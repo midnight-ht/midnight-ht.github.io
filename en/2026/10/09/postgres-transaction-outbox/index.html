@@ -1,0 +1,556 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>The Database Committed but the Notification Failed: Define the Handoff | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Use a transactional outbox to make handoff recoverable while defining worker ownership and duplicate delivery handling.">
+  
+  
+    <meta name="keywords" content="transactional outbox,message delivery,idempotency">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/09/postgres-transaction-outbox/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/09/postgres-transaction-outbox/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/09/postgres-transaction-outbox/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/09/postgres-transaction-outbox/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="The Database Committed but the Notification Failed: Define the Handoff | Midnight blog">
+    <meta property="og:description" content="Use a transactional outbox to make handoff recoverable while defining worker ownership and duplicate delivery handling.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/09/postgres-transaction-outbox/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/09/postgres-transaction-outbox/#webpage","url":"https://www.zyweb.vip/en/2026/10/09/postgres-transaction-outbox/","name":"The Database Committed but the Notification Failed: Define the Handoff | Midnight blog","description":"Use a transactional outbox to make handoff recoverable while defining worker ownership and duplicate delivery handling.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/09/postgres-transaction-outbox/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/09/postgres-transaction-outbox/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/09/postgres-transaction-outbox/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/09/postgres-transaction-outbox/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/09/postgres-transaction-outbox/","headline":"The Database Committed but the Notification Failed: Define the Handoff","description":"Use a transactional outbox to make handoff recoverable while defining worker ownership and duplicate delivery handling.","inLanguage":"en","datePublished":"2026-10-08T19:18:41.000Z","dateModified":"2026-10-08T19:18:41.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"}},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/09/postgres-transaction-outbox/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"The Database Committed but the Notification Failed: Define the Handoff","item":"https://www.zyweb.vip/en/2026/10/09/postgres-transaction-outbox/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.3.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.3.1">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  <body>
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      <header class="site-header">
+  
+  <div class="utility-bar">
+    <div class="utility-bar__inner">
+      <span class="utility-brand">Midnight blog</span>
+      <nav aria-label="Utility">
+        
+        <a href="/atom.xml">RSS</a>
+        <a href="/en/advertise/">Advertise</a>
+        
+    <label class="language-select language-select--utility" aria-label="Translations">
+      <select data-language-select>
+        
+          <option value="/zh-CN/2026/10/09/postgres-transaction-outbox/">zh-CN</option>
+        
+          <option value="/en/2026/10/09/postgres-transaction-outbox/" selected>en</option>
+        
+      </select>
+    </label>
+  
+        
+    <div class="appearance-controls">
+      <label>
+        <span class="sr-only">Appearance</span>
+        <select data-scheme-select aria-label="Appearance">
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+      <label>
+        <span class="sr-only">Palette</span>
+        <select data-skin-select aria-label="Palette">
+          <option value="ocean">Ocean</option>
+          <option value="jade">Jade</option>
+          <option value="violet">Violet</option>
+        </select>
+      </label>
+    </div>
+  
+      </nav>
+    </div>
+  </div>
+
+  
+  <div class="navbar">
+    <div class="brand-lockup">
+      <a class="brand" href="/en/" aria-label="Midnight">
+        
+          <span class="brand-mark brand-mark--initial" aria-hidden="true">M</span>
+        
+        <span>Midnight</span>
+      </a>
+      
+        <span class="brand-tagline">Engineering notes, from requirements to operations</span>
+      
+    </div>
+
+    <nav class="site-nav" aria-label="Primary">
+      
+        <a class="nav-link nav-link--underline" href="/en/">Home</a>
+      
+        <a class="nav-link nav-link--underline" href="/en/tags/Requirements/">Requirements &amp; Design</a>
+      
+        <a class="nav-link nav-link--underline" href="/en/tags/Development/">Development</a>
+      
+        <a class="nav-link nav-link--underline" href="/en/tags/Quality/">Quality &amp; Security</a>
+      
+        <a class="nav-link nav-link--underline" href="/en/tags/Delivery/">Delivery &amp; Operations</a>
+      
+        <a class="nav-link nav-link--underline" href="/en/tags/AI-Agent/">AI &amp; Automation</a>
+      
+        <a class="nav-link nav-link--underline" href="/en/archives/">Archives</a>
+      
+        <a class="nav-link nav-link--underline" href="/en/about/">About</a>
+      
+    </nav>
+
+    
+
+    
+    <button class="mobile-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu">
+      <span class="sr-only">Menu</span>
+      <svg class="mobile-menu-toggle__icon mobile-menu-toggle__icon--menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/></svg>
+      <svg class="mobile-menu-toggle__icon mobile-menu-toggle__icon--close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
+
+  <div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+  <aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true">
+    <div class="mobile-menu__head">
+      <strong>Midnight</strong>
+      <button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    </div>
+    
+    <nav class="mobile-menu__nav" aria-label="Primary">
+      
+        <a class="" href="/en/">Home</a>
+      
+        <a class="" href="/en/tags/Requirements/">Requirements &amp; Design</a>
+      
+        <a class="" href="/en/tags/Development/">Development</a>
+      
+        <a class="" href="/en/tags/Quality/">Quality &amp; Security</a>
+      
+        <a class="" href="/en/tags/Delivery/">Delivery &amp; Operations</a>
+      
+        <a class="" href="/en/tags/AI-Agent/">AI &amp; Automation</a>
+      
+        <a class="" href="/en/archives/">Archives</a>
+      
+        <a class="" href="/en/about/">About</a>
+      
+    </nav>
+    <div class="mobile-menu__tools">
+      
+    <label class="language-select language-select--mobile" aria-label="Translations">
+      <select data-language-select>
+        
+          <option value="/zh-CN/2026/10/09/postgres-transaction-outbox/">zh-CN</option>
+        
+          <option value="/en/2026/10/09/postgres-transaction-outbox/" selected>en</option>
+        
+      </select>
+    </label>
+  
+      
+    <div class="appearance-controls">
+      <label>
+        <span class="sr-only">Appearance</span>
+        <select data-scheme-select aria-label="Appearance">
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+      <label>
+        <span class="sr-only">Palette</span>
+        <select data-skin-select aria-label="Palette">
+          <option value="ocean">Ocean</option>
+          <option value="jade">Jade</option>
+          <option value="violet">Violet</option>
+        </select>
+      </label>
+    </div>
+  
+    </div>
+    <nav class="mobile-menu__utility" aria-label="Utility">
+      
+      <a href="/atom.xml">RSS</a>
+      <a href="/en/advertise/">Advertise</a>
+    </nav>
+    
+  </aside>
+</header>
+
+      <main class="site-main" id="content">
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-08T19:18:41.000Z">2026-10-09</time>
+    </div>
+
+    <h1>The Database Committed but the Notification Failed: Define the Handoff</h1>
+
+    
+      <p class="post-hero__summary">Use a transactional outbox to make handoff recoverable while defining worker ownership and duplicate delivery handling.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-08T19:18:41.000Z">2026-10-09</time> · Estimated read 6 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/09/postgres-transaction-outbox/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/09/postgres-transaction-outbox/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>Do not rerun an entire business operation merely because its notification failed after database commit. A transactional outbox can store business state and delivery intent in one local transaction, then hand delivery to a worker. That establishes responsibility, not globally exactly-once external effects. This is design analysis without an implemented messaging system or fault tests.</p>
+<h2 id="Two-successful-calls-do-not-share-a-commit"><a href="#Two-successful-calls-do-not-share-a-commit" class="headerlink" title="Two successful calls do not share a commit"></a>Two successful calls do not share a commit</h2><p>Writing an order then sending email leaves a crash window between them. Reversing the order can send email before a transaction rolls back. The issue is the missing shared boundary, not insufficiently adjacent code.</p>
+<p>The <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/tutorial-transactions.html">PostgreSQL 18 transaction tutorial</a> supports grouping database operations atomically. Saving an order and delivery record together is this article’s design inference; the tutorial does not prescribe an outbox architecture or worker semantics.</p>
+<h2 id="Make-the-handoff-recoverable"><a href="#Make-the-handoff-recoverable" class="headerlink" title="Make the handoff recoverable"></a>Make the handoff recoverable</h2><p>A record can contain a stable event ID, business object, event type or version, necessary content reference, state, and retry information. Minimize copied personal data. After commit, workers discover pending records; replacement workers need durable evidence to decide takeover after failure.</p>
+<p>Concurrent workers require an explicit claim, lease, or locking policy, including stalled owners and retry deadlines. An in-memory sending flag cannot establish recovery after restart.</p>
+<p>Define whether event content is a historical snapshot or a later read. If an order is canceled before notification, business meaning and ordering should determine delivery, not whichever state the worker happens to observe.</p>
+<h2 id="External-success-leaves-another-crash-window"><a href="#External-success-leaves-another-crash-window" class="headerlink" title="External success leaves another crash window"></a>External success leaves another crash window</h2><p>A worker can send successfully and fail before marking completion. A replacement then sends again. The receiver needs stable-ID deduplication where possible, or the business must accept and constrain duplicates. A local state field cannot promise global exactly-once effects across separate systems.</p>
+<p>Ordering also needs a scope. Per-object ordering and cross-object invariants differ; a global serial queue can impose unnecessary cost. Add coordination only where required.</p>
+<p>Proposed tests stop before commit, after commit but before send, and after external success but before acknowledgement. Include competing claims and persistent backlog. None were run. Inspect external effect counts, takeover, and manual recovery as well as database state.</p>
+<p>A noncritical notification may justify a simpler lossy approach if explicitly accepted. For critical delivery, define event identity, unknown-outcome lookup, and backlog ownership before selecting a library. Review <a href="/en/2026/10/09/api-retry-idempotency/">business idempotency</a> with the handoff; a committed record is not end-to-end delivery.</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/en/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F09%2Fpostgres-transaction-outbox%2F&text=The%20Database%20Committed%20but%20the%20Notification%20Failed%3A%20Define%20the%20Handoff" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F09%2Fpostgres-transaction-outbox%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=The%20Database%20Committed%20but%20the%20Notification%20Failed%3A%20Define%20the%20Handoff&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F09%2Fpostgres-transaction-outbox%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/09/secrets-rotation-revocation/">
+              <span>Previous Post</span>
+              <strong>The Key Was Deleted from Git: Why Is the Incident Not Over?</strong>
+              <small>2026-10-09</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/09/postgres-restore-rehearsal/">
+              <span>Next Post</span>
+              <strong>The Backup Job Is Green: Why Does Recovery Still Fail?</strong>
+              <small>2026-10-09</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <section class="sidebar-panel post-toc">
+        <h2>Contents</h2>
+        <p>Quickly navigate the article structure.</p>
+        
+          
+            <a class="toc-link toc-link--h2" href="#Two-successful-calls-do-not-share-a-commit">Two successful calls do not share a commit</a>
+          
+            <a class="toc-link toc-link--h2" href="#Make-the-handoff-recoverable">Make the handoff recoverable</a>
+          
+            <a class="toc-link toc-link--h2" href="#External-success-leaves-another-crash-window">External success leaves another crash window</a>
+          
+        
+      </section>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>25</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>16</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>13</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>5</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/09/api-if-match-conflicts/">Both Saves Succeeded: Why Did One Editor Lose Their Changes?</a></h3>
+          <p>2026-10-09</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/09/api-retry-idempotency/">Can a Timed-Out Request Be Retried? Define the Business Idempotency Boundary</a></h3>
+          <p>2026-10-09</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/09/frontend-abort-stale-results/">Search Results Went Backward: Cancellation Also Needs a State-Commit Guard</a></h3>
+          <p>2026-10-09</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="site-footer">
+  
+  <div class="site-footer__brand">
+    <strong>Midnight</strong>
+    <p>Engineering notes on requirements, architecture, development, testing, delivery, and operations. Evidence, trade-offs, and verification across the software lifecycle.</p>
+    <span>&copy; 2026 Midnight</span>
+    
+  </div>
+  <nav aria-label="Footer sections">
+    <div>
+      <strong>Sections</strong>
+      <a href="/en/">Home</a>
+      <a href="/en/archives/">Archives</a>
+      <a href="/en/about/">About</a>
+    </div>
+    <div>
+      <strong>Channels</strong>
+      
+        <a href="/en/tags/Requirements/">Requirements &amp; Design</a>
+      
+        <a href="/en/tags/Development/">Development</a>
+      
+        <a href="/en/tags/Quality/">Quality &amp; Security</a>
+      
+    </div>
+    <div>
+      <strong>Resources</strong>
+      
+      
+        <a href="/atom.xml">RSS</a>
+      
+      
+      <a href="/sitemap.xml">Sitemap</a>
+      
+    </div>
+    <div>
+      <strong>Meta</strong>
+      <a href="/en/advertise/">Advertise</a>
+      <a href="/en/privacy/">Privacy</a>
+      <a target="_blank" rel="noopener" href="https://hexo.io/">Powered by Hexo</a>
+    </div>
+  </nav>
+</footer>
+
+    </div>
+    
+    <script src="/js/main.js?v=0.3.1" defer></script>
+    
+    
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

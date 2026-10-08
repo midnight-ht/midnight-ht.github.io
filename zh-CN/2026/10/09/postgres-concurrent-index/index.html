@@ -1,0 +1,556 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>生产建索引用了 CONCURRENTLY，为什么还在等？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="PostgreSQL 18 并发建索引仍有事务等待、资源开销和失败状态，需要以有效性及业务负载验收。">
+  
+  
+    <meta name="keywords" content="PostgreSQL 18,并发索引,数据库发布">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/09/postgres-concurrent-index/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="生产建索引用了 CONCURRENTLY，为什么还在等？ | Midnight blog">
+    <meta property="og:description" content="PostgreSQL 18 并发建索引仍有事务等待、资源开销和失败状态，需要以有效性及业务负载验收。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/","name":"生产建索引用了 CONCURRENTLY，为什么还在等？ | Midnight blog","description":"PostgreSQL 18 并发建索引仍有事务等待、资源开销和失败状态，需要以有效性及业务负载验收。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/","headline":"生产建索引用了 CONCURRENTLY，为什么还在等？","description":"PostgreSQL 18 并发建索引仍有事务等待、资源开销和失败状态，需要以有效性及业务负载验收。","inLanguage":"zh-CN","datePublished":"2026-10-08T19:18:41.000Z","dateModified":"2026-10-08T19:18:41.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"}},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"生产建索引用了 CONCURRENTLY，为什么还在等？","item":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.3.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.3.1">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  <body>
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      <header class="site-header">
+  
+  <div class="utility-bar">
+    <div class="utility-bar__inner">
+      <span class="utility-brand">Midnight blog</span>
+      <nav aria-label="工具导航">
+        
+        <a href="/atom.xml">RSS</a>
+        <a href="/zh-CN/advertise/">广告合作</a>
+        
+    <label class="language-select language-select--utility" aria-label="多语言版本">
+      <select data-language-select>
+        
+          <option value="/zh-CN/2026/10/09/postgres-concurrent-index/" selected>zh-CN</option>
+        
+          <option value="/en/2026/10/09/postgres-concurrent-index/">en</option>
+        
+      </select>
+    </label>
+  
+        
+    <div class="appearance-controls">
+      <label>
+        <span class="sr-only">外观</span>
+        <select data-scheme-select aria-label="外观">
+          <option value="system">跟随系统</option>
+          <option value="light">浅色</option>
+          <option value="dark">深色</option>
+        </select>
+      </label>
+      <label>
+        <span class="sr-only">配色</span>
+        <select data-skin-select aria-label="配色">
+          <option value="ocean">海蓝</option>
+          <option value="jade">松绿</option>
+          <option value="violet">鸢紫</option>
+        </select>
+      </label>
+    </div>
+  
+      </nav>
+    </div>
+  </div>
+
+  
+  <div class="navbar">
+    <div class="brand-lockup">
+      <a class="brand" href="/zh-CN/" aria-label="Midnight">
+        
+          <span class="brand-mark brand-mark--initial" aria-hidden="true">M</span>
+        
+        <span>Midnight</span>
+      </a>
+      
+        <span class="brand-tagline">从需求到运行，记录研发的每一步</span>
+      
+    </div>
+
+    <nav class="site-nav" aria-label="主导航">
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/">首页</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/tags/Requirements/">需求与设计</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/tags/Development/">开发实践</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/tags/Quality/">测试与安全</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/tags/Delivery/">交付与运维</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/tags/AI-Agent/">AI 与自动化</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/archives/">归档</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/about/">关于</a>
+      
+    </nav>
+
+    
+
+    
+    <button class="mobile-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu">
+      <span class="sr-only">菜单</span>
+      <svg class="mobile-menu-toggle__icon mobile-menu-toggle__icon--menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/></svg>
+      <svg class="mobile-menu-toggle__icon mobile-menu-toggle__icon--close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
+
+  <div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+  <aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true">
+    <div class="mobile-menu__head">
+      <strong>Midnight</strong>
+      <button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    </div>
+    
+    <nav class="mobile-menu__nav" aria-label="主导航">
+      
+        <a class="" href="/zh-CN/">首页</a>
+      
+        <a class="" href="/zh-CN/tags/Requirements/">需求与设计</a>
+      
+        <a class="" href="/zh-CN/tags/Development/">开发实践</a>
+      
+        <a class="" href="/zh-CN/tags/Quality/">测试与安全</a>
+      
+        <a class="" href="/zh-CN/tags/Delivery/">交付与运维</a>
+      
+        <a class="" href="/zh-CN/tags/AI-Agent/">AI 与自动化</a>
+      
+        <a class="" href="/zh-CN/archives/">归档</a>
+      
+        <a class="" href="/zh-CN/about/">关于</a>
+      
+    </nav>
+    <div class="mobile-menu__tools">
+      
+    <label class="language-select language-select--mobile" aria-label="多语言版本">
+      <select data-language-select>
+        
+          <option value="/zh-CN/2026/10/09/postgres-concurrent-index/" selected>zh-CN</option>
+        
+          <option value="/en/2026/10/09/postgres-concurrent-index/">en</option>
+        
+      </select>
+    </label>
+  
+      
+    <div class="appearance-controls">
+      <label>
+        <span class="sr-only">外观</span>
+        <select data-scheme-select aria-label="外观">
+          <option value="system">跟随系统</option>
+          <option value="light">浅色</option>
+          <option value="dark">深色</option>
+        </select>
+      </label>
+      <label>
+        <span class="sr-only">配色</span>
+        <select data-skin-select aria-label="配色">
+          <option value="ocean">海蓝</option>
+          <option value="jade">松绿</option>
+          <option value="violet">鸢紫</option>
+        </select>
+      </label>
+    </div>
+  
+    </div>
+    <nav class="mobile-menu__utility" aria-label="工具导航">
+      
+      <a href="/atom.xml">RSS</a>
+      <a href="/zh-CN/advertise/">广告合作</a>
+    </nav>
+    
+  </aside>
+</header>
+
+      <main class="site-main" id="content">
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-08T19:18:41.000Z">2026-10-09</time>
+    </div>
+
+    <h1>生产建索引用了 CONCURRENTLY，为什么还在等？</h1>
+
+    
+      <p class="post-hero__summary">PostgreSQL 18 并发建索引仍有事务等待、资源开销和失败状态，需要以有效性及业务负载验收。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-08T19:18:41.000Z">2026-10-09</time> · 预计阅读 3 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/09/postgres-concurrent-index/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/09/postgres-concurrent-index/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>CREATE INDEX CONCURRENTLY 允许常规写入继续进行，但并不承诺立即完成或完全没有业务代价。生产变更应同时观察事务等待、资源负载和索引有效性，不能只等部署脚本的超时。下面按 PostgreSQL 18 文档讨论变更计划，没有在生产库执行索引操作。</p>
+<h2 id="在线构建为什么仍然会等待"><a href="#在线构建为什么仍然会等待" class="headerlink" title="在线构建为什么仍然会等待"></a>在线构建为什么仍然会等待</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-createindex.html">PostgreSQL 18 的 CREATE INDEX 文档</a>说明，并发方式需要额外扫描和事务等待，工作量比普通方式更多；失败时也可能留下无效索引。它不能在事务块中执行。因此迁移工具若默认把整个文件包在一个事务里，必须先确认支持这种操作的运行方式。</p>
+<p>假设订单查询需要新索引，而库里仍有长时间未结束的事务。构建过程等待不必然意味着数据库已经死锁，也可能是在等待满足阶段条件。此时盲目取消再运行，既未消除原因，又增加了清理责任。应该先找到等待对象、持续时间及拥有者，并由变更负责人协调处理长事务，再决定继续、取消还是调整窗口。</p>
+<h2 id="上线计划需要包含停止条件"><a href="#上线计划需要包含停止条件" class="headerlink" title="上线计划需要包含停止条件"></a>上线计划需要包含停止条件</h2><p>候选计划可以先记录表规模、现有索引、预期查询、剩余存储空间和变更负责人。执行期间观察业务延迟与错误、数据库负载、等待事件和构建进度。阈值必须依据本服务的约定，不抄一个“通用安全百分比”就视为可用。</p>
+<p>构建耗时也不等于业务不可用时长。反过来，即使写入未被常规表锁挡住，额外扫描仍可能争用资源，使业务变慢。应把数据库侧状态与用户结果放在一起判断，避免因为“没有锁表”就忽略明显的服务退化。必要时先降低其他后台任务的资源竞争。</p>
+<p>失败处置要看目录里的真实状态。无效索引可能占空间并带来维护成本，不能因为查询计划没有使用它就当作不存在。清理或重建之前，确认索引名称、归属表和失败原因，防止脚本误操作同名但不同用途的对象。具体命令应由有权限的操作人员在确认环境后执行。</p>
+<h2 id="命令完成之后还要验证什么"><a href="#命令完成之后还要验证什么" class="headerlink" title="命令完成之后还要验证什么"></a>命令完成之后还要验证什么</h2><p>索引有效只是第一步。还要用真实代表性的查询参数检查计划选择及业务耗时，考虑数据分布和缓存条件。新增索引不保证优化器必定采用，也不保证所有查询更快；写入维护成本需要在变更后持续观察。不要把一次本地短查询当作生产收益证据。</p>
+<p>对迁移工具，建议在预演环境检查事务包装、失败后的重跑行为和日志归档。如果重跑只看到对象已存在就跳过，而不检查有效性，可能把失败状态固化成“迁移完成”。本文未执行预演，这些是上线前需要补齐的验收项目。</p>
+<p>什么时候不用并发方式？可控维护窗口中的小表变更，普通构建可能更简单；是否接受写入阻塞应由业务安排决定，而不是默认所有表都必须并发。更复杂的分区和唯一性场景还需逐项阅读对应限制，不能把本例扩展成通用数据库发布脚本。</p>
+<p>把索引变更当作有阶段状态的操作：开始、等待、完成、有效、查询验证和清理各自留证。若新增索引的理由仍只是“查询慢”，先回到<a href="/zh-CN/2026/10/09/postgres-explain-evidence/">EXPLAIN 的证据检查</a>，确认主要问题确实来自访问方式。</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F09%2Fpostgres-concurrent-index%2F&text=%E7%94%9F%E4%BA%A7%E5%BB%BA%E7%B4%A2%E5%BC%95%E7%94%A8%E4%BA%86%20CONCURRENTLY%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E5%9C%A8%E7%AD%89%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F09%2Fpostgres-concurrent-index%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E7%94%9F%E4%BA%A7%E5%BB%BA%E7%B4%A2%E5%BC%95%E7%94%A8%E4%BA%86%20CONCURRENTLY%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E5%9C%A8%E7%AD%89%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F09%2Fpostgres-concurrent-index%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/09/postgres-explain-evidence/">
+              <span>上一篇</span>
+              <strong>慢查询先加索引？先看估算行数错在哪里</strong>
+              <small>2026-10-09</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/09/otel-baggage-boundaries/">
+              <span>下一篇</span>
+              <strong>链路上下文方便透传，为什么不能直接塞客户邮箱？</strong>
+              <small>2026-10-09</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <section class="sidebar-panel post-toc">
+        <h2>目录</h2>
+        <p>快速定位文章结构。</p>
+        
+          
+            <a class="toc-link toc-link--h2" href="#在线构建为什么仍然会等待">在线构建为什么仍然会等待</a>
+          
+            <a class="toc-link toc-link--h2" href="#上线计划需要包含停止条件">上线计划需要包含停止条件</a>
+          
+            <a class="toc-link toc-link--h2" href="#命令完成之后还要验证什么">命令完成之后还要验证什么</a>
+          
+        
+      </section>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>25</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>15</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>13</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>5</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/09/actions-cache-trust/">依赖缓存命中了，为什么仍要重新校验安装？</a></h3>
+          <p>2026-10-09</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/09/actions-deploy-concurrency/">两次发布交叉执行：并发组该锁分支还是环境？</a></h3>
+          <p>2026-10-09</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/09/kubernetes-probe-responsibilities/">数据库一慢就重启所有 Pod，探针是否问错了问题？</a></h3>
+          <p>2026-10-09</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="site-footer">
+  
+  <div class="site-footer__brand">
+    <strong>Midnight</strong>
+    <p>记录软件从需求、架构设计、开发、测试到发布、运维与持续改进的工程实践，讨论具体约束、方案取舍和验证方法。AI 是工具链的一部分。</p>
+    <span>&copy; 2026 Midnight</span>
+    
+  </div>
+  <nav aria-label="页脚栏目">
+    <div>
+      <strong>栏目</strong>
+      <a href="/zh-CN/">首页</a>
+      <a href="/zh-CN/archives/">归档</a>
+      <a href="/zh-CN/about/">关于</a>
+    </div>
+    <div>
+      <strong>频道</strong>
+      
+        <a href="/zh-CN/tags/Requirements/">需求与设计</a>
+      
+        <a href="/zh-CN/tags/Development/">开发实践</a>
+      
+        <a href="/zh-CN/tags/Quality/">测试与安全</a>
+      
+    </div>
+    <div>
+      <strong>资源</strong>
+      
+      
+        <a href="/atom.xml">RSS</a>
+      
+      
+      <a href="/sitemap.xml">站点地图</a>
+      
+    </div>
+    <div>
+      <strong>元信息</strong>
+      <a href="/zh-CN/advertise/">广告合作</a>
+      <a href="/zh-CN/privacy/">隐私</a>
+      <a target="_blank" rel="noopener" href="https://hexo.io/">Powered by Hexo</a>
+    </div>
+  </nav>
+</footer>
+
+    </div>
+    
+    <script src="/js/main.js?v=0.3.1" defer></script>
+    
+    
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

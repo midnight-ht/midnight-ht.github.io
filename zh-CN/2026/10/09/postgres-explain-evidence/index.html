@@ -1,0 +1,556 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>慢查询先加索引？先看估算行数错在哪里 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="如何用 PostgreSQL 18 EXPLAIN 建立慢查询证据，区分估算偏差、真实执行成本与索引直觉。">
+  
+  
+    <meta name="keywords" content="PostgreSQL 18,EXPLAIN,慢查询">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/09/postgres-explain-evidence/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="慢查询先加索引？先看估算行数错在哪里 | Midnight blog">
+    <meta property="og:description" content="如何用 PostgreSQL 18 EXPLAIN 建立慢查询证据，区分估算偏差、真实执行成本与索引直觉。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/","name":"慢查询先加索引？先看估算行数错在哪里 | Midnight blog","description":"如何用 PostgreSQL 18 EXPLAIN 建立慢查询证据，区分估算偏差、真实执行成本与索引直觉。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/","headline":"慢查询先加索引？先看估算行数错在哪里","description":"如何用 PostgreSQL 18 EXPLAIN 建立慢查询证据，区分估算偏差、真实执行成本与索引直觉。","inLanguage":"zh-CN","datePublished":"2026-10-08T19:18:41.000Z","dateModified":"2026-10-08T19:18:41.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"}},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"慢查询先加索引？先看估算行数错在哪里","item":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.3.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.3.1">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  <body>
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      <header class="site-header">
+  
+  <div class="utility-bar">
+    <div class="utility-bar__inner">
+      <span class="utility-brand">Midnight blog</span>
+      <nav aria-label="工具导航">
+        
+        <a href="/atom.xml">RSS</a>
+        <a href="/zh-CN/advertise/">广告合作</a>
+        
+    <label class="language-select language-select--utility" aria-label="多语言版本">
+      <select data-language-select>
+        
+          <option value="/zh-CN/2026/10/09/postgres-explain-evidence/" selected>zh-CN</option>
+        
+          <option value="/en/2026/10/09/postgres-explain-evidence/">en</option>
+        
+      </select>
+    </label>
+  
+        
+    <div class="appearance-controls">
+      <label>
+        <span class="sr-only">外观</span>
+        <select data-scheme-select aria-label="外观">
+          <option value="system">跟随系统</option>
+          <option value="light">浅色</option>
+          <option value="dark">深色</option>
+        </select>
+      </label>
+      <label>
+        <span class="sr-only">配色</span>
+        <select data-skin-select aria-label="配色">
+          <option value="ocean">海蓝</option>
+          <option value="jade">松绿</option>
+          <option value="violet">鸢紫</option>
+        </select>
+      </label>
+    </div>
+  
+      </nav>
+    </div>
+  </div>
+
+  
+  <div class="navbar">
+    <div class="brand-lockup">
+      <a class="brand" href="/zh-CN/" aria-label="Midnight">
+        
+          <span class="brand-mark brand-mark--initial" aria-hidden="true">M</span>
+        
+        <span>Midnight</span>
+      </a>
+      
+        <span class="brand-tagline">从需求到运行，记录研发的每一步</span>
+      
+    </div>
+
+    <nav class="site-nav" aria-label="主导航">
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/">首页</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/tags/Requirements/">需求与设计</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/tags/Development/">开发实践</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/tags/Quality/">测试与安全</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/tags/Delivery/">交付与运维</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/tags/AI-Agent/">AI 与自动化</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/archives/">归档</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/about/">关于</a>
+      
+    </nav>
+
+    
+
+    
+    <button class="mobile-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu">
+      <span class="sr-only">菜单</span>
+      <svg class="mobile-menu-toggle__icon mobile-menu-toggle__icon--menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/></svg>
+      <svg class="mobile-menu-toggle__icon mobile-menu-toggle__icon--close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
+
+  <div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+  <aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true">
+    <div class="mobile-menu__head">
+      <strong>Midnight</strong>
+      <button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    </div>
+    
+    <nav class="mobile-menu__nav" aria-label="主导航">
+      
+        <a class="" href="/zh-CN/">首页</a>
+      
+        <a class="" href="/zh-CN/tags/Requirements/">需求与设计</a>
+      
+        <a class="" href="/zh-CN/tags/Development/">开发实践</a>
+      
+        <a class="" href="/zh-CN/tags/Quality/">测试与安全</a>
+      
+        <a class="" href="/zh-CN/tags/Delivery/">交付与运维</a>
+      
+        <a class="" href="/zh-CN/tags/AI-Agent/">AI 与自动化</a>
+      
+        <a class="" href="/zh-CN/archives/">归档</a>
+      
+        <a class="" href="/zh-CN/about/">关于</a>
+      
+    </nav>
+    <div class="mobile-menu__tools">
+      
+    <label class="language-select language-select--mobile" aria-label="多语言版本">
+      <select data-language-select>
+        
+          <option value="/zh-CN/2026/10/09/postgres-explain-evidence/" selected>zh-CN</option>
+        
+          <option value="/en/2026/10/09/postgres-explain-evidence/">en</option>
+        
+      </select>
+    </label>
+  
+      
+    <div class="appearance-controls">
+      <label>
+        <span class="sr-only">外观</span>
+        <select data-scheme-select aria-label="外观">
+          <option value="system">跟随系统</option>
+          <option value="light">浅色</option>
+          <option value="dark">深色</option>
+        </select>
+      </label>
+      <label>
+        <span class="sr-only">配色</span>
+        <select data-skin-select aria-label="配色">
+          <option value="ocean">海蓝</option>
+          <option value="jade">松绿</option>
+          <option value="violet">鸢紫</option>
+        </select>
+      </label>
+    </div>
+  
+    </div>
+    <nav class="mobile-menu__utility" aria-label="工具导航">
+      
+      <a href="/atom.xml">RSS</a>
+      <a href="/zh-CN/advertise/">广告合作</a>
+    </nav>
+    
+  </aside>
+</header>
+
+      <main class="site-main" id="content">
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-08T19:18:41.000Z">2026-10-09</time>
+    </div>
+
+    <h1>慢查询先加索引？先看估算行数错在哪里</h1>
+
+    
+      <p class="post-hero__summary">如何用 PostgreSQL 18 EXPLAIN 建立慢查询证据，区分估算偏差、真实执行成本与索引直觉。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-08T19:18:41.000Z">2026-10-09</time> · 预计阅读 3 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/09/postgres-explain-evidence/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/09/postgres-explain-evidence/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>慢查询不应直接等同于缺索引。先看计划中预估与实际行数在哪里分歧，再判断扫描、连接、排序和等待各自的贡献。EXPLAIN ANALYZE 会执行查询，使用前必须确认副作用和资源预算。下面是分析方法，未对本站或其他生产数据库做性能实测。</p>
+<h2 id="计划里的-cost-不是用户等待秒数"><a href="#计划里的-cost-不是用户等待秒数" class="headerlink" title="计划里的 cost 不是用户等待秒数"></a>计划里的 cost 不是用户等待秒数</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/using-explain.html">PostgreSQL 18 的 EXPLAIN 指南</a>解释估算成本与执行计划，并说明 ANALYZE 会实际运行查询、输出真实行数和时间。成本用于优化器比较方案，不能把一个 cost 数字直接解读成请求毫秒数，更不能与另一台不同配置的数据库直接比较。</p>
+<p>假设查询按客户和时间范围筛选订单，再连接明细。若优化器预计返回少量订单，实际却命中大量历史记录，连接方式可能因此不合适。此时先找行数偏差，比仅盯着最上层总耗时更能定位下一步：检查统计信息、数据相关性和筛选条件，而不是立刻增加更多索引。</p>
+<h2 id="从最早的分歧追到后续放大"><a href="#从最早的分歧追到后续放大" class="headerlink" title="从最早的分歧追到后续放大"></a>从最早的分歧追到后续放大</h2><p>建议从基础扫描向上阅读，记录每个关键节点的估算行数、实际行数及执行次数，尤其核对多次执行节点展示的行数口径。一个看起来很便宜的节点，若被外层循环反复调用，累计工作可能很大。不能只凭单次节点时间判断，也不能把所有父子节点的时间简单相加，重复计算包含关系中的工作。</p>
+<p>还要保留查询参数、表规模、数据库版本及采集时的并发条件。同一条语句在不同客户、日期范围和缓存状态下可能呈现不同表现；只保存一张截图，下一位排查者很难判断问题是否复现。敏感参数应脱敏，但保留决定数据分布的类别或范围。</p>
+<p>顺序扫描也不是天然错误。读取表中较大部分数据时，逐页访问可能是合理选择；强制使用索引只是换了访问成本，并没有减少结果规模。相反，窄范围查询仍扫描大量无关行，才值得进一步检查可用索引、表达式和类型转换是否匹配。这里是判断方向，不是对某个执行计划下诊断。</p>
+<h2 id="ANALYZE-带来的风险由谁承担"><a href="#ANALYZE-带来的风险由谁承担" class="headerlink" title="ANALYZE 带来的风险由谁承担"></a>ANALYZE 带来的风险由谁承担</h2><p>对写语句运行 EXPLAIN ANALYZE 会真实触发执行，不能因为前缀叫“解释”就当作只读。即使使用回滚事务，也应评估序列、外部函数和触发逻辑等不完全随事务撤销的效果。读查询也可能消耗大量 CPU、内存和输入输出，生产采集需要明确授权与停止条件。</p>
+<p>没有合适采集窗口时，可以先用普通 EXPLAIN 观察估算计划，再在可控环境中复现。环境差异必须记录，不能把测试库结果写成生产证据。真实等待和应用端连接池排队也可能发生在计划之外，因此应与请求时延、数据库等待信息一起核对。</p>
+<p>修改之后怎样确认有收益？保留同一问题的前后计划、代表性参数和业务指标，说明采集条件。若只比较单次执行，很难区分缓存变热和方案本身的效果；不要在缺乏可比条件时宣称固定比例的提速。上线还应观察写入成本，避免只优化读取而增加其他业务负担。</p>
+<p>先选择一条可复现且重要的查询，找出最早明显的行数偏差，再提出一个可被证据否定的修改假设。需要在线加索引时，把<a href="/zh-CN/2026/10/09/postgres-concurrent-index/">并发构建的等待与清理</a>纳入发布计划，而不是把性能分析结束在一条建索引命令上。</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F09%2Fpostgres-explain-evidence%2F&text=%E6%85%A2%E6%9F%A5%E8%AF%A2%E5%85%88%E5%8A%A0%E7%B4%A2%E5%BC%95%EF%BC%9F%E5%85%88%E7%9C%8B%E4%BC%B0%E7%AE%97%E8%A1%8C%E6%95%B0%E9%94%99%E5%9C%A8%E5%93%AA%E9%87%8C" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F09%2Fpostgres-explain-evidence%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E6%85%A2%E6%9F%A5%E8%AF%A2%E5%85%88%E5%8A%A0%E7%B4%A2%E5%BC%95%EF%BC%9F%E5%85%88%E7%9C%8B%E4%BC%B0%E7%AE%97%E8%A1%8C%E6%95%B0%E9%94%99%E5%9C%A8%E5%93%AA%E9%87%8C&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F09%2Fpostgres-explain-evidence%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/09/postgres-isolation-retries/">
+              <span>上一篇</span>
+              <strong>事务都提交了，业务约束为什么仍被破坏？</strong>
+              <small>2026-10-09</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/09/postgres-concurrent-index/">
+              <span>下一篇</span>
+              <strong>生产建索引用了 CONCURRENTLY，为什么还在等？</strong>
+              <small>2026-10-09</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <section class="sidebar-panel post-toc">
+        <h2>目录</h2>
+        <p>快速定位文章结构。</p>
+        
+          
+            <a class="toc-link toc-link--h2" href="#计划里的-cost-不是用户等待秒数">计划里的 cost 不是用户等待秒数</a>
+          
+            <a class="toc-link toc-link--h2" href="#从最早的分歧追到后续放大">从最早的分歧追到后续放大</a>
+          
+            <a class="toc-link toc-link--h2" href="#ANALYZE-带来的风险由谁承担">ANALYZE 带来的风险由谁承担</a>
+          
+        
+      </section>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>25</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>15</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>13</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>5</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/09/api-if-match-conflicts/">两个人都保存成功，为什么一个人的修改消失了？</a></h3>
+          <p>2026-10-09</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/09/api-retry-idempotency/">请求超时后能否重试？先定义业务幂等边界</a></h3>
+          <p>2026-10-09</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/09/frontend-abort-stale-results/">搜索结果倒退了：取消请求还不够，提交状态也要验身份</a></h3>
+          <p>2026-10-09</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="site-footer">
+  
+  <div class="site-footer__brand">
+    <strong>Midnight</strong>
+    <p>记录软件从需求、架构设计、开发、测试到发布、运维与持续改进的工程实践，讨论具体约束、方案取舍和验证方法。AI 是工具链的一部分。</p>
+    <span>&copy; 2026 Midnight</span>
+    
+  </div>
+  <nav aria-label="页脚栏目">
+    <div>
+      <strong>栏目</strong>
+      <a href="/zh-CN/">首页</a>
+      <a href="/zh-CN/archives/">归档</a>
+      <a href="/zh-CN/about/">关于</a>
+    </div>
+    <div>
+      <strong>频道</strong>
+      
+        <a href="/zh-CN/tags/Requirements/">需求与设计</a>
+      
+        <a href="/zh-CN/tags/Development/">开发实践</a>
+      
+        <a href="/zh-CN/tags/Quality/">测试与安全</a>
+      
+    </div>
+    <div>
+      <strong>资源</strong>
+      
+      
+        <a href="/atom.xml">RSS</a>
+      
+      
+      <a href="/sitemap.xml">站点地图</a>
+      
+    </div>
+    <div>
+      <strong>元信息</strong>
+      <a href="/zh-CN/advertise/">广告合作</a>
+      <a href="/zh-CN/privacy/">隐私</a>
+      <a target="_blank" rel="noopener" href="https://hexo.io/">Powered by Hexo</a>
+    </div>
+  </nav>
+</footer>
+
+    </div>
+    
+    <script src="/js/main.js?v=0.3.1" defer></script>
+    
+    
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,556 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>事务都提交了，业务约束为什么仍被破坏？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="以值班约束分析 PostgreSQL 18 的并发事务：从不变量选择保护方式，并把可串行化重试纳入设计。">
+  
+  
+    <meta name="keywords" content="PostgreSQL 18,事务隔离,序列化重试">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/09/postgres-isolation-retries/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="事务都提交了，业务约束为什么仍被破坏？ | Midnight blog">
+    <meta property="og:description" content="以值班约束分析 PostgreSQL 18 的并发事务：从不变量选择保护方式，并把可串行化重试纳入设计。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/","name":"事务都提交了，业务约束为什么仍被破坏？ | Midnight blog","description":"以值班约束分析 PostgreSQL 18 的并发事务：从不变量选择保护方式，并把可串行化重试纳入设计。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/","headline":"事务都提交了，业务约束为什么仍被破坏？","description":"以值班约束分析 PostgreSQL 18 的并发事务：从不变量选择保护方式，并把可串行化重试纳入设计。","inLanguage":"zh-CN","datePublished":"2026-10-08T19:18:41.000Z","dateModified":"2026-10-08T19:18:41.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"}},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"事务都提交了，业务约束为什么仍被破坏？","item":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.3.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.3.1">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  <body>
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      <header class="site-header">
+  
+  <div class="utility-bar">
+    <div class="utility-bar__inner">
+      <span class="utility-brand">Midnight blog</span>
+      <nav aria-label="工具导航">
+        
+        <a href="/atom.xml">RSS</a>
+        <a href="/zh-CN/advertise/">广告合作</a>
+        
+    <label class="language-select language-select--utility" aria-label="多语言版本">
+      <select data-language-select>
+        
+          <option value="/zh-CN/2026/10/09/postgres-isolation-retries/" selected>zh-CN</option>
+        
+          <option value="/en/2026/10/09/postgres-isolation-retries/">en</option>
+        
+      </select>
+    </label>
+  
+        
+    <div class="appearance-controls">
+      <label>
+        <span class="sr-only">外观</span>
+        <select data-scheme-select aria-label="外观">
+          <option value="system">跟随系统</option>
+          <option value="light">浅色</option>
+          <option value="dark">深色</option>
+        </select>
+      </label>
+      <label>
+        <span class="sr-only">配色</span>
+        <select data-skin-select aria-label="配色">
+          <option value="ocean">海蓝</option>
+          <option value="jade">松绿</option>
+          <option value="violet">鸢紫</option>
+        </select>
+      </label>
+    </div>
+  
+      </nav>
+    </div>
+  </div>
+
+  
+  <div class="navbar">
+    <div class="brand-lockup">
+      <a class="brand" href="/zh-CN/" aria-label="Midnight">
+        
+          <span class="brand-mark brand-mark--initial" aria-hidden="true">M</span>
+        
+        <span>Midnight</span>
+      </a>
+      
+        <span class="brand-tagline">从需求到运行，记录研发的每一步</span>
+      
+    </div>
+
+    <nav class="site-nav" aria-label="主导航">
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/">首页</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/tags/Requirements/">需求与设计</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/tags/Development/">开发实践</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/tags/Quality/">测试与安全</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/tags/Delivery/">交付与运维</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/tags/AI-Agent/">AI 与自动化</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/archives/">归档</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/about/">关于</a>
+      
+    </nav>
+
+    
+
+    
+    <button class="mobile-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu">
+      <span class="sr-only">菜单</span>
+      <svg class="mobile-menu-toggle__icon mobile-menu-toggle__icon--menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/></svg>
+      <svg class="mobile-menu-toggle__icon mobile-menu-toggle__icon--close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
+
+  <div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+  <aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true">
+    <div class="mobile-menu__head">
+      <strong>Midnight</strong>
+      <button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    </div>
+    
+    <nav class="mobile-menu__nav" aria-label="主导航">
+      
+        <a class="" href="/zh-CN/">首页</a>
+      
+        <a class="" href="/zh-CN/tags/Requirements/">需求与设计</a>
+      
+        <a class="" href="/zh-CN/tags/Development/">开发实践</a>
+      
+        <a class="" href="/zh-CN/tags/Quality/">测试与安全</a>
+      
+        <a class="" href="/zh-CN/tags/Delivery/">交付与运维</a>
+      
+        <a class="" href="/zh-CN/tags/AI-Agent/">AI 与自动化</a>
+      
+        <a class="" href="/zh-CN/archives/">归档</a>
+      
+        <a class="" href="/zh-CN/about/">关于</a>
+      
+    </nav>
+    <div class="mobile-menu__tools">
+      
+    <label class="language-select language-select--mobile" aria-label="多语言版本">
+      <select data-language-select>
+        
+          <option value="/zh-CN/2026/10/09/postgres-isolation-retries/" selected>zh-CN</option>
+        
+          <option value="/en/2026/10/09/postgres-isolation-retries/">en</option>
+        
+      </select>
+    </label>
+  
+      
+    <div class="appearance-controls">
+      <label>
+        <span class="sr-only">外观</span>
+        <select data-scheme-select aria-label="外观">
+          <option value="system">跟随系统</option>
+          <option value="light">浅色</option>
+          <option value="dark">深色</option>
+        </select>
+      </label>
+      <label>
+        <span class="sr-only">配色</span>
+        <select data-skin-select aria-label="配色">
+          <option value="ocean">海蓝</option>
+          <option value="jade">松绿</option>
+          <option value="violet">鸢紫</option>
+        </select>
+      </label>
+    </div>
+  
+    </div>
+    <nav class="mobile-menu__utility" aria-label="工具导航">
+      
+      <a href="/atom.xml">RSS</a>
+      <a href="/zh-CN/advertise/">广告合作</a>
+    </nav>
+    
+  </aside>
+</header>
+
+      <main class="site-main" id="content">
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-08T19:18:41.000Z">2026-10-09</time>
+    </div>
+
+    <h1>事务都提交了，业务约束为什么仍被破坏？</h1>
+
+    
+      <p class="post-hero__summary">以值班约束分析 PostgreSQL 18 的并发事务：从不变量选择保护方式，并把可串行化重试纳入设计。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-08T19:18:41.000Z">2026-10-09</time> · 预计阅读 3 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/09/postgres-isolation-retries/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/09/postgres-isolation-retries/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>事务提交成功只说明这次事务满足数据库当时执行的规则，不意味着多个并发事务共同维护了全部业务不变量。设计并发更新时，先写出不能被破坏的条件，再选择约束、锁或隔离级别；采用可串行化也要准备处理失败。以下依据 PostgreSQL 18 文档作设计分析，没有运行数据库并发实验。</p>
+<h2 id="先找跨行约束，而不是先选级别"><a href="#先找跨行约束，而不是先选级别" class="headerlink" title="先找跨行约束，而不是先选级别"></a>先找跨行约束，而不是先选级别</h2><p>假设排班要求任何时刻至少保留一位值班人。甲乙同时申请退出，各自读到另一人还在，于是更新自己的记录。单笔更新都合法，却可能共同留下无人值班。这个例子关心的是多行之间的关系，不是某一行有没有完整写入，因此不能只用“事务是原子的”作答。</p>
+<p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/transaction-iso.html">PostgreSQL 18 事务隔离文档</a>说明不同级别的可见性和并发行为，并要求使用可串行化的应用准备重试序列化失败。级别名称要结合具体数据库解释，不能把其他数据库同名级别的行为直接套过来。</p>
+<p>对本例，我会先讨论能否把约束集中到明确的协调对象，或采用能够覆盖相关读取与写入的并发策略。究竟选行锁、事务隔离还是调整数据表示，取决于争用、查询范围与业务复杂度。没有实际负载，不给出哪一种一定更快的结论。</p>
+<h2 id="重试的单位应是完整判断过程"><a href="#重试的单位应是完整判断过程" class="headerlink" title="重试的单位应是完整判断过程"></a>重试的单位应是完整判断过程</h2><p>如果事务因序列化冲突失败，只重发最后一句更新是不够的。此前读取和据此作出的决定可能已经过时；重试应重新计算依赖这些读取的业务分支，应重新开始事务，重新读取并重新判断。应用还需要区分可重试的并发错误和权限、数据格式等永久错误，不能把所有异常都当作暂时冲突。</p>
+<p>重试次数、总期限和等待方式都应有限。高争用下无限立即重试可能把数据库压力继续放大；超出预算后应给用户可解释的失败或排队入口。错误日志记录业务标识、尝试次数和错误类别，但不把敏感数据或数据库内部细节直接暴露给终端用户。</p>
+<p>事务中已经发出的邮件、支付或第三方调用尤其危险。数据库回滚不自动撤销外部效果，再跑一次可能重复发送。候选做法是把外部意图留在可恢复的交接记录中，提交后再处理，或使用外部系统已经明确提供的幂等契约。不能仅靠增加隔离级别覆盖这一问题。</p>
+<h2 id="怎么验证业务没有留下空档"><a href="#怎么验证业务没有留下空档" class="headerlink" title="怎么验证业务没有留下空档"></a>怎么验证业务没有留下空档</h2><p>先写并发测试的目标：退出请求交错执行后，值班人数仍不低于约定值，失败者得到可恢复结果。再设计同时读取、交错提交和重试后重新读取的时序。检查数据库最终状态之外，也应检查界面是否把失败误报为成功，以及后台任务是否重复执行外部操作。</p>
+<p>如果系统还没有这些测试，可以先记录待验证假设，不写成“已经证明没有竞争条件”。锁的覆盖范围、索引变化和新增查询都可能改变交错行为，需要在实际数据库版本和部署方式下复验。本文只提供检查方向，没有成功率或吞吐量实测数据。</p>
+<p>可串行化是否总是最合适？小型管理功能可能优先正确性与实现清晰，而热点计数业务还要评估争用代价；某些约束可以用更直接的唯一约束表达。先让团队指出不变量由哪里保护，再选择具体实现。外部消息交接问题可接着看<a href="/zh-CN/2026/10/09/postgres-transaction-outbox/">事务发件箱</a>。</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F09%2Fpostgres-isolation-retries%2F&text=%E4%BA%8B%E5%8A%A1%E9%83%BD%E6%8F%90%E4%BA%A4%E4%BA%86%EF%BC%8C%E4%B8%9A%E5%8A%A1%E7%BA%A6%E6%9D%9F%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E8%A2%AB%E7%A0%B4%E5%9D%8F%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F09%2Fpostgres-isolation-retries%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E4%BA%8B%E5%8A%A1%E9%83%BD%E6%8F%90%E4%BA%A4%E4%BA%86%EF%BC%8C%E4%B8%9A%E5%8A%A1%E7%BA%A6%E6%9D%9F%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E8%A2%AB%E7%A0%B4%E5%9D%8F%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F09%2Fpostgres-isolation-retries%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/09/postgres-restore-rehearsal/">
+              <span>上一篇</span>
+              <strong>备份任务绿了，恢复演练为什么还是失败？</strong>
+              <small>2026-10-09</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/09/postgres-explain-evidence/">
+              <span>下一篇</span>
+              <strong>慢查询先加索引？先看估算行数错在哪里</strong>
+              <small>2026-10-09</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <section class="sidebar-panel post-toc">
+        <h2>目录</h2>
+        <p>快速定位文章结构。</p>
+        
+          
+            <a class="toc-link toc-link--h2" href="#先找跨行约束，而不是先选级别">先找跨行约束，而不是先选级别</a>
+          
+            <a class="toc-link toc-link--h2" href="#重试的单位应是完整判断过程">重试的单位应是完整判断过程</a>
+          
+            <a class="toc-link toc-link--h2" href="#怎么验证业务没有留下空档">怎么验证业务没有留下空档</a>
+          
+        
+      </section>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>25</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>15</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>13</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>5</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/09/api-if-match-conflicts/">两个人都保存成功，为什么一个人的修改消失了？</a></h3>
+          <p>2026-10-09</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/09/api-retry-idempotency/">请求超时后能否重试？先定义业务幂等边界</a></h3>
+          <p>2026-10-09</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/09/frontend-abort-stale-results/">搜索结果倒退了：取消请求还不够，提交状态也要验身份</a></h3>
+          <p>2026-10-09</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="site-footer">
+  
+  <div class="site-footer__brand">
+    <strong>Midnight</strong>
+    <p>记录软件从需求、架构设计、开发、测试到发布、运维与持续改进的工程实践，讨论具体约束、方案取舍和验证方法。AI 是工具链的一部分。</p>
+    <span>&copy; 2026 Midnight</span>
+    
+  </div>
+  <nav aria-label="页脚栏目">
+    <div>
+      <strong>栏目</strong>
+      <a href="/zh-CN/">首页</a>
+      <a href="/zh-CN/archives/">归档</a>
+      <a href="/zh-CN/about/">关于</a>
+    </div>
+    <div>
+      <strong>频道</strong>
+      
+        <a href="/zh-CN/tags/Requirements/">需求与设计</a>
+      
+        <a href="/zh-CN/tags/Development/">开发实践</a>
+      
+        <a href="/zh-CN/tags/Quality/">测试与安全</a>
+      
+    </div>
+    <div>
+      <strong>资源</strong>
+      
+      
+        <a href="/atom.xml">RSS</a>
+      
+      
+      <a href="/sitemap.xml">站点地图</a>
+      
+    </div>
+    <div>
+      <strong>元信息</strong>
+      <a href="/zh-CN/advertise/">广告合作</a>
+      <a href="/zh-CN/privacy/">隐私</a>
+      <a target="_blank" rel="noopener" href="https://hexo.io/">Powered by Hexo</a>
+    </div>
+  </nav>
+</footer>
+
+    </div>
+    
+    <script src="/js/main.js?v=0.3.1" defer></script>
+    
+    
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

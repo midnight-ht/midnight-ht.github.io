@@ -1,0 +1,556 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>请求超时后能否重试？先定义业务幂等边界 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="超时后的结果未知怎样处理：区分 HTTP 幂等语义、业务意图标识、持久化去重与外部副作用。">
+  
+  
+    <meta name="keywords" content="接口幂等,请求重试,订单一致性">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/09/api-retry-idempotency/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/09/api-retry-idempotency/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/09/api-retry-idempotency/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/09/api-retry-idempotency/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="请求超时后能否重试？先定义业务幂等边界 | Midnight blog">
+    <meta property="og:description" content="超时后的结果未知怎样处理：区分 HTTP 幂等语义、业务意图标识、持久化去重与外部副作用。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/09/api-retry-idempotency/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/api-retry-idempotency/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/09/api-retry-idempotency/","name":"请求超时后能否重试？先定义业务幂等边界 | Midnight blog","description":"超时后的结果未知怎样处理：区分 HTTP 幂等语义、业务意图标识、持久化去重与外部副作用。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/api-retry-idempotency/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/api-retry-idempotency/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/api-retry-idempotency/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/api-retry-idempotency/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/09/api-retry-idempotency/","headline":"请求超时后能否重试？先定义业务幂等边界","description":"超时后的结果未知怎样处理：区分 HTTP 幂等语义、业务意图标识、持久化去重与外部副作用。","inLanguage":"zh-CN","datePublished":"2026-10-08T19:18:41.000Z","dateModified":"2026-10-08T19:18:41.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"}},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/api-retry-idempotency/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"请求超时后能否重试？先定义业务幂等边界","item":"https://www.zyweb.vip/zh-CN/2026/10/09/api-retry-idempotency/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.3.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.3.1">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  <body>
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      <header class="site-header">
+  
+  <div class="utility-bar">
+    <div class="utility-bar__inner">
+      <span class="utility-brand">Midnight blog</span>
+      <nav aria-label="工具导航">
+        
+        <a href="/atom.xml">RSS</a>
+        <a href="/zh-CN/advertise/">广告合作</a>
+        
+    <label class="language-select language-select--utility" aria-label="多语言版本">
+      <select data-language-select>
+        
+          <option value="/zh-CN/2026/10/09/api-retry-idempotency/" selected>zh-CN</option>
+        
+          <option value="/en/2026/10/09/api-retry-idempotency/">en</option>
+        
+      </select>
+    </label>
+  
+        
+    <div class="appearance-controls">
+      <label>
+        <span class="sr-only">外观</span>
+        <select data-scheme-select aria-label="外观">
+          <option value="system">跟随系统</option>
+          <option value="light">浅色</option>
+          <option value="dark">深色</option>
+        </select>
+      </label>
+      <label>
+        <span class="sr-only">配色</span>
+        <select data-skin-select aria-label="配色">
+          <option value="ocean">海蓝</option>
+          <option value="jade">松绿</option>
+          <option value="violet">鸢紫</option>
+        </select>
+      </label>
+    </div>
+  
+      </nav>
+    </div>
+  </div>
+
+  
+  <div class="navbar">
+    <div class="brand-lockup">
+      <a class="brand" href="/zh-CN/" aria-label="Midnight">
+        
+          <span class="brand-mark brand-mark--initial" aria-hidden="true">M</span>
+        
+        <span>Midnight</span>
+      </a>
+      
+        <span class="brand-tagline">从需求到运行，记录研发的每一步</span>
+      
+    </div>
+
+    <nav class="site-nav" aria-label="主导航">
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/">首页</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/tags/Requirements/">需求与设计</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/tags/Development/">开发实践</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/tags/Quality/">测试与安全</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/tags/Delivery/">交付与运维</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/tags/AI-Agent/">AI 与自动化</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/archives/">归档</a>
+      
+        <a class="nav-link nav-link--underline" href="/zh-CN/about/">关于</a>
+      
+    </nav>
+
+    
+
+    
+    <button class="mobile-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu">
+      <span class="sr-only">菜单</span>
+      <svg class="mobile-menu-toggle__icon mobile-menu-toggle__icon--menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/></svg>
+      <svg class="mobile-menu-toggle__icon mobile-menu-toggle__icon--close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
+
+  <div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+  <aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true">
+    <div class="mobile-menu__head">
+      <strong>Midnight</strong>
+      <button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    </div>
+    
+    <nav class="mobile-menu__nav" aria-label="主导航">
+      
+        <a class="" href="/zh-CN/">首页</a>
+      
+        <a class="" href="/zh-CN/tags/Requirements/">需求与设计</a>
+      
+        <a class="" href="/zh-CN/tags/Development/">开发实践</a>
+      
+        <a class="" href="/zh-CN/tags/Quality/">测试与安全</a>
+      
+        <a class="" href="/zh-CN/tags/Delivery/">交付与运维</a>
+      
+        <a class="" href="/zh-CN/tags/AI-Agent/">AI 与自动化</a>
+      
+        <a class="" href="/zh-CN/archives/">归档</a>
+      
+        <a class="" href="/zh-CN/about/">关于</a>
+      
+    </nav>
+    <div class="mobile-menu__tools">
+      
+    <label class="language-select language-select--mobile" aria-label="多语言版本">
+      <select data-language-select>
+        
+          <option value="/zh-CN/2026/10/09/api-retry-idempotency/" selected>zh-CN</option>
+        
+          <option value="/en/2026/10/09/api-retry-idempotency/">en</option>
+        
+      </select>
+    </label>
+  
+      
+    <div class="appearance-controls">
+      <label>
+        <span class="sr-only">外观</span>
+        <select data-scheme-select aria-label="外观">
+          <option value="system">跟随系统</option>
+          <option value="light">浅色</option>
+          <option value="dark">深色</option>
+        </select>
+      </label>
+      <label>
+        <span class="sr-only">配色</span>
+        <select data-skin-select aria-label="配色">
+          <option value="ocean">海蓝</option>
+          <option value="jade">松绿</option>
+          <option value="violet">鸢紫</option>
+        </select>
+      </label>
+    </div>
+  
+    </div>
+    <nav class="mobile-menu__utility" aria-label="工具导航">
+      
+      <a href="/atom.xml">RSS</a>
+      <a href="/zh-CN/advertise/">广告合作</a>
+    </nav>
+    
+  </aside>
+</header>
+
+      <main class="site-main" id="content">
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-08T19:18:41.000Z">2026-10-09</time>
+    </div>
+
+    <h1>请求超时后能否重试？先定义业务幂等边界</h1>
+
+    
+      <p class="post-hero__summary">超时后的结果未知怎样处理：区分 HTTP 幂等语义、业务意图标识、持久化去重与外部副作用。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-08T19:18:41.000Z">2026-10-09</time> · 预计阅读 3 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/09/api-retry-idempotency/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/09/api-retry-idempotency/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>请求超时后是否可以重试，取决于重复执行是否会改变业务结果，以及服务端有没有把同一业务意图识别出来。客户端没收到响应，只能说明结果未知，不能证明订单没有创建。以下是创建订单的设计分析，未接入支付平台或进行故障实测。</p>
+<h2 id="方法名回答不了所有业务问题"><a href="#方法名回答不了所有业务问题" class="headerlink" title="方法名回答不了所有业务问题"></a>方法名回答不了所有业务问题</h2><p><a target="_blank" rel="noopener" href="https://www.rfc-editor.org/rfc/rfc9110.html#section-9.2.2">RFC 9110 第 9.2.2 节</a>定义的是多个相同请求对服务端的预期效果与单次相同。响应可以不同，日志也可以记录多次。这个语义不能替代应用自己的订单、扣款和通知约束；把创建接口改名为 PUT，不会让数据库与支付平台自动形成一次事务。</p>
+<p>假设用户按下购买按钮后等待超时。他可能在重试同一笔订单，也可能改变数量后重新下单。如果服务端只按用户身份去重，就可能误删合法购买；如果每次重试都产生新标识，又无法识别原来的意图。因此业务标识的生成时机和生命周期，应由接口契约明确。</p>
+<h2 id="去重记录要和业务状态一起讨论"><a href="#去重记录要和业务状态一起讨论" class="headerlink" title="去重记录要和业务状态一起讨论"></a>去重记录要和业务状态一起讨论</h2><p>一个候选方案是保存请求标识、规范化后的请求摘要、处理状态和结果引用，并约定摘要忽略哪些无业务意义的差异。同一标识配同一内容，返回已有结果或明确的处理中状态；同一标识却改变内容，则返回可解释的冲突。这是设计建议，具体状态码和保存期限需要客户端、业务与存储负责人协商。</p>
+<p>真正难点在并发。两次相同请求几乎同时到达，不能先各查一次“没有记录”，再各创建一张订单。唯一约束、条件写入或事务中的竞争裁决，需要让其中一个取得处理权。锁放在哪里、异常后谁接管，都要能从记录中解释，不能只依赖一台进程的内存标记。</p>
+<p>还要考虑业务已提交、响应却丢失的窗口。若去重记录与订单一起提交，客户端重试可以查到原结果。若二者分开写，服务崩溃可能留下订单存在、记录缺失的状态。审查时应画出写入顺序，逐个假设中途停止，而不是只验证成功路径。</p>
+<h2 id="外部扣款为什么仍要单独处理"><a href="#外部扣款为什么仍要单独处理" class="headerlink" title="外部扣款为什么仍要单独处理"></a>外部扣款为什么仍要单独处理</h2><p>本地数据库事务不能单独保证外部支付只发生一次。如果支付端支持自己的幂等契约，应对齐标识及保留时间；如果结果未知，就查询和对账，避免在不了解前次结果时盲目再扣。邮件和库存操作也要分别定义重复执行的后果，不能共享一句“接口已幂等”作为验收。</p>
+<p>保存期限也不是越长越好。订单数据保留、请求标识过期和支付查询范围可能不同，团队必须约定过期重试怎样响应。若允许重新创建，要让客户端知道它已成为新业务意图；若不能确定，应给出人工核对或状态查询入口，而不是返回含糊的成功。</p>
+<p>测试时可以设计同标识并发、同标识不同参数、提交后断开连接、处理中进程退出和记录过期等情形。本文没有执行这些测试；预期应由订单约束决定，并同时检查实际订单数、扣款状态和响应关联。仅有两次 HTTP 成功不足以证明正确。</p>
+<p>重试是否应该自动开启？对只读查询与有副作用操作应分开决定，重试次数和退避也要受请求总期限约束。先补齐“结果未知时查哪里”这一条契约，再考虑客户端自动化；涉及异步交接时可继续看<a href="/zh-CN/2026/10/09/postgres-transaction-outbox/">事务发件箱的责任边界</a>。</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F09%2Fapi-retry-idempotency%2F&text=%E8%AF%B7%E6%B1%82%E8%B6%85%E6%97%B6%E5%90%8E%E8%83%BD%E5%90%A6%E9%87%8D%E8%AF%95%EF%BC%9F%E5%85%88%E5%AE%9A%E4%B9%89%E4%B8%9A%E5%8A%A1%E5%B9%82%E7%AD%89%E8%BE%B9%E7%95%8C" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F09%2Fapi-retry-idempotency%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E8%AF%B7%E6%B1%82%E8%B6%85%E6%97%B6%E5%90%8E%E8%83%BD%E5%90%A6%E9%87%8D%E8%AF%95%EF%BC%9F%E5%85%88%E5%AE%9A%E4%B9%89%E4%B8%9A%E5%8A%A1%E5%B9%82%E7%AD%89%E8%BE%B9%E7%95%8C&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F09%2Fapi-retry-idempotency%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/09/frontend-abort-stale-results/">
+              <span>上一篇</span>
+              <strong>搜索结果倒退了：取消请求还不够，提交状态也要验身份</strong>
+              <small>2026-10-09</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/09/api-if-match-conflicts/">
+              <span>下一篇</span>
+              <strong>两个人都保存成功，为什么一个人的修改消失了？</strong>
+              <small>2026-10-09</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <section class="sidebar-panel post-toc">
+        <h2>目录</h2>
+        <p>快速定位文章结构。</p>
+        
+          
+            <a class="toc-link toc-link--h2" href="#方法名回答不了所有业务问题">方法名回答不了所有业务问题</a>
+          
+            <a class="toc-link toc-link--h2" href="#去重记录要和业务状态一起讨论">去重记录要和业务状态一起讨论</a>
+          
+            <a class="toc-link toc-link--h2" href="#外部扣款为什么仍要单独处理">外部扣款为什么仍要单独处理</a>
+          
+        
+      </section>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>25</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>15</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>13</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>5</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/09/api-if-match-conflicts/">两个人都保存成功，为什么一个人的修改消失了？</a></h3>
+          <p>2026-10-09</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/09/frontend-abort-stale-results/">搜索结果倒退了：取消请求还不够，提交状态也要验身份</a></h3>
+          <p>2026-10-09</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/09/http-cache-validation/">设置 no-cache 后仍有缓存文件，是配置错了吗？</a></h3>
+          <p>2026-10-09</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="site-footer">
+  
+  <div class="site-footer__brand">
+    <strong>Midnight</strong>
+    <p>记录软件从需求、架构设计、开发、测试到发布、运维与持续改进的工程实践，讨论具体约束、方案取舍和验证方法。AI 是工具链的一部分。</p>
+    <span>&copy; 2026 Midnight</span>
+    
+  </div>
+  <nav aria-label="页脚栏目">
+    <div>
+      <strong>栏目</strong>
+      <a href="/zh-CN/">首页</a>
+      <a href="/zh-CN/archives/">归档</a>
+      <a href="/zh-CN/about/">关于</a>
+    </div>
+    <div>
+      <strong>频道</strong>
+      
+        <a href="/zh-CN/tags/Requirements/">需求与设计</a>
+      
+        <a href="/zh-CN/tags/Development/">开发实践</a>
+      
+        <a href="/zh-CN/tags/Quality/">测试与安全</a>
+      
+    </div>
+    <div>
+      <strong>资源</strong>
+      
+      
+        <a href="/atom.xml">RSS</a>
+      
+      
+      <a href="/sitemap.xml">站点地图</a>
+      
+    </div>
+    <div>
+      <strong>元信息</strong>
+      <a href="/zh-CN/advertise/">广告合作</a>
+      <a href="/zh-CN/privacy/">隐私</a>
+      <a target="_blank" rel="noopener" href="https://hexo.io/">Powered by Hexo</a>
+    </div>
+  </nav>
+</footer>
+
+    </div>
+    
+    <script src="/js/main.js?v=0.3.1" defer></script>
+    
+    
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
