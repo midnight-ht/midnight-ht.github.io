@@ -1,90 +1,61 @@
 (function () {
   const root = document.documentElement;
-  const toggles = Array.from(document.querySelectorAll('[data-theme-toggle]'));
   const languageSelects = Array.from(document.querySelectorAll('[data-language-select]'));
   const menuToggle = document.querySelector('[data-mobile-menu-toggle]');
   const mobileMenu = document.querySelector('[data-mobile-menu]');
   const menuClosers = Array.from(document.querySelectorAll('[data-mobile-menu-close]'));
   const systemQuery = window.matchMedia('(prefers-color-scheme: dark)');
-  const storageKey = 'midnight-theme';
   const languageStorageKey = 'midnight-language';
-  const defaultScheme = root.dataset.defaultScheme === 'light' ? 'light' : 'dark';
-
-  function readCookie() {
-    const match = document.cookie.match(/(?:^|;\s*)midnight-theme=(light|dark)(?:;|$)/);
-    return match ? match[1] : '';
-  }
-
-  function readWindowName() {
-    const match = String(window.name || '').match(/(?:^|;)midnight-theme=(light|dark)(?:;|$)/);
-    return match ? match[1] : '';
-  }
-
-  function readStorage(storage) {
-    try {
-      const value = storage && storage.getItem(storageKey);
-      return value === 'light' || value === 'dark' ? value : '';
-    } catch (error) {
-      return '';
+  const schemes = ['system', 'light', 'dark'];
+  const skins = ['ocean', 'jade', 'violet'];
+  function readPreference(key, allowed) {
+    for (const name of ['localStorage', 'sessionStorage']) {
+      try { const value = window[name].getItem(key); if (allowed.includes(value)) return value; } catch (error) {}
     }
+    const cookie = document.cookie.split(';').map(value => value.trim()).find(value => value.startsWith(key + '='));
+    const value = cookie ? cookie.slice(key.length + 1) : '';
+    return allowed.includes(value) ? value : '';
   }
-
-  function readStored() {
-    return readStorage(window.localStorage) || readStorage(window.sessionStorage) || readCookie() || readWindowName();
-  }
-
-  function writeStored(theme) {
-    try {
-      document.cookie = `${storageKey}=${theme}; path=/; max-age=31536000; samesite=lax`;
-    } catch (error) {}
-    try {
-      window.name = `${String(window.name || '').replace(/(?:^|;)midnight-theme=(?:light|dark)(?:;|$)/, ';').replace(/^;+|;+$/g, '')};midnight-theme=${theme}`;
-    } catch (error) {}
-    try {
-      window.localStorage.setItem(storageKey, theme);
-    } catch (error) {
-      root.dataset.themePreference = 'session';
+  function storePreference(key, value) {
+    for (const name of ['localStorage', 'sessionStorage']) {
+      try { window[name].setItem(key, value); } catch (error) {}
     }
-    try {
-      window.sessionStorage.setItem(storageKey, theme);
-    } catch (error) {
-      root.dataset.themePreference = 'session';
-    }
+    try { document.cookie = `${key}=${value}; path=/; max-age=31536000; samesite=lax`; } catch (error) {}
   }
-
-  function applyTheme(theme) {
-    root.dataset.theme = theme;
-    root.classList.toggle('theme-dark', theme === 'dark');
-    root.classList.toggle('theme-light', theme === 'light');
-    toggles.forEach((toggle) => {
-      const switchLight = toggle.dataset.labelSwitchLight || 'Switch to light theme';
-      const switchDark = toggle.dataset.labelSwitchDark || 'Switch to dark theme';
-      const isDark = theme === 'dark';
-      toggle.dataset.theme = theme;
-      toggle.setAttribute('aria-checked', isDark ? 'true' : 'false');
-      toggle.setAttribute('aria-label', isDark ? switchLight : switchDark);
-      toggle.setAttribute('title', isDark ? switchLight : switchDark);
-    });
+  let scheme = readPreference('midnight-theme', schemes) || root.dataset.defaultScheme || 'system';
+  let skin = readPreference('midnight-skin', skins) || root.dataset.defaultSkin || 'ocean';
+  function applyAppearance() {
+    const mode = scheme === 'system' ? (systemQuery.matches ? 'dark' : 'light') : scheme;
+    root.dataset.theme = mode;
+    root.dataset.scheme = scheme;
+    root.dataset.skin = skin;
+    root.classList.toggle('theme-dark', mode === 'dark');
+    root.classList.toggle('theme-light', mode === 'light');
+    document.querySelectorAll('[data-scheme-select]').forEach(select => { select.value = scheme; });
+    document.querySelectorAll('[data-skin-select]').forEach(select => { select.value = skin; });
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) themeColor.content = getComputedStyle(root).getPropertyValue('--surface').trim();
   }
-
   root.classList.add('js-ready');
-  applyTheme(readStored() || defaultScheme || (systemQuery.matches ? 'dark' : 'light'));
-
-  const onSystemChange = (event) => {
-    if (readStored()) return;
-    if (defaultScheme) return;
-    applyTheme(event.matches ? 'dark' : 'light');
-  };
-  if (systemQuery.addEventListener) systemQuery.addEventListener('change', onSystemChange);
-  else if (systemQuery.addListener) systemQuery.addListener(onSystemChange);
-
-  toggles.forEach((toggle) => {
-    toggle.addEventListener('click', () => {
-      const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
-      writeStored(next);
-      applyTheme(next);
+  applyAppearance();
+  document.querySelectorAll('[data-scheme-select]').forEach(select => {
+    select.addEventListener('change', () => {
+      if (!schemes.includes(select.value)) return;
+      scheme = select.value;
+      storePreference('midnight-theme', scheme);
+      applyAppearance();
     });
   });
+  document.querySelectorAll('[data-skin-select]').forEach(select => {
+    select.addEventListener('change', () => {
+      if (!skins.includes(select.value)) return;
+      skin = select.value;
+      storePreference('midnight-skin', skin);
+      applyAppearance();
+    });
+  });
+  if (systemQuery.addEventListener) systemQuery.addEventListener('change', applyAppearance);
+  else if (systemQuery.addListener) systemQuery.addListener(applyAppearance);
 
   languageSelects.forEach((languageSelect) => {
     languageSelect.addEventListener('change', () => {
