@@ -1,0 +1,387 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>唯一约束存在，为什么还能保存两个空值？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="PostgreSQL 18 默认把唯一约束中的 NULL 视为不同值，业务需明确未知、未分配与空字符串的含义再选择约束。">
+  
+  
+    <meta name="keywords" content="PostgreSQL18,NULLS NOT DISTINCT,唯一约束">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/10/postgres-unique-null/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/10/postgres-unique-null/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/10/postgres-unique-null/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/10/postgres-unique-null/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="唯一约束存在，为什么还能保存两个空值？ | Midnight blog">
+    <meta property="og:description" content="PostgreSQL 18 默认把唯一约束中的 NULL 视为不同值，业务需明确未知、未分配与空字符串的含义再选择约束。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/10/postgres-unique-null/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-unique-null/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-unique-null/","name":"唯一约束存在，为什么还能保存两个空值？ | Midnight blog","description":"PostgreSQL 18 默认把唯一约束中的 NULL 视为不同值，业务需明确未知、未分配与空字符串的含义再选择约束。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-unique-null/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-unique-null/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-unique-null/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-unique-null/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-unique-null/","headline":"唯一约束存在，为什么还能保存两个空值？","description":"PostgreSQL 18 默认把唯一约束中的 NULL 视为不同值，业务需明确未知、未分配与空字符串的含义再选择约束。","inLanguage":"zh-CN","datePublished":"2026-10-09T19:23:32.000Z","dateModified":"2026-10-09T19:23:32.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Development, Engineering, PostgreSQL18"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-unique-null/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"唯一约束存在，为什么还能保存两个空值？","item":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-unique-null/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/10/postgres-unique-null/" selected>zh-CN</option><option value="/en/2026/10/10/postgres-unique-null/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/10/postgres-unique-null/" selected>zh-CN</option><option value="/en/2026/10/10/postgres-unique-null/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-09T19:23:32.000Z">2026-10-10</time>
+    </div>
+
+    <h1>唯一约束存在，为什么还能保存两个空值？</h1>
+
+    
+      <p class="post-hero__summary">PostgreSQL 18 默认把唯一约束中的 NULL 视为不同值，业务需明确未知、未分配与空字符串的含义再选择约束。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-09T19:23:32.000Z">2026-10-10</time> · 预计阅读 3 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/10/postgres-unique-null/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/10/postgres-unique-null/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>唯一约束存在时仍能保存多个空值，在 PostgreSQL 中可能是预期行为。应先明确空值代表未知、未分配，还是某种只能出现一次的业务状态，再选择约束。应用先查询“有没有重复”不能代替数据库在并发写入时执行统一规则。下面以外部客户编号为假设，没有执行建表或迁移。</p>
+<h2 id="空值的含义需要业务定义"><a href="#空值的含义需要业务定义" class="headerlink" title="空值的含义需要业务定义"></a>空值的含义需要业务定义</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/ddl-constraints.html#DDL-CONSTRAINTS-UNIQUE-CONSTRAINTS">PostgreSQL 十八版约束文档</a>说明唯一约束默认不把两个空值看作相等，可以通过 NULLS NOT DISTINCT 改变这一比较行为。原文提醒其他数据库可能有不同语义。本篇使用明确版本，不推断旧系统或其他引擎支持相同语法。</p>
+<p>假设客户暂未同步到外部系统，编号为空。如果每个未同步客户都没有确定编号，允许多条空值可能符合业务。把所有空值视为相等反而会让第二个新客户无法创建。反过来，如果一张配置表要求每个租户只能有一条“未指定地区”的默认配置，复合唯一性就可能需要把空地区视为同一种状态。两种场景都合理，差别来自业务身份定义。</p>
+<p>空字符串与数据库空值也不能随意互换。前者可以是实际字符串，后者表达没有值；表单清空字段、接口省略字段和用户主动取消编号又可能有不同更新含义。如果应用层把这些输入混成同一个值，数据库约束再准确也难以说明用户意图。先在接口契约里约定输入规范，再决定入库表示。</p>
+<h2 id="约束必须覆盖完整的身份范围"><a href="#约束必须覆盖完整的身份范围" class="headerlink" title="约束必须覆盖完整的身份范围"></a>约束必须覆盖完整的身份范围</h2><p>外部编号是否只在同一租户内唯一，应写入身份范围，而不是由每个查询临时带一个过滤条件。复合约束中每个可空字段都会影响比较，要分别检查租户、来源系统和编号的合法状态。不能只测试两条全部非空的数据，就认为所有身份路径受到保护。</p>
+<p>应用预查可以给用户友好提示，但两个请求可能都在查询时看到不存在，随后竞争写入。数据库约束负责阻止不符合规则的最终状态，应用负责处理冲突并表达为业务错误。重试前要理解冲突原因；重复编号不会因为盲目重试自动变成新编号，用户也不应只收到一串数据库异常。</p>
+<p>迁移约束之前要盘点已有值，包括空值、空字符串、大小写和业务规范化后的重复。是否把大小写看作同一身份是额外规则，不能假定唯一约束会替团队选择。处理重复的策略需要数据所有者确认，不能为了让迁移通过直接删除历史客户。约束变化可能影响旧客户端，实施顺序应与数据清理和应用错误处理一起评审。</p>
+<h2 id="验收要覆盖并发和缺值"><a href="#验收要覆盖并发和缺值" class="headerlink" title="验收要覆盖并发和缺值"></a>验收要覆盖并发和缺值</h2><p>可以准备待执行检查：同租户相同非空编号、不同租户相同编号、两个未分配编号，以及一空一非空的复合键。再用并发请求确认只有符合约定的写入留下，并验证错误没有造成部分业务状态。本文只提出检查条件，没有实际成功日志。</p>
+<p>对于规则跨越多行的场景，还要判断唯一约束是否足以表达，可以结合<a href="/zh-CN/2026/10/09/postgres-isolation-retries/">事务隔离与重试</a>理解其责任。评审的第一句话应是“哪些记录在业务上是同一个”，随后才是选择哪条数据库语法。</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+            <a class="tag tag--postgresql18" href="/zh-CN/tags/PostgreSQL18/">PostgreSQL18</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F10%2Fpostgres-unique-null%2F&text=%E5%94%AF%E4%B8%80%E7%BA%A6%E6%9D%9F%E5%AD%98%E5%9C%A8%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E8%83%BD%E4%BF%9D%E5%AD%98%E4%B8%A4%E4%B8%AA%E7%A9%BA%E5%80%BC%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F10%2Fpostgres-unique-null%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E5%94%AF%E4%B8%80%E7%BA%A6%E6%9D%9F%E5%AD%98%E5%9C%A8%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E8%83%BD%E4%BF%9D%E5%AD%98%E4%B8%A4%E4%B8%AA%E7%A9%BA%E5%80%BC%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F10%2Fpostgres-unique-null%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/10/product-metric-denominators/">
+              <span>上一篇</span>
+              <strong>点击增加了，任务完成了吗？产品指标先定义分母</strong>
+              <small>2026-10-10</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/10/postgres-pagination-order/">
+              <span>下一篇</span>
+              <strong>翻页有重复：LIMIT 之外还要约定什么？</strong>
+              <small>2026-10-10</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#空值的含义需要业务定义">空值的含义需要业务定义</a>
+          
+            <a class="toc-link toc-link--h2" href="#约束必须覆盖完整的身份范围">约束必须覆盖完整的身份范围</a>
+          
+            <a class="toc-link toc-link--h2" href="#验收要覆盖并发和缺值">验收要覆盖并发和缺值</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>45</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>21</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>20</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>9</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/10/postgres-deadlock-order/">加了行锁仍然死锁：所有入口是否按同一顺序拿锁？</a></h3>
+          <p>2026-10-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/10/postgres-jsonb-query-index/">JSONB 有 GIN 索引，为什么键存在查询仍可能用不上？</a></h3>
+          <p>2026-10-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/10/postgres-pagination-order/">翻页有重复：LIMIT 之外还要约定什么？</a></h3>
+          <p>2026-10-10</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.0" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

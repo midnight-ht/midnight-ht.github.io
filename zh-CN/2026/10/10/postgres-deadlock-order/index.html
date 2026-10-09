@@ -1,0 +1,387 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>加了行锁仍然死锁：所有入口是否按同一顺序拿锁？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="PostgreSQL 18 会中止死锁中的一个事务；一致拿锁顺序需要覆盖全部写入入口，重试应回到完整业务事务边界。">
+  
+  
+    <meta name="keywords" content="PostgreSQL18,死锁,锁顺序">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/10/postgres-deadlock-order/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="加了行锁仍然死锁：所有入口是否按同一顺序拿锁？ | Midnight blog">
+    <meta property="og:description" content="PostgreSQL 18 会中止死锁中的一个事务；一致拿锁顺序需要覆盖全部写入入口，重试应回到完整业务事务边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/","name":"加了行锁仍然死锁：所有入口是否按同一顺序拿锁？ | Midnight blog","description":"PostgreSQL 18 会中止死锁中的一个事务；一致拿锁顺序需要覆盖全部写入入口，重试应回到完整业务事务边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/","headline":"加了行锁仍然死锁：所有入口是否按同一顺序拿锁？","description":"PostgreSQL 18 会中止死锁中的一个事务；一致拿锁顺序需要覆盖全部写入入口，重试应回到完整业务事务边界。","inLanguage":"zh-CN","datePublished":"2026-10-09T19:23:32.000Z","dateModified":"2026-10-09T19:23:32.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Development, Engineering, PostgreSQL18"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"加了行锁仍然死锁：所有入口是否按同一顺序拿锁？","item":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/10/postgres-deadlock-order/" selected>zh-CN</option><option value="/en/2026/10/10/postgres-deadlock-order/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/10/postgres-deadlock-order/" selected>zh-CN</option><option value="/en/2026/10/10/postgres-deadlock-order/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-09T19:23:32.000Z">2026-10-10</time>
+    </div>
+
+    <h1>加了行锁仍然死锁：所有入口是否按同一顺序拿锁？</h1>
+
+    
+      <p class="post-hero__summary">PostgreSQL 18 会中止死锁中的一个事务；一致拿锁顺序需要覆盖全部写入入口，重试应回到完整业务事务边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-09T19:23:32.000Z">2026-10-10</time> · 预计阅读 3 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/10/postgres-deadlock-order/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/10/postgres-deadlock-order/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>行锁能协调对同一数据的写入，却不能保证多项资源的获取顺序不会形成等待环。排查死锁时，应看所有写入入口怎样排序资源，而不只看报错语句是否已经加锁。失败后的重试也需要回到业务事务边界，不能只把最后一条语句再发一次。本文讨论假设的库存调拨，没有执行并发实验。</p>
+<h2 id="每个入口都合理，组合仍可能互相等待"><a href="#每个入口都合理，组合仍可能互相等待" class="headerlink" title="每个入口都合理，组合仍可能互相等待"></a>每个入口都合理，组合仍可能互相等待</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/explicit-locking.html#LOCKING-DEADLOCKS">PostgreSQL 十八版显式锁文档</a>说明数据库会检测死锁并中止其中一个事务，不能依赖它总是选择某个确定的事务。原文建议多个对象使用一致的拿锁顺序，并避免长时间保持事务。本篇描述该机制，不推断实际系统中哪一条请求会失败。</p>
+<p>假设甲流程先减少仓库甲库存，再增加仓库乙；乙流程反向调拨，先减少仓库乙，再增加仓库甲。两边都遵守了“更新前锁定库存”，却可能各持有一个对方需要的锁。业务操作顺序与拿锁顺序不必相同：可以先按稳定资源标识获取需要的锁，再在已锁定范围内执行业务变化。这是设计建议，不是所有库存模型的完整实现。</p>
+<p>排序规则需要被所有入口采用。在线接口按仓库编号排序，补偿任务按消息顺序更新，批量管理工具按文件顺序处理，仍然可能产生相反顺序。列出接口、后台任务、管理脚本和数据修复路径，检查它们是否共享同一个资源比较规则。只修改最常见入口可能降低出现机会，但不能据此宣称死锁已经消失。</p>
+<h2 id="缩短事务，不靠延长等待掩盖问题"><a href="#缩短事务，不靠延长等待掩盖问题" class="headerlink" title="缩短事务，不靠延长等待掩盖问题"></a>缩短事务，不靠延长等待掩盖问题</h2><p>外部接口调用、用户确认和慢速文件读取不宜无条件放在持锁事务里。可以预先准备输入，再进入短事务检查当前状态并写入；需要写后发消息时，还应单独设计消息交接。把超时时间调长可能让等待堆积更久，却不会删除等待环本身。选择等待策略时也要考虑请求预算和调用者恢复能力。</p>
+<p>死锁发生后，应用应识别事务失败，回滚并根据明确的策略重新读取必要状态，再尝试完整操作。已有的外部副作用不能因为数据库回滚就被当作没有发生。若发送通知或扣款在事务外完成，重试必须尊重对应幂等规则；相关问题见<a href="/zh-CN/2026/10/09/postgres-transaction-outbox/">事务与消息交接</a>。</p>
+<p>重试次数、间隔和最终提示应有上限及所有者。无限重试可能把一次竞争变成持续负载；直接吞掉错误又会让调用者误以为库存已经移动。业务能够接受延迟时可以异步恢复，但需要可查询的状态，不能把排队成功写成调拨成功。这里没有测得最佳间隔，也不提供适用于所有负载的固定数值。</p>
+<h2 id="用等待关系验证修复"><a href="#用等待关系验证修复" class="headerlink" title="用等待关系验证修复"></a>用等待关系验证修复</h2><p>建议在测试环境构造相反方向的调拨、批量更新与补偿并发，保存实际等待对象和事务入口。修复后不仅看错误计数，还要确认业务结果、重试上限和失败提示符合预期。测试规模和调度条件会限制结论，没复现不等于所有真实竞争都被覆盖。</p>
+<p>本文没有运行这些测试。生产排查应保留可关联的请求与事务信息，避免把敏感业务字段直接写进日志。评审时要求每个写入入口解释资源顺序与失败恢复边界，才能判断行锁承担的是一致性责任，还是只增加了一个看起来安全的步骤。</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+            <a class="tag tag--postgresql18" href="/zh-CN/tags/PostgreSQL18/">PostgreSQL18</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F10%2Fpostgres-deadlock-order%2F&text=%E5%8A%A0%E4%BA%86%E8%A1%8C%E9%94%81%E4%BB%8D%E7%84%B6%E6%AD%BB%E9%94%81%EF%BC%9A%E6%89%80%E6%9C%89%E5%85%A5%E5%8F%A3%E6%98%AF%E5%90%A6%E6%8C%89%E5%90%8C%E4%B8%80%E9%A1%BA%E5%BA%8F%E6%8B%BF%E9%94%81%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F10%2Fpostgres-deadlock-order%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E5%8A%A0%E4%BA%86%E8%A1%8C%E9%94%81%E4%BB%8D%E7%84%B6%E6%AD%BB%E9%94%81%EF%BC%9A%E6%89%80%E6%9C%89%E5%85%A5%E5%8F%A3%E6%98%AF%E5%90%A6%E6%8C%89%E5%90%8C%E4%B8%80%E9%A1%BA%E5%BA%8F%E6%8B%BF%E9%94%81%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F10%2Fpostgres-deadlock-order%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/10/postgres-jsonb-query-index/">
+              <span>上一篇</span>
+              <strong>JSONB 有 GIN 索引，为什么键存在查询仍可能用不上？</strong>
+              <small>2026-10-10</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/10/otel-sampling-missing-traces/">
+              <span>下一篇</span>
+              <strong>改用尾部采样，就能找回已经丢掉的错误链路吗？</strong>
+              <small>2026-10-10</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#每个入口都合理，组合仍可能互相等待">每个入口都合理，组合仍可能互相等待</a>
+          
+            <a class="toc-link toc-link--h2" href="#缩短事务，不靠延长等待掩盖问题">缩短事务，不靠延长等待掩盖问题</a>
+          
+            <a class="toc-link toc-link--h2" href="#用等待关系验证修复">用等待关系验证修复</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>45</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>21</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>20</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>9</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/10/postgres-jsonb-query-index/">JSONB 有 GIN 索引，为什么键存在查询仍可能用不上？</a></h3>
+          <p>2026-10-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/10/postgres-pagination-order/">翻页有重复：LIMIT 之外还要约定什么？</a></h3>
+          <p>2026-10-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/10/postgres-unique-null/">唯一约束存在，为什么还能保存两个空值？</a></h3>
+          <p>2026-10-10</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.0" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

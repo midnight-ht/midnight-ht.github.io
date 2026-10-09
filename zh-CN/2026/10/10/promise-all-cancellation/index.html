@@ -1,0 +1,387 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Promise.all 已经失败，其他请求为什么还在执行？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Promise.all 聚合失败不会取消已经开始的任务；需区分可取消读取、业务写入与完整结果收集，避免重试重复副作用。">
+  
+  
+    <meta name="keywords" content="Promise.all,任务取消,副作用">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/10/promise-all-cancellation/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/10/promise-all-cancellation/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/10/promise-all-cancellation/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/10/promise-all-cancellation/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Promise.all 已经失败，其他请求为什么还在执行？ | Midnight blog">
+    <meta property="og:description" content="Promise.all 聚合失败不会取消已经开始的任务；需区分可取消读取、业务写入与完整结果收集，避免重试重复副作用。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/10/promise-all-cancellation/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/promise-all-cancellation/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/10/promise-all-cancellation/","name":"Promise.all 已经失败，其他请求为什么还在执行？ | Midnight blog","description":"Promise.all 聚合失败不会取消已经开始的任务；需区分可取消读取、业务写入与完整结果收集，避免重试重复副作用。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/promise-all-cancellation/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/promise-all-cancellation/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/promise-all-cancellation/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/promise-all-cancellation/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/10/promise-all-cancellation/","headline":"Promise.all 已经失败，其他请求为什么还在执行？","description":"Promise.all 聚合失败不会取消已经开始的任务；需区分可取消读取、业务写入与完整结果收集，避免重试重复副作用。","inLanguage":"zh-CN","datePublished":"2026-10-09T19:23:32.000Z","dateModified":"2026-10-09T19:23:32.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Development, Engineering, Promise.all"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/promise-all-cancellation/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Promise.all 已经失败，其他请求为什么还在执行？","item":"https://www.zyweb.vip/zh-CN/2026/10/10/promise-all-cancellation/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/10/promise-all-cancellation/" selected>zh-CN</option><option value="/en/2026/10/10/promise-all-cancellation/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/10/promise-all-cancellation/" selected>zh-CN</option><option value="/en/2026/10/10/promise-all-cancellation/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-09T19:23:32.000Z">2026-10-10</time>
+    </div>
+
+    <h1>Promise.all 已经失败，其他请求为什么还在执行？</h1>
+
+    
+      <p class="post-hero__summary">Promise.all 聚合失败不会取消已经开始的任务；需区分可取消读取、业务写入与完整结果收集，避免重试重复副作用。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-09T19:23:32.000Z">2026-10-10</time> · 预计阅读 3 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/10/promise-all-cancellation/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/10/promise-all-cancellation/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>Promise.all 返回失败以后，其他已经启动的任务仍可能继续执行。它聚合承诺的结果，并没有替任务定义取消、事务回滚或副作用补偿。调用方应根据每个操作的性质决定是继续收集结果、请求取消，还是进入明确的业务恢复流程。本文讨论批量保存的假设场景，没有执行网络请求。</p>
+<h2 id="返回结果与任务生命期分开理解"><a href="#返回结果与任务生命期分开理解" class="headerlink" title="返回结果与任务生命期分开理解"></a>返回结果与任务生命期分开理解</h2><p><a target="_blank" rel="noopener" href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/all">MDN 的 Promise.all 参考</a>说明，某个输入承诺拒绝时，聚合承诺会以首先出现的拒绝原因拒绝；拒绝不会取消其余操作。需要等待所有结果时可以使用 allSettled。这里描述语言接口行为，不宣称某个 HTTP 客户端或服务端自动遵循取消信号。</p>
+<p>假设页面同时保存三份配置，其中一份校验失败。页面进入错误分支时，另两份可能已经保存，也可能仍在等待响应。如果界面只显示“全部失败”，用户再次点击保存就可能重复执行成功的部分。数组里放的是承诺，不是一个覆盖所有业务写入的数据库事务；是否具备整体原子性，应由服务端接口和业务设计另行保证。</p>
+<p>任务什么时候启动也要明确。创建请求时通常已经开始了工作，把承诺交给聚合函数不会把它们变成可按需调度的任务工厂。大量输入的并发限制需要单独实现，并根据请求预算和下游承受能力决定。这里没有给出最佳并发数，因为它取决于真实负载、超时与服务限制。</p>
+<h2 id="取消信号不是撤销已经发生的事情"><a href="#取消信号不是撤销已经发生的事情" class="headerlink" title="取消信号不是撤销已经发生的事情"></a>取消信号不是撤销已经发生的事情</h2><p>对于搜索等只读工作，客户端可以请求取消不再需要的读取，并保护界面只提交当前有效结果。相关边界见<a href="/zh-CN/2026/10/09/frontend-abort-stale-results/">取消请求与过期结果</a>。但服务端是否停止处理，需要由协议与实现确认；浏览器不再等待，不等于远端已经恢复到操作前状态。</p>
+<p>对发送邮件、创建订单或保存配置，取消之后仍需要知道实际业务结果。可以通过稳定的操作标识查询终态，或者让重试携带相同的业务幂等身份。补偿也不是任意“反向调用”：如果配置已经被后续用户修改，直接写回旧值可能覆盖合法变化。恢复策略需要条件检查和权限边界，不能只放进错误捕获函数。</p>
+<p>allSettled 能保留每项最终结果，适合允许部分成功的批量操作，却不会自动把失败项目重试或把成功项目撤回。它还需要等待每个输入结束，某个任务长期不完成时，整体收集可能一直等待。每项任务的截止时间、未知状态与后续查询责任都要显式定义，不能把超时统一解释为未执行。</p>
+<h2 id="把界面提示绑定到业务状态"><a href="#把界面提示绑定到业务状态" class="headerlink" title="把界面提示绑定到业务状态"></a>把界面提示绑定到业务状态</h2><p>假设保存允许部分成功，可以明确列出哪些对象已保存、哪些失败、哪些仍待确认，并只对可重试对象提供操作。若业务要求整体成功，则优先设计一个能兑现该承诺的服务端边界，而不是让前端靠多个独立请求猜测原子性。标题中的“失败”在这些层面含义不同，验收条件应分别写出。</p>
+<p>建议在测试环境控制各任务的成功、拒绝与延迟顺序，验证提示、重复点击和重试是否产生预期结果。本文没有执行测试或提供成功日志。代码评审时，先问每个输入产生什么副作用，再选择聚合函数；一句 catch 并不能定义整个批次的失败语义。</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+            <a class="tag tag--promise-all" href="/zh-CN/tags/Promise.all/">Promise.all</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F10%2Fpromise-all-cancellation%2F&text=Promise.all%20%E5%B7%B2%E7%BB%8F%E5%A4%B1%E8%B4%A5%EF%BC%8C%E5%85%B6%E4%BB%96%E8%AF%B7%E6%B1%82%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E5%9C%A8%E6%89%A7%E8%A1%8C%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F10%2Fpromise-all-cancellation%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Promise.all%20%E5%B7%B2%E7%BB%8F%E5%A4%B1%E8%B4%A5%EF%BC%8C%E5%85%B6%E4%BB%96%E8%AF%B7%E6%B1%82%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E5%9C%A8%E6%89%A7%E8%A1%8C%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F10%2Fpromise-all-cancellation%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/10/terraform-state-lock-boundary/">
+              <span>上一篇</span>
+              <strong>Terraform 状态锁拿到了，云资源就不会被别人修改吗？</strong>
+              <small>2026-10-10</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/10/prometheus-label-budget/">
+              <span>下一篇</span>
+              <strong>每个订单都加一个指标标签，排查会更方便吗？</strong>
+              <small>2026-10-10</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#返回结果与任务生命期分开理解">返回结果与任务生命期分开理解</a>
+          
+            <a class="toc-link toc-link--h2" href="#取消信号不是撤销已经发生的事情">取消信号不是撤销已经发生的事情</a>
+          
+            <a class="toc-link toc-link--h2" href="#把界面提示绑定到业务状态">把界面提示绑定到业务状态</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>45</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>21</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>20</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>9</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/10/modal-focus-workflow/">弹窗能关闭，键盘用户为什么找不到原来的位置？</a></h3>
+          <p>2026-10-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/10/openapi-readonly-enforcement/">写了 readOnly，服务端就会拒绝修改吗？</a></h3>
+          <p>2026-10-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/10/postgres-deadlock-order/">加了行锁仍然死锁：所有入口是否按同一顺序拿锁？</a></h3>
+          <p>2026-10-10</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.0" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

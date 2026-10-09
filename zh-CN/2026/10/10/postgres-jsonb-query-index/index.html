@@ -1,0 +1,387 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>JSONB 有 GIN 索引，为什么键存在查询仍可能用不上？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="PostgreSQL 18 的 JSONB 索引选择需核对操作符类、表达式和业务查询，不能把更小的索引当成覆盖全部请求的保证。">
+  
+  
+    <meta name="keywords" content="PostgreSQL18,JSONB,GIN">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/10/postgres-jsonb-query-index/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/10/postgres-jsonb-query-index/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/10/postgres-jsonb-query-index/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/10/postgres-jsonb-query-index/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="JSONB 有 GIN 索引，为什么键存在查询仍可能用不上？ | Midnight blog">
+    <meta property="og:description" content="PostgreSQL 18 的 JSONB 索引选择需核对操作符类、表达式和业务查询，不能把更小的索引当成覆盖全部请求的保证。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/10/postgres-jsonb-query-index/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-jsonb-query-index/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-jsonb-query-index/","name":"JSONB 有 GIN 索引，为什么键存在查询仍可能用不上？ | Midnight blog","description":"PostgreSQL 18 的 JSONB 索引选择需核对操作符类、表达式和业务查询，不能把更小的索引当成覆盖全部请求的保证。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-jsonb-query-index/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-jsonb-query-index/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-jsonb-query-index/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-jsonb-query-index/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-jsonb-query-index/","headline":"JSONB 有 GIN 索引，为什么键存在查询仍可能用不上？","description":"PostgreSQL 18 的 JSONB 索引选择需核对操作符类、表达式和业务查询，不能把更小的索引当成覆盖全部请求的保证。","inLanguage":"zh-CN","datePublished":"2026-10-09T19:23:32.000Z","dateModified":"2026-10-09T19:23:32.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Development, Engineering, PostgreSQL18"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-jsonb-query-index/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"JSONB 有 GIN 索引，为什么键存在查询仍可能用不上？","item":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-jsonb-query-index/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/10/postgres-jsonb-query-index/" selected>zh-CN</option><option value="/en/2026/10/10/postgres-jsonb-query-index/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/10/postgres-jsonb-query-index/" selected>zh-CN</option><option value="/en/2026/10/10/postgres-jsonb-query-index/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-09T19:23:32.000Z">2026-10-10</time>
+    </div>
+
+    <h1>JSONB 有 GIN 索引，为什么键存在查询仍可能用不上？</h1>
+
+    
+      <p class="post-hero__summary">PostgreSQL 18 的 JSONB 索引选择需核对操作符类、表达式和业务查询，不能把更小的索引当成覆盖全部请求的保证。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-09T19:23:32.000Z">2026-10-10</time> · 预计阅读 3 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/10/postgres-jsonb-query-index/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/10/postgres-jsonb-query-index/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>JSONB 列上存在 GIN 索引，并不意味着所有针对这个文档的查询都能用同一种索引路径。应先核对操作符类、被索引的表达式与实际查询形状，再讨论大小和速度。本文使用 PostgreSQL 十八版文档解释选择，没有创建索引、运行执行计划或测量收益。</p>
+<h2 id="操作符类决定支持的查询范围"><a href="#操作符类决定支持的查询范围" class="headerlink" title="操作符类决定支持的查询范围"></a>操作符类决定支持的查询范围</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/datatype-json.html#JSON-INDEXING">PostgreSQL JSON 类型文档</a>说明，非默认的 jsonb_path_ops 支持包含和指定的路径查询操作符，但不支持键存在操作符；默认 jsonb_ops 支持的操作符范围不同。原文也讨论不同索引项的组织方式。本篇不把“通常更小”的描述改写成任何数据集都更快的承诺。</p>
+<p>假设客服系统把扩展属性放在 JSONB 中，查询“含有某种标签值”与“是否存在某个键”是两个不同问题。团队为第一种请求选了路径操作符类，随后第二种请求上线，并不能只凭索引名字一样就断定它受到覆盖。先把业务过滤条件翻译成真实数据库操作符，再与索引定义逐项比较，比看到列类型就添加一个通用索引更可靠。</p>
+<p>表达式也有边界。索引建在整个文档上，而查询先取出某个子对象再判断，是否匹配所建索引需要结合表达式与计划核对。不能把一段应用代码中的“查标签”当成所有 SQL 都有相同形状。不同 ORM 或条件拼装分支可能生成不同表达式，应保存实际发出的查询，而不只保存开发者预想的语句。</p>
+<h2 id="先列查询，再决定保留哪些灵活性"><a href="#先列查询，再决定保留哪些灵活性" class="headerlink" title="先列查询，再决定保留哪些灵活性"></a>先列查询，再决定保留哪些灵活性</h2><p>可以按读者真正需要的问题整理查询清单：固定字段等值、键存在、嵌套包含，以及结构缺值时的行为。这里只提出分类方法，没有执行这些查询。固定且频繁的业务属性是否适合独立列，也值得讨论；采用 JSONB 不等于禁止列建模，改成列也不自动解决所有数据演进问题。</p>
+<p>索引带来写入和存储责任。为每一种临时查询都加索引，可能使更新成本和维护复杂度增加；只留一个最小索引，又可能无法支持关键后台任务。取舍应结合真实频率、过滤选择性和服务时限，不应由索引体积一个数值决定。对很少运行但重要的审计查询，允许较长等待还是提供专门导出，需要业务确认。</p>
+<p>文档还指出，路径操作符类对没有值的某些 JSON 结构不会产生相应索引项，包含此类结构的查找可能需要较广扫描。因此数据中“空对象”不是可以从样本里随意删除的噪声。缺键、空对象、空数组和空值可能代表不同业务状态，验收用例应保留这种差别，否则索引评估与真实请求范围不一致。</p>
+<h2 id="验证选择，不编造速度"><a href="#验证选择，不编造速度" class="headerlink" title="验证选择，不编造速度"></a>验证选择，不编造速度</h2><p>建议先在代表性测试数据上保存索引定义、查询参数和执行计划，确认条件如何进入索引路径，再测量读取与更新的资源成本。规划估算和实际执行结果应分开；实际执行可能产生负载，需要适合环境的安全安排。相关方法见<a href="/zh-CN/2026/10/09/postgres-explain-evidence/">执行计划中的估算证据</a>。</p>
+<p>本文没有运行上述评估。上线评审应能回答：这个操作符类为哪些查询服务，哪些查询明确不覆盖，数据结构变化以后谁检查计划。如果只能回答“JSONB 已经有索引”，查询契约仍然没有得到验证。</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+            <a class="tag tag--postgresql18" href="/zh-CN/tags/PostgreSQL18/">PostgreSQL18</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F10%2Fpostgres-jsonb-query-index%2F&text=JSONB%20%E6%9C%89%20GIN%20%E7%B4%A2%E5%BC%95%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E9%94%AE%E5%AD%98%E5%9C%A8%E6%9F%A5%E8%AF%A2%E4%BB%8D%E5%8F%AF%E8%83%BD%E7%94%A8%E4%B8%8D%E4%B8%8A%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F10%2Fpostgres-jsonb-query-index%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=JSONB%20%E6%9C%89%20GIN%20%E7%B4%A2%E5%BC%95%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E9%94%AE%E5%AD%98%E5%9C%A8%E6%9F%A5%E8%AF%A2%E4%BB%8D%E5%8F%AF%E8%83%BD%E7%94%A8%E4%B8%8D%E4%B8%8A%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F10%2Fpostgres-jsonb-query-index%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/10/postgres-pagination-order/">
+              <span>上一篇</span>
+              <strong>翻页有重复：LIMIT 之外还要约定什么？</strong>
+              <small>2026-10-10</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/10/postgres-deadlock-order/">
+              <span>下一篇</span>
+              <strong>加了行锁仍然死锁：所有入口是否按同一顺序拿锁？</strong>
+              <small>2026-10-10</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#操作符类决定支持的查询范围">操作符类决定支持的查询范围</a>
+          
+            <a class="toc-link toc-link--h2" href="#先列查询，再决定保留哪些灵活性">先列查询，再决定保留哪些灵活性</a>
+          
+            <a class="toc-link toc-link--h2" href="#验证选择，不编造速度">验证选择，不编造速度</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>45</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>21</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>20</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>9</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/10/postgres-deadlock-order/">加了行锁仍然死锁：所有入口是否按同一顺序拿锁？</a></h3>
+          <p>2026-10-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/10/postgres-pagination-order/">翻页有重复：LIMIT 之外还要约定什么？</a></h3>
+          <p>2026-10-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/10/postgres-unique-null/">唯一约束存在，为什么还能保存两个空值？</a></h3>
+          <p>2026-10-10</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.0" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
