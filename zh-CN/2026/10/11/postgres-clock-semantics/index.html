@@ -1,0 +1,384 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>同一事务里时间没变，是数据库时钟停了吗？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="CURRENT_TIMESTAMP 不变源于事务时间语义；按业务事件选择取时点，避免把时间戳当成全局顺序。">
+  
+  
+    <meta name="keywords" content="PostgreSQL18,事务时间,审计时间">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/11/postgres-clock-semantics/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="同一事务里时间没变，是数据库时钟停了吗？ | Midnight blog">
+    <meta property="og:description" content="CURRENT_TIMESTAMP 不变源于事务时间语义；按业务事件选择取时点，避免把时间戳当成全局顺序。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/","name":"同一事务里时间没变，是数据库时钟停了吗？ | Midnight blog","description":"CURRENT_TIMESTAMP 不变源于事务时间语义；按业务事件选择取时点，避免把时间戳当成全局顺序。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/","headline":"同一事务里时间没变，是数据库时钟停了吗？","description":"CURRENT_TIMESTAMP 不变源于事务时间语义；按业务事件选择取时点，避免把时间戳当成全局顺序。","inLanguage":"zh-CN","datePublished":"2026-10-10T19:18:07.000Z","dateModified":"2026-10-10T19:18:07.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"同一事务里时间没变，是数据库时钟停了吗？","item":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/11/postgres-clock-semantics/" selected>zh-CN</option><option value="/en/2026/10/11/postgres-clock-semantics/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/11/postgres-clock-semantics/" selected>zh-CN</option><option value="/en/2026/10/11/postgres-clock-semantics/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-10T19:18:07.000Z">2026-10-11</time>
+    </div>
+
+    <h1>同一事务里时间没变，是数据库时钟停了吗？</h1>
+
+    
+      <p class="post-hero__summary">CURRENT_TIMESTAMP 不变源于事务时间语义；按业务事件选择取时点，避免把时间戳当成全局顺序。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-10T19:18:07.000Z">2026-10-11</time> · 预计阅读 3 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/11/postgres-clock-semantics/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/11/postgres-clock-semantics/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>同一事务里 CURRENT_TIMESTAMP 不变，是 PostgreSQL 对事务时间的定义，不能据此判断数据库时钟停了。需要记录事务开始、语句开始还是实际读取时刻，应先选择时间语义，再选择函数；审计字段的名字也应说明它记录的是哪一个事件。</p>
+<h2 id="时间字段需要一个明确的问题"><a href="#时间字段需要一个明确的问题" class="headerlink" title="时间字段需要一个明确的问题"></a>时间字段需要一个明确的问题</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-datetime.html">PostgreSQL 18 的日期时间文档</a>区分事务开始时间、语句开始时间与实际当前时间。CURRENT_TIMESTAMP 对应事务开始；clock_timestamp 的值可以在同一语句内变化。这些行为服务于不同用途，不存在所有字段都应该替换成一种函数的结论。版本依据为文档第十八版，本文没有运行数据库实验。</p>
+<p>设想事务先读取资料，再等待一个外部确认，最后写入审批记录。如果字段用事务开始时间，它描述的是整组操作的起点，不是最后写入那一刻。这个设计示例没有实际等待时长，却能暴露命名问题：一个叫“完成时间”的字段如果记录起点，会误导排查者，而函数本身并没有故障。</p>
+<h2 id="稳定与变化各有用途"><a href="#稳定与变化各有用途" class="headerlink" title="稳定与变化各有用途"></a>稳定与变化各有用途</h2><p>在同一事务中保持一致的时间，可以让一组相关记录共享同一个业务时点，便于解释它们属于同次变更。若要观察某段执行过程实际何时到达，则需要另外的事件时间。把执行观测时间与业务生效时间混在一列，后续报表可能将排队、处理和生效之间的差异理解成数据异常。</p>
+<p>语句开始时间也有独立价值：它不等于整个事务起点，更不保证每一行实际被处理的精确时刻。建议在表结构和接口说明中明确字段来源，而不是只列出数据类型。迁移函数之前，应检查使用者是否依赖同批数据时间相同，是否把它当成排序依据，以及历史记录是否还能与新定义比较。</p>
+<h2 id="时间戳不能代替所有顺序"><a href="#时间戳不能代替所有顺序" class="headerlink" title="时间戳不能代替所有顺序"></a>时间戳不能代替所有顺序</h2><p>即使采用变化的当前时间，也不应把时间戳当成全局唯一序号或绝对的跨系统因果关系。时钟与分布式执行还有其他约束；如果业务需要严格顺序，应另行设计标识或版本规则。多条记录显示相同时间，可能来自精度、语义或并发，不能仅凭相等就断言重复处理。</p>
+<p>对于审计，建议保留事件类型、对象身份、事务关联和时间来源，让一个时间值能够被解释。若记录外部事件，还需区分外部声称的发生时间与本系统观察时间。本文不声称这些字段能够证明事件真实性，它们只是提高后续核对能力的设计建议。日志中也应避免为排查而加入不必要的敏感数据。</p>
+<p>可以在可恢复环境中规划事务内多次读取、不同语句与长事务的对照检查，核对字段到底满足哪种业务含义。没有执行结果前，不把预期行为写成测试通过。相关的<a href="/zh-CN/2026/10/10/timestamps-recurring-intent/">周期任务时间设计</a>讨论日历意图，属于另一层问题；当前这篇先解决数据库取时点。下一步从“创建”“完成”“生效”三个字段名出发，逐一核对实际记录事件，再决定是否修改默认值。</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F11%2Fpostgres-clock-semantics%2F&text=%E5%90%8C%E4%B8%80%E4%BA%8B%E5%8A%A1%E9%87%8C%E6%97%B6%E9%97%B4%E6%B2%A1%E5%8F%98%EF%BC%8C%E6%98%AF%E6%95%B0%E6%8D%AE%E5%BA%93%E6%97%B6%E9%92%9F%E5%81%9C%E4%BA%86%E5%90%97%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F11%2Fpostgres-clock-semantics%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E5%90%8C%E4%B8%80%E4%BA%8B%E5%8A%A1%E9%87%8C%E6%97%B6%E9%97%B4%E6%B2%A1%E5%8F%98%EF%BC%8C%E6%98%AF%E6%95%B0%E6%8D%AE%E5%BA%93%E6%97%B6%E9%92%9F%E5%81%9C%E4%BA%86%E5%90%97%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F11%2Fpostgres-clock-semantics%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/11/postgres-delete-ownership/">
+              <span>上一篇</span>
+              <strong>外键能级联删除，业务就应该级联吗？</strong>
+              <small>2026-10-11</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/11/plural-rules-message/">
+              <span>下一篇</span>
+              <strong>国际化不能只给英文单词加一个 s</strong>
+              <small>2026-10-11</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#时间字段需要一个明确的问题">时间字段需要一个明确的问题</a>
+          
+            <a class="toc-link toc-link--h2" href="#稳定与变化各有用途">稳定与变化各有用途</a>
+          
+            <a class="toc-link toc-link--h2" href="#时间戳不能代替所有顺序">时间戳不能代替所有顺序</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>65</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>30</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>25</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>13</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/11/form-validation-authority/">浏览器校验通过，服务端还要检查什么？</a></h3>
+          <p>2026-10-11</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/11/grpc-deadline-budget/">上游超时了，下游任务为什么仍在消耗资源？</a></h3>
+          <p>2026-10-11</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/11/http-range-representation/">断点续传怎样避免拼接两个版本的文件？</a></h3>
+          <p>2026-10-11</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.0" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

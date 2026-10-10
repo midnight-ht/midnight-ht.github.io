@@ -1,0 +1,384 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>上游超时了，下游任务为什么仍在消耗资源？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="上游超时不证明下游停止：传播剩余预算，让执行器响应取消，并单独处理已经提交的业务副作用。">
+  
+  
+    <meta name="keywords" content="gRPC,截止时间,取消传播">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/11/grpc-deadline-budget/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/11/grpc-deadline-budget/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/11/grpc-deadline-budget/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/11/grpc-deadline-budget/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="上游超时了，下游任务为什么仍在消耗资源？ | Midnight blog">
+    <meta property="og:description" content="上游超时不证明下游停止：传播剩余预算，让执行器响应取消，并单独处理已经提交的业务副作用。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/11/grpc-deadline-budget/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/11/grpc-deadline-budget/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/11/grpc-deadline-budget/","name":"上游超时了，下游任务为什么仍在消耗资源？ | Midnight blog","description":"上游超时不证明下游停止：传播剩余预算，让执行器响应取消，并单独处理已经提交的业务副作用。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/11/grpc-deadline-budget/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/11/grpc-deadline-budget/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/11/grpc-deadline-budget/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/11/grpc-deadline-budget/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/11/grpc-deadline-budget/","headline":"上游超时了，下游任务为什么仍在消耗资源？","description":"上游超时不证明下游停止：传播剩余预算，让执行器响应取消，并单独处理已经提交的业务副作用。","inLanguage":"zh-CN","datePublished":"2026-10-10T19:18:07.000Z","dateModified":"2026-10-10T19:18:07.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/11/grpc-deadline-budget/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"上游超时了，下游任务为什么仍在消耗资源？","item":"https://www.zyweb.vip/zh-CN/2026/10/11/grpc-deadline-budget/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/11/grpc-deadline-budget/" selected>zh-CN</option><option value="/en/2026/10/11/grpc-deadline-budget/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/11/grpc-deadline-budget/" selected>zh-CN</option><option value="/en/2026/10/11/grpc-deadline-budget/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-10T19:18:07.000Z">2026-10-11</time>
+    </div>
+
+    <h1>上游超时了，下游任务为什么仍在消耗资源？</h1>
+
+    
+      <p class="post-hero__summary">上游超时不证明下游停止：传播剩余预算，让执行器响应取消，并单独处理已经提交的业务副作用。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-10T19:18:07.000Z">2026-10-11</time> · 预计阅读 3 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/11/grpc-deadline-budget/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/11/grpc-deadline-budget/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>上游超时只说明等待结束，不能证明下游工作已经停止。跨服务调用需要传递剩余时间预算，服务端还要让自己启动的任务响应取消；已经产生的外部副作用则需要另外处理，不能把取消当成事务回滚。</p>
+<h2 id="每层重新计时会延长等待"><a href="#每层重新计时会延长等待" class="headerlink" title="每层重新计时会延长等待"></a>每层重新计时会延长等待</h2><p>设想请求先完成身份检查，再读取订单，最后访问库存服务。如果每一层都从头给出同样的等待时间，最后一个服务可能在用户放弃后仍有很长的运行窗口。这个例子没有实际延迟数据，它说明的是预算被重复分配的问题。预算应从入口目标中扣除已经耗费的时间，还要为返回响应和必要清理留出余地。</p>
+<p><a target="_blank" rel="noopener" href="https://grpc.io/docs/guides/deadlines/">gRPC 的 deadlines 指南</a>区分截止时刻与最大等待时长，并说明服务端应用负责停止为调用启动的活动。截止时间传播依赖语言实现，有的默认启用，有的需要显式开启。部署前应核对实际客户端、服务端库和配置，不能仅凭接口使用 gRPC 就认定整条调用链已经共享预算。</p>
+<h2 id="取消必须到达真正工作的地方"><a href="#取消必须到达真正工作的地方" class="headerlink" title="取消必须到达真正工作的地方"></a>取消必须到达真正工作的地方</h2><p>服务处理器结束后，数据库查询、后台线程或者第三方任务仍可能继续。建议把取消信号沿着工作边界传递，并在长循环、昂贵操作前以及分块处理之间检查。检查频率需要结合操作成本，不能为每个极小步骤增加无意义的开销，也不能到整个计算结束才检查一次。清理连接和释放临时资源，应属于被设计的退出路径。</p>
+<p>还有一个边界是不可逆动作。库存扣减或者消息发送如果已经提交，收到取消不会自动撤销它。客户端无法确定结果时，应该查询业务状态，或依照已有的幂等与补偿契约恢复；未经评估直接重试可能造成重复执行。请求截止与业务事务寿命可以不同，但这种差异需要明确表达，而不是藏在后台继续处理的实现细节里。</p>
+<h2 id="预算不足时怎样作决定"><a href="#预算不足时怎样作决定" class="headerlink" title="预算不足时怎样作决定"></a>预算不足时怎样作决定</h2><p>当剩余时间已经不足以完成一个必要步骤，可以提早结束并报告适当状态，而非继续排队到必然超时。可选数据则可以考虑省略，但前提是接口允许部分结果，用户也能看出缺失内容。降级不是偷偷改变语义：报价所需的数据与页面装饰信息不能采用同一条放弃规则。具体阈值必须来自真实负载和服务目标，本文不给出通用毫秒数。</p>
+<p>验证计划应分别观察调用结束、后台工作停止与副作用状态。可以安排预算在首层耗尽、第二层排队以及已经提交后才取消的场景，记录资源是否释放、最终结果能否被查询。本文没有运行服务或压测，这些场景属于建议，不能作为资源节省或吞吐提升的证据。</p>
+<p><a href="/zh-CN/2026/10/11/http-202-terminal-state/">异步任务终态</a>可以承接必须脱离请求继续运行的工作，但需要正式接受契约和状态查询。先画出入口到真正执行器的取消路径，找出哪个边界丢失预算，再决定传播、降级或转成持久任务；单纯缩短上游超时不会自动修复这条路径。</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F11%2Fgrpc-deadline-budget%2F&text=%E4%B8%8A%E6%B8%B8%E8%B6%85%E6%97%B6%E4%BA%86%EF%BC%8C%E4%B8%8B%E6%B8%B8%E4%BB%BB%E5%8A%A1%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E5%9C%A8%E6%B6%88%E8%80%97%E8%B5%84%E6%BA%90%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F11%2Fgrpc-deadline-budget%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E4%B8%8A%E6%B8%B8%E8%B6%85%E6%97%B6%E4%BA%86%EF%BC%8C%E4%B8%8B%E6%B8%B8%E4%BB%BB%E5%8A%A1%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E5%9C%A8%E6%B6%88%E8%80%97%E8%B5%84%E6%BA%90%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F11%2Fgrpc-deadline-budget%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/11/http-range-representation/">
+              <span>上一篇</span>
+              <strong>断点续传怎样避免拼接两个版本的文件？</strong>
+              <small>2026-10-11</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/11/form-validation-authority/">
+              <span>下一篇</span>
+              <strong>浏览器校验通过，服务端还要检查什么？</strong>
+              <small>2026-10-11</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#每层重新计时会延长等待">每层重新计时会延长等待</a>
+          
+            <a class="toc-link toc-link--h2" href="#取消必须到达真正工作的地方">取消必须到达真正工作的地方</a>
+          
+            <a class="toc-link toc-link--h2" href="#预算不足时怎样作决定">预算不足时怎样作决定</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>65</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>30</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>25</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>13</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/11/form-validation-authority/">浏览器校验通过，服务端还要检查什么？</a></h3>
+          <p>2026-10-11</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/11/http-range-representation/">断点续传怎样避免拼接两个版本的文件？</a></h3>
+          <p>2026-10-11</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/11/plural-rules-message/">国际化不能只给英文单词加一个 s</a></h3>
+          <p>2026-10-11</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.0" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
