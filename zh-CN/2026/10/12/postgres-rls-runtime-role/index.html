@@ -1,0 +1,388 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>RLS 策略写好了，为什么应用仍能读到所有租户？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="RLS 是否生效取决于运行角色和策略；区分高权限绕过、表所有者及读写路径，不以管理员查询代替验收。">
+  
+  
+    <meta name="keywords" content="PostgreSQL18,RLS,运行角色">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/12/postgres-rls-runtime-role/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/12/postgres-rls-runtime-role/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/12/postgres-rls-runtime-role/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/12/postgres-rls-runtime-role/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="RLS 策略写好了，为什么应用仍能读到所有租户？ | Midnight blog">
+    <meta property="og:description" content="RLS 是否生效取决于运行角色和策略；区分高权限绕过、表所有者及读写路径，不以管理员查询代替验收。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/12/postgres-rls-runtime-role/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/12/postgres-rls-runtime-role/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/12/postgres-rls-runtime-role/","name":"RLS 策略写好了，为什么应用仍能读到所有租户？ | Midnight blog","description":"RLS 是否生效取决于运行角色和策略；区分高权限绕过、表所有者及读写路径，不以管理员查询代替验收。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/12/postgres-rls-runtime-role/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/12/postgres-rls-runtime-role/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/12/postgres-rls-runtime-role/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/12/postgres-rls-runtime-role/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/12/postgres-rls-runtime-role/","headline":"RLS 策略写好了，为什么应用仍能读到所有租户？","description":"RLS 是否生效取决于运行角色和策略；区分高权限绕过、表所有者及读写路径，不以管理员查询代替验收。","inLanguage":"zh-CN","datePublished":"2026-10-11T19:19:33.000Z","dateModified":"2026-10-11T19:19:33.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/12/postgres-rls-runtime-role/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"RLS 策略写好了，为什么应用仍能读到所有租户？","item":"https://www.zyweb.vip/zh-CN/2026/10/12/postgres-rls-runtime-role/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/12/postgres-rls-runtime-role/" selected>zh-CN</option><option value="/en/2026/10/12/postgres-rls-runtime-role/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/12/postgres-rls-runtime-role/" selected>zh-CN</option><option value="/en/2026/10/12/postgres-rls-runtime-role/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-11T19:19:33.000Z">2026-10-12</time>
+    </div>
+
+    <h1>RLS 策略写好了，为什么应用仍能读到所有租户？</h1>
+
+    
+      <p class="post-hero__summary">RLS 是否生效取决于运行角色和策略；区分高权限绕过、表所有者及读写路径，不以管理员查询代替验收。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-11T19:19:33.000Z">2026-10-12</time> · 预计阅读 3 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/12/postgres-rls-runtime-role/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/12/postgres-rls-runtime-role/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>RLS 策略存在，并不表示每个数据库连接都会受到它约束。排查租户数据泄漏时，先确认应用实际使用的角色，再核对策略；管理员连接中看到全部记录，不能直接证明普通应用角色也会如此。</p>
+<h2 id="策略之前还有角色边界"><a href="#策略之前还有角色边界" class="headerlink" title="策略之前还有角色边界"></a>策略之前还有角色边界</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/ddl-rowsecurity.html">PostgreSQL 18 行级安全文档</a>说明：超级用户和具有 BYPASSRLS 属性的角色始终绕过行级安全，表所有者通常也会绕过；FORCE ROW LEVEL SECURITY 可以让表所有者受策略约束，但不能据此声称超级用户也被限制。启用行级安全且没有适用策略时，对受约束的角色采用默认拒绝。这些条件决定了同一条查询为何可能得到不同结果。</p>
+<p>假设订单表已经按租户编写策略，应用却沿用了迁移程序的高权限连接。此时继续修改租户条件，可能一直改不到真正的问题。这个例子只是故障假设，并非本站发现的漏洞。应先沿着配置、连接池与数据库会话，找出实际执行查询的身份，避免把配置文件里的期望角色当成运行证据。</p>
+<h2 id="将迁移身份与运行身份分别检查"><a href="#将迁移身份与运行身份分别检查" class="headerlink" title="将迁移身份与运行身份分别检查"></a>将迁移身份与运行身份分别检查</h2><p>编辑建议是为数据库变更和日常业务访问建立不同的权限清单。迁移工作可能需要拥有表，业务服务则需要明确的读写能力。清单应记录角色属性、表所有者、策略适用角色及应用连接来源，审查对象包括后台任务和管理接口，不能只看用户请求使用的连接。</p>
+<p>还要检查租户上下文如何进入查询。连接池会重复使用连接，如果应用通过会话状态表达当前租户，必须定义设置、清理和失败路径。即使角色受 RLS 约束，错误的上下文仍可能让策略忠实执行错误的业务身份。这里提出的是需要验证的设计条件，没有证明任何连接池已经发生串租户。</p>
+<h2 id="读权限与写权限不能用一次查询代替"><a href="#读权限与写权限不能用一次查询代替" class="headerlink" title="读权限与写权限不能用一次查询代替"></a>读权限与写权限不能用一次查询代替</h2><p>可以制定一张待执行的检查表：租户甲读取自己的记录，读取租户乙的记录，创建记录，修改记录归属，以及不带有效上下文访问。预期结果应来自租户授权需求，而不是复制当前数据库返回值。检查应使用应用运行身份，同时保留管理员身份的对照结果，并明确哪个结果用于判断安全边界。</p>
+<p>只验证列表页面不足以覆盖导出、异步任务和批量修改。对拒绝写入的情况，也应确认事务如何反馈给用户，避免把部分失败包装成全部成功。本文没有运行数据库会话或迁移，上述步骤是检查方案，不能当作已通过的安全测试。</p>
+<h2 id="保留应用授权的责任"><a href="#保留应用授权的责任" class="headerlink" title="保留应用授权的责任"></a>保留应用授权的责任</h2><p>RLS 提供数据库中的行级访问控制，不能替代身份认证、业务动作授权或对高权限维护流程的管理。团队需要说明谁能绕过边界、为什么需要这种能力，以及相关操作如何被追踪。适用策略和运行角色应作为一个可审查的整体交付。</p>
+<p>下一步最有价值的工作，是用真实应用角色收集一次权限证据，而不是继续增加未经验证的策略条数。</p>
+<p>相关的<a href="/zh-CN/2026/10/09/idor-object-permissions/">对象级授权检查</a>同时核对应用动作与数据库行权限。</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F12%2Fpostgres-rls-runtime-role%2F&text=RLS%20%E7%AD%96%E7%95%A5%E5%86%99%E5%A5%BD%E4%BA%86%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%BA%94%E7%94%A8%E4%BB%8D%E8%83%BD%E8%AF%BB%E5%88%B0%E6%89%80%E6%9C%89%E7%A7%9F%E6%88%B7%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F12%2Fpostgres-rls-runtime-role%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=RLS%20%E7%AD%96%E7%95%A5%E5%86%99%E5%A5%BD%E4%BA%86%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%BA%94%E7%94%A8%E4%BB%8D%E8%83%BD%E8%AF%BB%E5%88%B0%E6%89%80%E6%9C%89%E7%A7%9F%E6%88%B7%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F12%2Fpostgres-rls-runtime-role%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/12/postgres-skip-locked-queue/">
+              <span>上一篇</span>
+              <strong>SKIP LOCKED 查不到任务，就代表队列空了吗？</strong>
+              <small>2026-10-12</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/12/postgres-check-null-domain/">
+              <span>下一篇</span>
+              <strong>CHECK 写着大于零，为什么空值仍能保存？</strong>
+              <small>2026-10-12</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#策略之前还有角色边界">策略之前还有角色边界</a>
+          
+            <a class="toc-link toc-link--h2" href="#将迁移身份与运行身份分别检查">将迁移身份与运行身份分别检查</a>
+          
+            <a class="toc-link toc-link--h2" href="#读权限与写权限不能用一次查询代替">读权限与写权限不能用一次查询代替</a>
+          
+            <a class="toc-link toc-link--h2" href="#保留应用授权的责任">保留应用授权的责任</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>85</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>40</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>29</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>17</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/12/http-redirect-method-contract/">POST 跳转后变成 GET，服务端到底接收了什么？</a></h3>
+          <p>2026-10-12</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/12/http-vary-representation-key/">同一个网址，缓存为什么给错了语言版本？</a></h3>
+          <p>2026-10-12</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/12/postgres-check-null-domain/">CHECK 写着大于零，为什么空值仍能保存？</a></h3>
+          <p>2026-10-12</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.0" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,389 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>多个实例的 P95，为什么不能直接取平均？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="实例 P95 不能直接平均成整体 P95；先定义请求总体、窗口与指标形式，再审查分布聚合和局部问题。">
+  
+  
+    <meta name="keywords" content="Prometheus,P95,分位数聚合">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/12/prometheus-quantile-aggregation/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/12/prometheus-quantile-aggregation/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/12/prometheus-quantile-aggregation/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/12/prometheus-quantile-aggregation/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="多个实例的 P95，为什么不能直接取平均？ | Midnight blog">
+    <meta property="og:description" content="实例 P95 不能直接平均成整体 P95；先定义请求总体、窗口与指标形式，再审查分布聚合和局部问题。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/12/prometheus-quantile-aggregation/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/12/prometheus-quantile-aggregation/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/12/prometheus-quantile-aggregation/","name":"多个实例的 P95，为什么不能直接取平均？ | Midnight blog","description":"实例 P95 不能直接平均成整体 P95；先定义请求总体、窗口与指标形式，再审查分布聚合和局部问题。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/12/prometheus-quantile-aggregation/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/12/prometheus-quantile-aggregation/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/12/prometheus-quantile-aggregation/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/12/prometheus-quantile-aggregation/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/12/prometheus-quantile-aggregation/","headline":"多个实例的 P95，为什么不能直接取平均？","description":"实例 P95 不能直接平均成整体 P95；先定义请求总体、窗口与指标形式，再审查分布聚合和局部问题。","inLanguage":"zh-CN","datePublished":"2026-10-11T19:19:33.000Z","dateModified":"2026-10-11T19:19:33.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Delivery, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/12/prometheus-quantile-aggregation/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"多个实例的 P95，为什么不能直接取平均？","item":"https://www.zyweb.vip/zh-CN/2026/10/12/prometheus-quantile-aggregation/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/12/prometheus-quantile-aggregation/" selected>zh-CN</option><option value="/en/2026/10/12/prometheus-quantile-aggregation/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/12/prometheus-quantile-aggregation/" selected>zh-CN</option><option value="/en/2026/10/12/prometheus-quantile-aggregation/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-11T19:19:33.000Z">2026-10-12</time>
+    </div>
+
+    <h1>多个实例的 P95，为什么不能直接取平均？</h1>
+
+    
+      <p class="post-hero__summary">实例 P95 不能直接平均成整体 P95；先定义请求总体、窗口与指标形式，再审查分布聚合和局部问题。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-11T19:19:33.000Z">2026-10-12</time> · 预计阅读 3 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/12/prometheus-quantile-aggregation/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/12/prometheus-quantile-aggregation/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>多个实例各自的 P95 不能直接取平均后当成整体 P95。分位数来自各自的数据分布，平均这些结果会丢失请求数量与分布形状；需要先确定要描述的总体，再选择可聚合的分布数据。</p>
+<h2 id="一个尾部分位数不能代表整份分布"><a href="#一个尾部分位数不能代表整份分布" class="headerlink" title="一个尾部分位数不能代表整份分布"></a>一个尾部分位数不能代表整份分布</h2><p><a target="_blank" rel="noopener" href="https://prometheus.io/docs/practices/histograms/">Prometheus 的直方图与摘要实践文档</a>明确指出，平均预先计算的分位数在统计上没有合理意义。摘要与直方图提供的聚合能力不同，查询必须匹配指标类型。对于分布数据的组合，还需遵守所用直方图形式的兼容条件，不能把经典桶要求无条件套用到所有原生直方图。</p>
+<p>假设一个实例请求很多，另一个实例请求很少，两者各自的 P95 描述不同样本集合。把两个数各占一半进行平均，已经与请求数量的权重脱离。这个例子是统计解释，没有提供真实流量、延迟数字或查询测得的结果。</p>
+<h2 id="先定义整体包含哪些请求"><a href="#先定义整体包含哪些请求" class="headerlink" title="先定义整体包含哪些请求"></a>先定义整体包含哪些请求</h2><p>编辑建议是明确服务、时间窗口、请求类型、单位和过滤条件。成功请求与失败请求是否放在同一个总体，后台操作是否计入用户接口，都需要事先定义。指标名称相同，并不保证各实例观察的是完全相同的业务对象。</p>
+<p>若采用可聚合的分布表示，应确认实例之间的观测定义与单位一致，并审查查询所需的桶或模式兼容性。这里没有给出一条未经验证的通用查询，团队需要依据实际经典或原生直方图类型来写查询，再用已知分布检查含义。</p>
+<h2 id="聚合值仍可能隐藏局部问题"><a href="#聚合值仍可能隐藏局部问题" class="headerlink" title="聚合值仍可能隐藏局部问题"></a>聚合值仍可能隐藏局部问题</h2><p>整体 P95 是总体视角，不会自动揭示每个实例或每类请求的状态。流量较少但持续缓慢的路径，可能在整体分布中不明显。团队应同时保留有业务意义的分组观察，但分组也有维护与指标成本，不能无限添加维度来换取表面上的细节。</p>
+<p>对报警而言，应说明哪个总体与哪种用户影响相关。把实例级报警条件直接搬到总体分位数上，可能改变响应目标。评审记录应解释为什么选择该窗口和分类，以及什么情境需要进一步下钻，而不是只列出一张曲线。</p>
+<h2 id="用已知样本核对查询含义"><a href="#用已知样本核对查询含义" class="headerlink" title="用已知样本核对查询含义"></a>用已知样本核对查询含义</h2><p>待执行的检查可以构造明确的小样本分布，分别查看单实例与整体结果，确认查询是否按目标总体聚合，并识别估计与精确分位数之间的差异。样本应注明这是验证用数据，不应伪装成生产性能表现。本文没有运行 Prometheus 查询或生成指标结果。</p>
+<p>下一步应先写下“整体 P95”代表的完整句子，再审查指标类型与聚合方式。能够解释总体、窗口与数据表示，才有条件判断查询是否正确；一个看起来平滑的平均分位数，并不能替代这份解释。</p>
+<p>直方图分位数通常还涉及估计精度，桶或数据表示的选择应与需要区分的延迟范围一致，不能把估计值写成逐条请求排序后的精确结果。</p>
+<p>相关的<a href="/zh-CN/2026/10/11/alert-label-stability/">告警标签稳定性</a>可帮助把总体定义与后续告警身份衔接起来。</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F12%2Fprometheus-quantile-aggregation%2F&text=%E5%A4%9A%E4%B8%AA%E5%AE%9E%E4%BE%8B%E7%9A%84%20P95%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E8%83%BD%E7%9B%B4%E6%8E%A5%E5%8F%96%E5%B9%B3%E5%9D%87%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F12%2Fprometheus-quantile-aggregation%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E5%A4%9A%E4%B8%AA%E5%AE%9E%E4%BE%8B%E7%9A%84%20P95%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E8%83%BD%E7%9B%B4%E6%8E%A5%E5%8F%96%E5%B9%B3%E5%9D%87%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F12%2Fprometheus-quantile-aggregation%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/12/property-test-oracle-boundary/">
+              <span>上一篇</span>
+              <strong>随机输入测了很多次，怎样知道断言没有写错？</strong>
+              <small>2026-10-12</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/12/postgres-vacuum-space-meaning/">
+              <span>下一篇</span>
+              <strong>VACUUM 完成了，数据库文件为什么没有变小？</strong>
+              <small>2026-10-12</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#一个尾部分位数不能代表整份分布">一个尾部分位数不能代表整份分布</a>
+          
+            <a class="toc-link toc-link--h2" href="#先定义整体包含哪些请求">先定义整体包含哪些请求</a>
+          
+            <a class="toc-link toc-link--h2" href="#聚合值仍可能隐藏局部问题">聚合值仍可能隐藏局部问题</a>
+          
+            <a class="toc-link toc-link--h2" href="#用已知样本核对查询含义">用已知样本核对查询含义</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>85</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>40</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>29</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>17</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/12/commit-signature-review-boundary/">提交显示 Verified，就代表代码已经审查了吗？</a></h3>
+          <p>2026-10-12</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/12/configmap-consumption-update/">ConfigMap 改了，应用为什么还在用旧配置？</a></h3>
+          <p>2026-10-12</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/12/npm-ci-install-inputs/">用了 npm ci，就能保证两台机器产物完全相同吗？</a></h3>
+          <p>2026-10-12</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.0" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
