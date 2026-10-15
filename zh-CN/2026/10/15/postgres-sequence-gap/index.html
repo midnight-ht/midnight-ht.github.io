@@ -1,0 +1,382 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>事务回滚了，序列编号为什么没有退回去？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="序列值不随回滚回收，空洞不等于已提交记录丢失；业务编号、统计和外部交付需独立确认。">
+  
+  
+    <meta name="keywords" content="PostgreSQL18,序列,编号空洞">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/15/postgres-sequence-gap/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="事务回滚了，序列编号为什么没有退回去？ | Midnight blog">
+    <meta property="og:description" content="序列值不随回滚回收，空洞不等于已提交记录丢失；业务编号、统计和外部交付需独立确认。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/","name":"事务回滚了，序列编号为什么没有退回去？ | Midnight blog","description":"序列值不随回滚回收，空洞不等于已提交记录丢失；业务编号、统计和外部交付需独立确认。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/","headline":"事务回滚了，序列编号为什么没有退回去？","description":"序列值不随回滚回收，空洞不等于已提交记录丢失；业务编号、统计和外部交付需独立确认。","inLanguage":"zh-CN","datePublished":"2026-10-15T01:40:01.000Z","dateModified":"2026-10-15T01:40:01.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"事务回滚了，序列编号为什么没有退回去？","item":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/15/postgres-sequence-gap/" selected>zh-CN</option><option value="/en/2026/10/15/postgres-sequence-gap/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/15/postgres-sequence-gap/" selected>zh-CN</option><option value="/en/2026/10/15/postgres-sequence-gap/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-15T01:40:01.000Z">2026-10-15</time>
+    </div>
+
+    <h1>事务回滚了，序列编号为什么没有退回去？</h1>
+
+    
+      <p class="post-hero__summary">序列值不随回滚回收，空洞不等于已提交记录丢失；业务编号、统计和外部交付需独立确认。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-15T01:40:01.000Z">2026-10-15</time> · 预计阅读 2 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/15/postgres-sequence-gap/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/15/postgres-sequence-gap/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>PostgreSQL 的序列值取得后，不会因为调用事务回滚就重新回收。序列编号因此可能出现空洞，不能把它当成连续业务完成计数。需要连续业务编号的场景，应单独定义分配、确认和恢复过程，而不是期待序列替自己实现全部规则。</p>
+<h2 id="分配编号与提交记录不是同一动作"><a href="#分配编号与提交记录不是同一动作" class="headerlink" title="分配编号与提交记录不是同一动作"></a>分配编号与提交记录不是同一动作</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-sequence.html">PostgreSQL 十八版本序列函数文档</a>说明，为避免并发事务相互阻塞，nextval 取得的值不因事务中止而回收；冲突处理等情况也可能消耗值。因此序列不提供无空洞保证。文档还区分序列状态变化与事务提交，不能仅凭拿到一个数字就证明业务已经完成。</p>
+<p>假设创建任务先取得编号，随后校验或写入失败，事务回滚。下一个任务使用更后的编号是正常行为，不表示中间一定丢失了一条已经提交的任务。排查需要实际业务记录、事务结果和失败证据，而不是只根据数字差推断数据损坏。这是机制示例，本文没有执行数据库故障实验。</p>
+<p>编号之间的距离也不能直接当作新增记录数量。批量操作、失败和并发可能让分配顺序与完成顺序不同。若报表用当前最大编号减去旧编号计算业务吞吐，得到的只是某种编号变化，不能替代对已完成记录的准确统计。产品需要先定义统计事件，再选择数据来源。</p>
+<h2 id="不要为了补空洞重新使用身份"><a href="#不要为了补空洞重新使用身份" class="headerlink" title="不要为了补空洞重新使用身份"></a>不要为了补空洞重新使用身份</h2><p>发现缺号以后，手动回调序列或重复利用旧值，可能与已有数据、并发分配或外部引用冲突。是否需要改变序列状态应由明确迁移和维护方案决定，不能把填满数字作为日常修复目标。本文不会在用户数据库运行重置或补号操作，也不给未经验证的安全命令。</p>
+<p>如果业务要求某种严格编号，应说明何时正式分配、作废如何记录、失败如何恢复以及谁有权修改。这样的业务规则可能有额外合规或流程条件，数据库主键只承担其中一部分。不要把主键唯一与业务编号连续混为一谈，也不把这里的存储解释当作任何行业规则的替代。</p>
+<p>向数据库之外交付编号时，还需要知道相应分配与业务状态是否已经持久确认。序列文档提醒外部持久使用前确认提交；但提交编号也不表示外部工作已经完成。两个系统之间仍需自己的结果交接和恢复证据，不能只靠双方都看到了同一个数字。</p>
+<p>拟议检查可以覆盖回滚、冲突、并发和外部交付失败，核对每个编号对应的真实状态。未执行前不报告连续性或恢复保证。有关数据库提交与外部通知之间的交接，可阅读<a href="/zh-CN/2026/10/09/postgres-transaction-outbox/">事务与通知写入</a>。编号是追踪线索，业务是否完成需要独立记录。</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F15%2Fpostgres-sequence-gap%2F&text=%E4%BA%8B%E5%8A%A1%E5%9B%9E%E6%BB%9A%E4%BA%86%EF%BC%8C%E5%BA%8F%E5%88%97%E7%BC%96%E5%8F%B7%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E6%9C%89%E9%80%80%E5%9B%9E%E5%8E%BB%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F15%2Fpostgres-sequence-gap%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E4%BA%8B%E5%8A%A1%E5%9B%9E%E6%BB%9A%E4%BA%86%EF%BC%8C%E5%BA%8F%E5%88%97%E7%BC%96%E5%8F%B7%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E6%9C%89%E9%80%80%E5%9B%9E%E5%8E%BB%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F15%2Fpostgres-sequence-gap%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/15/prometheus-rule-label-contract/">
+              <span>上一篇</span>
+              <strong>记录规则有结果，原来的实例标签为什么不见了？</strong>
+              <small>2026-10-15</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/15/postgres-numeric-rounding/">
+              <span>下一篇</span>
+              <strong>numeric 限定两位小数，为什么没有拒绝更多小数？</strong>
+              <small>2026-10-15</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#分配编号与提交记录不是同一动作">分配编号与提交记录不是同一动作</a>
+          
+            <a class="toc-link toc-link--h2" href="#不要为了补空洞重新使用身份">不要为了补空洞重新使用身份</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>145</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>64</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>47</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>29</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/15/http-accept-response-contract/">请求写了 Accept，客户端为什么仍要检查响应类型？</a></h3>
+          <p>2026-10-15</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/15/http-content-length-encoding/">Content-Length 为什么不等于解压后的正文长度？</a></h3>
+          <p>2026-10-15</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/15/json-integer-precision/">JSON 解析没报错，长编号为什么还是变了？</a></h3>
+          <p>2026-10-15</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.0" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
