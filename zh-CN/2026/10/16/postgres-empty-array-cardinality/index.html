@@ -1,0 +1,386 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>空数组长度为什么是 NULL，什么时候用 cardinality？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="array_length 检查维度，cardinality 统计总元素；空集合、未知输入和缺失维度应保留含义。">
+  
+  
+    <meta name="keywords" content="PostgreSQL18,cardinality,空数组">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/16/postgres-empty-array-cardinality/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/16/postgres-empty-array-cardinality/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/16/postgres-empty-array-cardinality/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/16/postgres-empty-array-cardinality/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="空数组长度为什么是 NULL，什么时候用 cardinality？ | Midnight blog">
+    <meta property="og:description" content="array_length 检查维度，cardinality 统计总元素；空集合、未知输入和缺失维度应保留含义。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/16/postgres-empty-array-cardinality/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/16/postgres-empty-array-cardinality/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/16/postgres-empty-array-cardinality/","name":"空数组长度为什么是 NULL，什么时候用 cardinality？ | Midnight blog","description":"array_length 检查维度，cardinality 统计总元素；空集合、未知输入和缺失维度应保留含义。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/16/postgres-empty-array-cardinality/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/16/postgres-empty-array-cardinality/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/16/postgres-empty-array-cardinality/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/16/postgres-empty-array-cardinality/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/16/postgres-empty-array-cardinality/","headline":"空数组长度为什么是 NULL，什么时候用 cardinality？","description":"array_length 检查维度，cardinality 统计总元素；空集合、未知输入和缺失维度应保留含义。","inLanguage":"zh-CN","datePublished":"2026-10-15T19:16:24.000Z","dateModified":"2026-10-15T19:16:24.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/16/postgres-empty-array-cardinality/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"空数组长度为什么是 NULL，什么时候用 cardinality？","item":"https://www.zyweb.vip/zh-CN/2026/10/16/postgres-empty-array-cardinality/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/16/postgres-empty-array-cardinality/" selected>zh-CN</option><option value="/en/2026/10/16/postgres-empty-array-cardinality/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/16/postgres-empty-array-cardinality/" selected>zh-CN</option><option value="/en/2026/10/16/postgres-empty-array-cardinality/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-15T19:16:24.000Z">2026-10-16</time>
+    </div>
+
+    <h1>空数组长度为什么是 NULL，什么时候用 cardinality？</h1>
+
+    
+      <p class="post-hero__summary">array_length 检查维度，cardinality 统计总元素；空集合、未知输入和缺失维度应保留含义。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-15T19:16:24.000Z">2026-10-16</time> · 预计阅读 3 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/16/postgres-empty-array-cardinality/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/16/postgres-empty-array-cardinality/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>在 PostgreSQL 中，空数组的指定维度长度可能是 NULL，而不是零。若问题是集合总共有多少个元素，应先考虑 cardinality；若问题是某一个维度有多长，才使用对应的维度查询。函数选择之前，必须区分空集合、未知输入和不存在的维度。</p>
+<h2 id="长度与总量不是一个问题"><a href="#长度与总量不是一个问题" class="headerlink" title="长度与总量不是一个问题"></a>长度与总量不是一个问题</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-array.html">PostgreSQL 18 的数组函数文档</a>说明，array_length 对空或缺失的数组维度产生 NULL；cardinality 返回全部元素数量，数组为空时返回零。文档中的多维示例也显示，总元素数与单个维度长度具有不同口径。这里描述的是版本十八的数据库行为，不能把其他语言中空列表长度的习惯直接搬过来。</p>
+<p>假设报表用数组记录选中的功能项，通过某个维度长度判断是否为空。设计者期待零，却遇到 NULL，筛选结果于是与预想不同。这是说明机制的假设场景，本文没有执行 SQL。排查应先确认数据类型、具体输入和判断表达式，不能只在展示层把所有缺失值替换成零。</p>
+<h2 id="空集合需要与未知保持区别"><a href="#空集合需要与未知保持区别" class="headerlink" title="空集合需要与未知保持区别"></a>空集合需要与未知保持区别</h2><p>业务中的“确认没有选择任何项目”和“尚未获取选择信息”可能是两种状态。前者可以表达为空集合，后者则需要按数据契约处理未知。若在多个处理层随意把缺失信息转为空数组，报表虽然容易计算，却可能失去区分尚未完成与已经确认的能力。</p>
+<p>同样，对一个不存在的维度查询得到 NULL，并不表示整个数组没有元素。调用方如果把缺失维度解释成零总量，就把结构问题伪装成了正常空集合。应先决定是否允许多维、维度是否固定，再决定需要验证结构还是只统计元素。</p>
+<p>多维数据还应说明计数用途。需要展示行数、列数和全部单元数量时，是三个不同问题。不能选择一个看起来返回整数的函数，便把它复用到所有指标。报告中的名称也应体现口径，例如“元素总数”比模糊的“长度”更容易审查。</p>
+<h2 id="默认值是业务规则，不是通用修复"><a href="#默认值是业务规则，不是通用修复" class="headerlink" title="默认值是业务规则，不是通用修复"></a>默认值是业务规则，不是通用修复</h2><p>如果界面确实需要把某些缺失显示为零，可以在已经确认含义的展示边界处理，并保留原始状态供分析。不要让一个方便的默认值一路写回数据库，使后续流程再也无法辨认最初是否取得数据。不同业务可能允许不同映射，没有必要为了统一代码把这些区别抹平。</p>
+<p>建议的验收样本包括空数组、单元素数组、多维数组、维度不符合预期的输入，以及业务允许的未知值。先写明每种样本应该得到的数量和状态，再检查查询与接口返回是否一致。本文未执行这些检查，也没有提供可直接替换生产查询的已验证脚本。</p>
+<p>还应检查过滤、分组和展示是否采用同一口径。前端显示零而数据库筛选没有选中，往往意味着某层把未知映射成零，而另一层仍保留原本含义。把输入、计算结果和展示规则分别记录，通常比对最终数字反复修补更容易定位。</p>
+<p>关于空值在约束中的另一种影响，可参看<a href="/zh-CN/2026/10/12/postgres-check-null-domain/">CHECK 与空值域</a>。数组计数的最终选择应能明确回答：是在看维度、全部元素，还是业务上尚不知道的数量。</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F16%2Fpostgres-empty-array-cardinality%2F&text=%E7%A9%BA%E6%95%B0%E7%BB%84%E9%95%BF%E5%BA%A6%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF%20NULL%EF%BC%8C%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E7%94%A8%20cardinality%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F16%2Fpostgres-empty-array-cardinality%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E7%A9%BA%E6%95%B0%E7%BB%84%E9%95%BF%E5%BA%A6%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF%20NULL%EF%BC%8C%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E7%94%A8%20cardinality%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F16%2Fpostgres-empty-array-cardinality%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/16/postgres-returning-commit-boundary/">
+              <span>上一篇</span>
+              <strong>PostgreSQL RETURNING 有结果，事务就提交了吗？</strong>
+              <small>2026-10-16</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/16/playwright-retry-flaky-evidence/">
+              <span>下一篇</span>
+              <strong>Playwright 重试通过后，第一次失败还要保留吗？</strong>
+              <small>2026-10-16</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#长度与总量不是一个问题">长度与总量不是一个问题</a>
+          
+            <a class="toc-link toc-link--h2" href="#空集合需要与未知保持区别">空集合需要与未知保持区别</a>
+          
+            <a class="toc-link toc-link--h2" href="#默认值是业务规则，不是通用修复">默认值是业务规则，不是通用修复</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>165</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>72</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>53</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>33</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/16/fetch-body-single-consumer/">Fetch 日志读过正文，业务解析为什么又失败？</a></h3>
+          <p>2026-10-16</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/16/foreach-async-completion/">forEach 里写了 await，外层为什么提前结束？</a></h3>
+          <p>2026-10-16</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/16/http-204-empty-response/">HTTP 204 成功后，为什么不该继续解析 JSON？</a></h3>
+          <p>2026-10-16</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.0" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

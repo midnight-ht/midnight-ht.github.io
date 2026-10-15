@@ -1,0 +1,386 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Docker 改了默认日志驱动，旧容器为什么没变？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="日志默认值只影响新容器；核对实际实例配置，带数据和恢复计划安排重建并验证日志出口。">
+  
+  
+    <meta name="keywords" content="Docker,日志驱动,容器配置">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/16/docker-log-driver-existing-container/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/16/docker-log-driver-existing-container/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/16/docker-log-driver-existing-container/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/16/docker-log-driver-existing-container/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Docker 改了默认日志驱动，旧容器为什么没变？ | Midnight blog">
+    <meta property="og:description" content="日志默认值只影响新容器；核对实际实例配置，带数据和恢复计划安排重建并验证日志出口。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/16/docker-log-driver-existing-container/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/16/docker-log-driver-existing-container/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/16/docker-log-driver-existing-container/","name":"Docker 改了默认日志驱动，旧容器为什么没变？ | Midnight blog","description":"日志默认值只影响新容器；核对实际实例配置，带数据和恢复计划安排重建并验证日志出口。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/16/docker-log-driver-existing-container/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/16/docker-log-driver-existing-container/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/16/docker-log-driver-existing-container/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/16/docker-log-driver-existing-container/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/16/docker-log-driver-existing-container/","headline":"Docker 改了默认日志驱动，旧容器为什么没变？","description":"日志默认值只影响新容器；核对实际实例配置，带数据和恢复计划安排重建并验证日志出口。","inLanguage":"zh-CN","datePublished":"2026-10-15T19:16:24.000Z","dateModified":"2026-10-15T19:16:24.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Delivery, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/16/docker-log-driver-existing-container/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Docker 改了默认日志驱动，旧容器为什么没变？","item":"https://www.zyweb.vip/zh-CN/2026/10/16/docker-log-driver-existing-container/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/16/docker-log-driver-existing-container/" selected>zh-CN</option><option value="/en/2026/10/16/docker-log-driver-existing-container/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/16/docker-log-driver-existing-container/" selected>zh-CN</option><option value="/en/2026/10/16/docker-log-driver-existing-container/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-15T19:16:24.000Z">2026-10-16</time>
+    </div>
+
+    <h1>Docker 改了默认日志驱动，旧容器为什么没变？</h1>
+
+    
+      <p class="post-hero__summary">日志默认值只影响新容器；核对实际实例配置，带数据和恢复计划安排重建并验证日志出口。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-15T19:16:24.000Z">2026-10-16</time> · 预计阅读 3 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/16/docker-log-driver-existing-container/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/16/docker-log-driver-existing-container/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>Docker daemon 的默认日志配置改变后，已有容器不会自动采用新配置。应检查每个实际容器创建时使用的日志驱动和选项，再安排必要的重建。只看到默认值已更新，不足以证明当前运行实例的日志出口和轮转策略已经变化。</p>
+<h2 id="默认值主要影响新创建的实例"><a href="#默认值主要影响新创建的实例" class="headerlink" title="默认值主要影响新创建的实例"></a>默认值主要影响新创建的实例</h2><p><a target="_blank" rel="noopener" href="https://docs.docker.com/engine/logging/configure/">Docker Engine 的日志配置文档</a>明确说明，修改默认日志驱动或选项，只影响配置变更后创建的容器；已有容器保留原创建配置，更新需要以期望选项重新创建。文档还提醒 daemon.json 中的日志选项应采用字符串值。具体部署方式仍应按运行环境核对，不宜把某个平台的重启步骤当成所有主机的操作手册。</p>
+<p>假设团队希望控制日志增长，修改了 daemon 配置，看见默认驱动符合预期，就认为所有服务已经完成调整。旧容器可能仍沿用原设置。这个情境没有在本文执行，不能据此判断某台机器正在失控；它只说明配置文件、默认值和实例实际配置属于不同证据。</p>
+<h2 id="清点日志链路而不只看驱动名称"><a href="#清点日志链路而不只看驱动名称" class="headerlink" title="清点日志链路而不只看驱动名称"></a>清点日志链路而不只看驱动名称</h2><p>检查时应关联容器身份、服务版本、创建时间、实际驱动与选项，以及日志后续流向。驱动名称正确也不代表收集器已接收，收集器收到也不代表查询和保留政策正确。需要沿业务排错实际依赖的链路确认，而不是把某个局部状态作为最终验收。</p>
+<p>如果不同服务有显式配置，daemon 默认值可能根本不是它们的来源。应保留配置优先关系和维护责任，避免后来重建时被另一个编排文件覆盖。审查报告最好能说明每个实例为何采用该设置，而不是仅附一份期望中的配置模板。</p>
+<p>日志内容也应与结构变化一起检查。应用是否写向被收集的出口、敏感内容怎样处理、错误时是否能识别具体实例，都影响实际可用性。减少日志量不能以丢失关键诊断为代价，但也不能为了排错无限保留全部请求正文。</p>
+<h2 id="重建是发布动作，需要恢复计划"><a href="#重建是发布动作，需要恢复计划" class="headerlink" title="重建是发布动作，需要恢复计划"></a>重建是发布动作，需要恢复计划</h2><p>文档要求重新创建，不代表可以直接删除容器。重建前应确认持久化数据、服务依赖、启动参数和恢复方式，并考虑旧日志怎样保留或交接。本文没有执行删除、重启或重建命令，也没有验证某个业务可以无中断切换。</p>
+<p>建议先在合适环境检查新实例的实际配置，产生一条可识别且不含秘密的诊断事件，沿收集与查询路径核对，再评估推广。对生产实例安排替换时，还需要确认流量切换与业务状态。事件能被查到只是日志链路证据，不能替代应用健康或任务完成检查。</p>
+<p>失败时应能区分配置没有生效、日志没有产生、转发中断和查询条件错误。若没有这些区分，团队可能反复改默认设置，却一直没有触碰真正阻塞的环节。记录变更前后的实例与配置，比只记录执行了某个命令更有价值。</p>
+<p>日志调整与恢复策略相邻但责任不同，可参看<a href="/zh-CN/2026/10/15/docker-restart-exit-boundary/">Docker 退出与重启边界</a>。把期望配置落实到正在运行的容器，再验证实际日志路径，才算完成这次配置交付。</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F16%2Fdocker-log-driver-existing-container%2F&text=Docker%20%E6%94%B9%E4%BA%86%E9%BB%98%E8%AE%A4%E6%97%A5%E5%BF%97%E9%A9%B1%E5%8A%A8%EF%BC%8C%E6%97%A7%E5%AE%B9%E5%99%A8%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E5%8F%98%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F16%2Fdocker-log-driver-existing-container%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Docker%20%E6%94%B9%E4%BA%86%E9%BB%98%E8%AE%A4%E6%97%A5%E5%BF%97%E9%A9%B1%E5%8A%A8%EF%BC%8C%E6%97%A7%E5%AE%B9%E5%99%A8%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E5%8F%98%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F16%2Fdocker-log-driver-existing-container%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/16/fetch-body-single-consumer/">
+              <span>上一篇</span>
+              <strong>Fetch 日志读过正文，业务解析为什么又失败？</strong>
+              <small>2026-10-16</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/16/assisted-digital-task-completion/">
+              <span>下一篇</span>
+              <strong>线上服务有人不会用，辅助渠道怎样才算完成任务？</strong>
+              <small>2026-10-16</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#默认值主要影响新创建的实例">默认值主要影响新创建的实例</a>
+          
+            <a class="toc-link toc-link--h2" href="#清点日志链路而不只看驱动名称">清点日志链路而不只看驱动名称</a>
+          
+            <a class="toc-link toc-link--h2" href="#重建是发布动作，需要恢复计划">重建是发布动作，需要恢复计划</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>165</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>72</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>53</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>33</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/16/git-push-tag-selection/">分支推送成功，发布标签为什么还没到远程？</a></h3>
+          <p>2026-10-16</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/16/kubernetes-job-backoff-counts/">Kubernetes Job 重试次数，为什么不能只数失败 Pod？</a></h3>
+          <p>2026-10-16</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/16/otel-batch-shutdown-export/">Span 已结束，进程退出前还需要刷新导出吗？</a></h3>
+          <p>2026-10-16</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.0" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
