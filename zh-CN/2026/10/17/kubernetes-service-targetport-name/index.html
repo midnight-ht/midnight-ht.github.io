@@ -1,0 +1,386 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Service 的 port 改了，为什么流量没到应用监听端口？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Service 入口与目标端口不同；核对名称解析、选择器和实际监听，并验证新旧 Pod 的运行契约。">
+  
+  
+    <meta name="keywords" content="Kubernetes,targetPort,命名端口">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/17/kubernetes-service-targetport-name/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/17/kubernetes-service-targetport-name/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/17/kubernetes-service-targetport-name/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/17/kubernetes-service-targetport-name/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Service 的 port 改了，为什么流量没到应用监听端口？ | Midnight blog">
+    <meta property="og:description" content="Service 入口与目标端口不同；核对名称解析、选择器和实际监听，并验证新旧 Pod 的运行契约。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/17/kubernetes-service-targetport-name/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/17/kubernetes-service-targetport-name/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/17/kubernetes-service-targetport-name/","name":"Service 的 port 改了，为什么流量没到应用监听端口？ | Midnight blog","description":"Service 入口与目标端口不同；核对名称解析、选择器和实际监听，并验证新旧 Pod 的运行契约。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/17/kubernetes-service-targetport-name/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/17/kubernetes-service-targetport-name/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/17/kubernetes-service-targetport-name/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/17/kubernetes-service-targetport-name/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/17/kubernetes-service-targetport-name/","headline":"Service 的 port 改了，为什么流量没到应用监听端口？","description":"Service 入口与目标端口不同；核对名称解析、选择器和实际监听，并验证新旧 Pod 的运行契约。","inLanguage":"zh-CN","datePublished":"2026-10-16T19:23:01.000Z","dateModified":"2026-10-16T19:23:01.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Delivery, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/17/kubernetes-service-targetport-name/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Service 的 port 改了，为什么流量没到应用监听端口？","item":"https://www.zyweb.vip/zh-CN/2026/10/17/kubernetes-service-targetport-name/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/17/kubernetes-service-targetport-name/" selected>zh-CN</option><option value="/en/2026/10/17/kubernetes-service-targetport-name/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/17/kubernetes-service-targetport-name/" selected>zh-CN</option><option value="/en/2026/10/17/kubernetes-service-targetport-name/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-16T19:23:01.000Z">2026-10-17</time>
+    </div>
+
+    <h1>Service 的 port 改了，为什么流量没到应用监听端口？</h1>
+
+    
+      <p class="post-hero__summary">Service 入口与目标端口不同；核对名称解析、选择器和实际监听，并验证新旧 Pod 的运行契约。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-16T19:23:01.000Z">2026-10-17</time> · 预计阅读 3 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/17/kubernetes-service-targetport-name/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/17/kubernetes-service-targetport-name/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>Service 的 port 是服务入口，targetPort 指向后端端口，还可以引用 Pod 中声明的端口名称，不能把它们混为一项。修改入口数字，不会自动让应用进程改为监听同一数字。诊断应沿服务入口、后端选择与实际监听逐层核对。</p>
+<h2 id="名称把契约与数字分开"><a href="#名称把契约与数字分开" class="headerlink" title="名称把契约与数字分开"></a>名称把契约与数字分开</h2><p><a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/services-networking/service/">Kubernetes 的 Service 文档</a>说明，Service 可以把入口端口映射到 targetPort；未显式设置时，targetPort 默认与 port 相同。Pod 的端口定义可以有名称，Service 可通过名称引用，后端 Pod 即使使用不同数字，也能在保持名称契约时被同一服务指向。具体配置仍需检查实际对象，不能仅凭模板推断部署结果。</p>
+<p>假设服务对外提供一个固定入口，应用新版本改了监听数字。只更新 Service 的 port，未更新后端对应关系，流量可能到不了预期进程。这是未经集群执行的示例，不表示实际故障一定来自端口；选择器、端点、就绪状态和网络策略也需要分别排查。</p>
+<h2 id="声明端口不等于进程监听"><a href="#声明端口不等于进程监听" class="headerlink" title="声明端口不等于进程监听"></a>声明端口不等于进程监听</h2><p>Pod 中的端口声明有助于描述和引用，但不是让应用自动开始监听的程序配置。应用启动参数、环境与自身设置仍要与声明一致。若进程实际监听另一个位置，清单看起来整齐也不能建立连接。应核对运行实例，而不是用一份正确 YAML 代替业务可达证据。</p>
+<p>使用名称时，还需保持拼写、协议和维护责任清楚。一个数字变化可以通过同名约定平滑表达，但把名称随意改掉，也可能破坏服务引用。多个端口时，更应明确 Service 端口名称与 Pod 目标名称分别属于哪一层，不要只看到都有 name 就误认为它们自动相连。</p>
+<p>服务选择器决定哪些 Pod 进入候选范围，端口设置则说明怎样到达它们。选择到了正确标签，不代表目标端口正确；目标端口正确，也不代表应用已经准备处理业务请求。这些控制的结果不能相互替代，排查应保留每层状态与时间。</p>
+<h2 id="更新过程要观察新旧实例"><a href="#更新过程要观察新旧实例" class="headerlink" title="更新过程要观察新旧实例"></a>更新过程要观察新旧实例</h2><p>滚动更新时，新旧 Pod 可能短时间并存。建议检查两类实例的端口名称如何解析，实际监听是否符合约定，以及端点状态是否反映预期。不要只测试一个碰巧连到旧版本的请求，就认定新版本已经可用。本文没有运行集群命令或请求测试。</p>
+<p>验收还应覆盖没有匹配 Pod、名称不一致、应用未监听和正常业务响应等情况，区分连接失败与应用错误。采集必要的对象版本和请求身份即可，不必把令牌与全部配置秘密写进报告。对可能影响流量的修改，应有适合系统的恢复办法。</p>
+<p>接口文档中的稳定入口也应与实际 Service 契约一致。客户端不应因为后端内部数字变化而随意调整访问方式；如果确实改变了外部入口，需要把它视为使用者可见的变更，安排兼容和通知，而不是仅更新一项清单字段。</p>
+<p>应用就绪与探针责任可参看<a href="/zh-CN/2026/10/09/kubernetes-probe-responsibilities/">探针应当检查什么</a>。把入口、目标解析和进程监听分别验收，才能知道流量究竟停在哪一步。</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F17%2Fkubernetes-service-targetport-name%2F&text=Service%20%E7%9A%84%20port%20%E6%94%B9%E4%BA%86%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B5%81%E9%87%8F%E6%B2%A1%E5%88%B0%E5%BA%94%E7%94%A8%E7%9B%91%E5%90%AC%E7%AB%AF%E5%8F%A3%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F17%2Fkubernetes-service-targetport-name%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Service%20%E7%9A%84%20port%20%E6%94%B9%E4%BA%86%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B5%81%E9%87%8F%E6%B2%A1%E5%88%B0%E5%BA%94%E7%94%A8%E7%9B%91%E5%90%AC%E7%AB%AF%E5%8F%A3%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F17%2Fkubernetes-service-targetport-name%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/17/node-env-string-boolean/">
+              <span>上一篇</span>
+              <strong>环境变量写了 false，功能为什么仍然开启？</strong>
+              <small>2026-10-17</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/17/json-stringify-undefined-fields/">
+              <span>下一篇</span>
+              <strong>对象里有 undefined，JSON 请求为什么少了字段？</strong>
+              <small>2026-10-17</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#名称把契约与数字分开">名称把契约与数字分开</a>
+          
+            <a class="toc-link toc-link--h2" href="#声明端口不等于进程监听">声明端口不等于进程监听</a>
+          
+            <a class="toc-link toc-link--h2" href="#更新过程要观察新旧实例">更新过程要观察新旧实例</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>185</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>80</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>59</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>37</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/17/docker-publish-localhost-binding/">Docker 发布端口后，为什么其他机器也能访问？</a></h3>
+          <p>2026-10-17</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/17/git-stash-untracked-scope/">git stash 后文件还在，哪些内容没有被暂存？</a></h3>
+          <p>2026-10-17</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/17/incident-severity-impact-policy/">事故级别应该看告警数量，还是看实际用户影响？</a></h3>
+          <p>2026-10-17</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.0" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

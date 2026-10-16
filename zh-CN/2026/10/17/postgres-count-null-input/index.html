@@ -1,0 +1,386 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>COUNT(*) 和 COUNT(字段) 为什么给出不同数量？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="COUNT 的行数与非空输入口径不同；先检查过滤、连接基数和指标单位，再讨论数量与性能。">
+  
+  
+    <meta name="keywords" content="PostgreSQL18,COUNT,统计口径">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/17/postgres-count-null-input/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/17/postgres-count-null-input/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/17/postgres-count-null-input/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/17/postgres-count-null-input/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="COUNT(*) 和 COUNT(字段) 为什么给出不同数量？ | Midnight blog">
+    <meta property="og:description" content="COUNT 的行数与非空输入口径不同；先检查过滤、连接基数和指标单位，再讨论数量与性能。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/17/postgres-count-null-input/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/17/postgres-count-null-input/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/17/postgres-count-null-input/","name":"COUNT(*) 和 COUNT(字段) 为什么给出不同数量？ | Midnight blog","description":"COUNT 的行数与非空输入口径不同；先检查过滤、连接基数和指标单位，再讨论数量与性能。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/17/postgres-count-null-input/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/17/postgres-count-null-input/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/17/postgres-count-null-input/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/17/postgres-count-null-input/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/17/postgres-count-null-input/","headline":"COUNT(*) 和 COUNT(字段) 为什么给出不同数量？","description":"COUNT 的行数与非空输入口径不同；先检查过滤、连接基数和指标单位，再讨论数量与性能。","inLanguage":"zh-CN","datePublished":"2026-10-16T19:23:01.000Z","dateModified":"2026-10-16T19:23:01.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/17/postgres-count-null-input/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"COUNT(*) 和 COUNT(字段) 为什么给出不同数量？","item":"https://www.zyweb.vip/zh-CN/2026/10/17/postgres-count-null-input/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/17/postgres-count-null-input/" selected>zh-CN</option><option value="/en/2026/10/17/postgres-count-null-input/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/17/postgres-count-null-input/" selected>zh-CN</option><option value="/en/2026/10/17/postgres-count-null-input/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-16T19:23:01.000Z">2026-10-17</time>
+    </div>
+
+    <h1>COUNT(*) 和 COUNT(字段) 为什么给出不同数量？</h1>
+
+    
+      <p class="post-hero__summary">COUNT 的行数与非空输入口径不同；先检查过滤、连接基数和指标单位，再讨论数量与性能。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-16T19:23:01.000Z">2026-10-17</time> · 预计阅读 3 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/17/postgres-count-null-input/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/17/postgres-count-null-input/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>COUNT(*) 统计输入行，COUNT(表达式) 统计表达式非空的输入，指标名称和查询应采用同一口径。两种数量不同，不一定是数据库算错；先确认每一行代表什么，以及被计数表达式是否允许为空，再判断差异是否符合预期。</p>
+<h2 id="同一批输入也能得到不同数量"><a href="#同一批输入也能得到不同数量" class="headerlink" title="同一批输入也能得到不同数量"></a>同一批输入也能得到不同数量</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-aggregate.html">PostgreSQL 18 的聚合函数文档</a>分别定义两种 count：星号形式统计输入行数，表达式形式统计该输入值不为 NULL 的行数。这个区别针对聚合接收到的行集合；数据在此前被过滤或连接后，输入集合本身也可能已经变化，不能把最终计数直接理解为原始表的记录数。</p>
+<p>假设报表显示“已提交申请数量”，查询却统计某个可选联系方式。没有填写该字段的申请不会被这项表达式计入，于是数量少于实际提交记录。这里是未经执行的分析示例，不代表某张真实报表存在错误。如果指标原本就是“提供联系方式的申请数”，同一个查询反而可能符合用途。</p>
+<h2 id="先给指标写出完整句子"><a href="#先给指标写出完整句子" class="headerlink" title="先给指标写出完整句子"></a>先给指标写出完整句子</h2><p>指标定义最好说明对象、筛选条件、观察时间与计数单位。是申请记录、不同申请人，还是具有某项信息的申请？这些问题需要不同查询，不能只通过把字段替换成星号解决全部差异。一个人提交多笔申请，按行统计与按人统计也不是同一指标。</p>
+<p>连接查询尤其需要审查输入基数。连接后同一申请可能对应多条明细，COUNT(*) 会统计这些输入行，而不自动恢复为一笔申请。要得到业务对象数量，应根据真实关系选择聚合方式并验证，不能在看见数字偏大以后随手加入去重，掩盖关系建模或条件错误。</p>
+<p>把空字段替换成零，也不是通用计数修复。若表达式结果从 NULL 变为非空，计入范围就可能改变；这应是明确的业务决定，而不是为了让两个数字看起来一致。未知、未提供和实际为零，在不少业务中需要保持区别。</p>
+<h2 id="用小而有解释力的样本验收"><a href="#用小而有解释力的样本验收" class="headerlink" title="用小而有解释力的样本验收"></a>用小而有解释力的样本验收</h2><p>建议准备字段完整、字段为空、多条明细对应同一对象、以及没有匹配数据的样本。先人工写出预期输入行和各项指标，再检查查询结果。这里没有执行 SQL，也没有测量查询性能；样本只是验收设计，不是数据库输出记录。</p>
+<p>对外报告也应保存查询版本和字段含义。今天把指标改成另一种 count，可能让历史曲线出现变化，但这不证明业务增长或流失。若要比较前后，应说明口径变化并在可行时重算，而不是把技术修复包装成真实产品成效。</p>
+<p>性能优化应在语义确定以后讨论。索引、查询计划和数据规模会影响成本，不能凭函数名称承诺哪一种总是更快。为了一个较低执行时间改变指标含义，得到的是另一个问题的答案，而不是原指标的可靠优化。</p>
+<p>数组总量与维度长度的差异可参看<a href="/zh-CN/2026/10/16/postgres-empty-array-cardinality/">数组计数口径</a>。计数验收的关键是让数字能够被输入集合与业务定义解释，而不只是让两列数字碰巧相等。</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F17%2Fpostgres-count-null-input%2F&text=COUNT(*)%20%E5%92%8C%20COUNT(%E5%AD%97%E6%AE%B5)%20%E4%B8%BA%E4%BB%80%E4%B9%88%E7%BB%99%E5%87%BA%E4%B8%8D%E5%90%8C%E6%95%B0%E9%87%8F%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F17%2Fpostgres-count-null-input%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=COUNT(*)%20%E5%92%8C%20COUNT(%E5%AD%97%E6%AE%B5)%20%E4%B8%BA%E4%BB%80%E4%B9%88%E7%BB%99%E5%87%BA%E4%B8%8D%E5%90%8C%E6%95%B0%E9%87%8F%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F17%2Fpostgres-count-null-input%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/17/postgres-union-all-duplicates/">
+              <span>上一篇</span>
+              <strong>UNION 合并报表后，为什么记录数量变少了？</strong>
+              <small>2026-10-17</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/17/playwright-download-lifetime/">
+              <span>下一篇</span>
+              <strong>Playwright 下载事件触发了，为什么产物仍然丢失？</strong>
+              <small>2026-10-17</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#同一批输入也能得到不同数量">同一批输入也能得到不同数量</a>
+          
+            <a class="toc-link toc-link--h2" href="#先给指标写出完整句子">先给指标写出完整句子</a>
+          
+            <a class="toc-link toc-link--h2" href="#用小而有解释力的样本验收">用小而有解释力的样本验收</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>185</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>80</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>59</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>37</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/17/html-disabled-submission/">输入框禁用了，提交时为什么收不到原来的值？</a></h3>
+          <p>2026-10-17</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/17/http-405-allow-contract/">收到 HTTP 405，应该修改方法还是检查目标资源？</a></h3>
+          <p>2026-10-17</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/17/javascript-date-parse-offset/">日期字符串没写时区，为什么两种写法解析结果不同？</a></h3>
+          <p>2026-10-17</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.0" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
