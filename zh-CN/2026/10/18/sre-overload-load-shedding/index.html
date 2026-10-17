@@ -1,0 +1,387 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>系统过载时，为什么拒绝部分请求可能比全部排队更可靠？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="过长排队消耗资源并增加无效工作；拒绝和降级也需成本、优先级、客户端反馈与恢复验收。">
+  
+  
+    <meta name="keywords" content="SRE,过载保护,接入控制">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/18/sre-overload-load-shedding/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/18/sre-overload-load-shedding/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/18/sre-overload-load-shedding/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/18/sre-overload-load-shedding/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="系统过载时，为什么拒绝部分请求可能比全部排队更可靠？ | Midnight blog">
+    <meta property="og:description" content="过长排队消耗资源并增加无效工作；拒绝和降级也需成本、优先级、客户端反馈与恢复验收。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/18/sre-overload-load-shedding/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/18/sre-overload-load-shedding/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/18/sre-overload-load-shedding/","name":"系统过载时，为什么拒绝部分请求可能比全部排队更可靠？ | Midnight blog","description":"过长排队消耗资源并增加无效工作；拒绝和降级也需成本、优先级、客户端反馈与恢复验收。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/18/sre-overload-load-shedding/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/18/sre-overload-load-shedding/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/18/sre-overload-load-shedding/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/18/sre-overload-load-shedding/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/18/sre-overload-load-shedding/","headline":"系统过载时，为什么拒绝部分请求可能比全部排队更可靠？","description":"过长排队消耗资源并增加无效工作；拒绝和降级也需成本、优先级、客户端反馈与恢复验收。","inLanguage":"zh-CN","datePublished":"2026-10-17T19:09:33.000Z","dateModified":"2026-10-17T19:09:33.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Delivery, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/18/sre-overload-load-shedding/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"系统过载时，为什么拒绝部分请求可能比全部排队更可靠？","item":"https://www.zyweb.vip/zh-CN/2026/10/18/sre-overload-load-shedding/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/18/sre-overload-load-shedding/" selected>zh-CN</option><option value="/en/2026/10/18/sre-overload-load-shedding/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/18/sre-overload-load-shedding/" selected>zh-CN</option><option value="/en/2026/10/18/sre-overload-load-shedding/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-17T19:09:33.000Z">2026-10-18</time>
+    </div>
+
+    <h1>系统过载时，为什么拒绝部分请求可能比全部排队更可靠？</h1>
+
+    
+      <p class="post-hero__summary">过长排队消耗资源并增加无效工作；拒绝和降级也需成本、优先级、客户端反馈与恢复验收。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-17T19:09:33.000Z">2026-10-18</time> · 预计阅读 3 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/18/sre-overload-load-shedding/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/18/sre-overload-load-shedding/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>过载时不应把所有请求都留在无限等待中；有边界地拒绝或降级，可以为仍能完成的任务保留处理能力。目标不是让接收数量看起来更多，而是维持可解释的业务结果。队列、截止时间和客户端行为需要一起进入恢复设计。</p>
+<h2 id="等待本身也占用资源"><a href="#等待本身也占用资源" class="headerlink" title="等待本身也占用资源"></a>等待本身也占用资源</h2><p><a target="_blank" rel="noopener" href="https://sre.google/sre-book/addressing-cascading-failures/">Google SRE 的级联故障章节</a>说明，过长队列会增加延迟和内存消耗；响应越过调用方截止时间后，已做的工作可能失去价值，重试又会增加负载。章节建议服务在过载时尽早、低成本地失败，并结合降级与更高层的接入控制。这是公开的历史工程方法，不是本站测得的服务容量。</p>
+<p>假设交互查询与后台批处理竞争同一组资源。若请求无差别地继续排队，原本能快速完成的交互任务也可能等待到超时。这里没有运行负载实验，也没有足以选择固定队列长度的数据。应先说明哪些请求仍有完成价值、等待多久后失去意义，再决定接收范围。</p>
+<p>拒绝与降级同样不是一回事。拒绝应让调用者知道本次没有取得预期结果；降级则需要解释结果缺少什么。不能为了维持成功率，把不完整的数据伪装成完整结果。如果部分操作已经产生副作用，也不能把后续拒绝描述成整个业务从未发生。</p>
+<h2 id="保护规则必须有边界"><a href="#保护规则必须有边界" class="headerlink" title="保护规则必须有边界"></a>保护规则必须有边界</h2><p>优先级需要来自明确的产品和服务约定，而不是临时按请求名称猜测。哪些操作可以延后、哪些需要交互响应、同一使用者的流量怎样处理，都应在上线前讨论。本文不提供通用分级或允许丢弃的比例，其他团队的分类不能直接成为本站规则。</p>
+<p><a target="_blank" rel="noopener" href="https://sre.google/sre-book/handling-overload/">Google SRE 的过载处理章节</a>还提醒，拒绝请求本身仍有成本；某些简单服务中，拒绝与处理的代价可能接近，拒绝量很大时也能压垮后端。章节讨论客户端自限速等配合方法。因此，增加一个拒绝分支不等于保护已经完成，接入位置与实际资源成本都需要核对。</p>
+<p>客户端若立即重试，可能把原有请求变成更多竞争。应明确哪些错误适合再试、什么时候停止，以及谁负责整个调用链的重试预算。多个层级各自重试尤其需要检查，不能把局部恢复能力当作系统一定能恢复的证明。</p>
+<h2 id="恢复不能只看队列变短"><a href="#恢复不能只看队列变短" class="headerlink" title="恢复不能只看队列变短"></a>恢复不能只看队列变短</h2><p>建议在授权测试环境中观察正常负载、突发流量、持续过载和恢复阶段，分别记录有效完成、明确拒绝、超时、排队和下游压力。还需检查客户端是否按反馈收敛，以及服务恢复后积压怎样被重新接纳。这些是待执行的验收方向，不是本文已经得到的吞吐或延迟结果。</p>
+<p>队列变短可能来自健康恢复，也可能只是大量请求已经失败。CPU 下降也可能源于业务完全不可用。恢复结论需要结合用户任务与结果正确性，而不是选择最容易变绿的指标。对曾经产生副作用的任务，应按稳定身份查询状态，再决定是否补偿或重放。</p>
+<p>配置维护要保留触发依据、责任人与解除条件，避免一次紧急保护变成长期隐藏拒绝。新的容量、请求成本或依赖变化，都可能使旧阈值失去意义。规则有效性需要持续观察，不能靠首次发布时的估算永久保证。</p>
+<p>关于调用方的具体等待与停止条件，可参看<a href="/zh-CN/2026/10/14/api-429-retry-budget/">429 与重试预算</a>。把有限接入、真实结果和反馈收敛一起验收，才能让过载保护服务于恢复。</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F18%2Fsre-overload-load-shedding%2F&text=%E7%B3%BB%E7%BB%9F%E8%BF%87%E8%BD%BD%E6%97%B6%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E6%8B%92%E7%BB%9D%E9%83%A8%E5%88%86%E8%AF%B7%E6%B1%82%E5%8F%AF%E8%83%BD%E6%AF%94%E5%85%A8%E9%83%A8%E6%8E%92%E9%98%9F%E6%9B%B4%E5%8F%AF%E9%9D%A0%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F18%2Fsre-overload-load-shedding%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E7%B3%BB%E7%BB%9F%E8%BF%87%E8%BD%BD%E6%97%B6%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E6%8B%92%E7%BB%9D%E9%83%A8%E5%88%86%E8%AF%B7%E6%B1%82%E5%8F%AF%E8%83%BD%E6%AF%94%E5%85%A8%E9%83%A8%E6%8E%92%E9%98%9F%E6%9B%B4%E5%8F%AF%E9%9D%A0%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F18%2Fsre-overload-load-shedding%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/18/url-objecturl-revoke-lifecycle/">
+              <span>上一篇</span>
+              <strong>Blob URL 能打开文件，为什么不代表已经保存？</strong>
+              <small>2026-10-18</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/18/pytest-approx-tolerance-contract/">
+              <span>下一篇</span>
+              <strong>同时设置两种容差，不表示两道门都要通过</strong>
+              <small>2026-10-18</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#等待本身也占用资源">等待本身也占用资源</a>
+          
+            <a class="toc-link toc-link--h2" href="#保护规则必须有边界">保护规则必须有边界</a>
+          
+            <a class="toc-link toc-link--h2" href="#恢复不能只看队列变短">恢复不能只看队列变短</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>205</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>88</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>65</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>41</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/18/docker-build-cache-package-index/">Docker 构建命中缓存，软件包索引为什么可能已过时</a></h3>
+          <p>2026-10-18</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/18/git-worktree-shared-refs/">两个 worktree 的文件独立，Git 引用和 stash 也独立吗</a></h3>
+          <p>2026-10-18</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/18/kubernetes-readiness-gates-unknown/">容器已经 Ready，Pod 为什么还在等待自定义就绪条件</a></h3>
+          <p>2026-10-18</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.0" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

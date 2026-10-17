@@ -1,0 +1,391 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Object.freeze 后，嵌套配置为什么仍会变化？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="浅冻结限制当前对象自身的属性；嵌套对象、共享引用和访问器仍需明确边界，再决定是否采用递归处理。">
+  
+  
+    <meta name="keywords" content="Object.freeze,浅冻结,共享引用">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/18/javascript-object-freeze-shallow/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/18/javascript-object-freeze-shallow/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/18/javascript-object-freeze-shallow/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/18/javascript-object-freeze-shallow/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Object.freeze 后，嵌套配置为什么仍会变化？ | Midnight blog">
+    <meta property="og:description" content="浅冻结限制当前对象自身的属性；嵌套对象、共享引用和访问器仍需明确边界，再决定是否采用递归处理。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/18/javascript-object-freeze-shallow/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/18/javascript-object-freeze-shallow/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/18/javascript-object-freeze-shallow/","name":"Object.freeze 后，嵌套配置为什么仍会变化？ | Midnight blog","description":"浅冻结限制当前对象自身的属性；嵌套对象、共享引用和访问器仍需明确边界，再决定是否采用递归处理。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/18/javascript-object-freeze-shallow/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/18/javascript-object-freeze-shallow/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/18/javascript-object-freeze-shallow/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/18/javascript-object-freeze-shallow/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/18/javascript-object-freeze-shallow/","headline":"Object.freeze 后，嵌套配置为什么仍会变化？","description":"浅冻结限制当前对象自身的属性；嵌套对象、共享引用和访问器仍需明确边界，再决定是否采用递归处理。","inLanguage":"zh-CN","datePublished":"2026-10-17T19:09:33.000Z","dateModified":"2026-10-17T19:09:33.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/18/javascript-object-freeze-shallow/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Object.freeze 后，嵌套配置为什么仍会变化？","item":"https://www.zyweb.vip/zh-CN/2026/10/18/javascript-object-freeze-shallow/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/18/javascript-object-freeze-shallow/" selected>zh-CN</option><option value="/en/2026/10/18/javascript-object-freeze-shallow/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/18/javascript-object-freeze-shallow/" selected>zh-CN</option><option value="/en/2026/10/18/javascript-object-freeze-shallow/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-17T19:09:33.000Z">2026-10-18</time>
+    </div>
+
+    <h1>Object.freeze 后，嵌套配置为什么仍会变化？</h1>
+
+    
+      <p class="post-hero__summary">浅冻结限制当前对象自身的属性；嵌套对象、共享引用和访问器仍需明确边界，再决定是否采用递归处理。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-17T19:09:33.000Z">2026-10-18</time> · 预计阅读 3 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/18/javascript-object-freeze-shallow/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/18/javascript-object-freeze-shallow/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>顶层配置已经调用 Object.freeze，嵌套开关却仍能改变，并不矛盾。冻结会处理传入对象自身的属性，不会自动沿着每个引用把整张对象图冻结。评审配置保护时，先分清不能替换一个引用，与不能修改引用指向的对象，是两项不同要求。</p>
+<h2 id="固定引用没有冻结引用的目标"><a href="#固定引用没有冻结引用的目标" class="headerlink" title="固定引用没有冻结引用的目标"></a>固定引用没有冻结引用的目标</h2><p><a target="_blank" rel="noopener" href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze">MDN 的 Object.freeze 说明</a>把这种行为称为浅冻结。它限制对象自身属性的增加、删除与重新赋值；当属性值是另一个对象时，那个对象的内容仍可能变化。该页标注二〇二六年五月更新，这里引用普通对象属性的行为，不把所有特殊对象都概括成同一种数据容器。</p>
+<p>下面是假设配置的说明代码，本文未执行：</p>
+<pre><code class="js">const policy = { upload: { enabled: true } };
+Object.freeze(policy);
+policy.upload.enabled = false;
+</code></pre>
+<p>最后一行改的是upload所指向对象的enabled属性，不是在给policy的upload属性换一个目标。因此，仅检查顶层是否已冻结，不能证明嵌套开关受到保护。若需求是整个配置快照在使用期间保持不变，就需要另外处理嵌套层，或采用适合项目的不可变更新策略。</p>
+<p>还要注意共享引用。假设两个配置都指向同一份上传选项，从其中一个入口修改子对象，另一个入口也会读到变化。顶层冻结既不会复制这份子对象，也不会自动切断别名。这个情境同样没有运行；它提示代码评审应追踪对象来源，而不能只搜索某处是否出现freeze调用。</p>
+<h2 id="递归处理也需要限定边界"><a href="#递归处理也需要限定边界" class="headerlink" title="递归处理也需要限定边界"></a>递归处理也需要限定边界</h2><p>对于完全由普通对象、数组与原始值组成的受控配置树，逐层处理可能符合需要。但把一个递归函数贴到任意运行时对象上，并不能因此宣布深层不可变完成。MDN提醒对象图可能存在循环引用，递归策略需要处理已访问对象，也可能遇到本来不应该冻结的对象。是否遍历函数、访问器或外部持有的共享对象，都需要明确范围。</p>
+<p>访问器尤其容易让“值不再改变”这个说法过头。MDN说明，冻结并不停止getter计算出的结果随外部状态变化，也不阻止setter被调用。对于配置输入，若希望快照语义清楚，可以限制数据形状，并在边界处生成受控数据；这是设计建议，不是freeze额外提供的能力。</p>
+<p>复制和冻结也不应混成同一个动作。复制关心是否还共享底层引用，冻结关心某个对象上的修改限制。浅层复制后保留同一子对象，再冻结外层，仍没有获得独立且深层固定的快照。如果系统只需约束调用者不要替换顶层字段，浅冻结可能已经足够，没必要为一个不存在的要求引入通用遍历逻辑。</p>
+<h2 id="先写允许什么变化，再选实现"><a href="#先写允许什么变化，再选实现" class="headerlink" title="先写允许什么变化，再选实现"></a>先写允许什么变化，再选实现</h2><p>可用一个权限配置评审作为假设任务：运行中的请求是否可以看见热更新，历史审计是否必须保留当时值，测试夹具是否允许各用例独立修改？三个用途对共享与变更的要求不同。不能从“配置”这个名字就推导出必须全局冻结，也不能把冻结当成外部授权检查。</p>
+<p><a href="/zh-CN/2026/10/08/requirements-to-decisions/">从需求到可核对决策</a>强调先确定验收边界。这里的验证也应分别观察顶层替换、嵌套修改、共享别名，以及所选数据形状的边界情况。没有执行这些检查时，应写成待验证项，而不是声称配置已经安全。</p>
+<p>本文未运行上述代码，也没有提供经过生产验证的深冻结工具。若下一次评审出现“已经freeze，所以不会变”，可以要求补全对象范围：哪些对象被冻结，哪些引用仍共享，哪些变化本来就被允许。把这三个答案写清楚，才能决定浅冻结是否满足当前需求。</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F18%2Fjavascript-object-freeze-shallow%2F&text=Object.freeze%20%E5%90%8E%EF%BC%8C%E5%B5%8C%E5%A5%97%E9%85%8D%E7%BD%AE%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E4%BC%9A%E5%8F%98%E5%8C%96%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F18%2Fjavascript-object-freeze-shallow%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Object.freeze%20%E5%90%8E%EF%BC%8C%E5%B5%8C%E5%A5%97%E9%85%8D%E7%BD%AE%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E4%BC%9A%E5%8F%98%E5%8C%96%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F18%2Fjavascript-object-freeze-shallow%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/18/kubernetes-readiness-gates-unknown/">
+              <span>上一篇</span>
+              <strong>容器已经 Ready，Pod 为什么还在等待自定义就绪条件</strong>
+              <small>2026-10-18</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/18/javascript-array-fill-alias/">
+              <span>下一篇</span>
+              <strong>Array.fill 放入对象，为什么改一项会影响其他项</strong>
+              <small>2026-10-18</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#固定引用没有冻结引用的目标">固定引用没有冻结引用的目标</a>
+          
+            <a class="toc-link toc-link--h2" href="#递归处理也需要限定边界">递归处理也需要限定边界</a>
+          
+            <a class="toc-link toc-link--h2" href="#先写允许什么变化，再选实现">先写允许什么变化，再选实现</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>205</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>88</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>65</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>41</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/18/css-box-sizing-width-contract/">给组件宽度一个可验收的尺寸口径</a></h3>
+          <p>2026-10-18</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/18/http-410-404-lifecycle/">没查到记录，就能返回 410 吗？</a></h3>
+          <p>2026-10-18</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/18/javascript-array-fill-alias/">Array.fill 放入对象，为什么改一项会影响其他项</a></h3>
+          <p>2026-10-18</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.0" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
