@@ -1,0 +1,391 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>构建能读到 ARG，容器启动后为什么没有？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="ARG 不会自动成为容器环境变量；按构建阶段、镜像默认值与运行时消费方式核对配置交接。">
+  
+  
+    <meta name="keywords" content="Docker,ARG,ENV">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/19/docker-arg-env-runtime-scope/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="构建能读到 ARG，容器启动后为什么没有？ | Midnight blog">
+    <meta property="og:description" content="ARG 不会自动成为容器环境变量；按构建阶段、镜像默认值与运行时消费方式核对配置交接。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/","name":"构建能读到 ARG，容器启动后为什么没有？ | Midnight blog","description":"ARG 不会自动成为容器环境变量；按构建阶段、镜像默认值与运行时消费方式核对配置交接。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/","headline":"构建能读到 ARG，容器启动后为什么没有？","description":"ARG 不会自动成为容器环境变量；按构建阶段、镜像默认值与运行时消费方式核对配置交接。","inLanguage":"zh-CN","datePublished":"2026-10-18T19:19:51.000Z","dateModified":"2026-10-18T19:19:51.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Delivery, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"构建能读到 ARG，容器启动后为什么没有？","item":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/19/docker-arg-env-runtime-scope/" selected>zh-CN</option><option value="/en/2026/10/19/docker-arg-env-runtime-scope/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/19/docker-arg-env-runtime-scope/" selected>zh-CN</option><option value="/en/2026/10/19/docker-arg-env-runtime-scope/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-18T19:19:51.000Z">2026-10-19</time>
+    </div>
+
+    <h1>构建能读到 ARG，容器启动后为什么没有？</h1>
+
+    
+      <p class="post-hero__summary">ARG 不会自动成为容器环境变量；按构建阶段、镜像默认值与运行时消费方式核对配置交接。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-18T19:19:51.000Z">2026-10-19</time> · 预计阅读 3 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/19/docker-arg-env-runtime-scope/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/19/docker-arg-env-runtime-scope/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      
+      <div class="article-content">
+        <p>构建步骤能读到 <code>ARG</code>，不代表镜像启动后的进程会继承同名环境变量。<code>ARG</code> 主要为 Dockerfile 的构建指令提供参数；需要写入镜像的运行默认值时，应明确使用相应配置，而需要随部署变化的值还要由运行环境提供。</p>
+<h2 id="先问这个值在哪里被消费"><a href="#先问这个值在哪里被消费" class="headerlink" title="先问这个值在哪里被消费"></a>先问这个值在哪里被消费</h2><p><a target="_blank" rel="noopener" href="https://docs.docker.com/build/building/variables/">Docker 构建变量文档</a>说明，构建参数不会自动出现在由镜像创建的容器里，除非 Dockerfile 显式把它传入镜像文件或配置。<code>ENV</code> 则会保留为镜像创建容器时的环境默认值。两者都叫变量，但生效阶段不同。</p>
+<p>考虑下面这个未执行的 Dockerfile 片段，它只演示非敏感参数的传递关系，不是可直接构建的完整文件：</p>
+<pre><code class="dockerfile">ARG APP_MODE=production
+RUN echo &quot;$APP_MODE&quot;
+ENV APP_MODE=$APP_MODE
+</code></pre>
+<p>其中构建命令能够读取参数；后面的环境声明才把值作为默认环境写入镜像配置。删除最后一行，不能因为日志里曾出现参数，就期待运行进程自动得到它。日志证明某个步骤看到了值，不证明应用最终采用了预期配置。</p>
+<p>这个区分会改变交接方式。依赖版本可能只在构建中使用；监听端口可能在进程启动时读取；浏览器端接口地址又可能被打包工具编译进静态文件。评审应逐项说明谁读取、何时读取、结果存在哪里，而不是为整个项目选择一种变量后就结束。</p>
+<h2 id="多阶段构建还有声明范围"><a href="#多阶段构建还有声明范围" class="headerlink" title="多阶段构建还有声明范围"></a>多阶段构建还有声明范围</h2><p>文档也说明，在 Dockerfile 全局范围声明的构建参数，不会自动被每个构建阶段继承。若阶段内要使用全局参数，需要在该阶段消费相应声明。排查“参数明明传了却为空”时，要同时看构建调用和实际使用位置，不能只搜索文件顶部出现过一次名称。</p>
+<p>复制上一阶段生成的文件，也不等于复制它的全部环境配置。一个阶段把值写进产物，另一个阶段再复制产物，传递的是文件内容。若后续进程需要读取环境变量，应单独确认最终镜像与运行配置；若值已经编译进网页文件，则运行时同名变量未必会重新生成它。</p>
+<p>后一点属于应用构建方式带来的判断，需要查实际工具和启动逻辑。这里没有指定某个框架，也没有把修改环境后自动生效当成通用行为。把变量打印出来可以辅助定位，但对秘密值不应采用这种做法。</p>
+<h2 id="运行默认值不是部署事实"><a href="#运行默认值不是部署事实" class="headerlink" title="运行默认值不是部署事实"></a>运行默认值不是部署事实</h2><p>例如，可选用专门的非敏感标记，分别查构建输入、生成文件与进程报告的有效设置。若文件仍含旧标记而进程环境已改变，下一步应检查产物生成阶段；若文件无需变化而程序仍用旧值，则应追踪读取时机。这样的分叉能决定应该重建镜像还是调整启动配置。</p>
+<p>即使镜像设置了 <code>ENV</code>，部署仍可能提供不同环境值；应用是否读取它、是否有配置优先级，也取决于程序实现。建议在交付说明中区分镜像默认配置与部署实际配置，并用非敏感的有效配置摘要观察采用结果。不要把镜像检查输出写成线上配置已经生效。</p>
+<p>构建参数和环境变量都不适合充当构建秘密的通道，相关输出风险可阅读<a href="/zh-CN/2026/10/10/docker-secret-output/">构建秘密与最终产物</a>。本文没有执行构建或容器启动。待验证的重点是：同一个值从输入到产物再到进程，究竟跨过了哪一步，哪一步仍需要显式传递。</p>
+
+      </div>
+
+      
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F19%2Fdocker-arg-env-runtime-scope%2F&text=%E6%9E%84%E5%BB%BA%E8%83%BD%E8%AF%BB%E5%88%B0%20ARG%EF%BC%8C%E5%AE%B9%E5%99%A8%E5%90%AF%E5%8A%A8%E5%90%8E%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E6%9C%89%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F19%2Fdocker-arg-env-runtime-scope%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E6%9E%84%E5%BB%BA%E8%83%BD%E8%AF%BB%E5%88%B0%20ARG%EF%BC%8C%E5%AE%B9%E5%99%A8%E5%90%AF%E5%8A%A8%E5%90%8E%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E6%9C%89%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F19%2Fdocker-arg-env-runtime-scope%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/19/formdata-append-multiple-values/">
+              <span>上一篇</span>
+              <strong>FormData追加同名字段，不会自动只留最后一个</strong>
+              <small>2026-10-19</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/19/css-sticky-scroll-ancestor/">
+              <span>下一篇</span>
+              <strong>sticky没有跟着页面滚动，先查祖先overflow</strong>
+              <small>2026-10-19</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#先问这个值在哪里被消费">先问这个值在哪里被消费</a>
+          
+            <a class="toc-link toc-link--h2" href="#多阶段构建还有声明范围">多阶段构建还有声明范围</a>
+          
+            <a class="toc-link toc-link--h2" href="#运行默认值不是部署事实">运行默认值不是部署事实</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>225</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>96</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>71</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>45</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/19/git-clean-preview-ignored-files/">用三个 dry-run 对照清理范围</a></h3>
+          <p>2026-10-19</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/19/kubernetes-emptydir-pod-lifetime/">重启后文件还在，换 Pod 为什么就没了？</a></h3>
+          <p>2026-10-19</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/19/otel-resource-service-identity/">链路已经上报，为什么服务仍叫 unknown_service？</a></h3>
+          <p>2026-10-19</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.0" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
