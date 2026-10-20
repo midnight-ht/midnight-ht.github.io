@@ -1,0 +1,391 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>After a CQRS Write: Confirm When the Read Projection Catches Up | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Separate write acceptance from read visibility, then design version, watermark, operation-status, and failure feedback.">
+  
+  
+    <meta name="keywords" content="CQRS eventual consistency,projection version,read your writes">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/21/cqrs-projection-read-confirmation/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/21/cqrs-projection-read-confirmation/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/21/cqrs-projection-read-confirmation/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/21/cqrs-projection-read-confirmation/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="After a CQRS Write: Confirm When the Read Projection Catches Up | Midnight blog">
+    <meta property="og:description" content="Separate write acceptance from read visibility, then design version, watermark, operation-status, and failure feedback.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/21/cqrs-projection-read-confirmation/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/21/cqrs-projection-read-confirmation/#webpage","url":"https://www.zyweb.vip/en/2026/10/21/cqrs-projection-read-confirmation/","name":"After a CQRS Write: Confirm When the Read Projection Catches Up | Midnight blog","description":"Separate write acceptance from read visibility, then design version, watermark, operation-status, and failure feedback.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/21/cqrs-projection-read-confirmation/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/21/cqrs-projection-read-confirmation/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/21/cqrs-projection-read-confirmation/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/21/cqrs-projection-read-confirmation/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/21/cqrs-projection-read-confirmation/","headline":"After a CQRS Write: Confirm When the Read Projection Catches Up","description":"Separate write acceptance from read visibility, then design version, watermark, operation-status, and failure feedback.","inLanguage":"en","datePublished":"2026-10-20T19:36:17.000Z","dateModified":"2026-10-20T19:36:17.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs","https://www.rfc-editor.org/rfc/rfc9110.html#section-15.3.3"],"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/21/cqrs-projection-read-confirmation/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"After a CQRS Write: Confirm When the Read Projection Catches Up","item":"https://www.zyweb.vip/en/2026/10/21/cqrs-projection-read-confirmation/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/21/cqrs-projection-read-confirmation/">zh-CN</option><option value="/en/2026/10/21/cqrs-projection-read-confirmation/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/21/cqrs-projection-read-confirmation/">zh-CN</option><option value="/en/2026/10/21/cqrs-projection-read-confirmation/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-20T19:36:17.000Z">2026-10-21</time>
+    </div>
+
+    <h1>After a CQRS Write: Confirm When the Read Projection Catches Up</h1>
+
+    
+      <p class="post-hero__summary">Separate write acceptance from read visibility, then design version, watermark, operation-status, and failure feedback.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-20T19:36:17.000Z">2026-10-21</time> · Estimated read 16 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/21/cqrs-projection-read-confirmation/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/21/cqrs-projection-read-confirmation/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>A successful write response does not prove a separate read projection shows the change.</li><li>A watermark must certify relevant changes were applied, not just that a maximum version was seen.</li><li>User feedback should distinguish pending sync, confirmed, rejected, and timed-out states.</li></ul></section>
+      <div class="article-content">
+        <p>A user submits a delivery-address change, receives a success response from the write endpoint, then refreshes the profile page and sees the old address. In a CQRS design with separate write and read models, that observation does not necessarily mean the write failed: the read projection may not have consumed the change yet. The <a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs">Microsoft CQRS pattern</a> explicitly notes that a separate read database might not show recent changes immediately. The product must answer two questions: what was accepted or committed on the write side, and when can the user trust the read page to reflect it?</p>
+<h2 id="Give-“success”-two-observable-meanings"><a href="#Give-“success”-two-observable-meanings" class="headerlink" title="Give “success” two observable meanings"></a>Give “success” two observable meanings</h2><p>Suppose a person changes an address from A to B. The write model validates authorization and the address, commits revision <code>v18</code>, and returns <code>operationId=op-73</code> with <code>writeVersion=18</code>. An event is sent to a projection worker, but the read database is still at <code>v17</code>, so the page returns A. A durable write and a caught-up projection are different facts. The first can be established by the write transaction. The second needs evidence from the relevant read model, such as an applied revision or a marker for this operation. If the client treats A as proof of write failure, it may prompt another submission and create a duplicate action. If it displays B optimistically forever without checking the projection, it can hide a broken worker.</p>
+<p>A useful API contract returns an operation identity and revision from the write path and a <code>projectionVersion</code> from the read path. The profile page compares target <code>writeVersion=18</code> with current <code>projectionVersion=17</code>. While the projection lags, it says “Address submitted; profile is updating,” and can show B as a local preview clearly marked as such. When the relevant projection reaches at least 18 and returns B, it can say the profile view has been confirmed. If the wait times out, offer a queryable operation status and a support route rather than an endless spinner. The versions must describe the same comparable aggregate or event stream. A site-wide count of unrelated events cannot safely be compared with one user’s address revision.</p>
+<pre><code class="json">{&quot;operationId&quot;:&quot;op-73&quot;,&quot;writeVersion&quot;:18,&quot;status&quot;:&quot;accepted&quot;}
+{&quot;address&quot;:&quot;A&quot;,&quot;projectionVersion&quot;:17}
+{&quot;address&quot;:&quot;B&quot;,&quot;projectionVersion&quot;:18}
+</code></pre>
+<p>These are illustrative responses, not standard fields from a CQRS framework. If the first line is returned with HTTP 202, <a target="_blank" rel="noopener" href="https://www.rfc-editor.org/rfc/rfc9110.html#section-15.3.3">RFC 9110’s definition of 202 Accepted</a> means processing has been accepted but not completed. Whether the write database has already committed must be specified by this API. A synchronously completed write can use a different suitable response. HTTP 202 is not a mandatory CQRS signal. What matters is that the UI distinguishes “command received,” “write committed,” “read synchronized,” and “business rule rejected,” instead of calling them all “Saved.”</p>
+<h2 id="A-watermark-is-meaningful-only-if-it-follows-the-data"><a href="#A-watermark-is-meaningful-only-if-it-follows-the-data" class="headerlink" title="A watermark is meaningful only if it follows the data"></a>A watermark is meaningful only if it follows the data</h2><p>A projection worker should advance its watermark after applying the event and committing the associated read-model change. If it updates the watermark first, the page could see <code>projectionVersion=18</code> while still reading address A. Separate projections for the profile page and search index need separate status; the profile watermark does not prove search has caught up. On retries, duplicates, or out-of-order deliveries, the worker also needs event identity and aggregate-version guards to prevent an old value from overwriting a new one. A monotonic watermark should refer to changes actually applied by the particular projection, not merely received by the worker.</p>
+<p>Consider a sharper counterexample. Revision 18 contains address B, but the projection mistakenly skips that event. It later processes unrelated revision 19 and writes a watermark of 19. If the client only compares numbers, it falsely concludes that B is visible. The watermark must mean that all required changes through that revision were successfully applied in order, or the system must record application of the target operation separately. “Highest version ever seen” is not the same as “contiguous version completed.” The design also needs an alert and replay path for a permanently failed event. In a partitioned system without one comparable global sequence, use aggregate revisions or an <code>operationId</code>-based confirmation service rather than pretending a global number exists.</p>
+<p>Another counterexample is a command that asynchronous business validation eventually rejects. If the API only reports “received,” the client cannot immediately claim B was persisted. Operation status should distinguish <code>pending</code>, <code>committed</code>, and <code>rejected</code>, with an actionable rejection reason. If the write side synchronously completes authorization and validation, it can return the committed revision directly. The related guide on <a href="/en/2026/10/09/api-if-match-conflicts/">conditional writes and conflicts</a> addresses write-side overwrites. The concern here begins once the write side has decided what happened and the read side must give a trustworthy account of it.</p>
+<h2 id="Select-confirmation-by-user-consequence"><a href="#Select-confirmation-by-user-consequence" class="headerlink" title="Select confirmation by user consequence"></a>Select confirmation by user consequence</h2><p>Not every page needs to wait. News browsing and trend reports may tolerate a few seconds of lag if they show when data was updated. A profile page after an edit, a transfer receipt, or a permission screen raises a stronger read-your-writes expectation. A local preview from the write response can bridge the gap while the app checks the projection. For consequential actions, expose an auditable operation status instead of relying only on optimistic UI. Where fresh read data is essential, briefly poll the target projection or operation status with a timeout and backoff. A timeout is not automatically a failed write, so the message must preserve that distinction.</p>
+<p>Document the poll’s completion condition as an actual predicate. <code>GET /operations/op-73</code> might report <code>writeStatus=committed</code>, <code>profileProjection=applied</code>, and applied revision 18. The page should announce “Profile updated” only when the relevant operation is applied and the returned read model actually contains B. On <code>rejected</code>, it explains why and removes the local preview. On a long <code>pending</code>, it retains an operation number the user and support team can query. Refreshing the profile every two seconds proves only that the client tried; an operation status can expose where processing stopped.</p>
+<p>The operation-status service can also lag or fail. For money movement and permission changes, identify the authoritative record and the reconciliation path; a projection status alone may not be sufficient evidence of the ultimate business outcome. A local optimistic preview on one device will not automatically appear on another. A server-side operation number and queryable state can carry the same explanation across devices. The UX requirement is therefore more than adding a “Syncing” badge. Each stage needs a traceable source of truth.</p>
+<p>Test this contract by deliberately pausing the projection worker. Submit B, verify the write revision is 18, confirm the read side still reports 17, and check that the page says “pending sync,” not “failed.” Resume the worker and require the read page to return B with evidence that this operation was applied. Inject a duplicate event, out-of-order delivery, a failed projection write, and a rejected command; check for false confirmation or endless waiting. Restart the worker and test whether its watermark and operation lookup remain stable. This article did not connect to real read and write databases or run fault injection. Actual delay, revision granularity, and status APIs depend on the architecture. CQRS becomes understandable to a user when each visible state corresponds to a distinct internal fact, rather than an instruction to “try refreshing.”</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs" rel="noopener">learn.microsoft.com</a></li><li><a target="_blank" href="https://www.rfc-editor.org/rfc/rfc9110.html#section-15.3.3" rel="noopener">www.rfc-editor.org</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/en/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F21%2Fcqrs-projection-read-confirmation%2F&text=After%20a%20CQRS%20Write%3A%20Confirm%20When%20the%20Read%20Projection%20Catches%20Up" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F21%2Fcqrs-projection-read-confirmation%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=After%20a%20CQRS%20Write%3A%20Confirm%20When%20the%20Read%20Projection%20Catches%20Up&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F21%2Fcqrs-projection-read-confirmation%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/21/jsonschema-allof-closed-objects/">
+              <span>Previous Post</span>
+              <strong>JSON Schema allOf: Where to Close an Extended Object</strong>
+              <small>2026-10-21</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/21/cloudevents-identity-deduplication/">
+              <span>Next Post</span>
+              <strong>CloudEvents Deduplication: Treat source and id as One Identity</strong>
+              <small>2026-10-21</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Give-“success”-two-observable-meanings">Give “success” two observable meanings</a>
+          
+            <a class="toc-link toc-link--h2" href="#A-watermark-is-meaningful-only-if-it-follows-the-data">A watermark is meaningful only if it follows the data</a>
+          
+            <a class="toc-link toc-link--h2" href="#Select-confirmation-by-user-consequence">Select confirmation by user consequence</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>265</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>113</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>81</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>54</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/21/cloudevents-identity-deduplication/">CloudEvents Deduplication: Treat source and id as One Identity</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/21/jsonschema-allof-closed-objects/">JSON Schema allOf: Where to Close an Extended Object</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/21/node-fs-rename-durability/">After rename Succeeds, Is the File Delivered?</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

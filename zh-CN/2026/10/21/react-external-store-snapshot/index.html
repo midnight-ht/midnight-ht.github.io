@@ -1,0 +1,387 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>外部 store 的快照，为什么必须稳定？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="以购物车数量拆解 subscribe、getSnapshot 和 getServerSnapshot：缓存不可变快照、通知顺序与 SSR 水合初值。">
+  
+  
+    <meta name="keywords" content="useSyncExternalStore,React外部store,getSnapshot缓存,getServerSnapshot水合">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/21/react-external-store-snapshot/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/21/react-external-store-snapshot/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/21/react-external-store-snapshot/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/21/react-external-store-snapshot/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="外部 store 的快照，为什么必须稳定？ | Midnight blog">
+    <meta property="og:description" content="以购物车数量拆解 subscribe、getSnapshot 和 getServerSnapshot：缓存不可变快照、通知顺序与 SSR 水合初值。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/21/react-external-store-snapshot/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/21/react-external-store-snapshot/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/21/react-external-store-snapshot/","name":"外部 store 的快照，为什么必须稳定？ | Midnight blog","description":"以购物车数量拆解 subscribe、getSnapshot 和 getServerSnapshot：缓存不可变快照、通知顺序与 SSR 水合初值。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/21/react-external-store-snapshot/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/21/react-external-store-snapshot/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/21/react-external-store-snapshot/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/21/react-external-store-snapshot/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/21/react-external-store-snapshot/","headline":"外部 store 的快照，为什么必须稳定？","description":"以购物车数量拆解 subscribe、getSnapshot 和 getServerSnapshot：缓存不可变快照、通知顺序与 SSR 水合初值。","inLanguage":"zh-CN","datePublished":"2026-10-20T19:36:17.000Z","dateModified":"2026-10-20T19:36:17.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://react.dev/reference/react/useSyncExternalStore"],"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/21/react-external-store-snapshot/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"外部 store 的快照，为什么必须稳定？","item":"https://www.zyweb.vip/zh-CN/2026/10/21/react-external-store-snapshot/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/21/react-external-store-snapshot/" selected>zh-CN</option><option value="/en/2026/10/21/react-external-store-snapshot/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/21/react-external-store-snapshot/" selected>zh-CN</option><option value="/en/2026/10/21/react-external-store-snapshot/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-20T19:36:17.000Z">2026-10-21</time>
+    </div>
+
+    <h1>外部 store 的快照，为什么必须稳定？</h1>
+
+    
+      <p class="post-hero__summary">以购物车数量拆解 subscribe、getSnapshot 和 getServerSnapshot：缓存不可变快照、通知顺序与 SSR 水合初值。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-20T19:36:17.000Z">2026-10-21</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/21/react-external-store-snapshot/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/21/react-external-store-snapshot/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>外部 store 未变化时 getSnapshot 要返回同一值，可变底层数据应缓存不可变快照。</li><li>subscribe 的函数身份与快照身份是不同契约，通知须让 React 读到新版本。</li><li>SSR 与水合阶段的 getServerSnapshot 必须给出相同初值，再由客户端订阅后续变化。</li></ul></section>
+      <div class="article-content">
+        <p>页面顶部的购物车数量来自 React 之外的 store。用户在商品卡片点“加入”，store 里的 <code>count</code> 从 2 改到 3，顶部组件应该跟着变；服务端先输出的页面还要在浏览器接管时对得上。<code>useSyncExternalStore</code> 提供了连接这两套状态的接口，但三个函数不能随意拼：<code>subscribe</code> 负责通知，<code>getSnapshot</code> 负责给 React 一份稳定的可比较值，<code>getServerSnapshot</code> 负责服务端与水合阶段的共同初值。<a target="_blank" rel="noopener" href="https://react.dev/reference/react/useSyncExternalStore">React 官方文档</a>把这些契约写得很明确，关键不在于“监听成功”，而在于每一次读值能否表达同一个状态版本。</p>
+<h2 id="快照身份代表状态是否变化"><a href="#快照身份代表状态是否变化" class="headerlink" title="快照身份代表状态是否变化"></a>快照身份代表状态是否变化</h2><p>先设 store 保存 <code>{count:2, items:[...]}</code>。组件只需要数量，可以让 <code>getSnapshot</code> 返回原始数字 2；只要数量没变，重复调用就是同一个基本值。用户加入一件后，store 改为 3，通知订阅者，React 再读到 3，于是更新显示。若组件需要对象快照，不能每次调用都 <code>return {count: store.count}</code>：即使 count 仍是 2，这也是新对象，<code>Object.is</code> 会认为不同。React 文档指出，未变更期间 <code>getSnapshot</code> 必须返回同一值；底层数据可变时，只有数据真的变化才创建新的不可变快照，否则返回缓存的上一份。</p>
+<p>可把版本号当成实现线索，但不能只靠版本号口号。store 在每次语义变更时更新 <code>version</code>，缓存 <code>{count, items}</code> 的冻结或不可变拷贝；<code>getSnapshot</code> 发现版本未变就返回同一个缓存对象，变了才构造新对象。通知要在状态写入之后发出，使回调触发的新读取得到新版本；订阅函数则返回真正移除监听器的清理函数。具体代码还要保证 <code>items</code> 不在原对象里被原地改动，否则外层对象身份没变，内部内容却悄悄变化，破坏快照语义。若状态来源本身已用不可变更新，直接返回那份不可变数据可能更简单。</p>
+<p>用一个完整小例子演算：初始 store 版本 5、购物车数量 2，缓存快照 S5=<code>{count:2}</code>。顶部组件订阅后读到 S5，显示“2”。商品卡片追加一件，store 先把数量设为 3、版本设为 6，再发通知；下一次 <code>getSnapshot</code> 创建 S6=<code>{count:3}</code>，顶部改为“3”。之后搜索框无关的重渲染再次调用 <code>getSnapshot</code>，仍返回 S6，React 不会因一个新造的同值对象而认为购物车又变化。这里的步骤是按官方契约推导的教学路径，并非对某个真实店铺进行了浏览器测量。</p>
+<p>反例能定位两种不同的身份错误。若 <code>subscribe</code> 写在组件函数体内，每次渲染都创建新的函数，React 会重新订阅；这带来不必要的清理与安装，文档建议把稳定的订阅函数放在组件外。若 <code>subscribe</code> 稳定，但 <code>getSnapshot</code> 每次返回新对象，依旧可能反复渲染并触发 React 提示缓存快照的错误。反过来，缓存对象却原地修改它的属性，React 可能看不见应有的变化。订阅身份和快照身份是两份独立契约，不能修好一个就宣布外部状态接入完成。</p>
+<h2 id="服务端与水合要读同一初值"><a href="#服务端与水合要读同一初值" class="headerlink" title="服务端与水合要读同一初值"></a>服务端与水合要读同一初值</h2><p>服务端渲染时没有浏览器里那份现成 store。假设服务器用会话数据输出购物车数量 2，而浏览器启动时本地 store 默认 0。若 <code>getServerSnapshot</code> 在服务端返回 2、水合时却返回 0，初始视图不一致；如果省略第三个函数却仍尝试在服务端渲染该组件，React 文档说会抛错。合理做法是把服务端用于输出的初始数据安全地序列化给浏览器，并让客户端水合时的 <code>getServerSnapshot</code> 返回同一数值 2，之后正常客户端 <code>getSnapshot</code> 才跟随后续 store 变化。序列化必须考虑用户隔离与转义，不能把另一用户购物车塞进共享缓存页面。</p>
+<p>还要处理初始 HTML 生成后、浏览器完成水合前购物车发生变化的情况。服务端初值 2 仍用于匹配第一帧，浏览器 store 若已收到数量 3，应在接管后通过订阅或再次读取更新到 3；不要为了即时显示 3 而把水合用的初值偷偷改成 3，使它与 HTML 上的“2”冲突。若初始数据来自用户会话，缓存键与序列化脚本都要按请求隔离。这个时序判断比简单地把第三个函数写成常量更重要，因为同一常量只适合真正与用户无关的初值。</p>
+<p>如果页面只是浏览器专属的在线状态徽标，服务端没有真实 <code>navigator.onLine</code>，可以选择定义一个一致的展示初值，或明确只在客户端渲染。关键是产品决定第一帧代表什么，而不是让服务器猜一个值、客户端再随机改掉。服务端初值相同也不等于远端数据永远同步：水合之后网络响应、跨标签页消息、库存更新仍应通过 store 的正常变更通知进入快照。<code>useSyncExternalStore</code> 解决的是 React 与外部源的读取和订阅桥梁，不替业务处理冲突合并或跨端权限。</p>
+<p>应先判断外部 store 是否必要。若数量本来就在组件树的 props 或 context 内，直接按 React 数据流计算可能更简单；站内<a href="/zh-CN/2026/10/12/react-derived-state-effect/">可计算状态与 Effect</a>讨论过为何不必把能推导的值再同步一份。只有数据确实由框架外对象、浏览器 API 或第三方订阅源拥有时，才需要这套桥接。别为“避免 props 传递”凭空造第二份权威数据，否则两份状态谁先谁后会比 Hook 本身更难解释。</p>
+<h2 id="用可重复的状态序列验收"><a href="#用可重复的状态序列验收" class="headerlink" title="用可重复的状态序列验收"></a>用可重复的状态序列验收</h2><p>测试应构造可控 store，先多次调用 <code>getSnapshot</code>，在无变更时断言返回值按 <code>Object.is</code> 相同；修改数量后触发通知，断言读取到新不可变对象或新基本值，并在卸载组件后确认监听器被清除。对象里有数组时，再检查老快照仍保留旧内容，防止共享可变引用。SSR 测试则把服务端 HTML 与传给浏览器的同一初始数据配对，确认水合第一帧一致，然后模拟一次客户端更新。还应故意让初值不一致，确认测试能暴露这个错误，而不是只跑成功路径。</p>
+<p>边界要记录清楚：React 文档还说明，外部 store 在非阻塞 Transition 期间变更时，React 可能重新读取快照并改用阻塞更新，以保持界面版本一致。这不是业务事务或数据库快照。本文没有运行 React 渲染探针，也不声称这些步骤在特定应用中测过；给出的是官方 API 契约、购物车状态推演及应执行的测试。交付标准是读者能指出每次变更的版本、通知、快照身份与水合初值，而不是只看到订阅回调被调用一次。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://react.dev/reference/react/useSyncExternalStore" rel="noopener">react.dev</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F21%2Freact-external-store-snapshot%2F&text=%E5%A4%96%E9%83%A8%20store%20%E7%9A%84%E5%BF%AB%E7%85%A7%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%BF%85%E9%A1%BB%E7%A8%B3%E5%AE%9A%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F21%2Freact-external-store-snapshot%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E5%A4%96%E9%83%A8%20store%20%E7%9A%84%E5%BF%AB%E7%85%A7%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%BF%85%E9%A1%BB%E7%A8%B3%E5%AE%9A%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F21%2Freact-external-store-snapshot%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/21/slo-burn-rate-multiwindow-alerts/">
+              <span>上一篇</span>
+              <strong>多窗口告警不是把阈值复制两遍</strong>
+              <small>2026-10-21</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/21/pytest-strict-marker-selection/">
+              <span>下一篇</span>
+              <strong>strict-markers 抓得住标记拼错，还漏什么？</strong>
+              <small>2026-10-21</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#快照身份代表状态是否变化">快照身份代表状态是否变化</a>
+          
+            <a class="toc-link toc-link--h2" href="#服务端与水合要读同一初值">服务端与水合要读同一初值</a>
+          
+            <a class="toc-link toc-link--h2" href="#用可重复的状态序列验收">用可重复的状态序列验收</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>265</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>113</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>80</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>54</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/21/cloudevents-identity-deduplication/">CloudEvents 去重：把 source 与 id 当一对身份</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/21/cqrs-projection-read-confirmation/">CQRS 写入后：用版本或状态确认读侧是否跟上</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/21/jsonschema-allof-closed-objects/">JSON Schema allOf：封闭对象扩展时怎样安放字段</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

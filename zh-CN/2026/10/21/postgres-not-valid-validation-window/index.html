@@ -1,0 +1,389 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>旧数据未清完，如何上线 CHECK 约束 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用订单金额案例拆开 NOT VALID 的新写入拦截、历史清理和最终验证，说明旧行更新、NULL 与锁的边界。">
+  
+  
+    <meta name="keywords" content="PostgreSQL NOT VALID,VALIDATE CONSTRAINT,CHECK约束迁移,存量数据清理">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/21/postgres-not-valid-validation-window/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/21/postgres-not-valid-validation-window/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/21/postgres-not-valid-validation-window/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/21/postgres-not-valid-validation-window/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="旧数据未清完，如何上线 CHECK 约束 | Midnight blog">
+    <meta property="og:description" content="用订单金额案例拆开 NOT VALID 的新写入拦截、历史清理和最终验证，说明旧行更新、NULL 与锁的边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/21/postgres-not-valid-validation-window/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-not-valid-validation-window/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-not-valid-validation-window/","name":"旧数据未清完，如何上线 CHECK 约束 | Midnight blog","description":"用订单金额案例拆开 NOT VALID 的新写入拦截、历史清理和最终验证，说明旧行更新、NULL 与锁的边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-not-valid-validation-window/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-not-valid-validation-window/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-not-valid-validation-window/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-not-valid-validation-window/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-not-valid-validation-window/","headline":"旧数据未清完，如何上线 CHECK 约束","description":"用订单金额案例拆开 NOT VALID 的新写入拦截、历史清理和最终验证，说明旧行更新、NULL 与锁的边界。","inLanguage":"zh-CN","datePublished":"2026-10-20T19:36:17.000Z","dateModified":"2026-10-20T19:36:17.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/sql-altertable.html"],"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-not-valid-validation-window/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"旧数据未清完，如何上线 CHECK 约束","item":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-not-valid-validation-window/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/21/postgres-not-valid-validation-window/" selected>zh-CN</option><option value="/en/2026/10/21/postgres-not-valid-validation-window/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/21/postgres-not-valid-validation-window/" selected>zh-CN</option><option value="/en/2026/10/21/postgres-not-valid-validation-window/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-20T19:36:17.000Z">2026-10-21</time>
+    </div>
+
+    <h1>旧数据未清完，如何上线 CHECK 约束</h1>
+
+    
+      <p class="post-hero__summary">用订单金额案例拆开 NOT VALID 的新写入拦截、历史清理和最终验证，说明旧行更新、NULL 与锁的边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-20T19:36:17.000Z">2026-10-21</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/21/postgres-not-valid-validation-window/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/21/postgres-not-valid-validation-window/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>NOT VALID 跳过添加约束时的存量扫描，提交后仍检查后续插入与更新。</li><li>历史坏行须先按业务含义清理，再以 VALIDATE CONSTRAINT 成功证明全表满足约束。</li><li>CHECK 的 NULL 语义、旧坏行更新和验证阶段的锁都应进入迁移验收。</li></ul></section>
+      <div class="article-content">
+        <p>订单表里已经有负金额，团队准备增加 <code>CHECK (total_cents &gt;= 0)</code>。直接添加约束会检查存量行，第一条违规订单就使迁移失败；先把所有旧订单清完又可能持续几天，期间新写入仍能制造同样的问题。<code>NOT VALID</code> 解决的是这个时间顺序：先让数据库对后续写入执法，再另开一次验证去确认历史数据。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-altertable.html">PostgreSQL 18 的 ALTER TABLE 文档</a>明确说，添加时跳过初始扫描，但约束仍作用于后续插入或更新。它绝不是“暂时不检查约束”。</p>
+<h2 id="先挡住新坏行，再证明旧行"><a href="#先挡住新坏行，再证明旧行" class="headerlink" title="先挡住新坏行，再证明旧行"></a>先挡住新坏行，再证明旧行</h2><p>先把三种状态写在迁移单上。开始前，旧行和新行都可能违规；执行 <code>ADD CONSTRAINT ... NOT VALID</code> 并提交之后，新写入必须满足条件，而旧行尚未整体证明合规；执行 <code>VALIDATE CONSTRAINT</code> 成功之后，数据库才可以把整张表视为满足该约束。这个状态分界比“SQL 执行成功”更有用。只看到 ADD 成功，不能向依赖方宣称历史数据已清洁；只看到批处理清理完成，也不能跳过数据库最终验证。</p>
+<p>用具体订单演算。<code>orders</code> 中有三行：编号 41 的金额为 1200 分，编号 42 为 -300 分，编号 43 为 0 分。产品规则允许零金额优惠单，却不允许负数。先确认规则确实如此：如果零金额也应被拒绝，表达式该是 <code>&gt; 0</code>，而不是在部署当天凭印象改运算符。迁移先运行 <code>ALTER TABLE orders ADD CONSTRAINT orders_total_nonnegative CHECK (total_cents &gt;= 0) NOT VALID;</code>。提交后尝试插入编号 44、金额 -1 分，会被约束拒绝；插入编号 45、金额 50 分可以通过。编号 42 仍留在表内，这正是待清理的存量，不是 ADD 漏执行。</p>
+<h2 id="清理前先解释旧值"><a href="#清理前先解释旧值" class="headerlink" title="清理前先解释旧值"></a>清理前先解释旧值</h2><p>接着找出异常订单以及业务归因。<code>SELECT id,total_cents FROM orders WHERE total_cents &lt; 0 ORDER BY id;</code> 是定位这个具体条件的候选查询。若旧值是退款冲回，不应简单改成零；可能需要把退款表示为独立记录，或修正此次约束原本不适合这张表的事实。若是导入错误，先在审计记录中保留原值和更正依据，再将编号 42 修为经确认的数值。最后运行 <code>ALTER TABLE orders VALIDATE CONSTRAINT orders_total_nonnegative;</code>。当编号 42 仍为 -300 分，验证会失败，约束保持未验证状态；修复后重试验证才有完成证据。这里的数值和结果是按 PostgreSQL 文档机制推演的教学案例，并非在生产订单表实测。</p>
+<p>需要特别看更新旧行的路径。<code>NOT VALID</code> 并不授权应用继续对编号 42 做任意更新。文档说约束作用于随后的更新，因此即使只是改订单备注，新的行版本仍须满足金额检查，可能先被拒绝。清理任务若把负数从 -300 改为 -100，同样不会因“正在修数据”而获豁免。迁移窗口中如果业务必须修改这类旧行，就要安排一次使整行合规的修复，或者改变迁移顺序；不要把错误重试归咎于偶发锁竞争。</p>
+<p>执行前还应做一遍 NULL 语义检查。<code>CHECK (total_cents &gt;= 0)</code> 对 <code>NULL</code> 得到未知，而不是 false，可能让空金额通过。若金额必须存在，需要另有非空约束及其迁移计划，不能靠这个 CHECK 偷渡。已有文章<a href="/zh-CN/2026/10/12/postgres-check-null-domain/">CHECK 与 NULL 的区别</a>解释了为何写着大于零的检查也可能保存空值。本例把“允许零”与“允许 NULL”分开决定，免得验证成功后产品仍出现没有金额的订单。</p>
+<h2 id="验证阶段仍有扫描与锁"><a href="#验证阶段仍有扫描与锁" class="headerlink" title="验证阶段仍有扫描与锁"></a>验证阶段仍有扫描与锁</h2><p><code>NOT VALID</code> 的另一层价值是降低长时间初始扫描对并发更新的影响，而不是无锁。PostgreSQL 文档说明，普通添加约束的存量扫描会把相关更新挡到命令提交；跳过该扫描可以尽早提交 ADD。后续 <code>VALIDATE CONSTRAINT</code> 仍需要扫描表，并获取 <code>SHARE UPDATE EXCLUSIVE</code> 锁。这个锁级别和日常读写的兼容性、与其他维护任务的冲突，必须结合实际业务和版本评估。迁移单应记录预计扫描规模、超时与重试方式，以及当验证因坏数据或锁等待失败时如何恢复，而不能写“一次 DDL 零影响”。</p>
+<p>约束类型也不能混用。文档列出的 <code>NOT VALID</code> 适用范围是外键、CHECK 和非空约束；它不是任意 UNIQUE 或主键迁移的通用开关。若改为外键，添加约束还会在被引用表取锁，验证也涉及被引用关系；不能把单表金额 CHECK 的运行窗口原封不动套到订单与客户的外键上。团队在上线清单中应写出本次约束的准确类型和触及的表，不把语法能通过当作并发风险评估。</p>
+<p>两阶段迁移还要确定失败后的“留在何处”。如果 ADD 语句失败，数据库尚未建立挡新写入的栅栏，不能开始以为后续都干净的清理；先查 DDL 错误并重试。若 ADD 已提交而批处理失败，约束仍继续拦截新违规写入，修复任务可以安全续跑，但业务上可能持续有旧行的非金额更新失败。若 VALIDATE 失败，保留约束、检查具体违规行并再次验证通常比撤销约束更符合目标；撤销会重新放开新写入，需另有明确理由和回滚授权。不要把三个阶段放在一笔长事务里等待人工清理，免得本来要缩短的锁窗口被事务延长。</p>
+<h2 id="以阶段证据结束迁移"><a href="#以阶段证据结束迁移" class="headerlink" title="以阶段证据结束迁移"></a>以阶段证据结束迁移</h2><p>验收也要按状态分开。上线前抽取代表性旧行，确认零、正数、负数、NULL 的业务预期，检查应用是否仍有负数生成路径。ADD 提交后用隔离的测试表或受控环境验证负数插入、正数插入和修改旧违规行的预期；这些探针不能拿生产真订单随意做。清理期间按约束条件盘点违规数量并保存批次进度、异常理由。最后以 <code>VALIDATE CONSTRAINT</code> 成功和数据库目录中已验证状态为完成信号，同时观察锁等待、写入错误及回滚请求。这里只给出验证方案，未声称执行了数据库实验或取得生产锁耗时。</p>
+<p>如果系统允许历史行永远不修，<code>NOT VALID</code> 可以长期保持“新行受管，旧行未证”的状态，但下游不能把全表当成一致数据。报表按总金额统计时仍会纳入负数旧行，API 也可能读到它。迁移负责人应把这种暂态写进数据契约，给清理明确责任和截止条件；否则一个看似成功的 schema 变更会变成永久的数据质量分叉。真正的完成点，是约束表达了已确认的业务规则、旧数据被正确处理、最终验证成功，而且相关读写路径都接受这个规则。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-altertable.html" rel="noopener">www.postgresql.org</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F21%2Fpostgres-not-valid-validation-window%2F&text=%E6%97%A7%E6%95%B0%E6%8D%AE%E6%9C%AA%E6%B8%85%E5%AE%8C%EF%BC%8C%E5%A6%82%E4%BD%95%E4%B8%8A%E7%BA%BF%20CHECK%20%E7%BA%A6%E6%9D%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F21%2Fpostgres-not-valid-validation-window%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E6%97%A7%E6%95%B0%E6%8D%AE%E6%9C%AA%E6%B8%85%E5%AE%8C%EF%BC%8C%E5%A6%82%E4%BD%95%E4%B8%8A%E7%BA%BF%20CHECK%20%E7%BA%A6%E6%9D%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F21%2Fpostgres-not-valid-validation-window%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/21/postgres-range-exclusion-overlap/">
+              <span>上一篇</span>
+              <strong>让数据库拒绝同房重叠预约</strong>
+              <small>2026-10-21</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/21/postgres-cte-materialization-plan/">
+              <span>下一篇</span>
+              <strong>CTE 物化是复用还是过滤围栏？</strong>
+              <small>2026-10-21</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#先挡住新坏行，再证明旧行">先挡住新坏行，再证明旧行</a>
+          
+            <a class="toc-link toc-link--h2" href="#清理前先解释旧值">清理前先解释旧值</a>
+          
+            <a class="toc-link toc-link--h2" href="#验证阶段仍有扫描与锁">验证阶段仍有扫描与锁</a>
+          
+            <a class="toc-link toc-link--h2" href="#以阶段证据结束迁移">以阶段证据结束迁移</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>265</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>113</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>80</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>54</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/21/cloudevents-identity-deduplication/">CloudEvents 去重：把 source 与 id 当一对身份</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/21/cqrs-projection-read-confirmation/">CQRS 写入后：用版本或状态确认读侧是否跟上</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/21/jsonschema-allof-closed-objects/">JSON Schema allOf：封闭对象扩展时怎样安放字段</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

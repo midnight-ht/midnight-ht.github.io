@@ -1,0 +1,389 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>CloudEvents 去重：把 source 与 id 当一对身份 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用跨仓库事件和失败重送解释 source 加 id 的身份边界，以及消费端事务与保留窗口。">
+  
+  
+    <meta name="keywords" content="CloudEvents 去重,source id,事件幂等">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/21/cloudevents-identity-deduplication/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/21/cloudevents-identity-deduplication/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/21/cloudevents-identity-deduplication/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/21/cloudevents-identity-deduplication/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="CloudEvents 去重：把 source 与 id 当一对身份 | Midnight blog">
+    <meta property="og:description" content="用跨仓库事件和失败重送解释 source 加 id 的身份边界，以及消费端事务与保留窗口。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/21/cloudevents-identity-deduplication/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/21/cloudevents-identity-deduplication/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/21/cloudevents-identity-deduplication/","name":"CloudEvents 去重：把 source 与 id 当一对身份 | Midnight blog","description":"用跨仓库事件和失败重送解释 source 加 id 的身份边界，以及消费端事务与保留窗口。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/21/cloudevents-identity-deduplication/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/21/cloudevents-identity-deduplication/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/21/cloudevents-identity-deduplication/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/21/cloudevents-identity-deduplication/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/21/cloudevents-identity-deduplication/","headline":"CloudEvents 去重：把 source 与 id 当一对身份","description":"用跨仓库事件和失败重送解释 source 加 id 的身份边界，以及消费端事务与保留窗口。","inLanguage":"zh-CN","datePublished":"2026-10-20T19:36:17.000Z","dateModified":"2026-10-20T19:36:17.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://raw.githubusercontent.com/cloudevents/spec/v1.0.2/cloudevents/spec.md"],"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/21/cloudevents-identity-deduplication/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"CloudEvents 去重：把 source 与 id 当一对身份","item":"https://www.zyweb.vip/zh-CN/2026/10/21/cloudevents-identity-deduplication/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/21/cloudevents-identity-deduplication/" selected>zh-CN</option><option value="/en/2026/10/21/cloudevents-identity-deduplication/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/21/cloudevents-identity-deduplication/" selected>zh-CN</option><option value="/en/2026/10/21/cloudevents-identity-deduplication/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-20T19:36:17.000Z">2026-10-21</time>
+    </div>
+
+    <h1>CloudEvents 去重：把 source 与 id 当一对身份</h1>
+
+    
+      <p class="post-hero__summary">用跨仓库事件和失败重送解释 source 加 id 的身份边界，以及消费端事务与保留窗口。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-20T19:36:17.000Z">2026-10-21</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/21/cloudevents-identity-deduplication/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/21/cloudevents-identity-deduplication/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>CloudEvents 要求生产者为不同事件保证 source 与 id 组合唯一。</li><li>只按 id 或 data 去重会误吞合法事件或漏掉重送。</li><li>消费端需把身份记录与业务副作用原子化或另设补偿。</li></ul></section>
+      <div class="article-content">
+        <p>一个库存变更事件经消息系统重试两次，下游计数器却增加了三次。团队在日志里看到三个相同的 <code>id</code>，便准备把 <code>id</code> 当全局主键。这个修补仍可能误删另一来源的合法事件。<a target="_blank" rel="noopener" href="https://raw.githubusercontent.com/cloudevents/spec/v1.0.2/cloudevents/spec.md">CloudEvents v1.0.2 规范</a>给出的身份边界是 <strong><code>source</code> 与 <code>id</code> 的组合</strong>：生产者必须保证这一对值对不同事件唯一；重复发送同一事件时可以沿用同一 <code>id</code>，消费者可以把同一对值视为重复。身份规则能让消费端识别重送，却不会自动替业务操作实现恰好一次。</p>
+<h2 id="从一条订单事件看重复的定义"><a href="#从一条订单事件看重复的定义" class="headerlink" title="从一条订单事件看重复的定义"></a>从一条订单事件看重复的定义</h2><p>假设 <code>/warehouse/east</code> 发布订单 <code>O-41</code> 的库存扣减事件，<code>id</code> 是 <code>evt-901</code>，首次投递后消费者完成了扣减，但确认消息在网络中丢失。代理再次投递，事件的 <code>source=/warehouse/east</code>、<code>id=evt-901</code> 均保持不变。消费者查到已处理的这对键，应返回成功或已处理结果，避免再扣一次。若 <code>/warehouse/west</code> 恰好也发布 <code>id=evt-901</code>，它是另一对身份；只按 <code>id</code> 去重会误吞西仓事件。若东仓随后真的发生第二次独立库存变化，则必须分配新的 <code>id</code>；重复使用 <code>evt-901</code> 会让消费者有理由把新变化当旧事件。</p>
+<pre><code class="json">{&quot;specversion&quot;:&quot;1.0&quot;,&quot;type&quot;:&quot;com.example.stock.debited&quot;,&quot;source&quot;:&quot;/warehouse/east&quot;,&quot;id&quot;:&quot;evt-901&quot;,&quot;subject&quot;:&quot;orders/O-41&quot;,&quot;data&quot;:{&quot;sku&quot;:&quot;S-7&quot;,&quot;quantity&quot;:2}}
+</code></pre>
+<p>这段 JSON 是说明性事件，并非生产投递记录。<code>source</code> 标识事件发生的上下文，通常由生产者选择；<code>id</code> 在该上下文内承担唯一性。<code>subject</code> 可以帮助定位订单，却不能替代身份键，因为一个订单会产生多次合法变化。<code>type</code> 描述事件种类，也不能成为唯一性的一部分：同类型会反复发生，类型变化也不应使同一重送突然成为新事件。规范只规定生产者的身份承诺与消费者可作的重复假设，并没有规定数据库该保留记录多久。</p>
+<p>身份键的规范性还取决于上游如何生成它。若生产者在每次重试时调用随机数生成器产生新 <code>id</code>，消费者收到的就是两对不同身份，无法知道它们对应同一次业务变化。生产端应在业务变更形成时固定事件身份，并让发送重试复用已持久化的事件记录；若使用 outbox，事件内容与身份应跟业务提交一起存下，发送器只负责重复取出和投递。若业务动作本身重试导致两次数据库变更，那是命令层的幂等问题，不能指望事件层去重弥补。两层身份分别回答“同一个命令是否执行过”和“同一个事件是否消费过”，需要用业务追踪号把它们关联，而不应偷换为同一个键。</p>
+<p>排查时还应保留原始事件字节或足够的规范化摘要，但不要用摘要直接代替 <code>(source,id)</code>。如果相同身份下 payload 不同，正好说明生产者身份约束或传输链存在异常；把摘要加进唯一键反而会让两份冲突事件都进入业务处理。消费者可以在已处理记录中保存不可变字段摘要，重复到达时先比对，若冲突则隔离并告警。这个附加校验帮助发现错误，不改变规范给出的事件身份。</p>
+<h2 id="把去重和业务提交放进同一事务"><a href="#把去重和业务提交放进同一事务" class="headerlink" title="把去重和业务提交放进同一事务"></a>把去重和业务提交放进同一事务</h2><p>消费端常见做法是在业务数据库建立 <code>(source,id)</code> 唯一键。处理事件时，同一事务先插入接收记录，再执行库存变化；若唯一冲突，读取已有处理结果并结束。关键不是语句先后，而是原子性：如果去重记录提交了、库存扣减却失败，后续重试会被错误丢弃；如果库存扣减提交了、去重记录却没落库，重试又会重复扣减。数据库无法将外部系统写入纳入同一事务时，需另设业务幂等键、outbox/inbox 或状态机，并明确每一步可重试的结果。站内<a href="/zh-CN/2026/10/09/api-retry-idempotency/">API 重试与幂等边界</a>讨论请求层语义；事件消费还要处理生产者与消费者两侧持久化的间隙。</p>
+<p>例如计数器更新 <code>stock = stock - 2</code> 若无保护就会随重送重复执行。把事件身份与订单变更版本一起写入账本，并对同一 <code>(source,id)</code> 返回既有结果，能防止这个具体重复；但若生产者把同一真实业务动作错误地发成两个不同 <code>id</code>，事件去重无法推断它们属于同一动作。反过来，两个合法动作即使业务字段完全相同，也不能靠比对 <code>data</code> JSON 当作重复。<code>data</code> 可能因补充字段、序列化顺序或脱敏而变化；身份承诺才是此层的判据，业务层另有其自然键与约束。</p>
+<p>还有一个经常漏掉的时间问题：如果只保存最近七天的去重键，八天后到达的旧事件可能再次生效。应根据传输系统最大重送窗口、离线回放、灾备导入与业务不可逆性确定保留策略。无确定上界的场景，不能只声称“七天后不会重复”；可保存紧凑的长期事件账本，或让业务更新本身由版本约束保护。回放历史流时要决定是重建新投影，还是向已有投影补事件；前者可清空投影并按顺序重建，后者必须继承已处理身份，避免再次执行副作用。</p>
+<h2 id="验收时同时制造重复与非重复"><a href="#验收时同时制造重复与非重复" class="headerlink" title="验收时同时制造重复与非重复"></a>验收时同时制造重复与非重复</h2><p>最小测试集应有四项。先把同一事件投递两次，断言账本只有一对身份且库存只扣一次。再用相同 <code>id</code>、不同 <code>source</code> 投递，断言两条都被接受；再用相同 <code>source</code>、新 <code>id</code> 且相同 <code>data</code> 投递，断言它仍是第二次合法变化。最后，在“业务写入成功但确认失败”处人为断开，恢复后重送并观察事务与响应。这组负例比只测“相同 JSON 进两次”更能找出错误的全局 <code>id</code> 主键和基于 payload 的误去重。</p>
+<p>消费者还应记录 <code>source</code>、<code>id</code>、处理版本、首次接收时间、最终结果与失败原因，方便区分重送、真正的新事件和业务拒绝。日志中看到同一键多次出现并非一定错误；重复投递可能是传输保证的一部分。真正需要报警的是同一键映射到相互冲突的不可变业务内容、同一键导致多次副作用，或生产者对不同事件复用了身份。对冲突应隔离并调查，而不是让“先到者赢”悄悄遮盖数据错误。</p>
+<p>因此，选择去重键时先问事件身份由谁承诺，再问副作用是否和记录原子提交，最后问旧事件可在多久之后回来。本文的 JSON 和仓库例子用于解释规范，并未运行消息代理或数据库事务；上线前还需用实际 CloudEvents SDK、传输协议、存储约束和故障注入确认。CloudEvents 给出跨生产者的身份坐标，应用仍须自己证明在这个坐标上如何只执行一次副作用。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://raw.githubusercontent.com/cloudevents/spec/v1.0.2/cloudevents/spec.md" rel="noopener">raw.githubusercontent.com</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F21%2Fcloudevents-identity-deduplication%2F&text=CloudEvents%20%E5%8E%BB%E9%87%8D%EF%BC%9A%E6%8A%8A%20source%20%E4%B8%8E%20id%20%E5%BD%93%E4%B8%80%E5%AF%B9%E8%BA%AB%E4%BB%BD" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F21%2Fcloudevents-identity-deduplication%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=CloudEvents%20%E5%8E%BB%E9%87%8D%EF%BC%9A%E6%8A%8A%20source%20%E4%B8%8E%20id%20%E5%BD%93%E4%B8%80%E5%AF%B9%E8%BA%AB%E4%BB%BD&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F21%2Fcloudevents-identity-deduplication%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/21/cqrs-projection-read-confirmation/">
+              <span>上一篇</span>
+              <strong>CQRS 写入后：用版本或状态确认读侧是否跟上</strong>
+              <small>2026-10-21</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/21/actions-pr-target-untrusted-checkout/">
+              <span>下一篇</span>
+              <strong>默认分支工作流，并不让PR检出内容可信</strong>
+              <small>2026-10-21</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#从一条订单事件看重复的定义">从一条订单事件看重复的定义</a>
+          
+            <a class="toc-link toc-link--h2" href="#把去重和业务提交放进同一事务">把去重和业务提交放进同一事务</a>
+          
+            <a class="toc-link toc-link--h2" href="#验收时同时制造重复与非重复">验收时同时制造重复与非重复</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>265</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>113</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>80</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>54</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/21/cqrs-projection-read-confirmation/">CQRS 写入后：用版本或状态确认读侧是否跟上</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/21/jsonschema-allof-closed-objects/">JSON Schema allOf：封闭对象扩展时怎样安放字段</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/21/node-fs-rename-durability/">rename 成功后，配置文件真的交付了吗？</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

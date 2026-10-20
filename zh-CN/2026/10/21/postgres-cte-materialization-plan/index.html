@@ -1,0 +1,398 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>CTE 物化是复用还是过滤围栏？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用双引用订单报表比较 MATERIALIZED 与 NOT MATERIALIZED：何时能下推过滤，何时会重复昂贵计算。">
+  
+  
+    <meta name="keywords" content="PostgreSQL CTE,MATERIALIZED,NOT MATERIALIZED,过滤下推">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/21/postgres-cte-materialization-plan/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/21/postgres-cte-materialization-plan/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/21/postgres-cte-materialization-plan/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/21/postgres-cte-materialization-plan/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="CTE 物化是复用还是过滤围栏？ | Midnight blog">
+    <meta property="og:description" content="用双引用订单报表比较 MATERIALIZED 与 NOT MATERIALIZED：何时能下推过滤，何时会重复昂贵计算。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/21/postgres-cte-materialization-plan/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-cte-materialization-plan/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-cte-materialization-plan/","name":"CTE 物化是复用还是过滤围栏？ | Midnight blog","description":"用双引用订单报表比较 MATERIALIZED 与 NOT MATERIALIZED：何时能下推过滤，何时会重复昂贵计算。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-cte-materialization-plan/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-cte-materialization-plan/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-cte-materialization-plan/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-cte-materialization-plan/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-cte-materialization-plan/","headline":"CTE 物化是复用还是过滤围栏？","description":"用双引用订单报表比较 MATERIALIZED 与 NOT MATERIALIZED：何时能下推过滤，何时会重复昂贵计算。","inLanguage":"zh-CN","datePublished":"2026-10-20T19:36:17.000Z","dateModified":"2026-10-20T19:36:17.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/queries-with.html"],"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-cte-materialization-plan/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"CTE 物化是复用还是过滤围栏？","item":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-cte-materialization-plan/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/21/postgres-cte-materialization-plan/" selected>zh-CN</option><option value="/en/2026/10/21/postgres-cte-materialization-plan/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/21/postgres-cte-materialization-plan/" selected>zh-CN</option><option value="/en/2026/10/21/postgres-cte-materialization-plan/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-20T19:36:17.000Z">2026-10-21</time>
+    </div>
+
+    <h1>CTE 物化是复用还是过滤围栏？</h1>
+
+    
+      <p class="post-hero__summary">用双引用订单报表比较 MATERIALIZED 与 NOT MATERIALIZED：何时能下推过滤，何时会重复昂贵计算。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-20T19:36:17.000Z">2026-10-21</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/21/postgres-cte-materialization-plan/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/21/postgres-cte-materialization-plan/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>非递归无副作用 SELECT 的单次引用默认可折叠，多次引用默认倾向物化。</li><li>NOT MATERIALIZED 可能让各引用下推过滤，也可能重复昂贵计算。</li><li>对照实际计划、行数、缓冲读与函数成本，并核对改写前后的结果语义。</li></ul></section>
+      <div class="article-content">
+        <p>一段报表 SQL 用 <code>WITH</code> 把订单清洗结果命名为 <code>w</code>，主查询再引用 <code>w</code> 两次：两次引用同一客户的订单以计算配对。团队看到查询变慢，就说“CTE 会物化，所以不要写 WITH”。这个判断过于粗糙。PostgreSQL 18 的 <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/queries-with.html">WITH 查询文档</a>指出，对于非递归、无副作用的 SELECT，单次引用默认可以折叠进父查询，多次引用默认不折叠；<code>MATERIALIZED</code> 与 <code>NOT MATERIALIZED</code> 能影响这个选择。真正需要判断的是：下推过滤能少读多少行，展开后又会重算多少工作。</p>
+<h2 id="两次引用怎样改变过滤路径"><a href="#两次引用怎样改变过滤路径" class="headerlink" title="两次引用怎样改变过滤路径"></a>两次引用怎样改变过滤路径</h2><p>先看一个小型案例。设 <code>orders(id, customer_id, amount)</code> 有一百万行，其中客户 17 只有八行，<code>customer_id</code> 上有可用索引。报表想计算客户 17 的订单之间共有多少对（允许同一订单与自身配对）。若 <code>WITH w AS (SELECT * FROM orders)</code> 被主查询引用两次，默认物化可能先形成一份覆盖大范围 <code>orders</code> 的中间结果，再由父查询过滤 <code>customer_id = 17</code>。概念上，八行目标被放在百万行候选之后才找；这正是想排查的代价路径，而不是任何环境已经测得的执行计划。</p>
+<p>为让两次引用可复现，设表内客户 17 恰有八行，<code>id</code> 各不相同，用两个别名计算配对：</p>
+<pre><code class="sql">WITH w AS (SELECT id, customer_id, amount FROM orders)
+SELECT count(*)
+FROM w AS left_order
+JOIN w AS right_order ON left_order.customer_id = right_order.customer_id
+WHERE left_order.customer_id = 17
+  AND right_order.customer_id = 17;
+</code></pre>
+<p>这里两个别名各可取八行，包含自身与反向配对，逻辑结果是 8×8=64；若业务只要不同订单的无序配对，应另加 <code>left_order.id &lt; right_order.id</code>，结果为 28，不能把两者混算。查询结果的 64 是从给定输入和连接条件推导，实际访问多少行仍需看计划。</p>
+<p>对照一段更短的查询：<code>WITH w AS (SELECT * FROM orders) SELECT * FROM w WHERE customer_id = 17;</code> 只有一次引用，且子查询没有递归或易变函数，按文档默认可与父查询一起优化。若索引与统计信息适合，优化器可以只访问客户 17 的行。不能因为看到 <code>WITH</code> 这个关键字就断言“必然建临时表”。也不能从语法推断必然走索引；行数估计、选择率、索引类型和成本参数都会影响实际选择。</p>
+<h2 id="展开能下推，物化能复用"><a href="#展开能下推，物化能复用" class="headerlink" title="展开能下推，物化能复用"></a>展开能下推，物化能复用</h2><p>有两种明确的改写值得并排评估。以 <code>WITH w AS NOT MATERIALIZED (SELECT * FROM orders)</code> 开头的写法 要求把合适的 CTE 合入父查询，使每处引用有机会使用自己的过滤条件；若两处各需很少行，全量中间结果可能被避免。反过来，以 <code>WITH w AS MATERIALIZED (SELECT * FROM orders)</code> 开头的写法 强制单独计算一次，适合昂贵而会被多处复用的结果。两者不是“新语法比旧语法快”的等级排序，而是改变优化器能否共享工作、能否分别下推条件。文档明示 <code>NOT MATERIALIZED</code> 有重复计算风险，即使有时净收益更大。</p>
+<p>把数值代入决策：假设两处引用各找八行，且过滤能利用索引，展开后大致是两个小范围访问；物化却可能生产很大结果，单独读取一次并没有优势。若 CTE 对每行运行复杂的格式转换或昂贵纯函数，两个引用都要同一批十万行，展开可能把函数做两遍，物化一次反而合算。这里的“八行”“十万行”是为演示成本方向设置的假设，不是 PostgreSQL 保证的物理读取次数。CPU、内存、临时存储、连接条件和并行计划，都要由真实计划与样本负载确认。</p>
+<p>文档给了一个特别清楚的反例：<code>SELECT key, very_expensive_function(val) AS f FROM some_table</code> 放在 <code>w</code> 中，父查询自连接 <code>w</code> 两次，物化能保证这个昂贵函数对每个表行只算一次，而不是两次。若团队为了“总让索引下推”机械加 <code>NOT MATERIALIZED</code>，这类查询可能退步。更早一步还得确认函数是否真可按无副作用规则折叠；含易变函数、递归或数据修改语句的 WITH 有不同语义，不能套用此处关于普通 SELECT 的建议。</p>
+<h2 id="让计划检验成本预测"><a href="#让计划检验成本预测" class="headerlink" title="让计划检验成本预测"></a>让计划检验成本预测</h2><p>怎样用实际证据选？先保留原 SQL 与参数，分别对默认、显式 <code>MATERIALIZED</code>、显式 <code>NOT MATERIALIZED</code> 跑 <code>EXPLAIN (ANALYZE, BUFFERS)</code>，在可控测试环境使用代表性数据。比较实际行数与估算、CTE Scan 是否出现、基础表访问方式、函数执行次数、缓冲读与耗时，而不是只盯总毫秒数。<code>ANALYZE</code> 会真的执行查询，因此若 SQL 中含数据修改或有副作用，必须改用安全的说明计划或隔离环境。站内关于<a href="/zh-CN/2026/10/09/postgres-explain-evidence/">估算行数与查询计划</a>的文章提供了读计划的前置方法。</p>
+<p>可把试验写成可证伪的预测。对于客户 17 的八行查询，预测 <code>NOT MATERIALIZED</code> 版本的基础表访问会更贴近两个受限范围，物化版本会出现较大中间结果；若计划显示过滤已提前落在基础表、或全表顺序访问本来更便宜，预测就不成立，别因为选了一个口号继续推进。对昂贵函数的复用查询，预测物化版本减少重复计算；如果每处引用的行集很小且互不相交，函数重复的成本也许小于中间结果构建成本。把参数分布一起测，避免只用一个稀有客户代表所有客户。</p>
+<p>还有查询正确性的条件。把 CTE 合进父查询可能改变某些表达式被计算的次数，因此不能拿有副作用或易变函数的结果仅按性能优化；文档对可折叠 CTE 的限定就是非递归、无副作用的 SELECT。对于普通确定性查询，也要确认两种改写输出的行数、重复关系与 NULL 处理一致。若为了让过滤下推而把谓词移到 CTE 内，原先两个引用可能需要不同范围，提前统一过滤会改变语义；用 <code>NOT MATERIALIZED</code> 与手动改 WHERE 不是同一件事。</p>
+<h2 id="依据引用范围做选择"><a href="#依据引用范围做选择" class="headerlink" title="依据引用范围做选择"></a>依据引用范围做选择</h2><p>选择可形成一条团队规则：若只引用一次，先假设默认折叠有合理机会，不急着加提示；若引用多次且每次只取很少一部分，用计划测试 <code>NOT MATERIALIZED</code>；若复用重计算结果且各引用覆盖相近数据，测试 <code>MATERIALIZED</code> 或保留默认。最后以真实参数、实际计划与结果一致性决定，不把某次压测的优胜版本写成所有数据规模下的规律。索引和统计信息变动后应复看计划，尤其报表客户分布差距很大时。</p>
+<p>这项决策的边界是“一次查询内部的工作安排”。CTE 物化不是持久缓存，不会让第二次请求免费复用，也不自动为中间结果建立可供父查询使用的普通表索引。若需求是跨请求共享结果，可能需要物化视图、缓存或预聚合，但它们带来更新时效和维护成本，是另一份设计。本文没有运行数据库探针，因此只给出由 PostgreSQL 18 文档支持的默认规则、可能的计划路径和可执行的验证方案；具体快慢要让自己的工作负载回答。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/queries-with.html" rel="noopener">www.postgresql.org</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F21%2Fpostgres-cte-materialization-plan%2F&text=CTE%20%E7%89%A9%E5%8C%96%E6%98%AF%E5%A4%8D%E7%94%A8%E8%BF%98%E6%98%AF%E8%BF%87%E6%BB%A4%E5%9B%B4%E6%A0%8F%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F21%2Fpostgres-cte-materialization-plan%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=CTE%20%E7%89%A9%E5%8C%96%E6%98%AF%E5%A4%8D%E7%94%A8%E8%BF%98%E6%98%AF%E8%BF%87%E6%BB%A4%E5%9B%B4%E6%A0%8F%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F21%2Fpostgres-cte-materialization-plan%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/21/postgres-not-valid-validation-window/">
+              <span>上一篇</span>
+              <strong>旧数据未清完，如何上线 CHECK 约束</strong>
+              <small>2026-10-21</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/21/playwright-timeout-budget-layers/">
+              <span>下一篇</span>
+              <strong>expect 能等15秒，测试为何第30秒失败？</strong>
+              <small>2026-10-21</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#两次引用怎样改变过滤路径">两次引用怎样改变过滤路径</a>
+          
+            <a class="toc-link toc-link--h2" href="#展开能下推，物化能复用">展开能下推，物化能复用</a>
+          
+            <a class="toc-link toc-link--h2" href="#让计划检验成本预测">让计划检验成本预测</a>
+          
+            <a class="toc-link toc-link--h2" href="#依据引用范围做选择">依据引用范围做选择</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>265</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>113</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>80</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>54</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/21/cloudevents-identity-deduplication/">CloudEvents 去重：把 source 与 id 当一对身份</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/21/cqrs-projection-read-confirmation/">CQRS 写入后：用版本或状态确认读侧是否跟上</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/21/jsonschema-allof-closed-objects/">JSON Schema allOf：封闭对象扩展时怎样安放字段</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

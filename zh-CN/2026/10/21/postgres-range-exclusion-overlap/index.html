@@ -1,0 +1,416 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>让数据库拒绝同房重叠预约 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用 tstzrange 与 GiST 排斥约束验证相邻可订、交叠拒绝、不同房可并行，并解释 NULL、空区间和并发边界。">
+  
+  
+    <meta name="keywords" content="PostgreSQL 排斥约束,tstzrange 预约冲突,GiST btree_gist,EXCLUDE USING gist">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/21/postgres-range-exclusion-overlap/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/21/postgres-range-exclusion-overlap/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/21/postgres-range-exclusion-overlap/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/21/postgres-range-exclusion-overlap/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="让数据库拒绝同房重叠预约 | Midnight blog">
+    <meta property="og:description" content="用 tstzrange 与 GiST 排斥约束验证相邻可订、交叠拒绝、不同房可并行，并解释 NULL、空区间和并发边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/21/postgres-range-exclusion-overlap/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-range-exclusion-overlap/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-range-exclusion-overlap/","name":"让数据库拒绝同房重叠预约 | Midnight blog","description":"用 tstzrange 与 GiST 排斥约束验证相邻可订、交叠拒绝、不同房可并行，并解释 NULL、空区间和并发边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-range-exclusion-overlap/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-range-exclusion-overlap/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-range-exclusion-overlap/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-range-exclusion-overlap/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-range-exclusion-overlap/","headline":"让数据库拒绝同房重叠预约","description":"用 tstzrange 与 GiST 排斥约束验证相邻可订、交叠拒绝、不同房可并行，并解释 NULL、空区间和并发边界。","inLanguage":"zh-CN","datePublished":"2026-10-20T19:36:17.000Z","dateModified":"2026-10-20T19:36:17.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/rangetypes.html#RANGETYPES-CONSTRAINT","https://www.postgresql.org/docs/18/btree-gist.html","https://www.postgresql.org/docs/18/rangetypes.html#RANGETYPES-BOUNDS","https://www.postgresql.org/docs/18/ddl-constraints.html#DDL-CONSTRAINTS-EXCLUSION","https://www.postgresql.org/docs/18/functions-range.html"],"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-range-exclusion-overlap/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"让数据库拒绝同房重叠预约","item":"https://www.zyweb.vip/zh-CN/2026/10/21/postgres-range-exclusion-overlap/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/21/postgres-range-exclusion-overlap/" selected>zh-CN</option><option value="/en/2026/10/21/postgres-range-exclusion-overlap/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/21/postgres-range-exclusion-overlap/" selected>zh-CN</option><option value="/en/2026/10/21/postgres-range-exclusion-overlap/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-20T19:36:17.000Z">2026-10-21</time>
+    </div>
+
+    <h1>让数据库拒绝同房重叠预约</h1>
+
+    
+      <p class="post-hero__summary">用 tstzrange 与 GiST 排斥约束验证相邻可订、交叠拒绝、不同房可并行，并解释 NULL、空区间和并发边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-20T19:36:17.000Z">2026-10-21</time> · 预计阅读 8 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/21/postgres-range-exclusion-overlap/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/21/postgres-range-exclusion-overlap/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>同房同一时段的约束是 room_id 相等且 during 重叠，UNIQUE 开始时间不能表达。</li><li>tstzrange 的 [) 边界允许前一预约结束点等于后一预约开始点；空区间和 NULL 要另设规则。</li><li>btree_gist 为整数房间号提供 GiST 等值支持，排斥约束负责最终拒绝冲突写入。</li></ul></section>
+      <div class="article-content">
+        <p>同一间会议室，甲预订十点到十一点，乙预订十点半到十一点半。两笔记录的开始时间不同，<code>UNIQUE (room_id, starts_at)</code> 可以让它们同时入库；房门却不能同时交给两组人。预约系统真正要禁止的是“同一房间且时间区间有交集”的记录对，而非某个标量值重复。PostgreSQL 的<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/rangetypes.html#RANGETYPES-CONSTRAINT">范围类型与排斥约束</a>可以把这条业务规则留在数据库里，令所有写入路径接受同一裁决。</p>
+<h2 id="把“相邻可用、交叠不可用”写成表约束"><a href="#把“相邻可用、交叠不可用”写成表约束" class="headerlink" title="把“相邻可用、交叠不可用”写成表约束"></a>把“相邻可用、交叠不可用”写成表约束</h2><p>以下是独立的教学表。预约时刻用 <code>tstzrange</code>，其端点是带时区的时间戳；输入显式写 <code>+08</code>，避免把会场当地时间和连接的会话时区混为一谈。<code>[)</code> 表示包含开始点而排除结束点，因此十点到十一点与十一点到十二点共用的十一点不构成重叠。这个边界定义需要产品和场地运维共同确认：若退场、清洁占用五分钟，应把缓冲计入区间，不能指望约束替业务猜出它。范围边界的包含与排除含义，见前述范围类型文档的边界小节。</p>
+<pre><code class="sql">CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+CREATE TABLE room_booking (
+  booking_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  room_id integer NOT NULL,
+  during tstzrange NOT NULL,
+  CONSTRAINT room_booking_nonempty CHECK (NOT isempty(during)),
+  CONSTRAINT room_booking_no_overlap
+    EXCLUDE USING gist (room_id WITH =, during WITH &amp;&amp;)
+);
+</code></pre>
+<p>这里 <code>room_id WITH =</code> 问两行是否订了同一房间，<code>during WITH &amp;&amp;</code> 问两个范围是否有共同时间点。排斥约束禁止两个条件同时为真；房间不同或时段不重叠，至少有一个比较为假，便不冲突。<code>btree_gist</code> 给整数房间号提供 GiST 等值运算符类，时间范围的 GiST 则支持重叠判断。它不是额外的唯一索引：普通 B-tree 唯一性只能排除相同键，而重叠有无数种不同的端点组合。官方房间示例确认这种组合；<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/btree-gist.html">btree_gist 扩展说明</a>列出整数的 GiST 运算符类。</p>
+<h2 id="四次插入，逐项核对规则"><a href="#四次插入，逐项核对规则" class="headerlink" title="四次插入，逐项核对规则"></a>四次插入，逐项核对规则</h2><p>先执行下面第一条，房间 7 从 10:00 至 11:00 被占用。第二条仍订房间 7，却从 11:00 开始，按 <code>[)</code> 边界预期成功。第三条把 10:30 至 11:30 放回房间 7，和前两条都相交，应被名为 <code>room_booking_no_overlap</code> 的约束拒绝。第四条改订房间 8，即使与房间 7 的时段相同，仍应成功。为便于逐条观察，四条语句应分别提交或在失败后处理当前事务状态；若把它们放在一个未设保存点的事务里，第三条的错误会使后续语句无法照原样继续。</p>
+<pre><code class="sql">INSERT INTO room_booking (room_id, during) VALUES
+  (7, tstzrange(&#39;2026-11-02 10:00+08&#39;, &#39;2026-11-02 11:00+08&#39;, &#39;[)&#39;));
+
+INSERT INTO room_booking (room_id, during) VALUES
+  (7, tstzrange(&#39;2026-11-02 11:00+08&#39;, &#39;2026-11-02 12:00+08&#39;, &#39;[)&#39;));
+
+INSERT INTO room_booking (room_id, during) VALUES
+  (7, tstzrange(&#39;2026-11-02 10:30+08&#39;, &#39;2026-11-02 11:30+08&#39;, &#39;[)&#39;));
+-- 预期：违反 room_booking_no_overlap，不插入这一行
+
+INSERT INTO room_booking (room_id, during) VALUES
+  (8, tstzrange(&#39;2026-11-02 10:30+08&#39;, &#39;2026-11-02 11:30+08&#39;, &#39;[)&#39;));
+-- 预期：成功；房间不同
+</code></pre>
+<p>这些是依据 PostgreSQL 18 官方规则推演的预期，并非本站对该脚本或生产库的实测输出。读者可以在隔离数据库中运行后查询 <code>SELECT booking_id, room_id, during FROM room_booking ORDER BY booking_id</code>，应只见第一、第二、第四次的三行；第三条应报排斥约束冲突。生成的 <code>booking_id</code> 可能有缺口，因此别以 ID 连号作为验收条件。也可单独用 <code>SELECT tstzrange(...,&#39;[)&#39;) &amp;&amp; tstzrange(...,&#39;[)&#39;)</code> 检查临界点，官方范围运算符表把 <code>&amp;&amp;</code> 定义为两个范围有共同元素。</p>
+<h2 id="为什么先查询空档仍会失败"><a href="#为什么先查询空档仍会失败" class="headerlink" title="为什么先查询空档仍会失败"></a>为什么先查询空档仍会失败</h2><p>界面需要先查空档以便显示可选时段，但这个查询只是用户体验，不是最终完整性规则。假设两个事务几乎同时请求房间 7 的 14:00—15:00：各自的“是否存在重叠预约”查询都可能看不到另一方尚未提交的写入，于是两端都认为可订。若只靠应用中的 <code>SELECT</code> 后 <code>INSERT</code>，便留下检查与写入之间的竞争窗口。把上述排斥约束建在表上，冲突写入必须通过数据库约束；应用要把最终的冲突错误转换为“此时段刚被占用，请重新选择”，并对支付、通知等后续动作按提交结果协调。</p>
+<p>不要把这个例子简化为“第二个事务必然立刻失败”。冲突检测和等待取决于并发事务的具体提交或回滚顺序。想验证自己系统的用户体验，应在隔离环境用两个连接分别执行冲突插入，观察等待、提交、回滚与返回错误，再验证失败请求没有发送确认邮件或扣款。单连接按顺序插入，只能证明约束判断了既有行，不能证明并发路径的错误处理。排斥约束自动创建相应索引；不能另建一棵普通查询索引便以为获得相同强制语义。排斥约束的索引创建与比较逻辑在 PostgreSQL 18 的约束文档中有明确说明。</p>
+<h2 id="空区间、NULL-与无限边界是不同决策"><a href="#空区间、NULL-与无限边界是不同决策" class="headerlink" title="空区间、NULL 与无限边界是不同决策"></a>空区间、NULL 与无限边界是不同决策</h2><p><code>NOT NULL</code> 放在房间号和时间范围上有实际理由。排斥约束的定义是任意两行比较时至少一个运算结果为假或空；若 <code>room_id</code> 或 <code>during</code> 可以是 <code>NULL</code>，不能据此承诺“所有未知房间或未知时间都互斥”。这个表把未知预约视为无效输入，故分别禁止两列为 <code>NULL</code>。<code>CHECK (NOT isempty(during))</code> 处理另一种漏洞：空范围不包含任何时间点，和已有预约不会重叠；若业务把“十点到十点”当作有效预约，它会绕开原本想表达的占用规则。<code>isempty</code> 正是判断范围是否为空的官方函数。</p>
+<p>还有无上界范围。<code>tstzrange</code> 允许省略端点，这代表向过去或未来无限延伸，可能意外锁死房间。若业务要求每笔预约都有明确开始和结束，应另外检查 <code>lower_inf(during)</code>、<code>upper_inf(during)</code> 均为假。是否限制最长预约时长、是否允许跨夜、取消后的记录是否继续参与冲突，都属于业务模型，不由这一条约束自动完成。若保留取消记录，常见选择是给约束加 <code>WHERE</code> 条件只覆盖有效状态；那会改变哪些行受保护，需要单独设计状态迁移和重复预约测试，不能机械地把本文 DDL 拷进已有表。</p>
+<h2 id="上线前先验证已有数据与写入路径"><a href="#上线前先验证已有数据与写入路径" class="headerlink" title="上线前先验证已有数据与写入路径"></a>上线前先验证已有数据与写入路径</h2><p>新表可以从零建立；已有预约表则先查出同房重叠的历史行并决定如何修复，不能假定 <code>ALTER TABLE</code> 会替人合并两张有效订单。可用自连接以 <code>a.booking_id &lt; b.booking_id</code> 去重，并匹配 <code>a.room_id = b.room_id AND a.during &amp;&amp; b.during</code>；先人工确认冲突代表重复写入、改期遗漏，还是业务允许的共享时段。随后在隔离副本上试建约束，记录建索引耗时与锁等待，再规划生产变更窗口。对写路径做接口测试：相邻与异房应可提交，同房重叠应得到明确冲突反馈；对更新路径也要测改房间、延长时段和取消后重订。约束解决的是表内完整性，不能替代用户可读错误或跨系统补偿。</p>
+<p>如果用户必须抢订同一间房，数据库约束给出最后一道确定裁决；如果需求变成一间房允许多个座位、或两场活动共享空间，这条规则本身就不再正确，应改建资源容量模型。先把“什么叫冲突”写成可复核的输入和结果，再选择约束，比先堆一个唯一键更容易发现错误承诺。本文示例未在真实 PostgreSQL 实例执行，并发、迁移锁与部署权限仍须按目标版本和环境实测。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/rangetypes.html#RANGETYPES-CONSTRAINT" rel="noopener">www.postgresql.org</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/btree-gist.html" rel="noopener">www.postgresql.org</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/rangetypes.html#RANGETYPES-BOUNDS" rel="noopener">www.postgresql.org</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/ddl-constraints.html#DDL-CONSTRAINTS-EXCLUSION" rel="noopener">www.postgresql.org</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-range.html" rel="noopener">www.postgresql.org</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F21%2Fpostgres-range-exclusion-overlap%2F&text=%E8%AE%A9%E6%95%B0%E6%8D%AE%E5%BA%93%E6%8B%92%E7%BB%9D%E5%90%8C%E6%88%BF%E9%87%8D%E5%8F%A0%E9%A2%84%E7%BA%A6" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F21%2Fpostgres-range-exclusion-overlap%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E8%AE%A9%E6%95%B0%E6%8D%AE%E5%BA%93%E6%8B%92%E7%BB%9D%E5%90%8C%E6%88%BF%E9%87%8D%E5%8F%A0%E9%A2%84%E7%BA%A6&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F21%2Fpostgres-range-exclusion-overlap%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/21/pytest-strict-marker-selection/">
+              <span>上一篇</span>
+              <strong>strict-markers 抓得住标记拼错，还漏什么？</strong>
+              <small>2026-10-21</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/21/postgres-not-valid-validation-window/">
+              <span>下一篇</span>
+              <strong>旧数据未清完，如何上线 CHECK 约束</strong>
+              <small>2026-10-21</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#把“相邻可用、交叠不可用”写成表约束">把“相邻可用、交叠不可用”写成表约束</a>
+          
+            <a class="toc-link toc-link--h2" href="#四次插入，逐项核对规则">四次插入，逐项核对规则</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么先查询空档仍会失败">为什么先查询空档仍会失败</a>
+          
+            <a class="toc-link toc-link--h2" href="#空区间、NULL-与无限边界是不同决策">空区间、NULL 与无限边界是不同决策</a>
+          
+            <a class="toc-link toc-link--h2" href="#上线前先验证已有数据与写入路径">上线前先验证已有数据与写入路径</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>265</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>113</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>80</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>54</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/21/cloudevents-identity-deduplication/">CloudEvents 去重：把 source 与 id 当一对身份</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/21/cqrs-projection-read-confirmation/">CQRS 写入后：用版本或状态确认读侧是否跟上</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/21/jsonschema-allof-closed-objects/">JSON Schema allOf：封闭对象扩展时怎样安放字段</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

@@ -11,7 +11,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
-  <title>构建能读到 ARG，容器启动后为什么没有？ | Midnight blog</title>
+  <title>ARG 有值，容器环境为何为空？沿三次交接排查 | Midnight blog</title>
   
     <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
     
@@ -28,10 +28,10 @@
     <link rel="apple-touch-icon" href="/img/favicon.ico">
   
   
-    <meta name="description" content="ARG 不会自动成为容器环境变量；按构建阶段、镜像默认值与运行时消费方式核对配置交接。">
+    <meta name="description" content="用完整两阶段镜像追踪构建 ARG、产物文件、镜像 ENV 与运行覆盖，定位同名配置在哪一步失联。">
   
   
-    <meta name="keywords" content="Docker,ARG,ENV">
+    <meta name="keywords" content="Docker ARG,Docker ENV,多阶段构建,运行时配置">
   
   
     <meta name="robots" content="index,follow,max-image-preview:large">
@@ -53,8 +53,8 @@
     <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
   
   
-    <meta property="og:title" content="构建能读到 ARG，容器启动后为什么没有？ | Midnight blog">
-    <meta property="og:description" content="ARG 不会自动成为容器环境变量；按构建阶段、镜像默认值与运行时消费方式核对配置交接。">
+    <meta property="og:title" content="ARG 有值，容器环境为何为空？沿三次交接排查 | Midnight blog">
+    <meta property="og:description" content="用完整两阶段镜像追踪构建 ARG、产物文件、镜像 ENV 与运行覆盖，定位同名配置在哪一步失联。">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/">
     <meta property="og:site_name" content="Midnight blog">
@@ -63,7 +63,7 @@
     <meta name="twitter:card" content="summary">
   
   
-    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/","name":"构建能读到 ARG，容器启动后为什么没有？ | Midnight blog","description":"ARG 不会自动成为容器环境变量；按构建阶段、镜像默认值与运行时消费方式核对配置交接。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/","headline":"构建能读到 ARG，容器启动后为什么没有？","description":"ARG 不会自动成为容器环境变量；按构建阶段、镜像默认值与运行时消费方式核对配置交接。","inLanguage":"zh-CN","datePublished":"2026-10-18T19:19:51.000Z","dateModified":"2026-10-18T19:19:51.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Delivery, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"构建能读到 ARG，容器启动后为什么没有？","item":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/"}]}]}</script>
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/","name":"ARG 有值，容器环境为何为空？沿三次交接排查 | Midnight blog","description":"用完整两阶段镜像追踪构建 ARG、产物文件、镜像 ENV 与运行覆盖，定位同名配置在哪一步失联。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/","headline":"ARG 有值，容器环境为何为空？沿三次交接排查","description":"用完整两阶段镜像追踪构建 ARG、产物文件、镜像 ENV 与运行覆盖，定位同名配置在哪一步失联。","inLanguage":"zh-CN","datePublished":"2026-10-18T19:19:51.000Z","dateModified":"2026-10-20T19:37:25.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.docker.com/build/building/variables/","https://alpinelinux.org/releases/"],"keywords":"Delivery, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"ARG 有值，容器环境为何为空？沿三次交接排查","item":"https://www.zyweb.vip/zh-CN/2026/10/19/docker-arg-env-runtime-scope/"}]}]}</script>
   
   <meta name="theme-color" content="#080b10">
   
@@ -140,10 +140,10 @@
       <time datetime="2026-10-18T19:19:51.000Z">2026-10-19</time>
     </div>
 
-    <h1>构建能读到 ARG，容器启动后为什么没有？</h1>
+    <h1>ARG 有值，容器环境为何为空？沿三次交接排查</h1>
 
     
-      <p class="post-hero__summary">ARG 不会自动成为容器环境变量；按构建阶段、镜像默认值与运行时消费方式核对配置交接。</p>
+      <p class="post-hero__summary">用完整两阶段镜像追踪构建 ARG、产物文件、镜像 ENV 与运行覆盖，定位同名配置在哪一步失联。</p>
     
 
     <div class="post-hero__meta">
@@ -162,7 +162,7 @@
         
 
 
-        <small>更新于 <time datetime="2026-10-18T19:19:51.000Z">2026-10-19</time> · 预计阅读 3 分钟</small>
+        <small>更新于 <time datetime="2026-10-20T19:37:25.000Z">2026-10-21</time> · 预计阅读 6 分钟</small>
       </div>
     </div>
 
@@ -194,27 +194,31 @@
 
       
 
-      
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>ARG 可供构建指令使用，但不会自动成为最终容器的环境变量。</li><li>全局 ARG 须在使用它的构建阶段消费；COPY 文件不等于复制上一阶段环境。</li><li>镜像 ENV 是默认值，部署可覆盖；应用有效配置还要由进程本身验证。</li></ul></section>
       <div class="article-content">
-        <p>构建步骤能读到 <code>ARG</code>，不代表镜像启动后的进程会继承同名环境变量。<code>ARG</code> 主要为 Dockerfile 的构建指令提供参数；需要写入镜像的运行默认值时，应明确使用相应配置，而需要随部署变化的值还要由运行环境提供。</p>
-<h2 id="先问这个值在哪里被消费"><a href="#先问这个值在哪里被消费" class="headerlink" title="先问这个值在哪里被消费"></a>先问这个值在哪里被消费</h2><p><a target="_blank" rel="noopener" href="https://docs.docker.com/build/building/variables/">Docker 构建变量文档</a>说明，构建参数不会自动出现在由镜像创建的容器里，除非 Dockerfile 显式把它传入镜像文件或配置。<code>ENV</code> 则会保留为镜像创建容器时的环境默认值。两者都叫变量，但生效阶段不同。</p>
-<p>考虑下面这个未执行的 Dockerfile 片段，它只演示非敏感参数的传递关系，不是可直接构建的完整文件：</p>
+        <p>构建日志显示 <code>APP_MODE=staging</code>，镜像启动后的进程却读不到 <code>APP_MODE</code>。这不一定是 Docker 丢了变量，而是构建输入、镜像配置和容器运行环境属于三个不同的交接点。<a target="_blank" rel="noopener" href="https://docs.docker.com/build/building/variables/">Docker 构建变量文档</a>明确说，<code>ARG</code> 若没有被 Dockerfile 显式写进文件或镜像配置，不会自动存在于镜像创建的容器；<code>ENV</code> 则会作为容器环境默认值保留。排查时先问这个值由谁、在什么时候消费，再选 ARG、ENV 或部署输入，而不是看构建日志里出现过同名字符串就宣布交付完成。</p>
+<h2 id="用完整的两阶段镜像追踪一个值"><a href="#用完整的两阶段镜像追踪一个值" class="headerlink" title="用完整的两阶段镜像追踪一个值"></a>用完整的两阶段镜像追踪一个值</h2><p>考虑这个只用非敏感标记的教学 Dockerfile；示例使用经<a target="_blank" rel="noopener" href="https://alpinelinux.org/releases/">官方发布分支页</a>核对的 Alpine 3.24，仅演示变量作用域，本文未拉取或构建镜像；真实项目应自行选定基础镜像，且不要把秘密放进去：</p>
 <pre><code class="dockerfile">ARG APP_MODE=production
-RUN echo &quot;$APP_MODE&quot;
-ENV APP_MODE=$APP_MODE
+FROM alpine:3.24 AS build
+ARG APP_MODE
+RUN printf &#39;%s\n&#39; &quot;$APP_MODE&quot; &gt; /mode.txt
+FROM alpine:3.24
+COPY --from=build /mode.txt /mode.txt
+CMD [&quot;sh&quot;, &quot;-c&quot;, &quot;cat /mode.txt; printenv APP_MODE || true&quot;]
 </code></pre>
-<p>其中构建命令能够读取参数；后面的环境声明才把值作为默认环境写入镜像配置。删除最后一行，不能因为日志里曾出现参数，就期待运行进程自动得到它。日志证明某个步骤看到了值，不证明应用最终采用了预期配置。</p>
-<p>这个区分会改变交接方式。依赖版本可能只在构建中使用；监听端口可能在进程启动时读取；浏览器端接口地址又可能被打包工具编译进静态文件。评审应逐项说明谁读取、何时读取、结果存在哪里，而不是为整个项目选择一种变量后就结束。</p>
-<h2 id="多阶段构建还有声明范围"><a href="#多阶段构建还有声明范围" class="headerlink" title="多阶段构建还有声明范围"></a>多阶段构建还有声明范围</h2><p>文档也说明，在 Dockerfile 全局范围声明的构建参数，不会自动被每个构建阶段继承。若阶段内要使用全局参数，需要在该阶段消费相应声明。排查“参数明明传了却为空”时，要同时看构建调用和实际使用位置，不能只搜索文件顶部出现过一次名称。</p>
-<p>复制上一阶段生成的文件，也不等于复制它的全部环境配置。一个阶段把值写进产物，另一个阶段再复制产物，传递的是文件内容。若后续进程需要读取环境变量，应单独确认最终镜像与运行配置；若值已经编译进网页文件，则运行时同名变量未必会重新生成它。</p>
-<p>后一点属于应用构建方式带来的判断，需要查实际工具和启动逻辑。这里没有指定某个框架，也没有把修改环境后自动生效当成通用行为。把变量打印出来可以辅助定位，但对秘密值不应采用这种做法。</p>
-<h2 id="运行默认值不是部署事实"><a href="#运行默认值不是部署事实" class="headerlink" title="运行默认值不是部署事实"></a>运行默认值不是部署事实</h2><p>例如，可选用专门的非敏感标记，分别查构建输入、生成文件与进程报告的有效设置。若文件仍含旧标记而进程环境已改变，下一步应检查产物生成阶段；若文件无需变化而程序仍用旧值，则应追踪读取时机。这样的分叉能决定应该重建镜像还是调整启动配置。</p>
-<p>即使镜像设置了 <code>ENV</code>，部署仍可能提供不同环境值；应用是否读取它、是否有配置优先级，也取决于程序实现。建议在交付说明中区分镜像默认配置与部署实际配置，并用非敏感的有效配置摘要观察采用结果。不要把镜像检查输出写成线上配置已经生效。</p>
-<p>构建参数和环境变量都不适合充当构建秘密的通道，相关输出风险可阅读<a href="/zh-CN/2026/10/10/docker-secret-output/">构建秘密与最终产物</a>。本文没有执行构建或容器启动。待验证的重点是：同一个值从输入到产物再到进程，究竟跨过了哪一步，哪一步仍需要显式传递。</p>
+<p>假设执行 <code>docker build --build-arg APP_MODE=staging -t mode-demo .</code>，然后 <code>docker run --rm mode-demo</code>。按文档语义推导，<code>/mode.txt</code> 会含 <code>staging</code>，因为 build 阶段把 ARG 写成文件并由最终阶段 COPY；但最终容器里没有因为这个 ARG 自动出现名为 APP_MODE 的环境变量，<code>printenv</code> 不应把 staging 当作继承值。这个“文件有值、进程环境无值”的组合就是案例结果，并非本文真实执行的 stdout。若最终阶段另外写 <code>ENV APP_MODE=production</code>，新容器的默认环境才有 production；运行时用 <code>docker run --rm -e APP_MODE=release mode-demo</code> 又可提供 release。文件仍是构建时写入的 staging，不会因运行环境改变自动重建。</p>
+<p>首行全局 <code>ARG</code> 给出未传参时的默认值，build 阶段内的 <code>ARG APP_MODE</code> 才让该阶段的指令消费它。若像本例显式传入 <code>--build-arg APP_MODE=staging</code>，可省去全局默认声明而保留阶段声明；若未传参，删掉全局默认就会改变默认行为。反过来，只留全局声明而删掉阶段声明，不能让 <code>RUN</code> 自动获得该参数。Docker 文档说明，全局范围声明的构建参数不会自动进入每个构建阶段；阶段内要使用它，必须在该阶段消费声明。这个片段里 <code>RUN</code> 读取的是 build 阶段可用的值。最终阶段没有 <code>ARG APP_MODE</code>，也没有 <code>ENV</code>；它只复制已经生成的文件。若要让最终阶段的指令再读取构建参数，应在那个阶段按语义重新声明并核对值，而不是误把上一个阶段的 shell 环境当作自动延续。</p>
+<p>这也说明日志为何会误导。<code>RUN echo &quot;$APP_MODE&quot;</code> 可证明那条构建指令看到变量，不能证明最终镜像的配置里有它；<code>COPY --from=build</code> 可证明文件被复制，不能证明环境变量一起复制；镜像配置里即使写了 <code>ENV</code>，也不能证明部署平台没有覆盖它，更不能证明应用读取了该值。评审时把证据分别标为构建输入、产物字节、镜像默认、容器环境和应用有效配置，每一层都留一次可核验的观察。</p>
+<h2 id="不同消费时刻要选不同通道"><a href="#不同消费时刻要选不同通道" class="headerlink" title="不同消费时刻要选不同通道"></a>不同消费时刻要选不同通道</h2><p>依赖版本若只用于 <code>RUN</code> 选包，ARG 可能合适；应用启动时读取监听模式，镜像 ENV 默认或部署环境更接近消费点；浏览器网页里的接口地址如果在构建时被前端工具编译进静态 JavaScript，则运行容器的同名环境变量通常不会改动已生成文件。最后一种行为还取决于具体构建工具和启动脚本：有些项目启动时会模板替换文件。不要把“网页变量必定构建期固定”写成所有框架的规则，要看实际代码在什么时候读取和输出它。</p>
+<p>选择把 <code>ARG</code> 经 <code>ENV APP_MODE=$APP_MODE</code> 传到最终镜像时，也要问是否真的希望所有基于该镜像的部署继承这个构建时决定的默认值。若 staging 和 production 共用一个镜像，环境特定配置更适合在部署阶段提供；否则一次构建会把 staging 默认烙进镜像，生产若忘记覆盖就可能跑错模式。相反，若值代表编译目标且产物不可变，运行时再改环境也不会改已有二进制或静态文件。统一的“变量都用 ENV”会掩盖这两个相反需求。</p>
+<p>环境变量也不等于应用最终采用的配置。应用可能有配置文件、命令行选项或自身默认值，优先级由应用定义。容器里 <code>printenv APP_MODE</code> 显示 release，仅能证明进程环境存在该键；若应用仍报告 production，要追它的读取时机、覆盖规则或打包产物。最有用的运行时证据是应用报告一份脱敏的有效配置摘要，与预期配置项逐一核对，而不是将完整环境和秘密打印进日志。</p>
+<h2 id="用非敏感探针判定交接断点"><a href="#用非敏感探针判定交接断点" class="headerlink" title="用非敏感探针判定交接断点"></a>用非敏感探针判定交接断点</h2><p>在隔离环境里可以给 APP_MODE 使用无业务含义的标记，分别观察构建指令输出、复制的 <code>/mode.txt</code>、镜像声明的 ENV、容器 <code>printenv</code> 和应用报告的最终值。若文件是 staging 而进程环境是 release，说明构建产物与运行配置走了两条路径；若镜像有默认值而容器环境不同，先查运行时覆盖；若容器环境正确但应用行为不对，查应用优先级。每次改变一个输入并重建或重启相应阶段，才能定位哪一步消费了旧值。本文没有执行这些命令，以上输出均为按官方机制推导的验证预期。</p>
+<p>反例是把数据库密码也放进 <code>ARG DB_PASSWORD</code>，再用 <code>RUN echo</code> 检查。Docker 文档警告，ARG 和 ENV 都不适合作为构建秘密通道，值可能进入镜像历史、来源证明或最终镜像。秘密应使用适当的构建 secret mount 或部署秘密注入机制，并按威胁模型审查产物。站内<a href="/zh-CN/2026/10/10/docker-secret-output/">构建秘密与最终产物</a>进一步说明了输出面。这个例子刻意只用无害的 APP_MODE，避免为排障制造凭据泄露。</p>
+<p>最终交付单应列清每项值的所有者与消费时刻：构建参数是否在使用阶段声明、是否写入产物、最终镜像是否设默认、部署是否覆盖、应用是否实际读取，以及改值需要重建还是重启。若只有构建日志证明 staging 出现，结论最多是“某个构建步骤收到 staging”。它不能推出容器环境、网页产物或线上有效配置。把这些层次拆开，才能决定修 Dockerfile、重建产物，还是修改部署输入，并明确各步骤的验收负责人。</p>
 
       </div>
 
-      
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.docker.com/build/building/variables/" rel="noopener">docs.docker.com</a></li><li><a target="_blank" href="https://alpinelinux.org/releases/" rel="noopener">alpinelinux.org</a></li></ol></section>
       
         <footer class="article-taxonomy">
           <span>标签</span>
@@ -239,11 +243,11 @@ ENV APP_MODE=$APP_MODE
         <span>分享</span>
         <div>
           
-            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F19%2Fdocker-arg-env-runtime-scope%2F&text=%E6%9E%84%E5%BB%BA%E8%83%BD%E8%AF%BB%E5%88%B0%20ARG%EF%BC%8C%E5%AE%B9%E5%99%A8%E5%90%AF%E5%8A%A8%E5%90%8E%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E6%9C%89%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F19%2Fdocker-arg-env-runtime-scope%2F&text=ARG%20%E6%9C%89%E5%80%BC%EF%BC%8C%E5%AE%B9%E5%99%A8%E7%8E%AF%E5%A2%83%E4%B8%BA%E4%BD%95%E4%B8%BA%E7%A9%BA%EF%BC%9F%E6%B2%BF%E4%B8%89%E6%AC%A1%E4%BA%A4%E6%8E%A5%E6%8E%92%E6%9F%A5" aria-label="分享到 X" title="分享到 X">X</a>
           
             <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F19%2Fdocker-arg-env-runtime-scope%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
           
-            <a href="mailto:?subject=%E6%9E%84%E5%BB%BA%E8%83%BD%E8%AF%BB%E5%88%B0%20ARG%EF%BC%8C%E5%AE%B9%E5%99%A8%E5%90%AF%E5%8A%A8%E5%90%8E%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E6%9C%89%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F19%2Fdocker-arg-env-runtime-scope%2F" aria-label="邮件分享" title="邮件分享">@</a>
+            <a href="mailto:?subject=ARG%20%E6%9C%89%E5%80%BC%EF%BC%8C%E5%AE%B9%E5%99%A8%E7%8E%AF%E5%A2%83%E4%B8%BA%E4%BD%95%E4%B8%BA%E7%A9%BA%EF%BC%9F%E6%B2%BF%E4%B8%89%E6%AC%A1%E4%BA%A4%E6%8E%A5%E6%8E%92%E6%9F%A5&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F19%2Fdocker-arg-env-runtime-scope%2F" aria-label="邮件分享" title="邮件分享">@</a>
           
         </div>
       </section>
@@ -259,7 +263,7 @@ ENV APP_MODE=$APP_MODE
           
             <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/19/css-sticky-scroll-ancestor/">
               <span>下一篇</span>
-              <strong>sticky没有跟着页面滚动，先查祖先overflow</strong>
+              <strong>CSS sticky 排障：滚动祖先、inset 与活动空间</strong>
               <small>2026-10-19</small>
             </a>
           
@@ -275,11 +279,11 @@ ENV APP_MODE=$APP_MODE
 
         
           
-            <a class="toc-link toc-link--h2" href="#先问这个值在哪里被消费">先问这个值在哪里被消费</a>
+            <a class="toc-link toc-link--h2" href="#用完整的两阶段镜像追踪一个值">用完整的两阶段镜像追踪一个值</a>
           
-            <a class="toc-link toc-link--h2" href="#多阶段构建还有声明范围">多阶段构建还有声明范围</a>
+            <a class="toc-link toc-link--h2" href="#不同消费时刻要选不同通道">不同消费时刻要选不同通道</a>
           
-            <a class="toc-link toc-link--h2" href="#运行默认值不是部署事实">运行默认值不是部署事实</a>
+            <a class="toc-link toc-link--h2" href="#用非敏感探针判定交接断点">用非敏感探针判定交接断点</a>
           
         
       </nav></details>
@@ -302,13 +306,13 @@ ENV APP_MODE=$APP_MODE
           <h2>相关专题</h2>
           <p>把当前文章放回长期跟踪线索里。</p>
           
-            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>245</b></a>
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>265</b></a>
           
-            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>104</b></a>
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>113</b></a>
           
-            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>77</b></a>
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>80</b></a>
           
-            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>49</b></a>
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>54</b></a>
           
         </section>
       
@@ -328,20 +332,20 @@ ENV APP_MODE=$APP_MODE
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/20/actions-nested-secrets-explicit-flow/">reusable workflow 的 secret 不会自动穿透下一层</a></h3>
-          <p>2026-10-20</p>
+          <h3><a href="/zh-CN/2026/10/21/actions-environment-review-workflow-change/">把发布保护分成环境、工作流和输入三道检查</a></h3>
+          <p>2026-10-21</p>
         </article>
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/20/docker-copy-chown-runtime-user/">USER 不是 chown：复制文件仍可能不可写</a></h3>
-          <p>2026-10-20</p>
+          <h3><a href="/zh-CN/2026/10/21/kubernetes-native-sidecar-shutdown-order/">边车“最后退出”不等于“最后数据已经送达”</a></h3>
+          <p>2026-10-21</p>
         </article>
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/20/git-merge-base-ancestry-evidence/">git diff 为空，不等于包含那个提交</a></h3>
-          <p>2026-10-20</p>
+          <h3><a href="/zh-CN/2026/10/21/slo-burn-rate-multiwindow-alerts/">多窗口告警不是把阈值复制两遍</a></h3>
+          <p>2026-10-21</p>
         </article>
       
     </div>

@@ -1,0 +1,398 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>CTE Materialization: Reuse or a Filter Barrier? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="A two-reference reporting query shows when folding pushes filters down and when materialization saves repeated work.">
+  
+  
+    <meta name="keywords" content="PostgreSQL CTE,MATERIALIZED,NOT MATERIALIZED,predicate pushdown">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/21/postgres-cte-materialization-plan/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/21/postgres-cte-materialization-plan/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/21/postgres-cte-materialization-plan/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/21/postgres-cte-materialization-plan/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="CTE Materialization: Reuse or a Filter Barrier? | Midnight blog">
+    <meta property="og:description" content="A two-reference reporting query shows when folding pushes filters down and when materialization saves repeated work.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/21/postgres-cte-materialization-plan/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/21/postgres-cte-materialization-plan/#webpage","url":"https://www.zyweb.vip/en/2026/10/21/postgres-cte-materialization-plan/","name":"CTE Materialization: Reuse or a Filter Barrier? | Midnight blog","description":"A two-reference reporting query shows when folding pushes filters down and when materialization saves repeated work.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/21/postgres-cte-materialization-plan/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/21/postgres-cte-materialization-plan/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/21/postgres-cte-materialization-plan/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/21/postgres-cte-materialization-plan/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/21/postgres-cte-materialization-plan/","headline":"CTE Materialization: Reuse or a Filter Barrier?","description":"A two-reference reporting query shows when folding pushes filters down and when materialization saves repeated work.","inLanguage":"en","datePublished":"2026-10-20T19:36:17.000Z","dateModified":"2026-10-20T19:36:17.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.postgresql.org/docs/18/queries-with.html"],"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/21/postgres-cte-materialization-plan/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"CTE Materialization: Reuse or a Filter Barrier?","item":"https://www.zyweb.vip/en/2026/10/21/postgres-cte-materialization-plan/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/21/postgres-cte-materialization-plan/">zh-CN</option><option value="/en/2026/10/21/postgres-cte-materialization-plan/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/21/postgres-cte-materialization-plan/">zh-CN</option><option value="/en/2026/10/21/postgres-cte-materialization-plan/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-20T19:36:17.000Z">2026-10-21</time>
+    </div>
+
+    <h1>CTE Materialization: Reuse or a Filter Barrier?</h1>
+
+    
+      <p class="post-hero__summary">A two-reference reporting query shows when folding pushes filters down and when materialization saves repeated work.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-20T19:36:17.000Z">2026-10-21</time> · Estimated read 16 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/21/postgres-cte-materialization-plan/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/21/postgres-cte-materialization-plan/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>A side-effect-free, nonrecursive SELECT CTE can fold by default with one reference but normally materializes with multiple references.</li><li>NOT MATERIALIZED may permit filtering per reference while duplicating expensive work.</li><li>Compare real plans, row counts, buffers, function costs, and result equivalence before choosing.</li></ul></section>
+      <div class="article-content">
+        <p>A reporting query names a cleaned orders set <code>w</code> in a <code>WITH</code> clause, then refers to <code>w</code> twice: twice to count pairs of the same customer’s orders. When it slows down, someone says, “CTEs always materialize; remove WITH.” That diagnosis misses the actual choice. The <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/queries-with.html">PostgreSQL 18 documentation on WITH queries</a> says a nonrecursive, side-effect-free SELECT CTE can normally fold into its parent query when referenced once, while multiple references normally prevent that default folding. <code>MATERIALIZED</code> and <code>NOT MATERIALIZED</code> can influence the choice. The decision is whether pushing restrictions into each reference saves more work than computing the shared result once.</p>
+<h2 id="Two-references-can-change-where-filtering-happens"><a href="#Two-references-can-change-where-filtering-happens" class="headerlink" title="Two references can change where filtering happens"></a>Two references can change where filtering happens</h2><p>Suppose <code>orders(id, customer_id, amount)</code> contains a million rows, only eight of which belong to customer 17, and a usable index exists on <code>customer_id</code>. A report counts pairs among that customer’s orders, including self-pairs. If <code>WITH w AS (SELECT * FROM orders)</code> is referenced twice, default materialization can produce an intermediate result over a broad part of <code>orders</code> before the parent’s <code>customer_id = 17</code> restriction applies. Conceptually, eight relevant rows are found after building a much larger candidate set. This is a path to investigate, not an execution plan measured on anyone’s database.</p>
+<p>To make both references reproducible, assume exactly eight rows for customer 17, each with a distinct <code>id</code>, and count pairs using two aliases:</p>
+<pre><code class="sql">WITH w AS (SELECT id, customer_id, amount FROM orders)
+SELECT count(*)
+FROM w AS left_order
+JOIN w AS right_order ON left_order.customer_id = right_order.customer_id
+WHERE left_order.customer_id = 17
+  AND right_order.customer_id = 17;
+</code></pre>
+<p>Each alias has eight eligible rows, including self-pairs and reverse pairs, so the logical result is 8×8=64. For unordered pairs of distinct orders, add <code>left_order.id &lt; right_order.id</code>; that result is 28. The 64 follows from the stated input and join, not from a measured access count. The execution plan is still an open question.</p>
+<p>Compare the simpler <code>WITH w AS (SELECT * FROM orders) SELECT * FROM w WHERE customer_id = 17;</code>. There is one reference and no recursion or volatile function. Under the documented default, the CTE can be optimized together with its parent. When the index and table statistics make it attractive, the planner may fetch just customer 17’s rows. The presence of the word <code>WITH</code> does not prove a temporary table is built. Nor does the syntax guarantee an index scan: estimates, selectivity, index structure, and cost settings influence the chosen plan.</p>
+<h2 id="Folding-permits-pushdown-materialization-reuses-work"><a href="#Folding-permits-pushdown-materialization-reuses-work" class="headerlink" title="Folding permits pushdown; materialization reuses work"></a>Folding permits pushdown; materialization reuses work</h2><p>Compare two explicit variants. A query beginning <code>WITH w AS NOT MATERIALIZED (SELECT * FROM orders)</code> asks PostgreSQL to merge an eligible CTE into the parent, allowing each reference to be optimized with its own restrictions. If both references need only a few rows, that may avoid a large intermediate result. A query beginning <code>WITH w AS MATERIALIZED (SELECT * FROM orders)</code> forces separate computation and can save work when both references need much of an expensive result. These are not speed rankings. They change which work can be shared and which conditions can be pushed into the underlying scan. PostgreSQL explicitly warns that <code>NOT MATERIALIZED</code> may duplicate computation, even when the net cost is lower.</p>
+<p>Put numbers into the decision without pretending they are benchmark results. If each reference needs eight rows and suitable indexes support those restrictions, folding suggests two small targeted accesses; computing a million-row intermediate result once may be wasteful. If the CTE applies a costly pure transformation to each row and two references both need roughly the same 100,000 rows, merging might run the transformation twice, while materializing once could win. The eight and 100,000 figures are illustrative assumptions, not guaranteed physical reads. CPU time, memory, temporary storage, join predicates, and parallel plans all require actual workload evidence.</p>
+<p>The documentation gives an especially useful counterexample: put <code>very_expensive_function(val)</code> in the CTE and self-join two references to it. Materialization ensures the expensive function is evaluated once per table row, rather than twice. A blanket policy of adding <code>NOT MATERIALIZED</code> to “make indexes work” can regress such a query. Before performance tuning, also check whether the CTE is eligible for the folding rule at all. Recursive CTEs, volatile functions, and data-modifying WITH statements have different semantics from the ordinary side-effect-free SELECT considered here.</p>
+<h2 id="Test-a-cost-prediction-against-the-real-plan"><a href="#Test-a-cost-prediction-against-the-real-plan" class="headerlink" title="Test a cost prediction against the real plan"></a>Test a cost prediction against the real plan</h2><p>Preserve the original query and its parameters. In a controlled environment with representative data, compare default, explicit <code>MATERIALIZED</code>, and explicit <code>NOT MATERIALIZED</code> using <code>EXPLAIN (ANALYZE, BUFFERS)</code>. Inspect actual versus estimated rows, whether a CTE Scan appears, how the base table is accessed, how often expensive functions run, buffer activity, and elapsed time. <code>ANALYZE</code> executes the query, so a statement with data modification or side effects belongs in a safe isolated setting or needs a nonexecuting plan inspection instead. Our related <a href="/en/2026/10/09/postgres-explain-evidence/">article on row estimates and EXPLAIN</a> covers the prerequisite of reading a plan rather than prescribing an index by reflex.</p>
+<p>State a prediction that can fail. For the eight-row customer case, expect the folded variant to access the base table through two restricted paths and the materialized variant to handle a larger intermediate result. When the plan already applies restrictions near the base scan, or a sequential scan is genuinely cheaper, the prediction is wrong. Do not keep the hint because it matched a slogan. For the expensive-function case, expect materialization to reduce repeated evaluation. If each reference needs a tiny, disjoint subset, however, paying for one full materialized result may still cost more. Test a common customer as well as a rare one; one customer ID cannot represent a skewed distribution.</p>
+<p>Result equivalence is a separate acceptance condition. Folding can change the number of times expressions are evaluated, which is why a performance-only argument is unsafe around side effects and volatile functions. Even for ordinary deterministic queries, compare row counts, duplicates, NULL behavior, and joins. Moving a predicate manually inside a CTE is not the same operation as adding <code>NOT MATERIALIZED</code>: two parent references may need different ranges, and a single early WHERE clause could change the result.</p>
+<h2 id="Choose-for-the-ranges-each-reference-needs"><a href="#Choose-for-the-ranges-each-reference-needs" class="headerlink" title="Choose for the ranges each reference needs"></a>Choose for the ranges each reference needs</h2><p>If the CTE is referenced once, first check whether the default folding already provides a good plan. If it is referenced several times and each reference needs a small slice, test <code>NOT MATERIALIZED</code>. If the references reuse a costly result over similar ranges, test <code>MATERIALIZED</code> or retain the default. Make the final decision from real parameters, plans, result equivalence, and measured costs. Revisit it when statistics, indexes, or data distribution change. A win on one report run is not a law about every CTE.</p>
+<p>This is a choice about work within one query. CTE materialization is not a persistent cache for later requests, and it does not automatically give the parent query an ordinary index over an intermediate table. For reuse across requests, a materialized view, cache, or pre-aggregation may be appropriate, with separate freshness and maintenance costs. No database probe was run for this article. It explains the documented PostgreSQL 18 rules, derives possible plan paths, and gives a validation procedure; the actual performance answer belongs to the reader’s workload.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/queries-with.html" rel="noopener">www.postgresql.org</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/en/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F21%2Fpostgres-cte-materialization-plan%2F&text=CTE%20Materialization%3A%20Reuse%20or%20a%20Filter%20Barrier%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F21%2Fpostgres-cte-materialization-plan%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=CTE%20Materialization%3A%20Reuse%20or%20a%20Filter%20Barrier%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F21%2Fpostgres-cte-materialization-plan%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/21/postgres-not-valid-validation-window/">
+              <span>Previous Post</span>
+              <strong>Adding a CHECK Constraint Before Old Rows Are Clean</strong>
+              <small>2026-10-21</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/21/playwright-timeout-budget-layers/">
+              <span>Next Post</span>
+              <strong>Why a 15-Second Expect Fails at the Test’s 30-Second Limit</strong>
+              <small>2026-10-21</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Two-references-can-change-where-filtering-happens">Two references can change where filtering happens</a>
+          
+            <a class="toc-link toc-link--h2" href="#Folding-permits-pushdown-materialization-reuses-work">Folding permits pushdown; materialization reuses work</a>
+          
+            <a class="toc-link toc-link--h2" href="#Test-a-cost-prediction-against-the-real-plan">Test a cost prediction against the real plan</a>
+          
+            <a class="toc-link toc-link--h2" href="#Choose-for-the-ranges-each-reference-needs">Choose for the ranges each reference needs</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>265</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>113</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>81</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>54</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/21/cloudevents-identity-deduplication/">CloudEvents Deduplication: Treat source and id as One Identity</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/21/cqrs-projection-read-confirmation/">After a CQRS Write: Confirm When the Read Projection Catches Up</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/21/jsonschema-allof-closed-objects/">JSON Schema allOf: Where to Close an Extended Object</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

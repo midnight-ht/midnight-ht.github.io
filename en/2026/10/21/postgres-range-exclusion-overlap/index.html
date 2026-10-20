@@ -1,0 +1,416 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Prevent Overlapping Room Bookings With an Exclusion Constraint | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="A complete tstzrange and GiST example tests adjacent slots, overlapping bookings, other rooms, empty ranges, and concurrency.">
+  
+  
+    <meta name="keywords" content="PostgreSQL exclusion constraint,tstzrange room booking,GiST btree_gist,overlap constraint">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/21/postgres-range-exclusion-overlap/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/21/postgres-range-exclusion-overlap/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/21/postgres-range-exclusion-overlap/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/21/postgres-range-exclusion-overlap/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Prevent Overlapping Room Bookings With an Exclusion Constraint | Midnight blog">
+    <meta property="og:description" content="A complete tstzrange and GiST example tests adjacent slots, overlapping bookings, other rooms, empty ranges, and concurrency.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/21/postgres-range-exclusion-overlap/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/21/postgres-range-exclusion-overlap/#webpage","url":"https://www.zyweb.vip/en/2026/10/21/postgres-range-exclusion-overlap/","name":"Prevent Overlapping Room Bookings With an Exclusion Constraint | Midnight blog","description":"A complete tstzrange and GiST example tests adjacent slots, overlapping bookings, other rooms, empty ranges, and concurrency.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/21/postgres-range-exclusion-overlap/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/21/postgres-range-exclusion-overlap/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/21/postgres-range-exclusion-overlap/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/21/postgres-range-exclusion-overlap/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/21/postgres-range-exclusion-overlap/","headline":"Prevent Overlapping Room Bookings With an Exclusion Constraint","description":"A complete tstzrange and GiST example tests adjacent slots, overlapping bookings, other rooms, empty ranges, and concurrency.","inLanguage":"en","datePublished":"2026-10-20T19:36:17.000Z","dateModified":"2026-10-20T19:36:17.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.postgresql.org/docs/18/rangetypes.html#RANGETYPES-CONSTRAINT","https://www.postgresql.org/docs/18/btree-gist.html","https://www.postgresql.org/docs/18/rangetypes.html#RANGETYPES-BOUNDS","https://www.postgresql.org/docs/18/ddl-constraints.html#DDL-CONSTRAINTS-EXCLUSION","https://www.postgresql.org/docs/18/functions-range.html"],"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/21/postgres-range-exclusion-overlap/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Prevent Overlapping Room Bookings With an Exclusion Constraint","item":"https://www.zyweb.vip/en/2026/10/21/postgres-range-exclusion-overlap/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/21/postgres-range-exclusion-overlap/">zh-CN</option><option value="/en/2026/10/21/postgres-range-exclusion-overlap/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/21/postgres-range-exclusion-overlap/">zh-CN</option><option value="/en/2026/10/21/postgres-range-exclusion-overlap/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-20T19:36:17.000Z">2026-10-21</time>
+    </div>
+
+    <h1>Prevent Overlapping Room Bookings With an Exclusion Constraint</h1>
+
+    
+      <p class="post-hero__summary">A complete tstzrange and GiST example tests adjacent slots, overlapping bookings, other rooms, empty ranges, and concurrency.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-20T19:36:17.000Z">2026-10-21</time> · Estimated read 17 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/21/postgres-range-exclusion-overlap/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/21/postgres-range-exclusion-overlap/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>The conflict rule is equal room IDs plus overlapping ranges; a unique start time cannot express it.</li><li>Half-open [) ranges allow adjacent reservations; empty ranges and NULLs need separate policy.</li><li>btree_gist supplies GiST equality for integer room IDs, while the exclusion constraint arbitrates conflicting writes.</li></ul></section>
+      <div class="article-content">
+        <p>Two people book the same meeting room. One reservation runs from 10:00 to 11:00; the other runs from 10:30 to 11:30. Their start times differ, so <code>UNIQUE (room_id, starts_at)</code> would admit both rows. The room cannot serve both groups. The actual invariant concerns pairs of rows: equal room IDs and time intervals with at least one instant in common. PostgreSQL’s <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/rangetypes.html#RANGETYPES-CONSTRAINT">range and exclusion constraint documentation</a> shows how to place that rule at the database boundary shared by every writer.</p>
+<h2 id="Encode-the-room-rule-including-its-edge"><a href="#Encode-the-room-rule-including-its-edge" class="headerlink" title="Encode the room rule, including its edge"></a>Encode the room rule, including its edge</h2><p>This is an independent teaching table, not a migration script for an existing booking system. <code>tstzrange</code> stores a range of timestamp-with-time-zone values. The input below states <code>+08</code> explicitly so that the example does not silently depend on a session time zone. The boundary string <code>[)</code> includes the start instant and excludes the end instant. A booking ending at 11:00 therefore does not overlap one beginning at 11:00. A venue might need a cleaning or handover buffer; if so, that time must be part of the business interval. A database constraint cannot infer it from a calendar label.</p>
+<pre><code class="sql">CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+CREATE TABLE room_booking (
+  booking_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  room_id integer NOT NULL,
+  during tstzrange NOT NULL,
+  CONSTRAINT room_booking_nonempty CHECK (NOT isempty(during)),
+  CONSTRAINT room_booking_no_overlap
+    EXCLUDE USING gist (room_id WITH =, during WITH &amp;&amp;)
+);
+</code></pre>
+<p>The first exclusion comparison asks whether two rows name the same room. The second asks whether their ranges overlap. The constraint rules out a pair for which both answers are true. If the rooms differ, or the intervals do not overlap, that pair is allowed. <code>btree_gist</code> provides a GiST equality operator class for the integer room ID; the range operator class handles <code>&amp;&amp;</code>. PostgreSQL’s <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/btree-gist.html">extension reference</a> explains why a simple scalar column can participate in a multicolumn GiST constraint. This is more than a unique index on the starting instant: overlapping reservations can have completely different starts and ends.</p>
+<h2 id="Four-inserts-reveal-what-the-constraint-accepts"><a href="#Four-inserts-reveal-what-the-constraint-accepts" class="headerlink" title="Four inserts reveal what the constraint accepts"></a>Four inserts reveal what the constraint accepts</h2><p>Run the statements separately, or use savepoints around expected failures. In one unhandled transaction, the third statement’s error would leave that transaction failed, obscuring the result of the fourth statement. The first insert occupies room 7 from 10:00 until 11:00. The second begins exactly at 11:00 in the same room and should succeed under the half-open boundary. The third reaches back into the first booking and forward into the second; it should be rejected by <code>room_booking_no_overlap</code>. The fourth uses room 8 and should succeed despite its matching time interval.</p>
+<pre><code class="sql">INSERT INTO room_booking (room_id, during) VALUES
+  (7, tstzrange(&#39;2026-11-02 10:00+08&#39;, &#39;2026-11-02 11:00+08&#39;, &#39;[)&#39;));
+
+INSERT INTO room_booking (room_id, during) VALUES
+  (7, tstzrange(&#39;2026-11-02 11:00+08&#39;, &#39;2026-11-02 12:00+08&#39;, &#39;[)&#39;));
+
+INSERT INTO room_booking (room_id, during) VALUES
+  (7, tstzrange(&#39;2026-11-02 10:30+08&#39;, &#39;2026-11-02 11:30+08&#39;, &#39;[)&#39;));
+-- Expected: room_booking_no_overlap violation; row not inserted.
+
+INSERT INTO room_booking (room_id, during) VALUES
+  (8, tstzrange(&#39;2026-11-02 10:30+08&#39;, &#39;2026-11-02 11:30+08&#39;, &#39;[)&#39;));
+-- Expected: succeeds because the room differs.
+</code></pre>
+<p>These outcomes are deductions from the PostgreSQL 18 documentation, not output captured from a database in this editorial run. In an isolated test database, query <code>SELECT booking_id, room_id, during FROM room_booking ORDER BY booking_id</code> after handling the expected error. You should find three rows corresponding to the first, second, and fourth inserts. Do not require consecutive generated IDs: an attempted insert may consume an identity value before a constraint rejects the row. Test the boundary separately with <code>&amp;&amp;</code> over two constructed ranges. The official range-operator table defines <code>&amp;&amp;</code> by whether the ranges share any elements. Adjacency alone is not overlap for these half-open intervals.</p>
+<h2 id="An-availability-lookup-cannot-be-the-last-arbiter"><a href="#An-availability-lookup-cannot-be-the-last-arbiter" class="headerlink" title="An availability lookup cannot be the last arbiter"></a>An availability lookup cannot be the last arbiter</h2><p>A booking interface still needs an availability query to show useful options. That query is a view for the user, not the final integrity rule. Imagine two transactions asking for room 7 at 14:00–15:00. Each may check before the other’s uncommitted reservation is visible. Both application processes then believe the slot is free. If the system relies only on <code>SELECT</code> followed by <code>INSERT</code>, the check and the write leave a race window. The table constraint is the final arbiter for conflicting writes. The application should turn a resulting constraint error into a clear “that slot was just taken” response and coordinate payment or confirmation messages with the actual commit outcome.</p>
+<p>Avoid claiming that the second transaction necessarily fails immediately. Waiting and the eventual result depend on what the concurrent transaction commits or rolls back. To verify the user-facing path, exercise two connections in an isolated environment: start competing inserts, observe any wait, commit or roll back one side, then inspect the other response and downstream actions. Sequential inserts on one connection prove that the constraint rejects a conflict with an established row; they do not test concurrency handling. The exclusion constraint creates its supporting index automatically. Adding an ordinary index for faster availability lookups does not itself enforce the no-overlap invariant.</p>
+<h2 id="Nulls-empty-ranges-and-unbounded-ranges-need-policy"><a href="#Nulls-empty-ranges-and-unbounded-ranges-need-policy" class="headerlink" title="Nulls, empty ranges, and unbounded ranges need policy"></a>Nulls, empty ranges, and unbounded ranges need policy</h2><p>Both <code>room_id</code> and <code>during</code> are <code>NOT NULL</code> for a reason. An exclusion constraint prohibits a pair when all specified comparisons are true; false or null in at least one comparison means it is not a conflicting pair. If a booking can have an unknown room or interval, the constraint alone cannot promise that every such row conflicts with others. This table chooses to reject incomplete bookings at insertion. Its <code>CHECK (NOT isempty(during))</code> makes a different decision: an empty range occupies no instant and therefore does not overlap a real booking. A zero-duration request should not slip through the occupancy rule as if it reserved time. The official <code>isempty</code> function reports that condition.</p>
+<p>A range can also omit either bound, extending indefinitely toward the past or future. That may accidentally block future reservations. If every booking must have concrete start and end instants, add checks against <code>lower_inf(during)</code> and <code>upper_inf(during)</code>. Maximum duration, overnight events, and cancellation are separate domain choices. For example, retaining cancelled bookings in this table would keep them in the exclusion comparison. A partial exclusion constraint restricted to active rows is possible, but then status changes and rebooking must be designed and tested together. Do not paste this DDL into a system whose meaning of “occupied” differs from the example.</p>
+<h2 id="Validate-old-rows-and-every-write-path-before-rollout"><a href="#Validate-old-rows-and-every-write-path-before-rollout" class="headerlink" title="Validate old rows and every write path before rollout"></a>Validate old rows and every write path before rollout</h2><p>A new empty table can accept this definition directly. For an existing reservation table, first find historical conflicts and decide which records represent duplicate writes, failed reschedules, or intentionally shared capacity. A self-join on <code>a.booking_id &lt; b.booking_id</code>, equal room IDs, and <code>a.during &amp;&amp; b.during</code> lists each conflicting pair once. Review the pairs before changing valid customer bookings. Then try the constraint on an isolated copy, measure index-build time and lock waits, and plan the production change window. Interface tests should cover adjacent slots and different rooms succeeding, same-room overlap failing with a useful response, and updates that change room or extend an interval. Cancellation and rebooking deserve their own case if the product supports them.</p>
+<p>This constraint gives a single database-level answer to a particular question: can two rows reserve the same room at overlapping instants? It does not implement capacity limits, shared seating, payment compensation, or a humane error message. If the venue allows multiple simultaneous reservations in one room, model that capacity explicitly rather than weakening the example with exceptions. Write down the accepted and rejected pairs before choosing the index and constraint. The SQL and expected results here were not executed against a live PostgreSQL instance; concurrency, migration locks, and extension privileges still require checks in the target environment.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/rangetypes.html#RANGETYPES-CONSTRAINT" rel="noopener">www.postgresql.org</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/btree-gist.html" rel="noopener">www.postgresql.org</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/rangetypes.html#RANGETYPES-BOUNDS" rel="noopener">www.postgresql.org</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/ddl-constraints.html#DDL-CONSTRAINTS-EXCLUSION" rel="noopener">www.postgresql.org</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-range.html" rel="noopener">www.postgresql.org</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/en/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F21%2Fpostgres-range-exclusion-overlap%2F&text=Prevent%20Overlapping%20Room%20Bookings%20With%20an%20Exclusion%20Constraint" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F21%2Fpostgres-range-exclusion-overlap%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Prevent%20Overlapping%20Room%20Bookings%20With%20an%20Exclusion%20Constraint&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F21%2Fpostgres-range-exclusion-overlap%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/21/pytest-strict-marker-selection/">
+              <span>Previous Post</span>
+              <strong>What strict-markers Catches—and What Selection Still Misses</strong>
+              <small>2026-10-21</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/21/postgres-not-valid-validation-window/">
+              <span>Next Post</span>
+              <strong>Adding a CHECK Constraint Before Old Rows Are Clean</strong>
+              <small>2026-10-21</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Encode-the-room-rule-including-its-edge">Encode the room rule, including its edge</a>
+          
+            <a class="toc-link toc-link--h2" href="#Four-inserts-reveal-what-the-constraint-accepts">Four inserts reveal what the constraint accepts</a>
+          
+            <a class="toc-link toc-link--h2" href="#An-availability-lookup-cannot-be-the-last-arbiter">An availability lookup cannot be the last arbiter</a>
+          
+            <a class="toc-link toc-link--h2" href="#Nulls-empty-ranges-and-unbounded-ranges-need-policy">Nulls, empty ranges, and unbounded ranges need policy</a>
+          
+            <a class="toc-link toc-link--h2" href="#Validate-old-rows-and-every-write-path-before-rollout">Validate old rows and every write path before rollout</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>265</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>113</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>81</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>54</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/21/cloudevents-identity-deduplication/">CloudEvents Deduplication: Treat source and id as One Identity</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/21/cqrs-projection-read-confirmation/">After a CQRS Write: Confirm When the Read Projection Catches Up</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/21/jsonschema-allof-closed-objects/">JSON Schema allOf: Where to Close an Extended Object</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
