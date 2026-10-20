@@ -1,0 +1,390 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why ON CONFLICT can succeed while RETURNING yields no row | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Trace insertion, conflict locking, the update condition, and the rows actually returned by PostgreSQL.">
+  
+  
+    <meta name="keywords" content="PostgreSQL ON CONFLICT,RETURNING,conditional update">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/20/postgres-onconflict-where-returning/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/20/postgres-onconflict-where-returning/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/20/postgres-onconflict-where-returning/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/20/postgres-onconflict-where-returning/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why ON CONFLICT can succeed while RETURNING yields no row | Midnight blog">
+    <meta property="og:description" content="Trace insertion, conflict locking, the update condition, and the rows actually returned by PostgreSQL.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/20/postgres-onconflict-where-returning/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/20/postgres-onconflict-where-returning/#webpage","url":"https://www.zyweb.vip/en/2026/10/20/postgres-onconflict-where-returning/","name":"Why ON CONFLICT can succeed while RETURNING yields no row | Midnight blog","description":"Trace insertion, conflict locking, the update condition, and the rows actually returned by PostgreSQL.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/20/postgres-onconflict-where-returning/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/20/postgres-onconflict-where-returning/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/20/postgres-onconflict-where-returning/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/20/postgres-onconflict-where-returning/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/20/postgres-onconflict-where-returning/","headline":"Why ON CONFLICT can succeed while RETURNING yields no row","description":"Trace insertion, conflict locking, the update condition, and the rows actually returned by PostgreSQL.","inLanguage":"en","datePublished":"2026-10-20T08:00:08.000Z","dateModified":"2026-10-20T08:00:08.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.postgresql.org/docs/18/sql-insert.html"],"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/20/postgres-onconflict-where-returning/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why ON CONFLICT can succeed while RETURNING yields no row","item":"https://www.zyweb.vip/en/2026/10/20/postgres-onconflict-where-returning/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/20/postgres-onconflict-where-returning/">zh-CN</option><option value="/en/2026/10/20/postgres-onconflict-where-returning/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/20/postgres-onconflict-where-returning/">zh-CN</option><option value="/en/2026/10/20/postgres-onconflict-where-returning/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-20T08:00:08.000Z">2026-10-20</time>
+    </div>
+
+    <h1>Why ON CONFLICT can succeed while RETURNING yields no row</h1>
+
+    
+      <p class="post-hero__summary">Trace insertion, conflict locking, the update condition, and the rows actually returned by PostgreSQL.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-20T08:00:08.000Z">2026-10-20</time> · Estimated read 13 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/20/postgres-onconflict-where-returning/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/20/postgres-onconflict-where-returning/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>A conditional ON CONFLICT update can lock a conflicting row yet return nothing when its WHERE predicate fails.</li><li>An empty RETURNING result identifies a stale update only after checking the exact statement and input cardinality.</li><li>Returned rows describe statement effects, while transaction commit and later current-state reads are separate evidence.</li></ul></section>
+      <div class="article-content">
+        <p>An inventory write completes without an error, yet the application receives no <code>RETURNING</code> row. The tempting diagnosis is that the driver lost the result, or that a successful upsert necessarily updated the existing record. A conditional <code>ON CONFLICT DO UPDATE ... WHERE</code> has another outcome: PostgreSQL finds the conflicting row, can lock it, then declines to update it because the condition is false. The statement succeeds, but no row qualifies for <code>RETURNING</code>.</p>
+<p>This distinction matters in an event consumer that keeps the latest state for each order. Suppose an incoming event carries a version. A new order should be inserted; a newer event should replace an older state; an older or equal event should leave the row alone. The version is an application sequence number, not a PostgreSQL transaction ID. Start with a deliberately small table and a stored version of seven:</p>
+<pre><code class="sql">CREATE TABLE order_state (
+  order_id bigint PRIMARY KEY,
+  version bigint NOT NULL,
+  state text NOT NULL
+);
+INSERT INTO order_state VALUES (42, 7, &#39;packed&#39;);
+</code></pre>
+<p>Now an old event for order 42 arrives with version six. <code>EXCLUDED</code> denotes the row proposed for insertion. The condition compares that proposal with the existing conflicting row:</p>
+<pre><code class="sql">INSERT INTO order_state (order_id, version, state)
+VALUES (42, 6, &#39;created&#39;)
+ON CONFLICT (order_id) DO UPDATE
+SET version = EXCLUDED.version,
+    state = EXCLUDED.state
+WHERE order_state.version &lt; EXCLUDED.version
+RETURNING order_id, version, state;
+</code></pre>
+<p>Follow the statement in order. The primary key identifies order 42 as a conflict. The update path identifies the target row. The existing version, seven, is not less than the proposed version, six, so the <code>WHERE</code> condition fails. No update occurs and <code>RETURNING</code> has no row to report. The <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-insert.html">PostgreSQL 18 INSERT reference</a> documents both relevant rules: <code>RETURNING</code> emits rows successfully inserted or updated, and a conflict row that was locked but not updated because the update condition failed is not returned. An empty result here is a valid “old event did not replace current state” outcome. It is neither evidence of a lost response nor proof that the proposed state was saved.</p>
+<p>Change the proposed version to eight. If it is still newer when PostgreSQL evaluates the condition, the update happens and the returned row contains version eight. Use an order ID absent from the table and the insert path returns the newly created row. Those are three distinct cases: first insertion, accepted advance, and rejected stale update. An API that maps all three to <code>success: true</code> hides whether a write actually occurred. An API that treats the third as a database outage will retry an intentionally rejected old event. The correct response depends on the event contract, but it must preserve this difference.</p>
+<p>The placement of <code>WHERE</code> is easy to misread. It does not filter the candidate input before conflict detection, and it does not define which unique constraint is targeted. PostgreSQL evaluates the update condition after identifying a conflicting row as a candidate for update. The unique key chooses the target; the version comparison decides whether to change it. The documentation also says the row can be locked despite the false condition. Therefore, zero returned rows does not mean the statement never touched a contended row. If many workers converge on one key, review lock waits and retry behavior separately from the number of returned rows.</p>
+<p>For a single proposed row using this exact <code>DO UPDATE</code> clause, one returned row means the statement inserted or updated one row. Zero rows should first prompt a check of the stale-version branch. If the application must tell a caller the current version, that zero-row result does not contain it. Read the current row under an appropriate transaction design, or make a separate lookup part of the response contract. Do not echo the rejected proposed version six as if it were the stored version seven. A subsequent read may itself see an even newer version after another writer commits; the response wording should not pretend that this lookup is the same instant as the earlier condition evaluation.</p>
+<p>Nor should zero rows be treated as a universal diagnosis for every <code>INSERT ... RETURNING</code>. An input query might produce no rows; <code>ON CONFLICT DO NOTHING</code> intentionally returns none for a conflict; an application might consume the wrong result object. First confirm the generated SQL, the input cardinality, the conflict action, and the driver call. An ORM can rewrite a statement in ways that differ from a hand-written example. Log a non-sensitive key, incoming version, returned row count and SQL shape during investigation. “Upsert succeeded” alone is too weak to reconstruct the branch taken.</p>
+<p>Equal versions need an explicit rule. If replay of the same event is an expected idempotent duplicate, no update and no row can be the desired result, but the response should say “duplicate ignored” rather than imply a new write. If equal versions with different payloads indicate corruption, the simple <code>&lt;</code> predicate will silently ignore a serious discrepancy. Detect or record that conflict separately. The <code>NOT NULL</code> version constraint in the example also matters: a null version would make the comparison unknown and could be mistaken for an ordinary stale event if the schema admitted it.</p>
+<p>There is a second boundary beyond this statement. A returned row reports that this statement inserted or updated a row; an outer transaction can still roll back. The site’s earlier <a href="/en/2026/10/16/postgres-returning-commit-boundary/">RETURNING and commit-boundary article</a> examines that separate issue. Here the immediate question is why a successful statement returns no row. At the API boundary, use the returned cardinality to describe the statement’s effect, and wait for the transaction outcome before claiming persistence.</p>
+<p>An isolated PostgreSQL acceptance check should retain the exact SQL, server version and raw output for at least three cases: a new key returns one row; a higher version updates and returns one row; a lower or equal version returns none and leaves the stored row unchanged. Add two interleaving writers if lock waits or competing versions matter to the service. These are validation steps, not tests performed for this article. I checked the PostgreSQL 18 documentation but did not execute this SQL against a database here, so the example outcomes are documented expectations rather than local measurements.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-insert.html" rel="noopener">www.postgresql.org</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/en/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F20%2Fpostgres-onconflict-where-returning%2F&text=Why%20ON%20CONFLICT%20can%20succeed%20while%20RETURNING%20yields%20no%20row" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F20%2Fpostgres-onconflict-where-returning%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20ON%20CONFLICT%20can%20succeed%20while%20RETURNING%20yields%20no%20row&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F20%2Fpostgres-onconflict-where-returning%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/20/postgres-read-committed-snapshots/">
+              <span>Previous Post</span>
+              <strong>Why two reads in one Read Committed transaction can differ</strong>
+              <small>2026-10-20</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/20/postgres-like-literal-wildcards/">
+              <span>Next Post</span>
+              <strong>Why a literal percent sign expands a PostgreSQL LIKE search</strong>
+              <small>2026-10-20</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>245</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>104</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>78</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>49</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/20/http-private-shared-cache-scope/">Cache-Control private: Decide Which Cache May Store the Response</a></h3>
+          <p>2026-10-20</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/20/intl-numberformat-display-rounding/">Intl.NumberFormat: Display Rounding Is Not Settlement</a></h3>
+          <p>2026-10-20</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/20/javascript-hasown-prototype-boundary/">Object.hasOwn: Separate Supplied Fields From Inherited Values</a></h3>
+          <p>2026-10-20</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

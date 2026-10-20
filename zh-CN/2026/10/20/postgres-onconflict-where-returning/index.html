@@ -1,0 +1,391 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>ON CONFLICT 没报错，RETURNING 为什么没有行？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="区分插入、冲突更新和条件拒绝更新，解释锁定但未更新的行为什么不会进入 RETURNING。">
+  
+  
+    <meta name="keywords" content="PostgreSQL ON CONFLICT,RETURNING,条件更新">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/20/postgres-onconflict-where-returning/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/20/postgres-onconflict-where-returning/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/20/postgres-onconflict-where-returning/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/20/postgres-onconflict-where-returning/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="ON CONFLICT 没报错，RETURNING 为什么没有行？ | Midnight blog">
+    <meta property="og:description" content="区分插入、冲突更新和条件拒绝更新，解释锁定但未更新的行为什么不会进入 RETURNING。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/20/postgres-onconflict-where-returning/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/20/postgres-onconflict-where-returning/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/20/postgres-onconflict-where-returning/","name":"ON CONFLICT 没报错，RETURNING 为什么没有行？ | Midnight blog","description":"区分插入、冲突更新和条件拒绝更新，解释锁定但未更新的行为什么不会进入 RETURNING。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/20/postgres-onconflict-where-returning/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/20/postgres-onconflict-where-returning/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/20/postgres-onconflict-where-returning/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/20/postgres-onconflict-where-returning/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/20/postgres-onconflict-where-returning/","headline":"ON CONFLICT 没报错，RETURNING 为什么没有行？","description":"区分插入、冲突更新和条件拒绝更新，解释锁定但未更新的行为什么不会进入 RETURNING。","inLanguage":"zh-CN","datePublished":"2026-10-20T08:00:08.000Z","dateModified":"2026-10-20T08:00:08.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/sql-insert.html"],"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/20/postgres-onconflict-where-returning/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"ON CONFLICT 没报错，RETURNING 为什么没有行？","item":"https://www.zyweb.vip/zh-CN/2026/10/20/postgres-onconflict-where-returning/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/20/postgres-onconflict-where-returning/" selected>zh-CN</option><option value="/en/2026/10/20/postgres-onconflict-where-returning/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/20/postgres-onconflict-where-returning/" selected>zh-CN</option><option value="/en/2026/10/20/postgres-onconflict-where-returning/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-20T08:00:08.000Z">2026-10-20</time>
+    </div>
+
+    <h1>ON CONFLICT 没报错，RETURNING 为什么没有行？</h1>
+
+    
+      <p class="post-hero__summary">区分插入、冲突更新和条件拒绝更新，解释锁定但未更新的行为什么不会进入 RETURNING。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-20T08:00:08.000Z">2026-10-20</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/20/postgres-onconflict-where-returning/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/20/postgres-onconflict-where-returning/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>条件冲突更新可能锁住目标行，但因 WHERE 为假而既不更新也不返回该行。</li><li>只在确认单行输入及具体 SQL 分支后，才能把空 RETURNING 解释为旧版本被拒绝。</li><li>RETURNING 描述语句效果；外层事务的最终提交和当前版本读取仍需分别验证。</li></ul></section>
+      <div class="article-content">
+        <p>一条库存写入语句成功返回，应用却拿到空的 <code>RETURNING</code> 结果。常见误判是把“没有报错”翻译成“原行被更新”，再把空结果解释为驱动漏读。更值得先查的是 <code>ON CONFLICT DO UPDATE … WHERE</code>：冲突行可以已经被找到、锁定，最终却因为条件不满足而没有发生更新。此时语句正常结束，<code>RETURNING</code> 也确实没有那一行。这不是数据库丢掉结果，而是写入契约里本来存在的一条分支。</p>
+<p>假设接口接收外部事件，表中每个订单只有一条当前状态。新事件带版本号，只有版本比已保存版本更大时才覆盖。简化表结构如下，<code>order_id</code> 是唯一键，<code>version</code> 是业务版本而非数据库事务 ID。</p>
+<pre><code class="sql">CREATE TABLE order_state (
+  order_id bigint PRIMARY KEY,
+  version bigint NOT NULL,
+  state text NOT NULL
+);
+INSERT INTO order_state VALUES (42, 7, &#39;packed&#39;);
+</code></pre>
+<p>写入使用一条 upsert。<code>EXCLUDED</code> 指本次拟插入的数据，条件比较拟插入版本与冲突行当前版本，<code>RETURNING</code> 只要求把本次实际写入后的行交给调用方。</p>
+<pre><code class="sql">INSERT INTO order_state (order_id, version, state)
+VALUES (42, 6, &#39;created&#39;)
+ON CONFLICT (order_id) DO UPDATE
+SET version = EXCLUDED.version,
+    state = EXCLUDED.state
+WHERE order_state.version &lt; EXCLUDED.version
+RETURNING order_id, version, state;
+</code></pre>
+<p>预期路径是：唯一键 <code>42</code> 命中冲突；更新分支找到目标行；已有版本 <code>7</code> 并不小于候选版本 <code>6</code>；<code>WHERE</code> 为假，所以没有更新；最后 <code>RETURNING</code> 没有行。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-insert.html">PostgreSQL 18 的 <code>INSERT</code> 文档</a>明确写明，<code>RETURNING</code> 只返回成功插入或更新的行；因 <code>ON CONFLICT DO UPDATE … WHERE</code> 不满足而“锁住但未更新”的行也不会返回。这里的空集可以表达“旧事件被拒绝覆盖”，不是异常或持久化成功的证据。</p>
+<p>现在把输入版本改为 <code>8</code>。如果它在条件评估时仍高于目标行版本，更新发生，<code>RETURNING</code> 才会给出版本 <code>8</code> 的行。若换成一个尚不存在的 <code>order_id</code>，插入路径也返回新行。三条路径的应用语义不同：插入是首次建立，更新是接受较新的事件，空结果是没有发生这两种写入。把它们压成单一的 <code>success: true</code>，会让上游误以为版本 <code>6</code> 已生效；把空结果一律当数据库故障，又会对正常过期事件反复重试。</p>
+<p><code>WHERE</code> 的位置容易被读错。它不是在扫描输入行之前就筛掉候选值，也不是指定唯一冲突目标的条件。PostgreSQL 说明更新条件在确定冲突目标后才评估。因此需要区分“冲突如何识别”和“识别后是否允许更新”。唯一约束保障只有一条候选目标；业务版本条件决定是否改变它。条件失败的行可能被锁定这一点还关系到并发：空结果不能推导出“写入完全没有接触那一行”或“它不会影响另一笔并发操作”。如果为高吞吐队列设计重试与锁等待，需要同时看冲突热键和锁行为，不能只数 <code>RETURNING</code> 行数。</p>
+<p>一个清晰的调用接口应先约定结果分类。对于单行 <code>VALUES</code>、<code>DO UPDATE</code> 且带上述版本条件的语句，返回一行表示本次插入或更新发生；返回零行首先检查它是否命中旧版本拒绝路径。若产品要给出“当前版本是多少”，零行本身没有携带这个值；可以在适当事务边界再查，或设计返回当前行的独立读取。不要凭空把候选版本 <code>6</code> 写进响应，冒充库里的版本 <code>7</code>。若并发写者仍在推进版本，后续读取也可能看到更新值，响应文案应避免假装获得与写入条件完全同一时刻的快照。</p>
+<p>还要避免反向过度推断。一个普遍的 <code>INSERT … RETURNING</code> 返回零行，原因不只这一种：输入可能是零行，语句可能用了 <code>DO NOTHING</code>，应用甚至可能读错了结果集。只有确认 SQL 是单行输入、冲突动作是这段有条件的 <code>DO UPDATE</code>，并且没有别的过滤路径，才能把零行解释为条件拒绝。查看日志时记录无敏感信息的键、提交版本、受影响行数与 SQL 版本，比只记录“upsert 成功”更可复核。若调试语句被 ORM 改写，还应核对实际发往数据库的 SQL，而不是仅看代码中声明的参数。</p>
+<p><code>RETURNING</code> 的另一个边界是事务提交。它告诉你本条语句实际插入或更新了什么；如果外层事务随后回滚，曾返回的行也不代表最终持久化。站内关于 <a href="/zh-CN/2026/10/16/postgres-returning-commit-boundary/">RETURNING 与提交边界</a> 的文章讨论的是另一层问题。本篇聚焦语句内部的零行分支，调用方既要正确解释行数，也要在事务结束后才宣布业务写入已提交。把这两层混淆，容易在接口日志中同时留下“成功写入”和“最终未提交”的矛盾记录。</p>
+<p>上线前可用一个隔离的 PostgreSQL 测试库验收三组输入：新键插入返回一行；同键较高版本更新返回一行；同键较低或相同版本返回零行且存量内容不变。再加一个竞争用例，让两位写者交错提交，确认应用对锁等待和最终版本的处理符合业务设计。保留执行的 SQL、数据库版本和实际输出；只靠本文的推理不能声称生产驱动、ORM 或并发调度已经通过。本文核对的是 PostgreSQL 18 官方文档的语义，没有运行上述数据库语句，因此示例结果是基于文档的预期，而非本环境中的实测记录。</p>
+<p>版本规则也要写清楚相等值的处理。如果相同版本的重放事件被视作幂等重复，那么“零行且无更新”是合理的，但响应可以是“已忽略重复”，不该暗示发生新写入；如果同版本而内容不同代表数据冲突，仅靠 <code>version &lt; EXCLUDED.version</code> 会静默忽略这个差异，还需要显式校验或冲突记录。版本为 <code>NULL</code> 的情形则应被表定义挡住，否则比较得到未知值，条件仍不会为真，却把输入质量问题伪装成普通旧事件。示例中的 <code>NOT NULL</code> 因而承担业务判定的一部分，不是随手加的装饰。</p>
+<p>验收记录还应拆开数据库事实与接口决策。数据库事实是实际写入行数和返回行；接口决策是把零行归为旧事件、重复事件或需要进一步读取的冲突。前者可由测试库输出证明，后者要由业务规则和响应契约证明。特别是消费者收到重试时，不应根据一次空 <code>RETURNING</code> 就确认所有先前处理步骤已完成；它只描述这条 SQL 的本次写入效果。把状态机的每一步对应到可观察证据，才能在故障排查时回答“版本没有变”究竟是有意拒绝，还是流程漏跑。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-insert.html" rel="noopener">www.postgresql.org</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F20%2Fpostgres-onconflict-where-returning%2F&text=ON%20CONFLICT%20%E6%B2%A1%E6%8A%A5%E9%94%99%EF%BC%8CRETURNING%20%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E6%9C%89%E8%A1%8C%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F20%2Fpostgres-onconflict-where-returning%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=ON%20CONFLICT%20%E6%B2%A1%E6%8A%A5%E9%94%99%EF%BC%8CRETURNING%20%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E6%9C%89%E8%A1%8C%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F20%2Fpostgres-onconflict-where-returning%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/20/postgres-read-committed-snapshots/">
+              <span>上一篇</span>
+              <strong>同一事务查两次，Read Committed 为什么会看到不同值？</strong>
+              <small>2026-10-20</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/20/postgres-like-literal-wildcards/">
+              <span>下一篇</span>
+              <strong>用户搜索百分号，PostgreSQL LIKE 为什么匹配了更多记录？</strong>
+              <small>2026-10-20</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>245</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>104</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>77</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>49</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/20/http-private-shared-cache-scope/">个性化响应的私人缓存与共享缓存边界</a></h3>
+          <p>2026-10-20</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/20/intl-numberformat-display-rounding/">Intl.NumberFormat：展示舍入与业务舍入分开</a></h3>
+          <p>2026-10-20</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/20/javascript-hasown-prototype-boundary/">Object.hasOwn：把自有字段与原型继承分开</a></h3>
+          <p>2026-10-20</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

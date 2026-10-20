@@ -1,0 +1,381 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>同一事务查两次，Read Committed 为什么会看到不同值？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用两个事务的时间线解释 PostgreSQL Read Committed 的语句级快照，并区分自身写入与并发提交。">
+  
+  
+    <meta name="keywords" content="PostgreSQL Read Committed,语句快照,事务隔离">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/20/postgres-read-committed-snapshots/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/20/postgres-read-committed-snapshots/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/20/postgres-read-committed-snapshots/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/20/postgres-read-committed-snapshots/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="同一事务查两次，Read Committed 为什么会看到不同值？ | Midnight blog">
+    <meta property="og:description" content="用两个事务的时间线解释 PostgreSQL Read Committed 的语句级快照，并区分自身写入与并发提交。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/20/postgres-read-committed-snapshots/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/20/postgres-read-committed-snapshots/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/20/postgres-read-committed-snapshots/","name":"同一事务查两次，Read Committed 为什么会看到不同值？ | Midnight blog","description":"用两个事务的时间线解释 PostgreSQL Read Committed 的语句级快照，并区分自身写入与并发提交。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/20/postgres-read-committed-snapshots/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/20/postgres-read-committed-snapshots/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/20/postgres-read-committed-snapshots/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/20/postgres-read-committed-snapshots/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/20/postgres-read-committed-snapshots/","headline":"同一事务查两次，Read Committed 为什么会看到不同值？","description":"用两个事务的时间线解释 PostgreSQL Read Committed 的语句级快照，并区分自身写入与并发提交。","inLanguage":"zh-CN","datePublished":"2026-10-20T08:00:08.000Z","dateModified":"2026-10-20T08:00:08.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/transaction-iso.html"],"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/20/postgres-read-committed-snapshots/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"同一事务查两次，Read Committed 为什么会看到不同值？","item":"https://www.zyweb.vip/zh-CN/2026/10/20/postgres-read-committed-snapshots/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/20/postgres-read-committed-snapshots/" selected>zh-CN</option><option value="/en/2026/10/20/postgres-read-committed-snapshots/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/20/postgres-read-committed-snapshots/" selected>zh-CN</option><option value="/en/2026/10/20/postgres-read-committed-snapshots/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-20T08:00:08.000Z">2026-10-20</time>
+    </div>
+
+    <h1>同一事务查两次，Read Committed 为什么会看到不同值？</h1>
+
+    
+      <p class="post-hero__summary">用两个事务的时间线解释 PostgreSQL Read Committed 的语句级快照，并区分自身写入与并发提交。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-20T08:00:08.000Z">2026-10-20</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/20/postgres-read-committed-snapshots/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/20/postgres-read-committed-snapshots/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>PostgreSQL Read Committed 的普通 SELECT 使用语句开始时的快照，同一事务内两次查询可能看到不同提交状态。</li><li>先查后写的旧读数不能代替受并发保护的实际写入条件与返回行数。</li><li>判断异常需记录两会话提交顺序、自身写入和隔离级别；本稿时间线尚未在数据库实测。</li></ul></section>
+      <div class="article-content">
+        <p>一笔事务里连续查两次账户余额，第一次是 <code>100</code>，第二次是 <code>80</code>。两条查询之间本事务没有更新余额，开发者便怀疑连接切换或缓存失效。对 PostgreSQL 默认的 <code>Read Committed</code> 隔离级别来说，这种变化可能完全正常：每条 <code>SELECT</code> 在开始执行时取得自己的快照，而不是在 <code>BEGIN</code> 那刻锁定一张贯穿整个事务的照片。另一笔事务在两次查询之间提交，第二条语句就可能看见它。</p>
+<p>先用两个会话写出时间线，避免把“同一事务”理解成“同一快照”。账户 <code>id=42</code> 初值 <code>100</code>。会话 A 执行 <code>BEGIN</code>，随后 <code>SELECT balance FROM wallet WHERE id=42</code>，读到 <code>100</code>；会话 B 把该行改成 <code>80</code> 并 <code>COMMIT</code>；会话 A 再执行相同 <code>SELECT</code>，可以读到 <code>80</code>。两次读都发生在 A 的事务里，差别在于第二次语句开始时，B 的提交已经可见。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/transaction-iso.html">PostgreSQL 18 隔离文档</a>明确说 <code>Read Committed</code> 是默认隔离级别，也明确指出同一事务内连续的 <code>SELECT</code> 可以看到不同数据。</p>
+<pre><code class="sql">-- 会话 A，预设 wallet(42) 的 balance = 100
+BEGIN;
+SELECT balance FROM wallet WHERE id = 42; -- 预期 100
+-- 会话 B 在此完成 UPDATE wallet SET balance = 80 WHERE id = 42; COMMIT;
+SELECT balance FROM wallet WHERE id = 42; -- 可见 80
+COMMIT;
+</code></pre>
+<p>上面是可复现的调度说明，不是本环境的执行记录。<code>SELECT</code> 看到的是它开始前已经提交的数据；在它运行过程中才提交的另一笔事务，不应被简单想象为随时插入到同一条查询的任意位置。反过来，A 自己在事务内先 <code>UPDATE</code> 为 <code>90</code>，随后查询又会看到自己的写入；“语句级快照”不意味着本事务刚刚写过的值被隐藏。解释某个读数时，先标出每条语句的起点、其他会话的提交点和本事务自己的写入，才有可能判断变化来自哪里。</p>
+<p>这对“先查再决定”的业务逻辑影响很具体。假设请求先查库存 <code>10</code> 件，处理其他工作后再查得到 <code>8</code> 件，代码若把第一次结果当作整笔事务的稳定前提，就可能基于过时数量计算承诺。把两次读放在一个 <code>BEGIN</code> 内并不能自动满足“期间数值不变”的需求。应该先确定真正要保护的业务不变量：只是显示最新信息，还是必须基于当前行原子地扣减，或必须对一组跨行条件给出一致判断。不同承诺对应不同写法，不应把隔离级别当作含糊的保险开关。</p>
+<p>对于单行扣减，可把资格条件放到实际写语句里，例如 <code>UPDATE inventory SET available = available - 2 WHERE sku = &#39;A&#39; AND available &gt;= 2 RETURNING available</code>，并以实际返回行数判断是否扣成。这样检查与修改在同一条写语句的逻辑内，而不是相信先前读出的数量永远没变。并发更新同一行时，PostgreSQL 的 <code>Read Committed</code> 写语句可能等待其他事务，并在对方提交后针对更新后的行重新评估条件；因此代码必须处理零行结果，不能用旧 <code>SELECT</code> 的结果宣布成功。这里的 SQL 仍须在真实表、约束和并发负载下测试，不能仅凭单条语句替整套订单流程做一致性担保。</p>
+<p>如果需求是一个事务中多次读取保持同一已提交视图，可以考虑 <code>Repeatable Read</code>。PostgreSQL 对该级别的快照建立时机是事务中第一条非事务控制语句，而非仅仅敲下 <code>BEGIN</code>；后续普通读取使用这个事务视图，同时仍可看到本事务写入。切换级别还意味着遇到并发更新冲突时可能收到需要重试的错误。它不是把任何跨行业务约束自动变真，也不是免费消除竞争。站内 <a href="/zh-CN/2026/10/09/postgres-isolation-retries/">事务隔离与重试</a> 从另一侧讨论何时要把完整事务作为重试单位。</p>
+<p>还有一种误读是以为 <code>Read Committed</code> 连单条查询也不一致。文档描述的是每个命令开始时所取的快照；同一条常规 <code>SELECT</code> 不应像两条先后查询那样，分别用两个不同开始时间的视图拼接结果。但包含复杂写入、触发器或并发等待的语句仍有细节，不宜把一句“语句级快照”推成所有 SQL 都只有简单静态画面。本文仅讨论普通读和明确的单行写示例。若报表必须把多个表的读数固定在共同边界，需设计事务级视图及其失败重试，而非只在应用层缓存第一次读数。</p>
+<p>诊断时记录隔离级别、连接标识、事务边界、每条查询起止时间以及另一个写者的提交顺序。只有知道先后关系，才能把第二次 <code>80</code> 归于并发提交；没有对照证据，把“偶发变化”归罪于 MVCC 也可能遮盖应用自己更新、读副本切换或缓存问题。复现脚本应让两个独立会话通过人工屏障或确定性的同步点交错，保留服务器版本、SQL 和原始输出。不要用任意睡眠时间代替并发顺序的证明。</p>
+<p>读数改变未必是缺陷，错误的是把未经保护的读数当作稳定承诺。如果界面只是展示余额最新状态，两次不同读数可能正符合期望；如果业务在第一次读后批准了不能超额的操作，就需要把批准条件绑到受并发保护的写入或更高隔离级别，并验证失败分支怎样回滚和重试。本文依据 PostgreSQL 18 官方隔离文档给出预期时间线，没有在本环境连接 PostgreSQL 跑双会话实验；应用的正确策略仍取决于其实际不变量、事务边界与错误处理。</p>
+<p>测试还应覆盖“没有并发提交”这一负例：在同一事务内重复读取，如果没有自己的写入、也没有其他已提交变化，预期值不应凭空改变。若此时变了，先检查查询条件、连接路由、数据源和应用缓存，而不是把一切交给隔离级别解释。再单独验证“本事务自己写入”路径，避免为了修复第二次查询可见新提交而意外误解自写可见性。这样三组对照——无变化、并发提交、自身写入——能把一句抽象的隔离定义变成可追踪的故障判定表。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/transaction-iso.html" rel="noopener">www.postgresql.org</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F20%2Fpostgres-read-committed-snapshots%2F&text=%E5%90%8C%E4%B8%80%E4%BA%8B%E5%8A%A1%E6%9F%A5%E4%B8%A4%E6%AC%A1%EF%BC%8CRead%20Committed%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BC%9A%E7%9C%8B%E5%88%B0%E4%B8%8D%E5%90%8C%E5%80%BC%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F20%2Fpostgres-read-committed-snapshots%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E5%90%8C%E4%B8%80%E4%BA%8B%E5%8A%A1%E6%9F%A5%E4%B8%A4%E6%AC%A1%EF%BC%8CRead%20Committed%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BC%9A%E7%9C%8B%E5%88%B0%E4%B8%8D%E5%90%8C%E5%80%BC%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F20%2Fpostgres-read-committed-snapshots%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/20/prometheus-keep-firing-resolution/">
+              <span>上一篇</span>
+              <strong>keep_firing_for 不是故障持续的证明</strong>
+              <small>2026-10-20</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/20/postgres-onconflict-where-returning/">
+              <span>下一篇</span>
+              <strong>ON CONFLICT 没报错，RETURNING 为什么没有行？</strong>
+              <small>2026-10-20</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>245</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>104</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>77</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>49</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/20/http-private-shared-cache-scope/">个性化响应的私人缓存与共享缓存边界</a></h3>
+          <p>2026-10-20</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/20/intl-numberformat-display-rounding/">Intl.NumberFormat：展示舍入与业务舍入分开</a></h3>
+          <p>2026-10-20</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/20/javascript-hasown-prototype-boundary/">Object.hasOwn：把自有字段与原型继承分开</a></h3>
+          <p>2026-10-20</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

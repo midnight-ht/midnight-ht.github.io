@@ -11,7 +11,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
-  <title>语句成功了，延迟约束为什么还能让提交失败？ | Midnight blog</title>
+  <title>提交才失败的延迟约束：PostgreSQL 应用何时能宣布成功？ | Midnight blog</title>
   
     <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
     
@@ -28,10 +28,10 @@
     <link rel="apple-touch-icon" href="/img/favicon.ico">
   
   
-    <meta name="description" content="延迟约束可能到提交才检查；明确可延迟定义、主动检查点与失败处理，避免提前宣布业务完成。">
+    <meta name="description" content="用外键先写后补的事务例子解释 PostgreSQL 延迟约束的检查时刻、主动检查点和提交失败处理。">
   
   
-    <meta name="keywords" content="PostgreSQL 18,延迟约束,SET CONSTRAINTS">
+    <meta name="keywords" content="PostgreSQL,延迟约束,事务提交">
   
   
     <meta name="robots" content="index,follow,max-image-preview:large">
@@ -53,8 +53,8 @@
     <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
   
   
-    <meta property="og:title" content="语句成功了，延迟约束为什么还能让提交失败？ | Midnight blog">
-    <meta property="og:description" content="延迟约束可能到提交才检查；明确可延迟定义、主动检查点与失败处理，避免提前宣布业务完成。">
+    <meta property="og:title" content="提交才失败的延迟约束：PostgreSQL 应用何时能宣布成功？ | Midnight blog">
+    <meta property="og:description" content="用外键先写后补的事务例子解释 PostgreSQL 延迟约束的检查时刻、主动检查点和提交失败处理。">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/19/postgres-deferred-constraint-timing/">
     <meta property="og:site_name" content="Midnight blog">
@@ -63,7 +63,7 @@
     <meta name="twitter:card" content="summary">
   
   
-    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/19/postgres-deferred-constraint-timing/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/19/postgres-deferred-constraint-timing/","name":"语句成功了，延迟约束为什么还能让提交失败？ | Midnight blog","description":"延迟约束可能到提交才检查；明确可延迟定义、主动检查点与失败处理，避免提前宣布业务完成。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/19/postgres-deferred-constraint-timing/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/19/postgres-deferred-constraint-timing/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/19/postgres-deferred-constraint-timing/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/19/postgres-deferred-constraint-timing/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/19/postgres-deferred-constraint-timing/","headline":"语句成功了，延迟约束为什么还能让提交失败？","description":"延迟约束可能到提交才检查；明确可延迟定义、主动检查点与失败处理，避免提前宣布业务完成。","inLanguage":"zh-CN","datePublished":"2026-10-18T19:19:51.000Z","dateModified":"2026-10-18T19:19:51.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/19/postgres-deferred-constraint-timing/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"语句成功了，延迟约束为什么还能让提交失败？","item":"https://www.zyweb.vip/zh-CN/2026/10/19/postgres-deferred-constraint-timing/"}]}]}</script>
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/19/postgres-deferred-constraint-timing/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/19/postgres-deferred-constraint-timing/","name":"提交才失败的延迟约束：PostgreSQL 应用何时能宣布成功？ | Midnight blog","description":"用外键先写后补的事务例子解释 PostgreSQL 延迟约束的检查时刻、主动检查点和提交失败处理。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/19/postgres-deferred-constraint-timing/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/19/postgres-deferred-constraint-timing/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/19/postgres-deferred-constraint-timing/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/19/postgres-deferred-constraint-timing/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/19/postgres-deferred-constraint-timing/","headline":"提交才失败的延迟约束：PostgreSQL 应用何时能宣布成功？","description":"用外键先写后补的事务例子解释 PostgreSQL 延迟约束的检查时刻、主动检查点和提交失败处理。","inLanguage":"zh-CN","datePublished":"2026-10-18T19:19:51.000Z","dateModified":"2026-10-20T07:37:06.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/sql-set-constraints.html"],"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/19/postgres-deferred-constraint-timing/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"提交才失败的延迟约束：PostgreSQL 应用何时能宣布成功？","item":"https://www.zyweb.vip/zh-CN/2026/10/19/postgres-deferred-constraint-timing/"}]}]}</script>
   
   <meta name="theme-color" content="#080b10">
   
@@ -89,8 +89,8 @@
     })();
   </script>
   
-  <link rel="stylesheet" href="/css/main.css?v=0.4.0">
-  <link rel="stylesheet" href="/css/editorial.css?v=0.4.0">
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
   <link rel="stylesheet" href="/css/studio.css">
   <link rel="stylesheet" href="/css/studio-inner.css">
   
@@ -140,10 +140,10 @@
       <time datetime="2026-10-18T19:19:51.000Z">2026-10-19</time>
     </div>
 
-    <h1>语句成功了，延迟约束为什么还能让提交失败？</h1>
+    <h1>提交才失败的延迟约束：PostgreSQL 应用何时能宣布成功？</h1>
 
     
-      <p class="post-hero__summary">延迟约束可能到提交才检查；明确可延迟定义、主动检查点与失败处理，避免提前宣布业务完成。</p>
+      <p class="post-hero__summary">用外键先写后补的事务例子解释 PostgreSQL 延迟约束的检查时刻、主动检查点和提交失败处理。</p>
     
 
     <div class="post-hero__meta">
@@ -162,7 +162,7 @@
         
 
 
-        <small>更新于 <time datetime="2026-10-18T19:19:51.000Z">2026-10-19</time> · 预计阅读 3 分钟</small>
+        <small>更新于 <time datetime="2026-10-20T07:37:06.000Z">2026-10-20</time> · 预计阅读 6 分钟</small>
       </div>
     </div>
 
@@ -194,26 +194,34 @@
 
       
 
-      
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>延迟约束允许事务内暂时不一致，但提交仍可能拒绝整组修改。</li><li>从 DEFERRED 切到 IMMEDIATE 会追溯检查尚未检查的修改。</li><li>应用应在事务提交确认后才向调用方宣布数据库写入成功。</li></ul></section>
       <div class="article-content">
-        <p>延迟约束可能在提交时才检查，所以最后一条写入成功，还不能成为业务完成的依据。应用需要知道约束何时检查，也需要让提交失败进入正常错误处理，而不是把它归为不可能发生的尾声。</p>
-<h2 id="允许暂时不一致，是为了完成一组修改"><a href="#允许暂时不一致，是为了完成一组修改" class="headerlink" title="允许暂时不一致，是为了完成一组修改"></a>允许暂时不一致，是为了完成一组修改</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-set-constraints.html">PostgreSQL 18 的 SET CONSTRAINTS 文档</a>说明，DEFERRED 模式把相关约束检查推迟到事务提交；NOT DEFERRABLE 不受这条命令影响。是否可以推迟，先看约束定义，不能只在业务代码里加一行设置就假定所有约束都会改变时点。</p>
-<p>假设一次导入先写子记录，随后写它引用的父记录。如果相应外键被正确声明为可延迟，并在事务中处于延迟模式，中途的暂时缺引用可以留到检查时再判断。这个说明性场景没有执行 SQL；它表达的是最终状态必须满足约束，绝不表示缺失父记录也能成功提交。</p>
-<p>延迟检查因此需要一个明确的修复窗口：哪一步暂时破坏关系，后面哪一步恢复关系，失败时整组修改如何结束。若团队无法说明这三个问题，使用延迟模式可能只是把容易定位的语句错误挪到了更远的位置，而没有获得实际业务好处。</p>
-<h2 id="可以设检查点，但它不是提前提交"><a href="#可以设检查点，但它不是提前提交" class="headerlink" title="可以设检查点，但它不是提前提交"></a>可以设检查点，但它不是提前提交</h2><p>官方文档还规定，从 DEFERRED 切换为 IMMEDIATE 会追溯检查尚未检查的修改；若违反约束，这条 SET CONSTRAINTS 命令失败，模式不会改变。因此可以在一组数据修复完成后主动检查，而不是一直等到提交才发现关系仍然破损。</p>
-<pre><code class="sql">-- Illustrative only; constraint name is hypothetical.
+        <p>一次事务里，<code>INSERT</code> 已返回成功，应用也拿到了新行的标识；随后 <code>COMMIT</code> 才报告外键不成立。如果成功响应在前一刻已经发给调用方，数据库最终却没有接受这组变更。延迟约束要解决的是事务内部暂时不一致的写入顺序，代价是把一部分错误推迟到更靠近事务出口的位置。业务“完成”的判断必须跟着真正的检查结果走。</p>
+<h2 id="先画出检查时刻，再看-SQL"><a href="#先画出检查时刻，再看-SQL" class="headerlink" title="先画出检查时刻，再看 SQL"></a>先画出检查时刻，再看 SQL</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-set-constraints.html">PostgreSQL 18 的 SET CONSTRAINTS 文档</a>把模式分为 <code>IMMEDIATE</code> 与 <code>DEFERRED</code>。前者通常在每条语句结束时检查，后者到事务提交时检查。创建约束时可以声明 <code>DEFERRABLE INITIALLY DEFERRED</code> 或 <code>DEFERRABLE INITIALLY IMMEDIATE</code>；<code>NOT DEFERRABLE</code> 不会被 <code>SET CONSTRAINTS</code> 改成延迟。<code>SET CONSTRAINTS</code> 只改变当前事务，不是对整张表永久改规则。</p>
+<p>设有订单表引用客户表，迁移程序必须先放入订单，再在同一事务内补入客户。下列模式是说明性 SQL，没有在本站数据库执行；表结构、键值和约束名也是假设。</p>
+<pre><code class="sql">BEGIN;
+SET CONSTRAINTS order_customer_fk DEFERRED;
+INSERT INTO orders (id, customer_id) VALUES (901, 42);
+INSERT INTO customers (id) VALUES (42);
 SET CONSTRAINTS order_customer_fk IMMEDIATE;
+COMMIT;
 </code></pre>
-<p>这个片段未经执行，名称必须换成实际约束。选择明确名称也便于说明本次检查范围；随意使用 ALL 可能把其他可延迟约束一起纳入，不利于理解失败来自哪组修改。模式切换后还会发生什么写入，应一并放入事务设计，不能只看检查点之前的数据。</p>
-<p>检查点通过也不是提交完成。它只确认当时受影响的约束检查通过，后续语句和最终提交仍各有结果。本站十月十六日的<a href="/zh-CN/2026/10/16/postgres-returning-commit-boundary/">RETURNING 与事务边界</a>讨论返回行和提交的区别；这里进一步要求记录是哪一种延迟检查在什么时候给出结果。</p>
-<h2 id="不要扩大成所有约束都能延迟"><a href="#不要扩大成所有约束都能延迟" class="headerlink" title="不要扩大成所有约束都能延迟"></a>不要扩大成所有约束都能延迟</h2><p>同一份文档列出受设置影响的约束种类，包括唯一、主键、外键和排除约束；NOT NULL 与 CHECK 不按这种方式推迟。写“事务中的约束都等到最后”会给读者错误预期。具体约束仍要满足可延迟的声明条件，不能从种类名称直接推断当前模式。</p>
-<p>建议拟议验收覆盖两条相反路径：暂时不一致被后续写入修复，以及暂时不一致一直保留到检查点或提交。后一条必须失败，才能说明测试没有只覆盖方便通过的路径。测试还应经过应用实际管理事务的入口，确认提交异常能返回合适结果，而不是只验证单条插入。</p>
-<p>若事务由框架包装，检查调用方究竟在包装器结束前还是结束后触发成功分支；不能只在单条写入附近捕获异常，遗漏最终提交的错误。</p>
-<p>本篇未执行这些验收。对外完成通知应依据提交结果安排；若使用事务内待发送记录，也要另行验证其交付流程。先把“数据写入、约束检查、提交确认”这三个时点写清，才知道成功提示应该出现在什么位置。</p>
+<p>第三行结束时，客户 42 尚不存在。若这个外键不可延迟或仍处于即时模式，错误会在那条插入语句附近出现。若它确实可延迟且切换生效，事务可以继续；第四行补齐引用后，再主动切回 <code>IMMEDIATE</code>，未检查的修改会当场接受检查。最后提交仍是单独的完成事件。这里的关键不是“先插后补”这种顺序本身，而是最终引用关系确实成立。</p>
+<p>反过来，删掉补入客户的一行，切回即时模式时就应失败。若省略主动切换，失败点通常推到提交。应用日志里同样写着“订单 INSERT 成功”，两种结局却不同：一个事务能提交，另一个必须回滚。这是评审中应该保留的负样本，而不是只证明快乐路径能跑通。</p>
+<h2 id="检查点可以提前暴露错误，却不会替你提交"><a href="#检查点可以提前暴露错误，却不会替你提交" class="headerlink" title="检查点可以提前暴露错误，却不会替你提交"></a>检查点可以提前暴露错误，却不会替你提交</h2><p>官方文档说明，从 <code>DEFERRED</code> 改为 <code>IMMEDIATE</code> 时，尚未检查的修改会被追溯检查；若有违规，<code>SET CONSTRAINTS</code> 失败，模式也不会改变。因此在数据修复段后设置检查点，有助于把错误定位到该段，而非延迟到事务包装器退出时才看到。但该语句通过之后，后续写入仍可能出错，提交也仍可能失败。检查点和提交有不同职责。</p>
+<p>约束名称要认真选择。<code>SET CONSTRAINTS ALL</code> 会改变事务内所有可延迟约束；一个迁移同时触碰外键与唯一键时，宽范围会让错误来源更难辨认。官方还提醒：同一 schema 中约束名不必全局唯一，未限定 schema 的名称按搜索路径查找，可能命中多个同名约束。因此“按名字切换一个约束”不能只凭肉眼推断；评审前应核对表定义、schema、搜索路径和本事务实际使用的名称。</p>
+<p>也不要把“可延迟”扩大成“任何不合法数据都能先写”。PostgreSQL 文档列出的相关种类是 <code>UNIQUE</code>、<code>PRIMARY KEY</code>、外键和 <code>EXCLUDE</code>；<code>NOT NULL</code> 与 <code>CHECK</code> 不通过这项设置推迟。即使属于列出的种类，也需要约束本身声明为可延迟。排查时先查约束定义，再查当前模式，最后查某条语句处于哪个事务，不要只看 ORM 里的一句开关调用。</p>
+<h2 id="应用程序真正需要捕获哪一次失败"><a href="#应用程序真正需要捕获哪一次失败" class="headerlink" title="应用程序真正需要捕获哪一次失败"></a>应用程序真正需要捕获哪一次失败</h2><p>典型事务包装器在回调内部执行几条 SQL，回调返回后才提交。如果业务层在回调里写入“创建成功”日志或触发外部通知，就可能早于最终检查。更稳妥的边界是：数据库提交确认后，调用方才收到成功；提交异常进入与其他事务失败一致的错误分支。对外部邮件或队列投递，还需单独设计提交后的发送或可靠的待发送记录，不能从数据库提交直接推论外部动作已交付。</p>
+<p>验收可以分成三条可判定路径。第一，暂时缺少被引用行，随后在同一事务补齐，检查点与提交应成功。第二，始终缺少被引用行，切回即时模式或提交应失败，最终不得留下订单。第三，在检查点通过后再次制造违规，最终提交仍应失败。这三条要经由应用实际事务入口执行，尤其让测试观察包装器退出时的异常；仅调用单条 <code>INSERT</code> 的测试抓不到最重要的失败位置。</p>
+<p>若目的是批量导入或重排关联记录，延迟检查能给事务一个受控的修复窗口。若根本没有“暂时不一致、随后修复”的必要，默认即时检查通常让错误更靠近原因，也更便于定位。写设计时明确窗口从哪一步开始、在哪一步恢复、在何处强制检查、谁负责处理提交失败，比笼统说“开启延迟约束更方便”更可操作。</p>
+<h2 id="把事务边界放进调用链"><a href="#把事务边界放进调用链" class="headerlink" title="把事务边界放进调用链"></a>把事务边界放进调用链</h2><p>在代码评审里，最该问的不是“SQL 有没有 <code>COMMIT</code>”，而是谁实际控制它。有的数据库客户端自动提交每条语句，有的框架在回调结束后统一提交，还有的事务被上层请求或任务包装。若 <code>SET CONSTRAINTS</code> 在一个连接上执行，而写入却被连接池分配到另一个连接，预期的时序根本不存在。排查要记录同一事务中的连接、起止位置与约束模式；把示例 SQL 复制进应用而不确认连接绑定，不能证明效果。</p>
+<p>数据库拒绝提交后还要决定如何向调用方表达。应区分约束冲突这种可解释的业务或数据错误，与连接中断时提交结果未知的情况；后者不能贸然重试一整组可能已成功的外部动作。若同一请求还修改缓存或发送通知，回滚数据库并不能自动撤销那些动作。把通知放在提交后，或采用可审计的待发送模式，是为了让外部观察顺序与事务事实一致。这里不声称某一种模式能独自保证端到端交付，具体重试与去重需要另外验收。</p>
+<p>批量迁移时还可用分段检查帮助定位：在一个逻辑批次完成后切回即时，核对通过再继续下一段。不过从这时开始该约束会按即时模式检查后续语句，若下一段还需暂时不一致，必须再次明确切换。随手在事务开头设成延迟然后忘掉，往往把最后一条违规留到最难诊断的位置。设计文档最好画出每个批次的“暂时破坏—修复—主动检查”三点，并给失败批次一个可重试的输入标识。</p>
+<p>本站的<a href="/zh-CN/2026/10/16/postgres-returning-commit-boundary/">RETURNING 与事务边界</a>解释了返回行为什么不等于提交。本题再加一层：即使所有写入语句都返回成功，延迟约束仍可能在事务出口否决整组修改。验收记录应写清实际约束声明、模式切换、失败时点和最终库状态；只有后两者一致，成功提示才有依据。</p>
 
       </div>
 
-      
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-set-constraints.html" rel="noopener">www.postgresql.org</a></li></ol></section>
       
         <footer class="article-taxonomy">
           <span>标签</span>
@@ -238,11 +246,11 @@ SET CONSTRAINTS order_customer_fk IMMEDIATE;
         <span>分享</span>
         <div>
           
-            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F19%2Fpostgres-deferred-constraint-timing%2F&text=%E8%AF%AD%E5%8F%A5%E6%88%90%E5%8A%9F%E4%BA%86%EF%BC%8C%E5%BB%B6%E8%BF%9F%E7%BA%A6%E6%9D%9F%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E8%83%BD%E8%AE%A9%E6%8F%90%E4%BA%A4%E5%A4%B1%E8%B4%A5%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F19%2Fpostgres-deferred-constraint-timing%2F&text=%E6%8F%90%E4%BA%A4%E6%89%8D%E5%A4%B1%E8%B4%A5%E7%9A%84%E5%BB%B6%E8%BF%9F%E7%BA%A6%E6%9D%9F%EF%BC%9APostgreSQL%20%E5%BA%94%E7%94%A8%E4%BD%95%E6%97%B6%E8%83%BD%E5%AE%A3%E5%B8%83%E6%88%90%E5%8A%9F%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
           
             <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F19%2Fpostgres-deferred-constraint-timing%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
           
-            <a href="mailto:?subject=%E8%AF%AD%E5%8F%A5%E6%88%90%E5%8A%9F%E4%BA%86%EF%BC%8C%E5%BB%B6%E8%BF%9F%E7%BA%A6%E6%9D%9F%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E8%83%BD%E8%AE%A9%E6%8F%90%E4%BA%A4%E5%A4%B1%E8%B4%A5%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F19%2Fpostgres-deferred-constraint-timing%2F" aria-label="邮件分享" title="邮件分享">@</a>
+            <a href="mailto:?subject=%E6%8F%90%E4%BA%A4%E6%89%8D%E5%A4%B1%E8%B4%A5%E7%9A%84%E5%BB%B6%E8%BF%9F%E7%BA%A6%E6%9D%9F%EF%BC%9APostgreSQL%20%E5%BA%94%E7%94%A8%E4%BD%95%E6%97%B6%E8%83%BD%E5%AE%A3%E5%B8%83%E6%88%90%E5%8A%9F%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F19%2Fpostgres-deferred-constraint-timing%2F" aria-label="邮件分享" title="邮件分享">@</a>
           
         </div>
       </section>
@@ -274,11 +282,13 @@ SET CONSTRAINTS order_customer_fk IMMEDIATE;
 
         
           
-            <a class="toc-link toc-link--h2" href="#允许暂时不一致，是为了完成一组修改">允许暂时不一致，是为了完成一组修改</a>
+            <a class="toc-link toc-link--h2" href="#先画出检查时刻，再看-SQL">先画出检查时刻，再看 SQL</a>
           
-            <a class="toc-link toc-link--h2" href="#可以设检查点，但它不是提前提交">可以设检查点，但它不是提前提交</a>
+            <a class="toc-link toc-link--h2" href="#检查点可以提前暴露错误，却不会替你提交">检查点可以提前暴露错误，却不会替你提交</a>
           
-            <a class="toc-link toc-link--h2" href="#不要扩大成所有约束都能延迟">不要扩大成所有约束都能延迟</a>
+            <a class="toc-link toc-link--h2" href="#应用程序真正需要捕获哪一次失败">应用程序真正需要捕获哪一次失败</a>
+          
+            <a class="toc-link toc-link--h2" href="#把事务边界放进调用链">把事务边界放进调用链</a>
           
         
       </nav></details>
@@ -301,13 +311,13 @@ SET CONSTRAINTS order_customer_fk IMMEDIATE;
           <h2>相关专题</h2>
           <p>把当前文章放回长期跟踪线索里。</p>
           
-            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>225</b></a>
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>245</b></a>
           
-            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>96</b></a>
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>104</b></a>
           
-            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>71</b></a>
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>77</b></a>
           
-            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>45</b></a>
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>49</b></a>
           
         </section>
       
@@ -327,20 +337,20 @@ SET CONSTRAINTS order_customer_fk IMMEDIATE;
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/19/css-sticky-scroll-ancestor/">sticky没有跟着页面滚动，先查祖先overflow</a></h3>
-          <p>2026-10-19</p>
+          <h3><a href="/zh-CN/2026/10/20/http-private-shared-cache-scope/">个性化响应的私人缓存与共享缓存边界</a></h3>
+          <p>2026-10-20</p>
         </article>
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/19/formdata-append-multiple-values/">FormData追加同名字段，不会自动只留最后一个</a></h3>
-          <p>2026-10-19</p>
+          <h3><a href="/zh-CN/2026/10/20/intl-numberformat-display-rounding/">Intl.NumberFormat：展示舍入与业务舍入分开</a></h3>
+          <p>2026-10-20</p>
         </article>
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/19/http-415-request-media-type/">收到415，先核对发出的正文与内容声明</a></h3>
-          <p>2026-10-19</p>
+          <h3><a href="/zh-CN/2026/10/20/javascript-hasown-prototype-boundary/">Object.hasOwn：把自有字段与原型继承分开</a></h3>
+          <p>2026-10-20</p>
         </article>
       
     </div>
@@ -360,7 +370,7 @@ SET CONSTRAINTS order_customer_fk IMMEDIATE;
 </div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
     </div>
     
-    <script src="/js/main.js?v=0.4.0" defer></script>
+    <script src="/js/main.js?v=0.4.1" defer></script>
     
     
     <script src="/js/studio.js" defer></script>

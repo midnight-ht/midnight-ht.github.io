@@ -1,0 +1,388 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why two reads in one Read Committed transaction can differ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Follow two transactions to see how statement snapshots, own writes, and concurrent commits shape each read.">
+  
+  
+    <meta name="keywords" content="PostgreSQL Read Committed,statement snapshot,transaction isolation">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/20/postgres-read-committed-snapshots/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/20/postgres-read-committed-snapshots/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/20/postgres-read-committed-snapshots/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/20/postgres-read-committed-snapshots/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why two reads in one Read Committed transaction can differ | Midnight blog">
+    <meta property="og:description" content="Follow two transactions to see how statement snapshots, own writes, and concurrent commits shape each read.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/20/postgres-read-committed-snapshots/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/20/postgres-read-committed-snapshots/#webpage","url":"https://www.zyweb.vip/en/2026/10/20/postgres-read-committed-snapshots/","name":"Why two reads in one Read Committed transaction can differ | Midnight blog","description":"Follow two transactions to see how statement snapshots, own writes, and concurrent commits shape each read.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/20/postgres-read-committed-snapshots/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/20/postgres-read-committed-snapshots/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/20/postgres-read-committed-snapshots/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/20/postgres-read-committed-snapshots/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/20/postgres-read-committed-snapshots/","headline":"Why two reads in one Read Committed transaction can differ","description":"Follow two transactions to see how statement snapshots, own writes, and concurrent commits shape each read.","inLanguage":"en","datePublished":"2026-10-20T08:00:08.000Z","dateModified":"2026-10-20T08:00:08.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.postgresql.org/docs/18/transaction-iso.html"],"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/20/postgres-read-committed-snapshots/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why two reads in one Read Committed transaction can differ","item":"https://www.zyweb.vip/en/2026/10/20/postgres-read-committed-snapshots/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/20/postgres-read-committed-snapshots/">zh-CN</option><option value="/en/2026/10/20/postgres-read-committed-snapshots/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/20/postgres-read-committed-snapshots/">zh-CN</option><option value="/en/2026/10/20/postgres-read-committed-snapshots/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-20T08:00:08.000Z">2026-10-20</time>
+    </div>
+
+    <h1>Why two reads in one Read Committed transaction can differ</h1>
+
+    
+      <p class="post-hero__summary">Follow two transactions to see how statement snapshots, own writes, and concurrent commits shape each read.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-20T08:00:08.000Z">2026-10-20</time> · Estimated read 14 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/20/postgres-read-committed-snapshots/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/20/postgres-read-committed-snapshots/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>In PostgreSQL Read Committed, two SELECT statements in one transaction can use different committed snapshots.</li><li>A preliminary read does not protect a later write; put eligibility into the write or design a stronger transaction strategy.</li><li>Distinguish concurrent commits from own writes with an ordered two-session reproduction before diagnosing isolation behavior.</li></ul></section>
+      <div class="article-content">
+        <p>Two balance queries run inside the same transaction. The first returns 100 and the second returns 80, although that transaction did not change the balance. This can be expected behavior under PostgreSQL’s default <code>Read Committed</code> isolation level. Each <code>SELECT</code> starts with a snapshot of data committed before that statement begins. <code>BEGIN</code> does not freeze one database image for all subsequent statements. If another transaction commits between the two reads, the second read can see its change.</p>
+<p>Make the timing explicit. Wallet 42 starts with a balance of 100. Session A begins a transaction and reads 100. Session B changes that row to 80 and commits. Session A executes the same query again and can read 80. Both reads belong to A’s transaction, but the second statement starts after B’s commit. The <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/transaction-iso.html">PostgreSQL 18 isolation reference</a> says <code>Read Committed</code> is its default level and specifically warns that successive <code>SELECT</code> commands can see different data within one transaction.</p>
+<pre><code class="sql">-- Session A; assume wallet(42).balance initially equals 100
+BEGIN;
+SELECT balance FROM wallet WHERE id = 42; -- expected: 100
+-- Session B runs UPDATE wallet SET balance = 80 WHERE id = 42; COMMIT;
+SELECT balance FROM wallet WHERE id = 42; -- can see: 80
+COMMIT;
+</code></pre>
+<p>The comments describe an interleaving to test, not output captured from this environment. A statement reads from its own start-of-command view of committed data. A commit that happens only after that statement has begun should not be imagined as an arbitrary mid-query change to every part of its result. Session A’s own writes are another exception to a simplistic “only earlier commits” description. If A updates the row to 90 and then queries it, A can see its own modification. When reconstructing a surprising value, mark each statement’s start, each concurrent commit and any writes within the reading transaction.</p>
+<p>Consider a service that checks inventory twice. The first read says ten units are available. After other work, the second says eight. If the service uses the first number as a stable prerequisite for an order, wrapping both reads in <code>BEGIN</code> has not supplied that guarantee under <code>Read Committed</code>. Define the actual invariant instead: is the page merely showing the latest count, must a two-unit deduction happen only when two units remain, or must several rows satisfy a joint constraint? These are different questions and call for different write and isolation designs.</p>
+<p>For a single-row deduction, the qualification can be placed in the write itself:</p>
+<pre><code class="sql">UPDATE inventory
+SET available = available - 2
+WHERE sku = &#39;A&#39; AND available &gt;= 2
+RETURNING available;
+</code></pre>
+<p>The application should treat a zero-row result as a failed deduction rather than announcing success based on an earlier read. In <code>Read Committed</code>, an update contending with another writer can wait for that writer, then reevaluate its condition against the updated row. The stored value and final qualification, not a stale preliminary read, determine whether this write proceeds. That still does not prove an entire order workflow is safe: other tables, side effects and transaction rollback need their own rules and tests.</p>
+<p>If the requirement is that repeated reads in one transaction use a consistent committed view, PostgreSQL offers <code>Repeatable Read</code>. Its snapshot begins with the first non-transaction-control statement in the transaction, not simply the moment <code>BEGIN</code> is typed. The transaction can still see its own writes. A concurrent update conflict can require retrying the whole transaction. Choosing that level is a decision about a particular consistency promise and its failure path, not a magic switch that guarantees every cross-row business invariant. The site’s <a href="/en/2026/10/09/postgres-isolation-retries/">isolation and retry guide</a> discusses the larger retry boundary.</p>
+<p>The opposite misconception is that <code>Read Committed</code> gives no consistency even within a single ordinary query. The documented boundary is each command’s start. Two separate commands may see different committed states because they have different start times; do not project that observation onto an ordinary <code>SELECT</code> as though every row can be read from a fresh arbitrary instant. Complex writes, triggers and waits introduce their own details. This article’s worked model concerns ordinary reads and the explicit single-row update above. A report that needs a shared view across several queries should be designed for that need rather than patched by caching only its first number.</p>
+<p>A useful incident record includes the actual isolation level, transaction boundaries, connection identity, query start and end times, and the competing writer’s commit order. Without that sequence, “MVCC changed the result” is only a hypothesis. The application might have written the row itself, switched data sources, changed query predicates or served a cached value. Build a reproduction with two independent sessions and a deliberate synchronization point; arbitrary sleeps are weak evidence of order. Save the PostgreSQL version, statements and raw outputs when the experiment is run.</p>
+<p>Include a negative control. Repeated reads with no own write and no new relevant commit should not change for no reason. Then separately test a concurrent commit and an own-write case. These three observations distinguish the mechanisms that a vague “transaction read changed” report blends together. Check the application endpoint too, because an ORM or connection pool can add behavior beyond the simple SQL schedule.</p>
+<p>Different readings are not necessarily a defect. A dashboard that promises current information may appropriately show 100 and then 80. An order approval that promises not to overspend needs its eligibility condition tied to a protected write or a suitable stronger isolation strategy, with its rejection and retry paths specified. The timeline above is a reading of PostgreSQL 18’s official isolation documentation. I did not run a two-session PostgreSQL experiment here, so it is a documented expectation, not a measured result from this environment.</p>
+<p>Be precise about what a retry means if the service changes isolation levels. Retrying just the last read while retaining decisions made from an older view cannot restore the transaction’s intended invariant. The unit of retry must include the reads, decisions and writes whose assumptions depended on one another, while external side effects must be handled so they are not duplicated. That design question sits above the narrow snapshot fact, but it is often the practical reason to investigate the fact in the first place.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/transaction-iso.html" rel="noopener">www.postgresql.org</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/en/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F20%2Fpostgres-read-committed-snapshots%2F&text=Why%20two%20reads%20in%20one%20Read%20Committed%20transaction%20can%20differ" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F20%2Fpostgres-read-committed-snapshots%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20two%20reads%20in%20one%20Read%20Committed%20transaction%20can%20differ&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F20%2Fpostgres-read-committed-snapshots%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/20/prometheus-keep-firing-resolution/">
+              <span>Previous Post</span>
+              <strong>Why a recovered metric can leave an alert firing</strong>
+              <small>2026-10-20</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/20/postgres-onconflict-where-returning/">
+              <span>Next Post</span>
+              <strong>Why ON CONFLICT can succeed while RETURNING yields no row</strong>
+              <small>2026-10-20</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>245</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>104</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>78</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>49</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/20/http-private-shared-cache-scope/">Cache-Control private: Decide Which Cache May Store the Response</a></h3>
+          <p>2026-10-20</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/20/intl-numberformat-display-rounding/">Intl.NumberFormat: Display Rounding Is Not Settlement</a></h3>
+          <p>2026-10-20</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/20/javascript-hasown-prototype-boundary/">Object.hasOwn: Separate Supplied Fields From Inherited Values</a></h3>
+          <p>2026-10-20</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
