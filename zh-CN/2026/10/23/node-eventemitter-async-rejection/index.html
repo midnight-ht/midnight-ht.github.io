@@ -1,0 +1,406 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Node.js 异步监听器拒绝后，谁接住 EventEmitter 的错误 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="区分 emit 的同步调用、监听器 Promise 拒绝与业务完成，用 captureRejections 设计明确的错误路由及验证。">
+  
+  
+    <meta name="keywords" content="EventEmitter,captureRejections,async listener">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/23/node-eventemitter-async-rejection/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/23/node-eventemitter-async-rejection/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/23/node-eventemitter-async-rejection/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/23/node-eventemitter-async-rejection/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Node.js 异步监听器拒绝后，谁接住 EventEmitter 的错误 | Midnight blog">
+    <meta property="og:description" content="区分 emit 的同步调用、监听器 Promise 拒绝与业务完成，用 captureRejections 设计明确的错误路由及验证。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/23/node-eventemitter-async-rejection/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/node-eventemitter-async-rejection/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/23/node-eventemitter-async-rejection/","name":"Node.js 异步监听器拒绝后，谁接住 EventEmitter 的错误 | Midnight blog","description":"区分 emit 的同步调用、监听器 Promise 拒绝与业务完成，用 captureRejections 设计明确的错误路由及验证。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/node-eventemitter-async-rejection/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/node-eventemitter-async-rejection/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/node-eventemitter-async-rejection/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/node-eventemitter-async-rejection/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/23/node-eventemitter-async-rejection/","headline":"Node.js 异步监听器拒绝后，谁接住 EventEmitter 的错误","description":"区分 emit 的同步调用、监听器 Promise 拒绝与业务完成，用 captureRejections 设计明确的错误路由及验证。","inLanguage":"zh-CN","datePublished":"2026-10-22T19:24:39.000Z","dateModified":"2026-10-22T19:24:39.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://nodejs.org/docs/latest-v22.x/api/events.html"],"keywords":"Development, Node.js, Events"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/node-eventemitter-async-rejection/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Node.js 异步监听器拒绝后，谁接住 EventEmitter 的错误","item":"https://www.zyweb.vip/zh-CN/2026/10/23/node-eventemitter-async-rejection/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/23/node-eventemitter-async-rejection/" selected>zh-CN</option><option value="/en/2026/10/23/node-eventemitter-async-rejection/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/23/node-eventemitter-async-rejection/" selected>zh-CN</option><option value="/en/2026/10/23/node-eventemitter-async-rejection/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-22T19:24:39.000Z">2026-10-23</time>
+    </div>
+
+    <h1>Node.js 异步监听器拒绝后，谁接住 EventEmitter 的错误</h1>
+
+    
+      <p class="post-hero__summary">区分 emit 的同步调用、监听器 Promise 拒绝与业务完成，用 captureRejections 设计明确的错误路由及验证。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-22T19:24:39.000Z">2026-10-23</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/23/node-eventemitter-async-rejection/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/23/node-eventemitter-async-rejection/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>emit 同步分发，不能证明异步任务完成。</li><li>captureRejections 只为返回的监听器拒绝提供路由。</li><li>错误接收、耐久接纳与终态查询要分别验证。</li></ul></section>
+      <div class="article-content">
+        <p>给 EventEmitter 注册 async 监听器后，emit 外层的 try/catch 不能自动接住稍后发生的 Promise 拒绝。Node.js 22 的 captureRejections 可以把监听器返回的拒绝导向指定接收方，但它不把 emit 变成等待全部业务完成的 Promise 接口。若调用方需要知道任务何时结束，应先明确完成合同，再选择错误路由。</p>
+<h2 id="同步调用不等于异步工作已经结束"><a href="#同步调用不等于异步工作已经结束" class="headerlink" title="同步调用不等于异步工作已经结束"></a>同步调用不等于异步工作已经结束</h2><p><a target="_blank" rel="noopener" href="https://nodejs.org/docs/latest-v22.x/api/events.html">Node.js 22 Events 文档</a>说明，EventEmitter 按注册顺序同步调用监听器，并忽略监听器返回值。这里的同步，描述调用监听函数的时机；监听器内部开始的异步工作仍然可能在后面完成。把函数标成 async，也不会让 emit 自动收集返回的 Promise 并等待它们。</p>
+<p>假设一个导出服务在接受任务后发送 exportRequested 事件。监听器读取数据，再写入文件。emit 返回时，调用方如果立即把任务状态改成 completed，可能早于文件写入。即使导出最终成功，这个完成时机也没有依据；若写入稍后失败，接口早已返回成功，外层同步捕获无法追溯改变那次回答。这个流程是未执行的假设，不是当前站点的导出记录。</p>
+<p>下面只展示错误路由所需的接口形状。persistExport 与 recordFailure 是待实现的业务函数，代码未运行，不能复制后当成完整导出服务。特别是失败记录自身也需要明确的失败处理，不能默认日志或数据库永远可用。</p>
+<pre><code class="js">import { EventEmitter } from &#39;node:events&#39;;
+const bus = new EventEmitter({ captureRejections: true });
+bus.on(&#39;error&#39;, (error) =&gt; {
+  recordFailure(error); // 同步接收方，需另行定义记录失败的处理
+});
+bus.on(&#39;exportRequested&#39;, async (job) =&gt; {
+  await persistExport(job);
+});
+bus.emit(&#39;exportRequested&#39;, { id: &#39;example-job&#39; });
+</code></pre>
+<p>该选项默认关闭。开启后，官方文档描述它为返回的 Promise 安装拒绝处理，再异步路由到实例的拒绝处理符号方法；若没有该方法，则路由到 error 事件。这给出了可解释的接收方向，但没有定义导出任务的重试、取消、状态持久化或调用方等待。一个程序有错误接收器，只能说明错误有人接，不能说明业务已经恢复。</p>
+<h2 id="error-监听器为何不宜继续写成-async"><a href="#error-监听器为何不宜继续写成-async" class="headerlink" title="error 监听器为何不宜继续写成 async"></a>error 监听器为何不宜继续写成 async</h2><p>文档明确建议不要把 error 事件处理函数写成 async，以免捕获产生的错误继续形成处理循环。反例是导出失败后，error 监听器再异步写数据库，而写数据库也拒绝；开发者以为同一选项会把每一层都照顾好。实际设计必须说明第二次失败如何被发现，不能无限把错误重新抛给同一个入口。</p>
+<p>可以让同步接收器把错误交给一个具有明确接纳和失败合同的队列，也可以在受控边界显式处理异步记录的拒绝。哪种方式合适取决于允许丢失什么、进程如何停机、是否需要持久化。这不是建议把所有失败都吞掉，恰恰是要求每次转交有真实接收结果。打印一行错误与持久保存失败状态，是不同的完成标准。</p>
+<p>全局开启 captureRejections 会改变后续新建实例的默认行为。对于局部组件，显式在实例上配置更容易让评审者看见边界；若使用全局设置，就盘点依赖库和实例创建顺序。不要因为某个实例能接到拒绝，就推断整个进程的所有异步调用都进入了同一条路线。</p>
+<p>如果任务是请求必须等待的单项操作，直接调用返回 Promise 的业务函数并 await，往往比把完成语义藏进通知事件更清楚。若确实是多个订阅者分别消费通知，则应定义每个订阅者的责任、失败状态与可观察结果。需要耐久交付时，进程内事件本身也不提供消息存储保证；不能仅加一个捕获选项就承诺进程重启后任务仍在。</p>
+<h2 id="验证时分开发送、拒绝与完成"><a href="#验证时分开发送、拒绝与完成" class="headerlink" title="验证时分开发送、拒绝与完成"></a>验证时分开发送、拒绝与完成</h2><p>拟议测试先准备一个会稍后拒绝的监听器，确认 emit 已经返回，再确认错误接收方得到相应任务身份与错误。然后分别覆盖同步抛错、成功完成、没有监听器、存在自定义拒绝方法的情况。每一种预期都应来自所用 API 的合同，不要把所有异常混为一种“捕获成功”。测试进程退出的路径可以放在独立子进程中观察，避免测试运行器自身的处理掩盖结果。</p>
+<p>还要检查多个监听器的情况。第一个监听器开始异步写文件，第二个监听器同步更新计数，这不意味着计数一定反映文件完成。可以使用受控 Promise 让两个监听器按相反顺序完成，观察任务状态是否错误依赖注册顺序。对于监听器内部派生但没有返回或等待的另一项异步工作，不能推断选项会替它追踪所有后代任务。</p>
+<p>资源问题与错误路由也应分开。若事件持续产生，而消费方越来越慢，捕获拒绝不限制同时运行任务数。应评审接纳速率、等待队列和取消路径。相关的<a href="/zh-CN/2026/10/13/node-stream-backpressure/">流背压与保留数据</a>讨论生产与消费速度如何形成资源压力；事件发送次数本身不是处理吞吐的证明。</p>
+<h3 id="emit-返回-true，是否代表导出被接受？"><a href="#emit-返回-true，是否代表导出被接受？" class="headerlink" title="emit 返回 true，是否代表导出被接受？"></a>emit 返回 true，是否代表导出被接受？</h3><p>它最多能支持 EventEmitter 自身约定的监听器存在情况，不能独自代表业务系统已经持久接纳任务。若接口需要返回 accepted，应在可靠任务记录或其他明确接纳步骤完成后产生该状态；若接口承诺 completed，则等待可验证的终态。把布尔返回值写成业务回执，会把同步分发信号扩大成没有来源的承诺。</p>
+<p>并发失败还需要独立关联。假设导出甲与乙先后开始，乙先拒绝，甲随后拒绝；接收器若只保存一个全局 lastError，第二次写入会抹去第一次失败的归属。拟议验收应保留两条任务记录和对应错误，分别查询两项终态，并确认一次失败不会把另一任务标为成功或失败。这里的任务标识是业务记录，不能依赖错误到达顺序临时推断。</p>
+<p>若接收方需要事件参数，可评估文档提供的拒绝符号方法并核对参数合同，或在业务函数中显式保留任务身份。无论采用哪条路线，都应检查错误对象是否包含不适合返回用户的细节。内部诊断信息与用户可执行的失败说明可以关联，却无需把整个错误堆栈当作接口结果发送。</p>
+<p>本文依据读取时标为 v22.23.4 的二十二版本分支文档，没有执行示例、故障注入或真实导出。接收器、状态记录与完成通知应在同一份验收中对应起来：哪次发送启动了什么工作，哪个失败被谁接住，用户最终能查到什么状态。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://nodejs.org/docs/latest-v22.x/api/events.html" rel="noopener">Events | Node.js v22.23.4 Documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--node-js" href="/zh-CN/tags/Node.js/">Node.js</a>
+          
+            <a class="tag tag--events" href="/zh-CN/tags/Events/">Events</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fnode-eventemitter-async-rejection%2F&text=Node.js%20%E5%BC%82%E6%AD%A5%E7%9B%91%E5%90%AC%E5%99%A8%E6%8B%92%E7%BB%9D%E5%90%8E%EF%BC%8C%E8%B0%81%E6%8E%A5%E4%BD%8F%20EventEmitter%20%E7%9A%84%E9%94%99%E8%AF%AF" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fnode-eventemitter-async-rejection%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Node.js%20%E5%BC%82%E6%AD%A5%E7%9B%91%E5%90%AC%E5%99%A8%E6%8B%92%E7%BB%9D%E5%90%8E%EF%BC%8C%E8%B0%81%E6%8E%A5%E4%BD%8F%20EventEmitter%20%E7%9A%84%E9%94%99%E8%AF%AF&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fnode-eventemitter-async-rejection%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/23/npm-overrides-direct-dependency-spec/">
+              <span>上一篇</span>
+              <strong>npm overrides 报 EOVERRIDE：直接依赖要匹配同一份规格</strong>
+              <small>2026-10-23</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/23/node-asynclocalstorage-run-context/">
+              <span>下一篇</span>
+              <strong>AsyncLocalStorage：用 run 划定请求上下文的入口</strong>
+              <small>2026-10-23</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#同步调用不等于异步工作已经结束">同步调用不等于异步工作已经结束</a>
+          
+            <a class="toc-link toc-link--h2" href="#error-监听器为何不宜继续写成-async">error 监听器为何不宜继续写成 async</a>
+          
+            <a class="toc-link toc-link--h2" href="#验证时分开发送、拒绝与完成">验证时分开发送、拒绝与完成</a>
+          
+            <a class="toc-link toc-link--h3" href="#emit-返回-true，是否代表导出被接受？">emit 返回 true，是否代表导出被接受？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>277</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>122</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>85</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>57</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/node-asynclocalstorage-run-context/">AsyncLocalStorage：用 run 划定请求上下文的入口</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/css-container-query-size-containment/">屏幕很宽，侧栏卡片为什么仍然挤成一团？</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/grpc-status-trailers-result/">HTTP 已经返回 200，gRPC 调用为什么仍然失败？</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

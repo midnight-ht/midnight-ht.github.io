@@ -1,0 +1,393 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Kubernetes 拓扑分散：先算合格域，再理解 maxSkew | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用双域对照计算解释 minDomains、硬性偏斜与软偏好，并区分计数和实际容量。">
+  
+  
+    <meta name="keywords" content="topologySpreadConstraints,maxSkew,minDomains">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/23/kubernetes-topology-spread-eligible-domains/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/23/kubernetes-topology-spread-eligible-domains/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/23/kubernetes-topology-spread-eligible-domains/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/23/kubernetes-topology-spread-eligible-domains/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Kubernetes 拓扑分散：先算合格域，再理解 maxSkew | Midnight blog">
+    <meta property="og:description" content="用双域对照计算解释 minDomains、硬性偏斜与软偏好，并区分计数和实际容量。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/23/kubernetes-topology-spread-eligible-domains/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/kubernetes-topology-spread-eligible-domains/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/23/kubernetes-topology-spread-eligible-domains/","name":"Kubernetes 拓扑分散：先算合格域，再理解 maxSkew | Midnight blog","description":"用双域对照计算解释 minDomains、硬性偏斜与软偏好，并区分计数和实际容量。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/kubernetes-topology-spread-eligible-domains/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/kubernetes-topology-spread-eligible-domains/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/kubernetes-topology-spread-eligible-domains/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/kubernetes-topology-spread-eligible-domains/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/23/kubernetes-topology-spread-eligible-domains/","headline":"Kubernetes 拓扑分散：先算合格域，再理解 maxSkew","description":"用双域对照计算解释 minDomains、硬性偏斜与软偏好，并区分计数和实际容量。","inLanguage":"zh-CN","datePublished":"2026-10-22T19:24:39.000Z","dateModified":"2026-10-22T19:24:39.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/"],"keywords":"Delivery, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/kubernetes-topology-spread-eligible-domains/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Kubernetes 拓扑分散：先算合格域，再理解 maxSkew","item":"https://www.zyweb.vip/zh-CN/2026/10/23/kubernetes-topology-spread-eligible-domains/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/23/kubernetes-topology-spread-eligible-domains/" selected>zh-CN</option><option value="/en/2026/10/23/kubernetes-topology-spread-eligible-domains/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/23/kubernetes-topology-spread-eligible-domains/" selected>zh-CN</option><option value="/en/2026/10/23/kubernetes-topology-spread-eligible-domains/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-22T19:24:39.000Z">2026-10-23</time>
+    </div>
+
+    <h1>Kubernetes 拓扑分散：先算合格域，再理解 maxSkew</h1>
+
+    
+      <p class="post-hero__summary">用双域对照计算解释 minDomains、硬性偏斜与软偏好，并区分计数和实际容量。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-22T19:24:39.000Z">2026-10-23</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/23/kubernetes-topology-spread-eligible-domains/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/23/kubernetes-topology-spread-eligible-domains/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>先确定匹配 Pod 与合格域。</li><li>域不足 minDomains 时最小值按零计算。</li><li>软偏好不能取消其他硬调度约束。</li></ul></section>
+      <div class="article-content">
+        <p>集群标了三个可用区，新增副本却停在 Pending，不能只数地图上的三个区。Kubernetes 拓扑分散约束要先确定哪些域参与计数，再计算候选节点上的偏斜；<code>maxSkew: 1</code> 既不是“每个区必须有一个副本”，也不会替其他调度约束创造可用节点。</p>
+<h2 id="最小值来自哪些域"><a href="#最小值来自哪些域" class="headerlink" title="最小值来自哪些域"></a>最小值来自哪些域</h2><p><a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/">Kubernetes 拓扑分散文档</a>说明，采用 <code>DoNotSchedule</code> 时，偏斜与目标域的匹配 Pod 数和全局最小值有关；合格域不足 <code>minDomains</code> 时，全局最小值按零计算。采用 <code>ScheduleAnyway</code> 则改变为减少偏斜的调度偏好。本文围绕这两个分支做纸面推演，未在集群运行调度实验。</p>
+<p>一个域由拓扑标签键值确定，例如同一 <code>topology.kubernetes.io/zone</code> 值下的节点属于同一区。计数对象又由 Pod 标签选择器决定。节点有区标签，但不符合相应节点选择条件，未必参与这条约束的域集合；Pod 在同一区，但不匹配这条约束的标签，也未必参与数量计算。先写明“统计谁、在哪些域统计”，再谈均匀，才能避免把节点总数当成副本计数。</p>
+<p>还要区分计数资格与最终可调度性。<code>nodeAffinityPolicy</code> 和 <code>nodeTaintsPolicy</code> 控制某些节点条件是否用于确定分散计算范围；它们不等于取消节点亲和、污点容忍或资源要求本身。即使某域参与统计，也可能暂时没有节点能满足新 Pod 的全部条件。不要把“它被算进最小值”读成“调度器保证能把 Pod 放进去”。这些可选字段的可用性与功能状态应按目标集群版本确认，不能仅靠在线文档接受配置就推断旧环境行为。</p>
+<h2 id="用两次计算看出-minDomains-的作用"><a href="#用两次计算看出-minDomains-的作用" class="headerlink" title="用两次计算看出 minDomains 的作用"></a>用两次计算看出 minDomains 的作用</h2><p>假设三个区叫甲、乙、丙，三个区的匹配副本数原来都是一个。现在丙区节点不满足此 Pod 的节点选择条件，并在本例所采用的域资格策略下被排除，只剩甲、乙两个合格域。新 Pod 使用硬性分散，<code>maxSkew</code> 为一，且明确配置 <code>minDomains</code> 为三。忽略其他限制只是为了单独推演本约束，数字不来自真实调度日志。</p>
+<p>本例还明确约定：现有被计数副本与新增 Pod 都带 <code>app=orders</code>，约束的 <code>labelSelector</code> 也选择这个标签；<code>nodeAffinityPolicy</code> 采用 <code>Honor</code>。新增 Pod 的节点选择只接受甲乙两区，故丙区不进入合格域集合。各区在本例没有会改变资格的污点差异。这样，新增副本确实会增加目标域计数，排除丙区也有明确策略依据。</p>
+<p>合格域只有两个，少于要求的三个，所以计算基准不是甲乙现有数量中的最小一，而是零。把新 Pod 放进甲，会让甲的计数变成二，与零的偏斜为二，超过一；放进乙同理。这条约束阻止继续向两个区堆副本。它表达的是团队希望在域数量不足时保留故障分散要求，代价可能是副本暂时等待，并不是调度器漏看了剩余容量。</p>
+<p>再做对照：保持甲乙各一个，改为不要求至少三个合格域，其他条件不变。若有效最小域要求已经满足，全局最小值是一；放进甲后计数为二，偏斜为一，本条约束可以允许这个候选位置。这仅说明分散约束这一项可以满足，最终还要通过资源、亲和及其他过滤。两次计算不同，是资格与基准不同，不是 <code>maxSkew</code> 在某次失灵。</p>
+<p>如果采用 <code>ScheduleAnyway</code>，它会成为偏好而非这条硬拒绝条件。但软偏好仍受其他硬条件约束，也不能承诺负载一定平均。这里需要产品与运维共同选择：容量不足时宁可部分副本等待，还是允许剩余区承载更多副本。把配置从硬改软确实改变了可用性与故障分散之间的取舍，不能只以 Pending 消失作为改动成功的全部证据。</p>
+<h2 id="两个容易把计算算错的条件"><a href="#两个容易把计算算错的条件" class="headerlink" title="两个容易把计算算错的条件"></a>两个容易把计算算错的条件</h2><p>标签选择器选错对象，会让纸面副本数与调度器使用的计数不同。假设新旧版本都带 <code>app=orders</code>，约束只选择这个标签，旧版本副本也会参与统计；若团队本意是按版本计算，需要审查实际选择器及相关版本支持，而不是拿新版本列表直接代入。选择器不能为了让某次发布通过而随意收窄，否则多版本并存时的故障分布可能与业务期待不同。</p>
+<p>另一种失败是部分节点缺少拓扑标签。不要凭节点显示在某云区域，就假设 Kubernetes 已获得对应标签。核对实际节点标签和值，确认每个预期域是否出现在调度器可见范围。自动扩容也需要理解约束所期待的节点组，新增一台仍不满足选择条件的节点，不会自动补齐缺失域。</p>
+<h2 id="恢复第三个区后，旧副本会自动搬回去吗？"><a href="#恢复第三个区后，旧副本会自动搬回去吗？" class="headerlink" title="恢复第三个区后，旧副本会自动搬回去吗？"></a>恢复第三个区后，旧副本会自动搬回去吗？</h2><p>不能从这条约束推导出自动再平衡。它主要约束新 Pod 的调度；原有副本的位置不会仅因域恢复就自动重排。若需要恢复分布，应另行设计受控替换或再平衡流程，核对容量、业务影响与中断预算。副本重新分散与应用始终可服务是两份需要分别观察的结果。</p>
+<p>因此验收也应分阶段。先记录 Pod 的实际约束、选择器、节点标签、域资格策略以及匹配计数，在调度前算出预期候选。再在受控环境中分别减少一个域、恢复域、改变匹配标签，观察调度事件与新增 Pod 的落点。若事件同时提示资源不足，要把资源过滤和偏斜拒绝分开，不把所有 Pending 都归给同一个字段。</p>
+<p>还应把副本数量与业务流量分布分开。假设甲区有两个轻任务副本，乙区只有一个承担长任务的副本，计数接近平衡并不表示处理量或故障影响相同。分散约束按匹配对象计数，容量规划仍需核对各区节点规格、请求入口和应用处理模式。若验收目标是单区故障后仍能接受订单，就需要在剩余区实际验证任务结果，不能把偏斜计算满足条件直接等同于服务级别目标达成。</p>
+<p>扩容、域故障与滚动更新可能在不同时间改变计数，单次截图不是长期分散证明。记录每一步的对象版本和观察时点，确认新旧副本如何共同影响结果。与退出期间容量变化有关的讨论可参看<a href="/zh-CN/2026/10/09/kubernetes-termination-budget/">Pod 终止时间预算</a>。分散策略的验收结论应写成“这些条件下允许或阻止哪些新增落点”，再另行核对业务承载能力。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/" rel="noopener">Pod Topology Spread Constraints | Kubernetes</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fkubernetes-topology-spread-eligible-domains%2F&text=Kubernetes%20%E6%8B%93%E6%89%91%E5%88%86%E6%95%A3%EF%BC%9A%E5%85%88%E7%AE%97%E5%90%88%E6%A0%BC%E5%9F%9F%EF%BC%8C%E5%86%8D%E7%90%86%E8%A7%A3%20maxSkew" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fkubernetes-topology-spread-eligible-domains%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Kubernetes%20%E6%8B%93%E6%89%91%E5%88%86%E6%95%A3%EF%BC%9A%E5%85%88%E7%AE%97%E5%90%88%E6%A0%BC%E5%9F%9F%EF%BC%8C%E5%86%8D%E7%90%86%E8%A7%A3%20maxSkew&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fkubernetes-topology-spread-eligible-domains%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/23/node-asynclocalstorage-run-context/">
+              <span>上一篇</span>
+              <strong>AsyncLocalStorage：用 run 划定请求上下文的入口</strong>
+              <small>2026-10-23</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/23/kubernetes-graceful-node-shutdown-budget/">
+              <span>下一篇</span>
+              <strong>Kubernetes 节点关机：Pod 宽限期还要服从节点预算</strong>
+              <small>2026-10-23</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#最小值来自哪些域">最小值来自哪些域</a>
+          
+            <a class="toc-link toc-link--h2" href="#用两次计算看出-minDomains-的作用">用两次计算看出 minDomains 的作用</a>
+          
+            <a class="toc-link toc-link--h2" href="#两个容易把计算算错的条件">两个容易把计算算错的条件</a>
+          
+            <a class="toc-link toc-link--h2" href="#恢复第三个区后，旧副本会自动搬回去吗？">恢复第三个区后，旧副本会自动搬回去吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>277</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>122</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>85</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>57</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/kubernetes-graceful-node-shutdown-budget/">Kubernetes 节点关机：Pod 宽限期还要服从节点预算</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/otel-context-propagator-format-compatibility/">OpenTelemetry 跨服务传播：注入格式和提取格式必须相认</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/21/actions-environment-review-workflow-change/">把发布保护分成环境、工作流和输入三道检查</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

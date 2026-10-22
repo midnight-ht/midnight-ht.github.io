@@ -1,0 +1,390 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Use If-None-Match for Create-Only Intent | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Explain concurrent creation, recovery after 412, and name reuse with an enforced create-only precondition.">
+  
+  
+    <meta name="keywords" content="If-None-Match,conditional creation,concurrent writes">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/23/http-if-none-match-create-only/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/23/http-if-none-match-create-only/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/23/http-if-none-match-create-only/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/23/http-if-none-match-create-only/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Use If-None-Match for Create-Only Intent | Midnight blog">
+    <meta property="og:description" content="Explain concurrent creation, recovery after 412, and name reuse with an enforced create-only precondition.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/23/http-if-none-match-create-only/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/23/http-if-none-match-create-only/#webpage","url":"https://www.zyweb.vip/en/2026/10/23/http-if-none-match-create-only/","name":"Use If-None-Match for Create-Only Intent | Midnight blog","description":"Explain concurrent creation, recovery after 412, and name reuse with an enforced create-only precondition.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/23/http-if-none-match-create-only/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/23/http-if-none-match-create-only/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/23/http-if-none-match-create-only/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/23/http-if-none-match-create-only/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/23/http-if-none-match-create-only/","headline":"Use If-None-Match for Create-Only Intent","description":"Explain concurrent creation, recovery after 412, and name reuse with an enforced create-only precondition.","inLanguage":"en","datePublished":"2026-10-22T19:24:39.000Z","dateModified":"2026-10-22T19:24:39.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.2"],"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/23/http-if-none-match-create-only/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Use If-None-Match for Create-Only Intent","item":"https://www.zyweb.vip/en/2026/10/23/http-if-none-match-create-only/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/23/http-if-none-match-create-only/">zh-CN</option><option value="/en/2026/10/23/http-if-none-match-create-only/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/23/http-if-none-match-create-only/">zh-CN</option><option value="/en/2026/10/23/http-if-none-match-create-only/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-22T19:24:39.000Z">2026-10-23</time>
+    </div>
+
+    <h1>Use If-None-Match for Create-Only Intent</h1>
+
+    
+      <p class="post-hero__summary">Explain concurrent creation, recovery after 412, and name reuse with an enforced create-only precondition.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-22T19:24:39.000Z">2026-10-23</time> · Estimated read 12 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/23/http-if-none-match-create-only/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/23/http-if-none-match-create-only/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>A separate absence check does not prevent a write race.</li><li>The asterisk condition and idempotency answer different questions.</li><li>Reusing a deleted name requires an identity policy.</li></ul></section>
+      <div class="article-content">
+        <p>A GET that finds no resource followed by an ordinary PUT does not guarantee creation without replacement. Another client can create the same target between those requests. If the intention is “create only while the target has no current representation,” use If-None-Match with an asterisk to express that precondition, and ensure the server enforces it at the write boundary.</p>
+<h2 id="Absence-is-different-from-an-old-version"><a href="#Absence-is-different-from-an-old-version" class="headerlink" title="Absence is different from an old version"></a>Absence is different from an old version</h2><p><a target="_blank" rel="noopener" href="https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.2">RFC 9110 section 13.1.2</a> defines the asterisk condition around the existence of a current target representation. When the condition is false, the method must not execute. For PUT, failure is 412 rather than the 304 used for GET or HEAD validation. An asterisk cannot be mixed with entity tags in a valid field value.</p>
+<p>The target is the requested resource, not every related database row. If an address identifies a configuration within a tenant, define how tenant and name establish identity. Inconsistent case normalization, ignored tenant scope, or aliases for one object can make that identity ambiguous. A conditional header cannot repair the routing model; establish a stable target first.</p>
+<p>Consider an unexecuted concurrent-creation example. Two deployment clients want to create the nightly schedule in the same tenant. A proposes one o’clock; B proposes two. Both query absence and then send their writes almost together. If ordinary PUT permits replacement, the final state may be whichever write arrives last. An earlier success tells neither client why its configuration disappeared.</p>
+<p>With a create-only precondition on both requests, existence and creation need a single arbitration boundary. Once A wins creation, B must not overwrite it using an earlier absence observation. B receives precondition failure, keeps its draft, and can show the existing schedule for comparison. Real execution order decides the winner; the design does not promise that A always wins.</p>
+<p>A possible implementation combines a unique constraint on resource identity with atomic insertion and an appropriate conditional-response mapping. Another uses storage with conditional writes. The relevant property is that a second creator cannot acquire the same absence-based permission between the check and commit. A lock inside one process may not cover multiple instances; verify the actual protected scope.</p>
+<h2 id="Does-conditional-creation-make-retry-return-the-original-success"><a href="#Does-conditional-creation-make-retry-return-the-original-success" class="headerlink" title="Does conditional creation make retry return the original success?"></a>Does conditional creation make retry return the original success?</h2><p>Not necessarily. Suppose A commits but loses the response. On retry, the resource exists, so the condition can fail. That does not prove the first attempt failed, nor prove that the existing object belongs to A’s request. Query and compare business correlation before deciding whether it is the earlier result or someone else’s object. Automatically choosing a new name after 412 may create an unintended duplicate.</p>
+<p>If replaying the same intention should retrieve its original result, define a separate request identifier, content digest, and retention period. Create-only conditions protect an existing target from replacement; business idempotency correlates repeated intentions. They can cooperate, but neither one header nor one database insertion guarantees exactly one effect across notifications and external systems. A creation email needs its own handling for conflict and lost receipts.</p>
+<p>A dangerous recovery is to remove the condition and repeat ordinary PUT just to obtain success. That changes “do not replace” into permission to replace. If the person chooses replacement, show the existing object, confirm the difference, and use an explicit update flow. The related article on <a href="/en/2026/10/14/api-put-patch-replacement/">PUT and PATCH contracts</a> explains why full replacement and partial modification also need separate meanings.</p>
+<h2 id="Is-recreating-a-deleted-name-the-same-object"><a href="#Is-recreating-a-deleted-name-the-same-object" class="headerlink" title="Is recreating a deleted name the same object?"></a>Is recreating a deleted name the same object?</h2><p>The header cannot settle this lifecycle question. After deletion, the target may again have no current representation and satisfy the condition. Old links and tasks may nevertheless interpret the reused name as the old schedule. Decide whether identity includes an unrepeatable identifier, whether deletion reserves the name, and how restoration differs from new creation.</p>
+<p>For example, an old schedule might already have launched jobs before being deleted and recreated. If those jobs look up configuration by name alone, they can read the new schedule. A distinct creation identity, or a policy that prohibits name reuse, can avoid that ambiguity. This is an engineering choice, not a requirement to use one primary-key format for every API.</p>
+<p>Proposed verification submits different conditional creations concurrently and checks that one creates the target while the other neither overwrites nor sends a creation notification. Then exercise a lost response, deletion and recreation, aliases, and tenant separation. Inspect the stored representation and side effects rather than counting one successful and one failed HTTP response.</p>
+<p>Decide what happens to writers that omit the condition. A protected new client cannot preserve a resource if an older script may still overwrite it unconditionally. A create-only endpoint can require its contract, or creation and update can have distinct routes with a migration plan. Include older writers in verification instead of demonstrating only two clicks in the new interface.</p>
+<p>No server or database concurrency test was run here. Check that the framework reads the condition, intermediaries preserve it, evaluation precedes the write, and errors retain useful recovery information. The contract is effective only when “existing means no replacement” survives from request intent through storage arbitration.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.2" rel="noopener">RFC 9110 HTTP Semantics §13.1.2 If-None-Match</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/en/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F23%2Fhttp-if-none-match-create-only%2F&text=Use%20If-None-Match%20for%20Create-Only%20Intent" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F23%2Fhttp-if-none-match-create-only%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Use%20If-None-Match%20for%20Create-Only%20Intent&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F23%2Fhttp-if-none-match-create-only%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/23/javascript-weakmap-retention-observability/">
+              <span>Previous Post</span>
+              <strong>WeakMap Cannot Provide a Live Inventory or Timely Cleanup</strong>
+              <small>2026-10-23</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/23/http-content-location-representation/">
+              <span>Next Post</span>
+              <strong>Content-Location Identifies a Representation, Not a Redirect</strong>
+              <small>2026-10-23</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Absence-is-different-from-an-old-version">Absence is different from an old version</a>
+          
+            <a class="toc-link toc-link--h2" href="#Does-conditional-creation-make-retry-return-the-original-success">Does conditional creation make retry return the original success?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Is-recreating-a-deleted-name-the-same-object">Is recreating a deleted name the same object?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>277</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>122</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>86</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>57</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/23/css-container-query-size-containment/">Container Queries Need a Size Supplied by the Layout</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/23/grpc-status-trailers-result/">HTTP 200 Does Not Establish gRPC Call Success</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/23/http-content-location-representation/">Content-Location Identifies a Representation, Not a Redirect</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,401 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>PostgreSQL 默认权限没给新表：先查建表时的角色 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="以迁移角色和读取角色为例，区分已有表授权、未来对象默认权限及角色成员关系，并设计正反向验证。">
+  
+  
+    <meta name="keywords" content="PostgreSQL18,ALTER DEFAULT PRIVILEGES,creating role">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/23/postgres-default-privileges-future-owner/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/23/postgres-default-privileges-future-owner/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/23/postgres-default-privileges-future-owner/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/23/postgres-default-privileges-future-owner/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="PostgreSQL 默认权限没给新表：先查建表时的角色 | Midnight blog">
+    <meta property="og:description" content="以迁移角色和读取角色为例，区分已有表授权、未来对象默认权限及角色成员关系，并设计正反向验证。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/23/postgres-default-privileges-future-owner/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/postgres-default-privileges-future-owner/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/23/postgres-default-privileges-future-owner/","name":"PostgreSQL 默认权限没给新表：先查建表时的角色 | Midnight blog","description":"以迁移角色和读取角色为例，区分已有表授权、未来对象默认权限及角色成员关系，并设计正反向验证。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/postgres-default-privileges-future-owner/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/postgres-default-privileges-future-owner/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/postgres-default-privileges-future-owner/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/postgres-default-privileges-future-owner/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/23/postgres-default-privileges-future-owner/","headline":"PostgreSQL 默认权限没给新表：先查建表时的角色","description":"以迁移角色和读取角色为例，区分已有表授权、未来对象默认权限及角色成员关系，并设计正反向验证。","inLanguage":"zh-CN","datePublished":"2026-10-22T19:24:39.000Z","dateModified":"2026-10-22T19:24:39.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/sql-alterdefaultprivileges.html"],"keywords":"Development, PostgreSQL, Permissions"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/postgres-default-privileges-future-owner/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"PostgreSQL 默认权限没给新表：先查建表时的角色","item":"https://www.zyweb.vip/zh-CN/2026/10/23/postgres-default-privileges-future-owner/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/23/postgres-default-privileges-future-owner/" selected>zh-CN</option><option value="/en/2026/10/23/postgres-default-privileges-future-owner/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/23/postgres-default-privileges-future-owner/" selected>zh-CN</option><option value="/en/2026/10/23/postgres-default-privileges-future-owner/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-22T19:24:39.000Z">2026-10-23</time>
+    </div>
+
+    <h1>PostgreSQL 默认权限没给新表：先查建表时的角色</h1>
+
+    
+      <p class="post-hero__summary">以迁移角色和读取角色为例，区分已有表授权、未来对象默认权限及角色成员关系，并设计正反向验证。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-22T19:24:39.000Z">2026-10-23</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/23/postgres-default-privileges-future-owner/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/23/postgres-default-privileges-future-owner/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>默认授权只影响未来对象，已有表需单独评审。</li><li>建表时当前角色决定采用哪组默认权限。</li><li>用不同创建角色和真实读取角色验证授权边界。</li></ul></section>
+      <div class="article-content">
+        <p>迁移账号已经加入表所有者角色，新表却仍然拒绝报表账号读取，先查创建对象时的当前角色。PostgreSQL 18 的默认权限按创建角色应用；成员关系不会把其他角色的默认权限自动叠加进来。修复应同时回答两件事：已有对象缺什么授权，以及以后由谁创建对象，不能用一次默认设置代替这两份检查。</p>
+<h2 id="默认权限在哪个时刻生效"><a href="#默认权限在哪个时刻生效" class="headerlink" title="默认权限在哪个时刻生效"></a>默认权限在哪个时刻生效</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-alterdefaultprivileges.html">PostgreSQL 18 的 ALTER DEFAULT PRIVILEGES 文档</a>明确把它限定在未来创建的对象。可以为当前数据库全局设置，也可以限定到指定模式。它不是持续运行的权限同步器，修改规则后，已经存在的表不会重新计算授权。因此，“执行命令成功”和“旧表能够查询”没有直接的因果保证。</p>
+<p>对象创建时只采用当前角色的默认权限，不继承它所属角色的默认权限。这里需要分清登录身份、当前执行身份和对象所有者。在部署脚本里记录一个账号名仍不够，连接建立后是否切换角色、切换发生在建表之前还是之后，都会影响应检查哪组规则。若迁移工具每次新开连接，前一连接的角色切换也不能当作后一连接的证据。</p>
+<p>假设数据库里有 app 模式，owner_role 负责拥有表，migrator 可以切换到它，reporter 只需要读取。角色和模式已由管理员按最小权限准备好，以下是尚未执行的推演。先由 migrator 直接创建 app.before，再给 owner_role 设置默认 SELECT 授权。app.before 的权限不会因此补齐；随后若仍由 migrator 创建 app.after，也不能仅凭 migrator 是 owner_role 的成员就期待 reporter 得到权限。</p>
+<p>正确的设计可以选择统一创建身份：迁移事务里先切换到 owner_role，再创建 app.future。默认权限也明确针对 owner_role 配置。或者团队确实允许多个创建角色，就分别维护它们的默认授权。两种方式的差别是维护对象数量，不是一个命令更有权威。不要在故障后随手给 PUBLIC 全部权限，这会把一个报表读取需求扩大成所有用户的访问。</p>
+<pre><code class="sql">-- 说明性 SQL，未执行；需由有权修改该角色默认权限的身份运行
+ALTER DEFAULT PRIVILEGES FOR ROLE owner_role IN SCHEMA app
+  GRANT SELECT ON TABLES TO reporter;
+-- 旧对象需要另行评审其对象级授权
+GRANT SELECT ON app.before TO reporter;
+</code></pre>
+<p>这个例子还假设 reporter 已具备访问 app 模式所需的 USAGE。表的 SELECT 不负责替代模式访问权限；否则默认授权可能已经正确，读者仍在另一个门槛失败。把表名写成模式限定名也有价值，它避免搜索路径把验证查询引向另一张同名表。管理员查得到数据只能证明管理员的访问，不能代替 reporter 的结果。</p>
+<h2 id="为什么在模式里撤销仍未收紧"><a href="#为什么在模式里撤销仍未收紧" class="headerlink" title="为什么在模式里撤销仍未收紧"></a>为什么在模式里撤销仍未收紧</h2><p>同一份官方文档说明，按模式设置的默认权限会加到全局默认权限之上。如果全局已经授予某权限，在单一模式里 REVOKE 不能把全局授予抵消。需要先理解现有来源，再决定是否修改全局规则以及怎样恢复其他模式的合法需求。这种加法关系使“只改 app 一行”未必能表达团队想要的例外。</p>
+<p>例如团队希望 reporter 默认读大部分模式，但禁止读 payroll。若全局规则已给 reporter 未来表的 SELECT，直接给 payroll 配一条模式级撤销，并不能构成拒绝例外。可评审的方案是撤掉过宽的全局默认授予，再对确实需要的模式逐一授予，并检查既有表。这里没有建议直接变更任何现有数据库，例子用来指出授权模型是否能表达需求。</p>
+<p>方案选择还要看对象类型。对表配置的默认权限不等于已经为序列、函数或其他对象完成授权；不能为了省事把所有对象类型都给同样的权限。若业务只做只读分析，就先交付表读取这一条合同。业务写入需要什么序列权限，应由实际语句和对象模型决定，再单独验证。范围清楚，比一段看似完整却无业务根据的授权模板更可维护。</p>
+<h2 id="如何证明以后不会再漏一张表"><a href="#如何证明以后不会再漏一张表" class="headerlink" title="如何证明以后不会再漏一张表"></a>如何证明以后不会再漏一张表</h2><p>在可丢弃数据库安排三个对象：规则设定前的旧表、由预期角色新建的表、由另一个角色新建的对照表。保存创建时的 current_user、对象所有者、默认权限清单和 reporter 的实际查询结果。预期应在执行前写下：旧表依赖显式授权，预期创建角色的新表应可读，对照角色不应因成员关系凭空获得相同默认规则。验收应包含拒绝路径，不能只看一次成功查询。</p>
+<p>还应重新开一个迁移连接重复创建，用来发现角色切换只发生在手工会话里的问题。连接池、迁移框架与定时任务可能采用不同入口，验收样本要来自真正的建表入口。核对失败原因时，区分模式访问、对象权限和行级安全；相关的<a href="/zh-CN/2026/10/12/postgres-rls-runtime-role/">运行身份与 RLS 检查</a>解释了表权限通过之后的另一层边界。</p>
+<h3 id="改默认权限后，是否要把所有旧表一起授权？"><a href="#改默认权限后，是否要把所有旧表一起授权？" class="headerlink" title="改默认权限后，是否要把所有旧表一起授权？"></a>改默认权限后，是否要把所有旧表一起授权？</h3><p>不应从“默认规则改了”直接推出这个动作。先列出 reporter 的业务范围，再筛选旧对象；历史表可能包含不应进入报表的数据。未来对象和已有对象可以采用同一份权限意图，但它们的执行步骤与检查结果要分别保存。若需要批量补齐，先审查具体模式、表集合与回退方案，避免把不相关的旧表带进来。</p>
+<p>权限交接时还应保留创建过程的记录，而非只查询今天的所有者字段。假设发布后有人把表所有权转交给统一维护角色，最终清单能说明当前归属，却不能单独还原创建时采用了哪个角色的默认规则。可在迁移日志中记录切换角色与建表操作，配合变更编号保存当时的默认权限快照；下一次排查才不必从最终状态猜测历史。</p>
+<p>验收通过后也要给创建入口指定维护者。新增第二个迁移工具或后台分区任务时，应重新核对它的创建身份，而不是沿用报表账号上次查询成功的结论。权限规则的变更审查需要同时列出受影响创建者与读者：只知道谁获得权限，不知道谁负责产生对象，仍然容易在下一次发布遗漏新表。</p>
+<p>本文核对的是 PostgreSQL 18 官方机制，没有创建角色、执行迁移或运行查询。最小交付证据应能把创建身份、未来规则、已有授权和读取结果关联起来；只有默认权限命令的成功回执，仍不足以说明下一次迁移会按相同身份工作。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-alterdefaultprivileges.html" rel="noopener">PostgreSQL 18 — ALTER DEFAULT PRIVILEGES</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--permissions" href="/zh-CN/tags/Permissions/">Permissions</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fpostgres-default-privileges-future-owner%2F&text=PostgreSQL%20%E9%BB%98%E8%AE%A4%E6%9D%83%E9%99%90%E6%B2%A1%E7%BB%99%E6%96%B0%E8%A1%A8%EF%BC%9A%E5%85%88%E6%9F%A5%E5%BB%BA%E8%A1%A8%E6%97%B6%E7%9A%84%E8%A7%92%E8%89%B2" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fpostgres-default-privileges-future-owner%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=PostgreSQL%20%E9%BB%98%E8%AE%A4%E6%9D%83%E9%99%90%E6%B2%A1%E7%BB%99%E6%96%B0%E8%A1%A8%EF%BC%9A%E5%85%88%E6%9F%A5%E5%BB%BA%E8%A1%A8%E6%97%B6%E7%9A%84%E8%A7%92%E8%89%B2&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fpostgres-default-privileges-future-owner%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/">
+              <span>上一篇</span>
+              <strong>PostgreSQL 等锁超时与语句超时：两个预算怎样配合</strong>
+              <small>2026-10-23</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/23/playwright-storage-state-indexeddb/">
+              <span>下一篇</span>
+              <strong>Playwright 登录态快照：IndexedDB 要显式纳入，sessionStorage 另算</strong>
+              <small>2026-10-23</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#默认权限在哪个时刻生效">默认权限在哪个时刻生效</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么在模式里撤销仍未收紧">为什么在模式里撤销仍未收紧</a>
+          
+            <a class="toc-link toc-link--h2" href="#如何证明以后不会再漏一张表">如何证明以后不会再漏一张表</a>
+          
+            <a class="toc-link toc-link--h3" href="#改默认权限后，是否要把所有旧表一起授权？">改默认权限后，是否要把所有旧表一起授权？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>277</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>122</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>85</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>57</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/">PostgreSQL 等锁超时与语句超时：两个预算怎样配合</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/css-container-query-size-containment/">屏幕很宽，侧栏卡片为什么仍然挤成一团？</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/grpc-status-trailers-result/">HTTP 已经返回 200，gRPC 调用为什么仍然失败？</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

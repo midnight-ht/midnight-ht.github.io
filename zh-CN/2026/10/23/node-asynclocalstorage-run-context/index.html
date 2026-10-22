@@ -1,0 +1,404 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>AsyncLocalStorage：用 run 划定请求上下文的入口 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="从两个同步事件监听器解释 run 与 enterWith 的范围差异，设计异步创建点、上下文丢失及跨请求对照检查。">
+  
+  
+    <meta name="keywords" content="AsyncLocalStorage,run,enterWith">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/23/node-asynclocalstorage-run-context/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/23/node-asynclocalstorage-run-context/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/23/node-asynclocalstorage-run-context/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/23/node-asynclocalstorage-run-context/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="AsyncLocalStorage：用 run 划定请求上下文的入口 | Midnight blog">
+    <meta property="og:description" content="从两个同步事件监听器解释 run 与 enterWith 的范围差异，设计异步创建点、上下文丢失及跨请求对照检查。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/23/node-asynclocalstorage-run-context/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/node-asynclocalstorage-run-context/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/23/node-asynclocalstorage-run-context/","name":"AsyncLocalStorage：用 run 划定请求上下文的入口 | Midnight blog","description":"从两个同步事件监听器解释 run 与 enterWith 的范围差异，设计异步创建点、上下文丢失及跨请求对照检查。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/node-asynclocalstorage-run-context/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/node-asynclocalstorage-run-context/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/node-asynclocalstorage-run-context/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/node-asynclocalstorage-run-context/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/23/node-asynclocalstorage-run-context/","headline":"AsyncLocalStorage：用 run 划定请求上下文的入口","description":"从两个同步事件监听器解释 run 与 enterWith 的范围差异，设计异步创建点、上下文丢失及跨请求对照检查。","inLanguage":"zh-CN","datePublished":"2026-10-22T19:24:39.000Z","dateModified":"2026-10-22T19:24:39.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://nodejs.org/api/async_context.html"],"keywords":"Development, Node.js, Context"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/node-asynclocalstorage-run-context/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"AsyncLocalStorage：用 run 划定请求上下文的入口","item":"https://www.zyweb.vip/zh-CN/2026/10/23/node-asynclocalstorage-run-context/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/23/node-asynclocalstorage-run-context/" selected>zh-CN</option><option value="/en/2026/10/23/node-asynclocalstorage-run-context/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/23/node-asynclocalstorage-run-context/" selected>zh-CN</option><option value="/en/2026/10/23/node-asynclocalstorage-run-context/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-22T19:24:39.000Z">2026-10-23</time>
+    </div>
+
+    <h1>AsyncLocalStorage：用 run 划定请求上下文的入口</h1>
+
+    
+      <p class="post-hero__summary">从两个同步事件监听器解释 run 与 enterWith 的范围差异，设计异步创建点、上下文丢失及跨请求对照检查。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-22T19:24:39.000Z">2026-10-23</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/23/node-asynclocalstorage-run-context/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/23/node-asynclocalstorage-run-context/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>在 run 回调内创建需要继承上下文的工作。</li><li>enterWith 会影响当前同步执行余下部分。</li><li>交错完成、嵌套恢复和异常桥接需要独立验证。</li></ul></section>
+      <div class="article-content">
+        <p>请求日志需要携带编号时，优先在请求入口用 AsyncLocalStorage.run 包住启动工作的回调。enterWith 会改变当前同步执行余下部分的上下文，同一个事件里后续监听器也可能读到它。把“设置一次编号”当成局部变量赋值，容易遗漏这个影响范围；选择 API 前，先画出工作在哪里创建、谁应该继承编号。</p>
+<h2 id="上下文边界跟着执行路径走"><a href="#上下文边界跟着执行路径走" class="headerlink" title="上下文边界跟着执行路径走"></a>上下文边界跟着执行路径走</h2><p>本篇核对的是<a target="_blank" rel="noopener" href="https://nodejs.org/api/async_context.html">Node.js v26.12.1 的异步上下文文档</a>，只讨论 run、enterWith 和 getStore，未把新增接口套给旧版运行时。run 在给定存储值的上下文里同步调用回调，其中创建的异步操作能够沿相应路径访问存储；离开这段调用范围后，外围同步代码不应被当成同一请求继续使用。上下文不是每个 JavaScript 模块都能随意共享的请求身份变量。</p>
+<p>假设服务收到甲、乙两个请求，编号分别为 req-a 与 req-b。每次入口创建独立存储对象，在 run 回调里启动读取配置、数据库调用和响应记录。甲的数据库较慢，乙先返回。希望看到的是两条链各自保持编号，完成顺序可以交错，而不是把进程最近一次收到的编号放进全局变量。这个例子没有运行，编号与先后顺序是说明性输入。</p>
+<pre><code class="js">import { AsyncLocalStorage } from &#39;node:async_hooks&#39;;
+const context = new AsyncLocalStorage();
+function handle(requestId) {
+  return context.run({ requestId }, async () =&gt; {
+    await performWork(); // 示例业务函数，未实现也未执行
+    return context.getStore()?.requestId;
+  });
+}
+</code></pre>
+<p>这里 handle 返回 run 回调的返回值，调用者仍需等待或处理该 Promise 的失败。上下文传播不负责把异步操作变成成功，也不负责取消它。若入口只启动工作却丢弃 Promise，编号可能仍然正确，业务错误却没有接收方。两类问题都应进入验证，但不能用一条带编号的日志证明整个请求已经完成。</p>
+<h2 id="enterWith-的反例发生在同一次同步分发里"><a href="#enterWith-的反例发生在同一次同步分发里" class="headerlink" title="enterWith 的反例发生在同一次同步分发里"></a>enterWith 的反例发生在同一次同步分发里</h2><p>官方文档给出明确提醒：在一个事件处理器里 enterWith 后，后续事件处理器也会在这个上下文执行，除非已明确绑定其他上下文。因此文档建议没有强理由时优先用 run。这里并不需要两个网络请求恰好并发，单次同步事件分发就足以出现超出预期的可见范围。</p>
+<p>例如通知总线上第一个监听器为订单甲 enterWith，第二个监听器只是统计通知数量，开发者以为它不属于订单处理，却从 getStore 读到了订单甲。随后第二个监听器创建异步任务，错误标签还可能继续传播。判断错误发生在“哪个监听器有权设定上下文”，而不是日志库是否正确打印了对象。run 可以把第一个监听器的工作包在明确回调内，让同步外围保有原来的上下文。</p>
+<p>也不能从“对象独立”推断内容自动不可变。把同一个存储对象分配给不同请求，或让下游任意改写其 requestId，会破坏原来的归属设计。建议每个入口创建最小的上下文，把稳定编号与可变业务数据区分开。上下文用于关联，不是可信授权凭证；用户传入的编号应与认证得到的身份分别处理，避免调试便利演变成身份来源。</p>
+<p>如果已有库需要跨边界调用后来保存的回调，就检查回调执行时的上下文，而不是只看注册时。自定义 thenable、回调桥接和第三方异步机制可能需要按官方的上下文丢失排查方法定位，再评估 AsyncResource 等桥接工具。不要在每个丢失点随手 enterWith，这可能修好一条日志，同时扩大另一段同步执行的范围。</p>
+<h2 id="怎样验证编号不串也不丢"><a href="#怎样验证编号不串也不丢" class="headerlink" title="怎样验证编号不串也不丢"></a>怎样验证编号不串也不丢</h2><p>拟议测试给甲乙两条工作链设置受控等待，先让乙完成，再释放甲。每个阶段记录预期编号与 getStore 的实际值，断言归属而不是断言日志顺序。再增加嵌套 run：内层返回后，外层同步代码应重新看到外层值；最外围则按初始化状态判断。这样能检查恢复范围，避免只覆盖单一成功链。</p>
+<p>事件总线测试可以安排两个同步监听器，分别比较 enterWith 与 run 包裹第一监听器工作的结果。保留第二监听器读到的值，作为范围差异证据。异步丢失测试则在每个可疑桥接边界前后读取 getStore，找到第一次改变的位置。需要用实际运行时和依赖版本执行，不能只依据示例注释认定某个库已兼容。</p>
+<p>运行配置也会影响复现。测试若从启动参数、环境变量或工作进程入口改变初始化方式，应记录最终使用的配置，而非配置文件外观。相关的<a href="/zh-CN/2026/10/17/node-env-string-boolean/">环境变量字符串解析</a>说明如何避免把文本开关误当布尔值；它不解决上下文传播，却能帮助确认用于复现的入口真的启用了预期行为。</p>
+<h3 id="能靠上下文自动传递到另一台服务吗？"><a href="#能靠上下文自动传递到另一台服务吗？" class="headerlink" title="能靠上下文自动传递到另一台服务吗？"></a>能靠上下文自动传递到另一台服务吗？</h3><p>不能把当前进程中的异步存储当成网络协议。跨服务调用需要明确将允许的关联信息写入约定的请求字段，再由接收方校验并建立自己的上下文。哪些字段可传播、哪些要重新生成，应按信任边界决定。进程内编号连贯，与分布式链路可关联，是不同的验收目标；本文的 run 示例没有实现网络传播。</p>
+<p>创建点的对照尤其有用：一组工作在进入请求入口之前就已启动，另一组在 run 回调内才启动。不要把外围预先启动的任务，仅因后来在回调里等待它，就假设整个任务来源都已改变。测试应在各自真实回调中读取上下文，分别核对预期；若确需把外部任务结果关联到请求，在受控接收点明确建立归属，而不是修改任务的历史。</p>
+<p>异常恢复也要有自己的记录。让嵌套回调同步抛错，再在外层捕获位置读取存储，检查外围上下文仍符合设计。另让异步工作拒绝，确认错误处理日志保留正确请求编号，调用者又能收到真实失败。编号没有丢与异常没有丢是两个断言，只检查其中一个容易把日志正确误认成处理完整。</p>
+<p>本文没有执行 Node.js 请求、事件分发或依赖桥接测试。交付时应提供入口、异步创建点、嵌套恢复和异常路径的实际记录。先让每条工作链的边界可解释，再用日志判断任务进展，才能避免编号打印得整齐却指向了错误请求。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://nodejs.org/api/async_context.html" rel="noopener">Asynchronous context tracking | Node.js v26.12.1 Documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--node-js" href="/zh-CN/tags/Node.js/">Node.js</a>
+          
+            <a class="tag tag--context" href="/zh-CN/tags/Context/">Context</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fnode-asynclocalstorage-run-context%2F&text=AsyncLocalStorage%EF%BC%9A%E7%94%A8%20run%20%E5%88%92%E5%AE%9A%E8%AF%B7%E6%B1%82%E4%B8%8A%E4%B8%8B%E6%96%87%E7%9A%84%E5%85%A5%E5%8F%A3" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fnode-asynclocalstorage-run-context%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=AsyncLocalStorage%EF%BC%9A%E7%94%A8%20run%20%E5%88%92%E5%AE%9A%E8%AF%B7%E6%B1%82%E4%B8%8A%E4%B8%8B%E6%96%87%E7%9A%84%E5%85%A5%E5%8F%A3&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fnode-asynclocalstorage-run-context%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/23/node-eventemitter-async-rejection/">
+              <span>上一篇</span>
+              <strong>Node.js 异步监听器拒绝后，谁接住 EventEmitter 的错误</strong>
+              <small>2026-10-23</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/23/kubernetes-topology-spread-eligible-domains/">
+              <span>下一篇</span>
+              <strong>Kubernetes 拓扑分散：先算合格域，再理解 maxSkew</strong>
+              <small>2026-10-23</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#上下文边界跟着执行路径走">上下文边界跟着执行路径走</a>
+          
+            <a class="toc-link toc-link--h2" href="#enterWith-的反例发生在同一次同步分发里">enterWith 的反例发生在同一次同步分发里</a>
+          
+            <a class="toc-link toc-link--h2" href="#怎样验证编号不串也不丢">怎样验证编号不串也不丢</a>
+          
+            <a class="toc-link toc-link--h3" href="#能靠上下文自动传递到另一台服务吗？">能靠上下文自动传递到另一台服务吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>277</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>122</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>85</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>57</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/node-eventemitter-async-rejection/">Node.js 异步监听器拒绝后，谁接住 EventEmitter 的错误</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/css-container-query-size-containment/">屏幕很宽，侧栏卡片为什么仍然挤成一团？</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/grpc-status-trailers-result/">HTTP 已经返回 200，gRPC 调用为什么仍然失败？</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

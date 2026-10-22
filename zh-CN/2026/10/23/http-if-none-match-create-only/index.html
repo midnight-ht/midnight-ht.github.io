@@ -1,0 +1,390 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>先查不存在，为什么仍可能覆盖别人创建的资源？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用条件创建解释并发竞争、412 后的恢复以及删除后名称复用的边界。">
+  
+  
+    <meta name="keywords" content="If-None-Match,条件创建,并发写入">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/23/http-if-none-match-create-only/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/23/http-if-none-match-create-only/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/23/http-if-none-match-create-only/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/23/http-if-none-match-create-only/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="先查不存在，为什么仍可能覆盖别人创建的资源？ | Midnight blog">
+    <meta property="og:description" content="用条件创建解释并发竞争、412 后的恢复以及删除后名称复用的边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/23/http-if-none-match-create-only/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/http-if-none-match-create-only/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/23/http-if-none-match-create-only/","name":"先查不存在，为什么仍可能覆盖别人创建的资源？ | Midnight blog","description":"用条件创建解释并发竞争、412 后的恢复以及删除后名称复用的边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/http-if-none-match-create-only/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/http-if-none-match-create-only/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/http-if-none-match-create-only/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/http-if-none-match-create-only/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/23/http-if-none-match-create-only/","headline":"先查不存在，为什么仍可能覆盖别人创建的资源？","description":"用条件创建解释并发竞争、412 后的恢复以及删除后名称复用的边界。","inLanguage":"zh-CN","datePublished":"2026-10-22T19:24:39.000Z","dateModified":"2026-10-22T19:24:39.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.2"],"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/http-if-none-match-create-only/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"先查不存在，为什么仍可能覆盖别人创建的资源？","item":"https://www.zyweb.vip/zh-CN/2026/10/23/http-if-none-match-create-only/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/23/http-if-none-match-create-only/" selected>zh-CN</option><option value="/en/2026/10/23/http-if-none-match-create-only/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/23/http-if-none-match-create-only/" selected>zh-CN</option><option value="/en/2026/10/23/http-if-none-match-create-only/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-22T19:24:39.000Z">2026-10-23</time>
+    </div>
+
+    <h1>先查不存在，为什么仍可能覆盖别人创建的资源？</h1>
+
+    
+      <p class="post-hero__summary">用条件创建解释并发竞争、412 后的恢复以及删除后名称复用的边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-22T19:24:39.000Z">2026-10-23</time> · 预计阅读 4 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/23/http-if-none-match-create-only/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/23/http-if-none-match-create-only/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>先查后写无法单独消除竞争。</li><li>星号条件与业务幂等回答不同问题。</li><li>删除后同名重建需要独立身份策略。</li></ul></section>
+      <div class="article-content">
+        <p>先查询资源不存在，再发一个普通 PUT，并不能保证只创建而不覆盖。两次请求之间，另一位客户端可能已经创建了同一地址。若业务意图是“仅在目标尚无当前表示时创建”，可以用带星号的 If-None-Match 表达前置条件，但服务端必须真正评估它，并在写入竞争中保持条件有效。</p>
+<h2 id="星号表达的是不存在，不是某个旧版本"><a href="#星号表达的是不存在，不是某个旧版本" class="headerlink" title="星号表达的是不存在，不是某个旧版本"></a>星号表达的是不存在，不是某个旧版本</h2><p><a target="_blank" rel="noopener" href="https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.2">RFC 9110 第 13.1.2 节</a>说明，星号用于判断目标资源是否存在当前表示；该条件为假时，不能执行请求方法。对于 PUT 这样的非 GET、HEAD 方法，条件失败对应 412；不要把缓存验证场景的 304 拿来表示创建冲突。星号也不能与实体标签列表混合成一个合法条件值。</p>
+<p>这里的判断对象是请求目标资源，不是数据库中任何看起来相关的记录。假设地址表示某租户下的配置文件，服务端需要明确租户和名称如何组成资源身份。如果路由忽略租户、大小写归一规则不一致，或者两个别名指向同一业务对象，头字段本身不能修复这种身份歧义。先有稳定对象，条件才有可解释的作用范围。</p>
+<p>下面是未执行的并发创建例子。两个部署客户端都想在同一租户创建一份名为 nightly 的计划。甲准备的内容是每晚一点运行，乙准备的是每晚两点运行。它们先后查询，都得到不存在，然后几乎同时发送创建请求。如果普通 PUT 允许替换，最终可能只留下后写入的一份，而先前的成功响应不能解释配置为何改变。</p>
+<p>若两个请求都带只创建条件，服务端应在同一竞争边界裁决存在性和创建。甲先取得创建资格后，乙不能再依据自己稍早的查询结果覆盖甲；乙收到条件失败，保留原草稿，并展示当前计划供人比较。谁先成功由真实执行顺序决定，示例没有预设某一客户端永远获胜。</p>
+<p>一种候选存储实现是用与资源身份对应的唯一约束配合原子插入，把唯一冲突映射为符合条件请求的结果。另一种是有条件写入的存储接口。关键不是工具名字，而是检查不存在和提交之间不能让第二个创建者也得到相同资格。只在应用进程内加一个锁，多实例部署时未必覆盖竞争；应核对锁实际保护的范围。</p>
+<h2 id="有了条件创建，重试就一定返回原来的成功吗？"><a href="#有了条件创建，重试就一定返回原来的成功吗？" class="headerlink" title="有了条件创建，重试就一定返回原来的成功吗？"></a>有了条件创建，重试就一定返回原来的成功吗？</h2><p>不一定。假设甲已经创建，但响应在网络中丢失。甲重试相同条件请求时，目标已经存在，因此可能得到条件失败。这不说明甲第一次没有成功，也不保证当前资源就是甲创建的那份。客户端需要查询并比较业务关联信息，判断是自己的既有结果还是别人的对象，不能看到 412 就自动改名重建。</p>
+<p>若业务希望相同意图重放时拿到原结果，需要另外定义请求标识、内容摘要和保存期限。只创建条件避免的是覆盖已经存在的目标；业务幂等处理的是重复意图怎样关联。两者可以配合，但不能把一个请求头当作跨数据库、通知和外部系统的一次执行保证。若创建还触发发送邮件，应分别处理竞争失败和已提交但回执丢失的副作用。</p>
+<p>反例是客户端为了让第二次成功，去掉条件再发送普通 PUT。这把用户的“不要覆盖”改成了“可以替换”，即使接口最后返回绿色成功，也违反了最初意图。若用户确实决定替换，应先看到已有对象、确认差异，并走明确的更新流程。有关完整表示与局部修改，可参看<a href="/zh-CN/2026/10/14/api-put-patch-replacement/">PUT 与 PATCH 的更新契约</a>。</p>
+<h2 id="删除后重新创建，还是原来的对象吗？"><a href="#删除后重新创建，还是原来的对象吗？" class="headerlink" title="删除后重新创建，还是原来的对象吗？"></a>删除后重新创建，还是原来的对象吗？</h2><p>这是头字段无法替业务回答的追问。原对象被删除后，地址可能重新没有当前表示，因此只创建条件可以再次成立。但旧链接、旧任务或外部系统若仍把这个名字视为同一计划，就可能误关联新对象。需要决定资源身份是否包含不可复用标识，删除后是否保留名称占位，以及恢复与新建怎样区分。</p>
+<p>例如旧计划已经触发一批执行，随后删除同名新建。若后台仅按名称查配置，就可能让旧任务读到新的两点计划。更清楚的设计是为每次创建分配不可混淆的业务身份，将名称作为可读入口，或在不允许复用时保留相应约束。这里是生命周期分析，不是规范要求所有接口使用同一种主键。</p>
+<p>验证可以并发发送两个内容不同的条件创建，确认只有一个资源版本取得创建结果，另一个没有覆盖，也没有触发创建后通知。再测试响应丢失后的重试、先删除再创建、路由别名和不同租户。记录实际表示内容及副作用，不能只数一个成功状态和一个失败状态便结束。</p>
+<p>服务端还应明确缺少前置条件的写请求是否允许替换。如果只有新客户端携带保护，旧脚本仍可无条件覆盖，同一资源就存在两套互相破坏的约定。可以为只创建入口拒绝不符合约定的请求，或把创建与更新明确分流，并给维护脚本同步迁移计划。验收应让旧入口也参与竞争，检查保护是否覆盖全部写入者，而不是只证明某个新界面的两次点击碰巧安全。</p>
+<p>本文没有运行 HTTP 服务或数据库并发测试。实际接入时还应核对框架是否读取条件头、代理是否传递、服务是否在提交前真正执行判断，以及错误映射是否向客户端保留恢复信息。只有从请求意图一直到持久化竞争都证明“存在就不覆盖”，这个头才成为有效契约；否则它只是网络面板里一行没有执行力的文字。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.2" rel="noopener">RFC 9110 HTTP Semantics §13.1.2 If-None-Match</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fhttp-if-none-match-create-only%2F&text=%E5%85%88%E6%9F%A5%E4%B8%8D%E5%AD%98%E5%9C%A8%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E5%8F%AF%E8%83%BD%E8%A6%86%E7%9B%96%E5%88%AB%E4%BA%BA%E5%88%9B%E5%BB%BA%E7%9A%84%E8%B5%84%E6%BA%90%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fhttp-if-none-match-create-only%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E5%85%88%E6%9F%A5%E4%B8%8D%E5%AD%98%E5%9C%A8%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E5%8F%AF%E8%83%BD%E8%A6%86%E7%9B%96%E5%88%AB%E4%BA%BA%E5%88%9B%E5%BB%BA%E7%9A%84%E8%B5%84%E6%BA%90%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fhttp-if-none-match-create-only%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/23/javascript-weakmap-retention-observability/">
+              <span>上一篇</span>
+              <strong>WeakMap 不提供存活清单，也不能替资源按时收尾</strong>
+              <small>2026-10-23</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/23/http-content-location-representation/">
+              <span>下一篇</span>
+              <strong>Content-Location 出现以后，客户端应该跳转吗？</strong>
+              <small>2026-10-23</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#星号表达的是不存在，不是某个旧版本">星号表达的是不存在，不是某个旧版本</a>
+          
+            <a class="toc-link toc-link--h2" href="#有了条件创建，重试就一定返回原来的成功吗？">有了条件创建，重试就一定返回原来的成功吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#删除后重新创建，还是原来的对象吗？">删除后重新创建，还是原来的对象吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>277</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>122</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>85</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>57</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/css-container-query-size-containment/">屏幕很宽，侧栏卡片为什么仍然挤成一团？</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/grpc-status-trailers-result/">HTTP 已经返回 200，gRPC 调用为什么仍然失败？</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/http-content-location-representation/">Content-Location 出现以后，客户端应该跳转吗？</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

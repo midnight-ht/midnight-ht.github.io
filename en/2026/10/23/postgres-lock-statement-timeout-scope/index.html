@@ -1,0 +1,403 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>PostgreSQL Lock and Statement Timeouts Need Different Budgets | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Use a two-session migration scenario to separate lock waits, statement budgets, transaction cleanup, and connection reuse.">
+  
+  
+    <meta name="keywords" content="PostgreSQL18,lock_timeout,statement_timeout">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/23/postgres-lock-statement-timeout-scope/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/23/postgres-lock-statement-timeout-scope/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="PostgreSQL Lock and Statement Timeouts Need Different Budgets | Midnight blog">
+    <meta property="og:description" content="Use a two-session migration scenario to separate lock waits, statement budgets, transaction cleanup, and connection reuse.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/23/postgres-lock-statement-timeout-scope/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/23/postgres-lock-statement-timeout-scope/#webpage","url":"https://www.zyweb.vip/en/2026/10/23/postgres-lock-statement-timeout-scope/","name":"PostgreSQL Lock and Statement Timeouts Need Different Budgets | Midnight blog","description":"Use a two-session migration scenario to separate lock waits, statement budgets, transaction cleanup, and connection reuse.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/23/postgres-lock-statement-timeout-scope/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/23/postgres-lock-statement-timeout-scope/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/23/postgres-lock-statement-timeout-scope/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/23/postgres-lock-statement-timeout-scope/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/23/postgres-lock-statement-timeout-scope/","headline":"PostgreSQL Lock and Statement Timeouts Need Different Budgets","description":"Use a two-session migration scenario to separate lock waits, statement budgets, transaction cleanup, and connection reuse.","inLanguage":"en","datePublished":"2026-10-22T19:24:39.000Z","dateModified":"2026-10-22T19:24:39.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.postgresql.org/docs/18/runtime-config-client.html","https://www.postgresql.org/docs/18/sql-set.html"],"keywords":"Development, PostgreSQL, Timeouts"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/23/postgres-lock-statement-timeout-scope/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"PostgreSQL Lock and Statement Timeouts Need Different Budgets","item":"https://www.zyweb.vip/en/2026/10/23/postgres-lock-statement-timeout-scope/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/">zh-CN</option><option value="/en/2026/10/23/postgres-lock-statement-timeout-scope/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/">zh-CN</option><option value="/en/2026/10/23/postgres-lock-statement-timeout-scope/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-22T19:24:39.000Z">2026-10-23</time>
+    </div>
+
+    <h1>PostgreSQL Lock and Statement Timeouts Need Different Budgets</h1>
+
+    
+      <p class="post-hero__summary">Use a two-session migration scenario to separate lock waits, statement budgets, transaction cleanup, and connection reuse.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-22T19:24:39.000Z">2026-10-23</time> · Estimated read 13 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/23/postgres-lock-statement-timeout-scope/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Lock timeouts apply separately to acquisition attempts.</li><li>Statement and client deadlines cover different intervals.</li><li>Recover transaction state and verify reused connection settings.</li></ul></section>
+      <div class="article-content">
+        <p>A migration may tolerate half a second waiting for a lock while allowing several seconds after acquisition. Give those stages different budgets. In PostgreSQL 18, lock_timeout applies while waiting for locks and separately to each acquisition attempt. statement_timeout constrains statement processing. Giving both the same value usually lets the statement limit act first, obscuring the distinction.</p>
+<h2 id="The-clocks-cover-different-intervals"><a href="#The-clocks-cover-different-intervals" class="headerlink" title="The clocks cover different intervals"></a>The clocks cover different intervals</h2><p>The <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/runtime-config-client.html">PostgreSQL 18 client-defaults reference</a> covers explicit and implicit lock acquisition. A lock timeout is neither a cumulative transaction wait budget nor an execution-time limit. A statement acquiring several locks has separate acquisition attempts; the value cannot be read as the maximum duration of an entire migration.</p>
+<p>The statement limit runs from receipt of the command at the server until completion, with documented details for simple and extended query protocols. End-to-end application latency also includes pool queues, network time, and retries outside that interval. A product deadline needs a budget for those stages too.</p>
+<p>In an unexecuted scenario, inventory already contains data. Session A opens a transaction and holds a lock that conflicts with a schema change. Session B wants to add a column. The change can be retried later, so waiting briefly is preferable to a long lock queue, while execution after acquisition gets a longer allowance. These values illustrate a relationship; they are not production recommendations or measurements.</p>
+<pre><code class="sql">-- Session B: illustrative, not executed.
+BEGIN;
+SET LOCAL lock_timeout = &#39;500ms&#39;;
+SET LOCAL statement_timeout = &#39;5s&#39;;
+ALTER TABLE inventory ADD COLUMN review_note text;
+COMMIT;
+</code></pre>
+<p>If A retains its lock, B is expected to hit the lock-wait limit first. If A releases promptly, B can proceed while the statement limit remains relevant. A counterexample sets lock_timeout to ten seconds but leaves statement_timeout at five: the statement deadline arrives before the lock budget expires. Absence of a lock-timeout error does not prove there was no lock wait.</p>
+<h2 id="An-error-leaves-transaction-work-to-do"><a href="#An-error-leaves-transaction-work-to-do" class="headerlink" title="An error leaves transaction work to do"></a>An error leaves transaction work to do</h2><p>A timeout exception does not mean that application rollback and connection cleanup are complete. After an error in an explicit transaction, end or recover that transaction according to its actual state before returning the connection to a pool. Partial recovery requires a savepoint established before the failing statement and a business contract that permits that scope. Sending another business statement blindly is not recovery.</p>
+<p>The <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-set.html">SET reference</a> says SET LOCAL lasts until the current transaction ends, whether by commit or rollback. This makes it useful for a migration transaction. Session-level settings can persist after commit and affect a reused connection. Rolling back to a savepoint earlier than a SET LOCAL also cancels that setting.</p>
+<p>For example, a batch sets a short wait after a savepoint, fails, and returns to an earlier point. Its next change may no longer have the intended budget. Either set budgets at a stable outer entry point or reestablish them before each local retry. Recovery paths, rather than shorter SQL, should determine the placement.</p>
+<p>Retain which deadline fired, the statement identity, the transaction action, and the retry decision. A timed-out migration is not a successful column addition. When connection loss leaves the outcome unknown, inspect final schema state and migration records before retrying. No lock contention or driver recovery was executed for this article.</p>
+<h2 id="Make-the-failure-modes-distinguishable"><a href="#Make-the-failure-modes-distinguishable" class="headerlink" title="Make the failure modes distinguishable"></a>Make the failure modes distinguishable</h2><p>A proposed test uses independent sessions: A holds a conflicting lock; B applies local limits and runs the change. Record the database error, elapsed time, and transaction state, end B’s transaction, and then release A. Separately test the statement deadline without competing locks using a suitable disposable workload. If both cases are reported as a lost connection, error classification needs attention.</p>
+<p>Include short-wait/long-execution and multiple-lock paths. One blocked statement cannot prove a cumulative cap. Review client cancellation as well: if the client gives up first without cancelling server work, the database may continue after the application reports failure.</p>
+<p>After transaction cleanup, inspect current parameter values and run an ordinary request on the reused connection. Record the actual database identity alongside the settings. The related article on <a href="/en/2026/10/11/postgres-savepoint-partial-import/">savepoints and partial-import reports</a> addresses the result contract; this article addresses the clocks.</p>
+<h3 id="Can-the-application-retry-immediately"><a href="#Can-the-application-retry-immediately" class="headerlink" title="Can the application retry immediately?"></a>Can the application retry immediately?</h3><p>Only after defining retry semantics, transaction recovery, and the total deadline. Repeatedly joining a queue behind a long maintenance task may accomplish little, while synchronized retries add competition. Deferral, backoff, or an assigned maintenance window may fit different workloads. Keep the total elapsed budget rather than restarting the user’s deadline for each new statement.</p>
+<p>Recovery also consumes the remaining deadline. Suppose a hypothetical client allows six seconds and the statement limit consumes five. Error handling, rollback, and a useful response still need time. Returning a connection to the pool without confirmed cleanup does not finish recovery. Determine actual margins with the driver and environment rather than treating these numbers as recommendations.</p>
+<p>A test can start an independent operation immediately after cancellation and inspect whether it receives a clean connection. Preserve the original operation’s terminal state and cleanup result separately; a later successful request must not erase evidence of a failed cleanup. Let connection management handle a connection whose reuse cannot be established.</p>
+<p>This is a PostgreSQL 18 documentation review and a test design. No two-session experiment, pool test, or driver cancellation was run. Assign responsibility for waiting, execution, transaction recovery, and client deadlines separately; one timeout cannot promise when the whole operation will finish safely.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/runtime-config-client.html" rel="noopener">PostgreSQL 18 — 19.11 Client Connection Defaults</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-set.html" rel="noopener">PostgreSQL 18 — SET</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/en/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--timeouts" href="/en/tags/Timeouts/">Timeouts</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F23%2Fpostgres-lock-statement-timeout-scope%2F&text=PostgreSQL%20Lock%20and%20Statement%20Timeouts%20Need%20Different%20Budgets" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F23%2Fpostgres-lock-statement-timeout-scope%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=PostgreSQL%20Lock%20and%20Statement%20Timeouts%20Need%20Different%20Budgets&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F23%2Fpostgres-lock-statement-timeout-scope%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/23/wcag-dragging-single-pointer-alternative/">
+              <span>Previous Post</span>
+              <strong>A Non-Dragging Pointer Route for Card Reordering</strong>
+              <small>2026-10-23</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/23/postgres-default-privileges-future-owner/">
+              <span>Next Post</span>
+              <strong>PostgreSQL Default Privileges Follow the Creating Role</strong>
+              <small>2026-10-23</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#The-clocks-cover-different-intervals">The clocks cover different intervals</a>
+          
+            <a class="toc-link toc-link--h2" href="#An-error-leaves-transaction-work-to-do">An error leaves transaction work to do</a>
+          
+            <a class="toc-link toc-link--h2" href="#Make-the-failure-modes-distinguishable">Make the failure modes distinguishable</a>
+          
+            <a class="toc-link toc-link--h3" href="#Can-the-application-retry-immediately">Can the application retry immediately?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>277</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>122</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>86</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>57</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/23/postgres-default-privileges-future-owner/">PostgreSQL Default Privileges Follow the Creating Role</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/23/css-container-query-size-containment/">Container Queries Need a Size Supplied by the Layout</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/23/grpc-status-trailers-result/">HTTP 200 Does Not Establish gRPC Call Success</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

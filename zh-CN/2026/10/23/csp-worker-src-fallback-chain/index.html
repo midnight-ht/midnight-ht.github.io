@@ -1,0 +1,387 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>CSP Worker 限制：读懂 worker-src 的回退顺序 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="从缺席回退、Blob 入口和后续请求三个边界，定位 Worker 创建与任务失败。">
+  
+  
+    <meta name="keywords" content="CSP,worker-src,blob">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/23/csp-worker-src-fallback-chain/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/23/csp-worker-src-fallback-chain/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/23/csp-worker-src-fallback-chain/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/23/csp-worker-src-fallback-chain/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="CSP Worker 限制：读懂 worker-src 的回退顺序 | Midnight blog">
+    <meta property="og:description" content="从缺席回退、Blob 入口和后续请求三个边界，定位 Worker 创建与任务失败。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/23/csp-worker-src-fallback-chain/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/csp-worker-src-fallback-chain/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/23/csp-worker-src-fallback-chain/","name":"CSP Worker 限制：读懂 worker-src 的回退顺序 | Midnight blog","description":"从缺席回退、Blob 入口和后续请求三个边界，定位 Worker 创建与任务失败。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/csp-worker-src-fallback-chain/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/csp-worker-src-fallback-chain/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/csp-worker-src-fallback-chain/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/csp-worker-src-fallback-chain/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/23/csp-worker-src-fallback-chain/","headline":"CSP Worker 限制：读懂 worker-src 的回退顺序","description":"从缺席回退、Blob 入口和后续请求三个边界，定位 Worker 创建与任务失败。","inLanguage":"zh-CN","datePublished":"2026-10-22T19:24:39.000Z","dateModified":"2026-10-22T19:24:39.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/worker-src","https://www.w3.org/TR/CSP3/","https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy"],"keywords":"Quality, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/csp-worker-src-fallback-chain/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"CSP Worker 限制：读懂 worker-src 的回退顺序","item":"https://www.zyweb.vip/zh-CN/2026/10/23/csp-worker-src-fallback-chain/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/23/csp-worker-src-fallback-chain/" selected>zh-CN</option><option value="/en/2026/10/23/csp-worker-src-fallback-chain/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/23/csp-worker-src-fallback-chain/" selected>zh-CN</option><option value="/en/2026/10/23/csp-worker-src-fallback-chain/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--quality">Quality</span>
+      <time datetime="2026-10-22T19:24:39.000Z">2026-10-23</time>
+    </div>
+
+    <h1>CSP Worker 限制：读懂 worker-src 的回退顺序</h1>
+
+    
+      <p class="post-hero__summary">从缺席回退、Blob 入口和后续请求三个边界，定位 Worker 创建与任务失败。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-22T19:24:39.000Z">2026-10-23</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/23/csp-worker-src-fallback-chain/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/23/csp-worker-src-fallback-chain/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>worker-src 缺席才依次回退。</li><li>Blob 入口按实际方案和目标 API 验证。</li><li>入口许可不等于后续数据请求许可。</li></ul></section>
+      <div class="article-content">
+        <p>页面脚本能从允许的域加载，不表示 Worker 入口也会被同一条规则放行。检查 CSP 时，先找是否存在 <code>worker-src</code>；它缺席时才按 <code>child-src</code>、<code>script-src</code>、<code>default-src</code> 的顺序寻找回退规则。找到一条适用指令后被拒绝，不会因为后面另有宽松规则就继续获得许可。</p>
+<h2 id="回退发生在指令缺席时"><a href="#回退发生在指令缺席时" class="headerlink" title="回退发生在指令缺席时"></a>回退发生在指令缺席时</h2><p><a target="_blank" rel="noopener" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/worker-src">MDN 的 worker-src 说明</a>列出了这条回退顺序，并说明指令约束 Worker、SharedWorker 与 ServiceWorker 脚本来源。<a target="_blank" rel="noopener" href="https://www.w3.org/TR/CSP3/#directive-worker-src">CSP Level 3 工作草案</a>给出对应指令与来源匹配机制。引用的草案版本为二〇二六年九月十六日，具体浏览器实现还应在产品支持范围中验证；本文没有运行浏览器安全策略实验。</p>
+<p>假设页面来自 <code>app.example.test</code>，响应头声明默认只允许自身，页面脚本另外允许一个资源域，同时给 <code>child-src</code> 配置禁止。此时没有 <code>worker-src</code>，Worker 判断先遇到 <code>child-src &#39;none&#39;</code>，不再拿后面的宽松脚本来源当许可。主脚本照常运行与工作线程入口被挡，可以同时成立。这是根据回退机制推演的配置反例，不是真实站点故障日志。</p>
+<pre><code class="http">Content-Security-Policy: default-src &#39;self&#39;; script-src &#39;self&#39; https://assets.example.test; child-src &#39;none&#39;
+</code></pre>
+<p>这个头部只用于解释冲突，不是一份可直接部署的完整安全模板。若需求确实允许本站的专用 Worker 入口，应评估显式配置 <code>worker-src</code>，让它与框架用途分开表达。这样修改的是 Worker 来源边界，不需要为了一个工作线程随手放开全部子资源。是否还要允许其他来源，应根据真实构建输出和信任关系判断。</p>
+<p>明确回退也方便评审升级。过去没有 <code>worker-src</code> 时，团队也许一直依赖 <code>script-src</code>；后来添加 <code>child-src</code> 管理框架，可能改变 Worker 的有效回退来源。配置文本看似只新增了一种资源限制，实际影响却跨到另一个入口。修改前列出依赖回退的资源类型，修改后再核对真正生效的响应，能避免把隐含约定留给浏览器替团队决定。</p>
+<h2 id="blob-入口要按真实-URL-方案评估"><a href="#blob-入口要按真实-URL-方案评估" class="headerlink" title="blob 入口要按真实 URL 方案评估"></a>blob 入口要按真实 URL 方案评估</h2><p>假设构建工具把一段代码变成 Blob，再通过 <code>blob:</code> 地址创建专用 Worker。此时网络面板上主脚本来自资源域，并不能说明 Worker 入口也是那个 HTTPS 地址。应查看创建 Worker 时实际使用的 URL 类型。如果需求允许这种生成入口，可评估类似 <code>worker-src &#39;self&#39; blob:</code> 的显式方案许可；这里不假定所有浏览器都会以相同方式把 blob 归入 <code>&#39;self&#39;</code>。</p>
+<p>允许 <code>blob:</code> 的代价也要说清楚：它扩大了可被用来启动 Worker 的来源表达式范围，并不验证生成代码的业务用途。若工具链可以产出独立、可维护的同源 Worker 文件，也值得比较路径可审计性和部署成本。选择不应只看哪一行能让控制台错误消失，还要能解释被允许执行的代码来自哪里。</p>
+<p>示意来源列表不能越过 Worker API 自身的限制。给某种 URL 方案 CSP 许可，不等于该方案对所有 Worker 类型、所有注册方式都有效；尤其不能把专用 Worker 的 Blob 示例直接推广成 ServiceWorker 注册保证。应分别记录目标 API、入口地址、构建方式和支持浏览器，验证这一具体组合，而不是泛称“全部 Worker 已开放”。</p>
+<h2 id="入口放行后，内部-fetch-也会自动放行吗？"><a href="#入口放行后，内部-fetch-也会自动放行吗？" class="headerlink" title="入口放行后，内部 fetch 也会自动放行吗？"></a>入口放行后，内部 fetch 也会自动放行吗？</h2><p>不会仅因入口被允许就得到任意网络权限。Worker 脚本入口和内部请求属于不同检查对象，需要分别核对适用的 CSP、网络来源、跨源策略和服务端授权。普通网络加载的 Worker 与 Blob 等特殊入口的策略继承方式也需要区别；排查时查明保护哪一个执行环境，不把页面响应的一条来源列表当成所有后续请求的通行证。</p>
+<p>比如报表 Worker 已启动，却在读取报表数据时失败。应先观察错误属于入口创建、脚本依赖加载还是数据请求，再核对该步骤实际受哪项策略影响。盲目向 <code>worker-src</code> 继续添加数据接口域，可能完全没有修改真正失败的规则。反过来，放宽数据连接规则也不会补上被禁止的 Worker 入口。</p>
+<p><a target="_blank" rel="noopener" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy">CSP 响应头参考</a>进一步说明 Worker 的策略归属和多策略组合。若页面同时收到多个 CSP，新增一条宽松策略不等于覆盖原有严格限制。代理、应用与静态托管层都可能交付头部，调查应保存实际响应头组合并识别每条限制的来源。报告模式只报告潜在违反，也不能当成强制模式已允许或已阻止的行为。本站十月十日的<a href="/zh-CN/2026/10/10/csp-report-only-rollout/">报告模式发布检查</a>可以帮助把配置观察和真正阻断结果分开。</p>
+<p>验证可建立四个受控样本：同源静态专用 Worker、构建产出的 Blob 专用 Worker、未允许来源的入口、入口成功但内部数据请求被拒绝。分别记录收到的政策、实际入口方案、创建结果和后续工作结果。再从真实发布入口读取响应，防止本地配置正确却在代理层收到另一版本。</p>
+<p>策略归属也影响回滚。若应用团队添加了显式Worker许可，边缘代理仍交付旧政策，回滚应用代码可能既不能解释也不能解除阻断。维护记录应能定位最终响应由哪一层生成，哪一层添加额外限制，以及该配置何时刷新缓存。测试阶段可以分别保存直接源站与公开入口的头部，再说明用户真正经过哪个入口；两份都拿到并不代表任意入口都可被绕过使用。</p>
+<p>对于功能降级，也应在创建失败处给用户明确结果。报表线程被拦时，可以提供重试、较小任务或由服务端生成等已经实现的替代路径；如果没有替代能力，就准确提示当前任务不可用。不要让界面一直显示正在准备，也不要在后台反复启动同一被禁止入口。安全策略拒绝是需要被产品处理的状态，不是只能留在开发控制台的一条消息。替代路径本身仍需权限和数据完整性验证，不能因为被称为降级就免除检查。</p>
+<p>这些样本都未在本文执行。验收要能回答“哪条指令通过哪条回退链约束哪次请求”，以及“Worker 是否真正完成了所需任务”。把指令补全是配置变更，启动成功是运行结果，任务完成还需要单独的业务证据。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/worker-src" rel="noopener">Content-Security-Policy: worker-src directive - HTTP | MDN</a></li><li><a target="_blank" href="https://www.w3.org/TR/CSP3/" rel="noopener">Content Security Policy Level 3</a></li><li><a target="_blank" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy" rel="noopener">Content-Security-Policy (CSP) header - HTTP | MDN</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--quality" href="/zh-CN/tags/Quality/">Quality</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--quality" href="/zh-CN/categories/Quality/">Quality</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fcsp-worker-src-fallback-chain%2F&text=CSP%20Worker%20%E9%99%90%E5%88%B6%EF%BC%9A%E8%AF%BB%E6%87%82%20worker-src%20%E7%9A%84%E5%9B%9E%E9%80%80%E9%A1%BA%E5%BA%8F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fcsp-worker-src-fallback-chain%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=CSP%20Worker%20%E9%99%90%E5%88%B6%EF%BC%9A%E8%AF%BB%E6%87%82%20worker-src%20%E7%9A%84%E5%9B%9E%E9%80%80%E9%A1%BA%E5%BA%8F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fcsp-worker-src-fallback-chain%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/23/css-container-query-size-containment/">
+              <span>上一篇</span>
+              <strong>屏幕很宽，侧栏卡片为什么仍然挤成一团？</strong>
+              <small>2026-10-23</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#回退发生在指令缺席时">回退发生在指令缺席时</a>
+          
+            <a class="toc-link toc-link--h2" href="#blob-入口要按真实-URL-方案评估">blob 入口要按真实 URL 方案评估</a>
+          
+            <a class="toc-link toc-link--h2" href="#入口放行后，内部-fetch-也会自动放行吗？">入口放行后，内部 fetch 也会自动放行吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>277</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>122</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>85</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>57</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/playwright-framelocator-boundary/">Playwright iframe：先进入正确框架，再定位支付按钮</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/playwright-storage-state-indexeddb/">Playwright 登录态快照：IndexedDB 要显式纳入，sessionStorage 另算</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/21/actions-pr-target-untrusted-checkout/">默认分支工作流，并不让PR检出内容可信</a></h3>
+          <p>2026-10-21</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

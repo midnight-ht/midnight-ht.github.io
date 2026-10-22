@@ -1,0 +1,403 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>PostgreSQL 等锁超时与语句超时：两个预算怎样配合 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用双会话迁移推演区分每次锁等待和整条语句预算，检查事务局部设置、取消后的回滚与连接复用。">
+  
+  
+    <meta name="keywords" content="PostgreSQL18,lock_timeout,statement_timeout">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/23/postgres-lock-statement-timeout-scope/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="PostgreSQL 等锁超时与语句超时：两个预算怎样配合 | Midnight blog">
+    <meta property="og:description" content="用双会话迁移推演区分每次锁等待和整条语句预算，检查事务局部设置、取消后的回滚与连接复用。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/","name":"PostgreSQL 等锁超时与语句超时：两个预算怎样配合 | Midnight blog","description":"用双会话迁移推演区分每次锁等待和整条语句预算，检查事务局部设置、取消后的回滚与连接复用。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/","headline":"PostgreSQL 等锁超时与语句超时：两个预算怎样配合","description":"用双会话迁移推演区分每次锁等待和整条语句预算，检查事务局部设置、取消后的回滚与连接复用。","inLanguage":"zh-CN","datePublished":"2026-10-22T19:24:39.000Z","dateModified":"2026-10-22T19:24:39.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/runtime-config-client.html","https://www.postgresql.org/docs/18/sql-set.html"],"keywords":"Development, PostgreSQL, Timeouts"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"PostgreSQL 等锁超时与语句超时：两个预算怎样配合","item":"https://www.zyweb.vip/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/" selected>zh-CN</option><option value="/en/2026/10/23/postgres-lock-statement-timeout-scope/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/" selected>zh-CN</option><option value="/en/2026/10/23/postgres-lock-statement-timeout-scope/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-22T19:24:39.000Z">2026-10-23</time>
+    </div>
+
+    <h1>PostgreSQL 等锁超时与语句超时：两个预算怎样配合</h1>
+
+    
+      <p class="post-hero__summary">用双会话迁移推演区分每次锁等待和整条语句预算，检查事务局部设置、取消后的回滚与连接复用。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-22T19:24:39.000Z">2026-10-23</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/23/postgres-lock-statement-timeout-scope/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>锁等待限制按每次获取锁的尝试计时。</li><li>语句期限与客户端总期限覆盖不同阶段。</li><li>错误后处理事务，再验证连接复用与参数恢复。</li></ul></section>
+      <div class="article-content">
+        <p>一条迁移只愿意等锁半秒，但允许拿到锁后运行数秒，应分别设置锁等待预算与整条语句预算。PostgreSQL 18 的 lock_timeout 只在等锁时计时，并分别约束每次获取锁的尝试；statement_timeout 约束语句处理时间。把两个值设成相同大小，通常会让语句超时先发挥作用，失去区分故障阶段的意义。</p>
+<h2 id="预算覆盖的时间段不同"><a href="#预算覆盖的时间段不同" class="headerlink" title="预算覆盖的时间段不同"></a>预算覆盖的时间段不同</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/runtime-config-client.html">PostgreSQL 18 客户端默认设置文档</a>区分了这两个参数。锁等待既可能来自显式锁定，也可能来自语句隐式需要的锁。lock_timeout 不是整条事务累计等待上限，更不是查询运行时间上限。若语句多次获取不同锁，每次尝试都有自己的预算，不能把某个值直接当成整次迁移的最长耗时。</p>
+<p>statement_timeout 则从服务端收到命令到完成进行约束。文档还区分简单查询消息与扩展查询协议的计时细节，因此应用从点击按钮到收到结果的总时长，不能直接与服务端参数画等号。连接池排队、网络传输和应用重试可能发生在这个计时范围之外。产品若承诺请求期限，还要给这些阶段留出明确预算。</p>
+<p>假设 inventory 表已有数据，会话甲开启事务并持有阻碍结构修改的锁。会话乙准备为它增加一列：业务允许这项迁移稍后再试，不愿长时间堵在锁队列；拿到锁后的语句则允许较长时间处理。以下数值仅是未执行示例，不是生产推荐值，也不构成耗时测量。</p>
+<pre><code class="sql">-- 会话乙；说明性步骤，尚未运行
+BEGIN;
+SET LOCAL lock_timeout = &#39;500ms&#39;;
+SET LOCAL statement_timeout = &#39;5s&#39;;
+ALTER TABLE inventory ADD COLUMN review_note text;
+COMMIT;
+</code></pre>
+<p>若甲持续占锁，乙预期先遇到锁等待限制。若锁及时释放，乙继续执行，五秒语句限制仍可约束后续处理。反例是把锁限制设为十秒、语句限制仍为五秒：长锁等待尚未走完自己的额度，语句期限已经到达。没有报锁超时，不能据此判断语句未曾等待锁。</p>
+<h2 id="取消以后，连接是否还能继续用"><a href="#取消以后，连接是否还能继续用" class="headerlink" title="取消以后，连接是否还能继续用"></a>取消以后，连接是否还能继续用</h2><p>不要把超时异常等同于自动完成业务回滚。应用在显式事务里收到错误后，应按实际事务状态结束或恢复事务，再把连接交回池。若采用局部恢复，保存点必须在可能失败的语句前建立，恢复边界也要符合业务允许的原子性；不能在失败后继续发送下一条业务语句，假设它一定可以执行。</p>
+<p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-set.html">SET 文档</a>说明 SET LOCAL 的效果到当前事务结束为止，无论提交还是回滚。这使它适合一段迁移或一个事务的预算，而普通会话级设置可能在提交后继续影响复用连接。局部设置也不是永久属性：如果回滚到设置之前的保存点，相应设置会被撤销，恢复后需要核对当前值。</p>
+<p>例如批处理在保存点之后设置短锁等待，失败后回到更早的保存点，再运行另一项变更。若代码只记得“前面已经配置过”，第二项可能在不同预算下执行。设计时可选择在稳定的外层事务入口设置，或者在每次局部重试前显式重建预算。选择依据是恢复路径，而不是减少几条 SQL 的美观程度。</p>
+<p>失败报告也应保留哪个期限触发、语句身份、事务动作与重试安排。迁移超时可以表示本轮没有完成，不能直接显示“新增列成功”。对于连接中断造成的结果未知，先查最终模式状态和迁移记录，再考虑重试。本文没有执行锁竞争，未证明任何特定驱动已经正确处理这些状态。</p>
+<h2 id="用对照实验分开验证两种限制"><a href="#用对照实验分开验证两种限制" class="headerlink" title="用对照实验分开验证两种限制"></a>用对照实验分开验证两种限制</h2><p>拟议验证需要两个独立会话。甲先持锁，乙使用上述局部参数运行目标语句，记录服务端错误、开始结束时间与事务状态；确认乙结束事务后，再释放甲。接着在没有竞争的情况下重复目标操作，用一条适合测试环境的耗时语句检查语句期限。两种失败分别制造，才能知道处理器是否把它们都误判成连接丢失。</p>
+<p>还要测试“等锁很短、执行很长”的路径，以及同一语句需要多个锁的路径。不能仅拿一个阻塞例子推断全局累计上限。检查客户端自身的取消期限，确保它与数据库预算的先后关系是有意设计的：若客户端更早放弃，却没有取消服务端操作，应用看到失败而数据库继续工作的情况仍需处理。</p>
+<p>连接复用验证可以在事务结束后查询当前参数，并运行一条普通请求，检查短迁移预算是否污染后续业务。把参数值和真正使用的数据库身份一同保留，避免测试连接与运行连接不一致。需要局部继续处理时，可参考<a href="/zh-CN/2026/10/11/postgres-savepoint-partial-import/">保存点与部分导入报告</a>，该文讨论的是结果合同，本篇解决的是等待与执行的预算范围。</p>
+<h3 id="超时后能否立刻自动重试？"><a href="#超时后能否立刻自动重试？" class="headerlink" title="超时后能否立刻自动重试？"></a>超时后能否立刻自动重试？</h3><p>只有当操作的重试语义、事务恢复和总期限都已定义时才适合安排。若锁来自持续运行的维护任务，立即反复重试可能只是重新排队；若多个实例同步重试，还会形成额外竞争。可以按业务选择延后、退避或交给人工窗口，但次数和间隔应来自运行约束，本文不指定通用秒数。需要保留已耗费的总预算，不能让每次新语句都把用户期限重新开始。</p>
+<p>预算还应包含失败收尾。假设客户端给本次操作六秒，语句上限已经用去五秒，应用还需要处理错误、回滚并返回可解释结果。若清理阶段没有剩余额度，不能简单把连接放回池当作结束。数值仍是假设，具体余量应由真实驱动和运行环境的观察确定；设计重点是取消发生后还有动作需要完成。</p>
+<p>可以让测试在取消后立刻发起下一项独立工作，检查它是否取得干净连接、是否被残留事务或错误设置影响。同时保留原操作的终态与清理结果，避免新请求成功覆盖了旧请求清理失败的事实。若连接无法确认可复用，应由连接管理层按明确规则处置，而不是让业务代码猜测它已经恢复。</p>
+<p>这份说明限定 PostgreSQL 18 文档，没有运行双会话实验、驱动取消或连接池测试。验收时先确认等待、执行、事务恢复和客户端期限各由谁负责，再记录各自证据。一个超时参数只能约束它定义的时间段，无法独自承诺整次操作何时安全结束。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/runtime-config-client.html" rel="noopener">PostgreSQL 18 — 19.11 Client Connection Defaults</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-set.html" rel="noopener">PostgreSQL 18 — SET</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--timeouts" href="/zh-CN/tags/Timeouts/">Timeouts</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fpostgres-lock-statement-timeout-scope%2F&text=PostgreSQL%20%E7%AD%89%E9%94%81%E8%B6%85%E6%97%B6%E4%B8%8E%E8%AF%AD%E5%8F%A5%E8%B6%85%E6%97%B6%EF%BC%9A%E4%B8%A4%E4%B8%AA%E9%A2%84%E7%AE%97%E6%80%8E%E6%A0%B7%E9%85%8D%E5%90%88" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fpostgres-lock-statement-timeout-scope%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=PostgreSQL%20%E7%AD%89%E9%94%81%E8%B6%85%E6%97%B6%E4%B8%8E%E8%AF%AD%E5%8F%A5%E8%B6%85%E6%97%B6%EF%BC%9A%E4%B8%A4%E4%B8%AA%E9%A2%84%E7%AE%97%E6%80%8E%E6%A0%B7%E9%85%8D%E5%90%88&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F23%2Fpostgres-lock-statement-timeout-scope%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/23/wcag-dragging-single-pointer-alternative/">
+              <span>上一篇</span>
+              <strong>不能拖动卡片的人，怎样完成排序？</strong>
+              <small>2026-10-23</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/23/postgres-default-privileges-future-owner/">
+              <span>下一篇</span>
+              <strong>PostgreSQL 默认权限没给新表：先查建表时的角色</strong>
+              <small>2026-10-23</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#预算覆盖的时间段不同">预算覆盖的时间段不同</a>
+          
+            <a class="toc-link toc-link--h2" href="#取消以后，连接是否还能继续用">取消以后，连接是否还能继续用</a>
+          
+            <a class="toc-link toc-link--h2" href="#用对照实验分开验证两种限制">用对照实验分开验证两种限制</a>
+          
+            <a class="toc-link toc-link--h3" href="#超时后能否立刻自动重试？">超时后能否立刻自动重试？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>277</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>122</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>85</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>57</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/postgres-default-privileges-future-owner/">PostgreSQL 默认权限没给新表：先查建表时的角色</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/css-container-query-size-containment/">屏幕很宽，侧栏卡片为什么仍然挤成一团？</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/grpc-status-trailers-result/">HTTP 已经返回 200，gRPC 调用为什么仍然失败？</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
