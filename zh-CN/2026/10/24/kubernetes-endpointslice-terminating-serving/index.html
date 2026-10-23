@@ -1,0 +1,398 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>EndpointSlice 退出端点：ready、serving、terminating 怎么一起读 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="区分端点退出、可服务与普通就绪；保留 publishNotReadyAddresses 例外，结合代理和请求证据核验排空。">
+  
+  
+    <meta name="keywords" content="EndpointSlice,terminating serving ready,publishNotReadyAddresses">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/24/kubernetes-endpointslice-terminating-serving/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/24/kubernetes-endpointslice-terminating-serving/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/24/kubernetes-endpointslice-terminating-serving/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/24/kubernetes-endpointslice-terminating-serving/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="EndpointSlice 退出端点：ready、serving、terminating 怎么一起读 | Midnight blog">
+    <meta property="og:description" content="区分端点退出、可服务与普通就绪；保留 publishNotReadyAddresses 例外，结合代理和请求证据核验排空。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/24/kubernetes-endpointslice-terminating-serving/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/24/kubernetes-endpointslice-terminating-serving/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/24/kubernetes-endpointslice-terminating-serving/","name":"EndpointSlice 退出端点：ready、serving、terminating 怎么一起读 | Midnight blog","description":"区分端点退出、可服务与普通就绪；保留 publishNotReadyAddresses 例外，结合代理和请求证据核验排空。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/24/kubernetes-endpointslice-terminating-serving/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/24/kubernetes-endpointslice-terminating-serving/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/24/kubernetes-endpointslice-terminating-serving/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/24/kubernetes-endpointslice-terminating-serving/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/24/kubernetes-endpointslice-terminating-serving/","headline":"EndpointSlice 退出端点：ready、serving、terminating 怎么一起读","description":"区分端点退出、可服务与普通就绪；保留 publishNotReadyAddresses 例外，结合代理和请求证据核验排空。","inLanguage":"zh-CN","datePublished":"2026-10-23T19:34:07.000Z","dateModified":"2026-10-23T19:34:07.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/"],"keywords":"Delivery, Engineering, Kubernetes, EndpointSlice"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/24/kubernetes-endpointslice-terminating-serving/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"EndpointSlice 退出端点：ready、serving、terminating 怎么一起读","item":"https://www.zyweb.vip/zh-CN/2026/10/24/kubernetes-endpointslice-terminating-serving/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/24/kubernetes-endpointslice-terminating-serving/" selected>zh-CN</option><option value="/en/2026/10/24/kubernetes-endpointslice-terminating-serving/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/24/kubernetes-endpointslice-terminating-serving/" selected>zh-CN</option><option value="/en/2026/10/24/kubernetes-endpointslice-terminating-serving/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-23T19:34:07.000Z">2026-10-24</time>
+    </div>
+
+    <h1>EndpointSlice 退出端点：ready、serving、terminating 怎么一起读</h1>
+
+    
+      <p class="post-hero__summary">区分端点退出、可服务与普通就绪；保留 publishNotReadyAddresses 例外，结合代理和请求证据核验排空。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-23T19:34:07.000Z">2026-10-24</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/24/kubernetes-endpointslice-terminating-serving/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/24/kubernetes-endpointslice-terminating-serving/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>收到删除时间戳早于进程退出，终止与可服务可同时成立。</li><li>ready 的通常关系受 publishNotReadyAddresses 例外影响。</li><li>代理可能使用退出中可服务目标，真实路由和排空仍需请求证据。</li></ul></section>
+      <div class="article-content">
+        <p>EndpointSlice 中的 <code>terminating=true</code> 表示端点正在终止，不表示进程已经退出；<code>serving</code> 仍可描述它是否具备服务能力。普通情况下，<code>ready</code> 可理解为能够服务且没有终止，因此退出中的端点可能同时是 <code>ready=false</code>、<code>serving=true</code>。排查发布丢请求时，应把这三个条件一起读，再核对实际代理和应用行为。</p>
+<h2 id="三个字段回答不同的问题"><a href="#三个字段回答不同的问题" class="headerlink" title="三个字段回答不同的问题"></a>三个字段回答不同的问题</h2><p><a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/#conditions">Kubernetes 的 EndpointSlices 文档</a>说明，<code>serving</code> 与 <code>terminating</code> 自一点二六版本起稳定。对于由 Pod 支撑的端点，前者对应 Pod 的 Ready 条件，后者在 Pod 收到删除时间戳时设置，通常早于容器真正退出。本文按二〇二六年十月二十四日的在线说明讨论，没有创建集群，也没有运行滚动发布演练。</p>
+<p>把三者压缩成一个“健康”状态，会损失退出阶段的区别。一个端点可以还在响应请求，却已经进入删除流程；也可以尚未删除，但因为应用无法接收工作而不再可服务。前者需要讨论流量迁移与排空，后者需要调查不可用原因。只看一个布尔值，很容易给不同状态安排同一种恢复动作。</p>
+<p><code>ready</code> 的通常关系还有一个例外：Service 设置 <code>spec.publishNotReadyAddresses=true</code> 时，文档说明该条件始终为真。因而“ready 为真就一定是可服务且未终止”不能脱离 Service 配置使用。评审导出状态时，应一起保留 Service 与端点条件，避免下游只拿一个经过兼容处理的字段猜测应用状态。</p>
+<h2 id="两个副本退出时，状态线怎样变化"><a href="#两个副本退出时，状态线怎样变化" class="headerlink" title="两个副本退出时，状态线怎样变化"></a>两个副本退出时，状态线怎样变化</h2><p>假设报表服务有甲、乙两个副本，最初两者都就绪。甲收到删除时间戳后，控制面为甲记录终止条件，而它仍有能力完成正在运行的报表。此时甲可以处于退出中且可服务，乙仍可正常接受新请求。普通 ready 语义把甲排除在常规就绪集合之外，不等于甲的进程在同一时刻消失。</p>
+<p>以下是为说明字段关系而写的三组假设观察，不是集群日志。具体传播时刻取决于控制面、代理和应用；这里也不承诺各组件原子地同时更新。</p>
+<p>乙正常运行时，假设三个条件依次为 ready=true、serving=true、terminating=false，属于普通配置下的常规可用目标。甲收到删除时间戳后，假设为 ready=false、serving=true、terminating=true，表示正在退出但仍报告服务能力。甲不再提供服务时，则可以观察到 ready=false、serving=false、terminating=true。三组值说明的是不同阶段可能报告的状态，不能替代进程退出事件。</p>
+<p>如果乙也进入退出流程，情况又不同。官方说明指出，服务代理通常忽略终止中的端点；当所有可用端点都在终止时，代理可能把流量路由到同时 serving 和 terminating 的端点。这里的“可能”需要保留，不能改写成任何代理、任何流量策略都保证继续路由，更不能据此允许应用毫无限制地接新工作。</p>
+<p>这项选择试图避免滚动更新时出现没有目标的窗口，但应用是否有余量接收、请求能否在退出预算内完成，仍是另一组条件。若请求本来需要很久，短暂继续路由也可能在进程退出时失败。端点可服务描述的是状态输入；用户有没有得到完整结果，需要请求级证据回答。</p>
+<h2 id="不要把-serving-当成排空计数器"><a href="#不要把-serving-当成排空计数器" class="headerlink" title="不要把 serving 当成排空计数器"></a>不要把 serving 当成排空计数器</h2><p><code>serving=true</code> 不是“还有多少在途请求”的数值，也不证明所有已接受任务都写入了持久状态。反过来，条件已经变为 false，也不能单凭它推断所有客户端连接都已结束。已有连接、入口缓存、代理更新和应用停止接收之间，需要逐层核对，不能用 EndpointSlice 快照代替完整时间线。</p>
+<p>一个反例是只监听 ready 变化，然后等待固定几秒就记录“排空成功”。这份记录最多证明看见某个状态和等待过一段时间，并不知道甲是否仍持有任务、是否有请求被重试，或者乙是否承接了所有新请求。真正的验收应该关联被接受任务的身份、完成或交接结果，不能让术语替代观测。</p>
+<p>应用的退出顺序也要与代理策略相容。若进程一收到终止通知就关闭监听，代理尚未获知状态时仍可能尝试连接；若一直接新任务，现有工作又可能没有足够时间完成。应根据目标请求类型制定接收、拒绝、完成与交接规则。这里没有一个可从三个字段直接算出的通用睡眠值。</p>
+<h2 id="publishNotReadyAddresses-会改变什么？"><a href="#publishNotReadyAddresses-会改变什么？" class="headerlink" title="publishNotReadyAddresses 会改变什么？"></a>publishNotReadyAddresses 会改变什么？</h2><p>它改变了如何解释 ready，不能代替完整的可用性检查。若业务为特殊发现需求开启该选项，消费者更应明确自己读取哪些字段，以及是否还会检查应用协议。把所有地址发布出来，和保证这些地址能够处理某类业务请求，是不同承诺。不能为了在列表里看到端点就开启选项，再把出现地址当作发布成功。</p>
+<p>对自建代理或直接读取 EndpointSlice 的程序，还应先确认谁管理这些对象、消费者支持哪些条件，以及不同版本的兼容行为。不能因为 API 中存在 serving 字段，就假定当前网络组件已经按期望使用它。对于普通代理应依其具体文档与配置核验，本篇只提供状态解释，不替任何网络实现背书。</p>
+<p>待执行演练可以先保留乙，删除甲，分别采集 Pod 删除时间戳、三条件变化、代理目标选择和应用最后接收的请求；再在隔离环境覆盖所有可用端点同时终止的情况。用短请求与长请求对照，检查状态变化期间新请求、在途请求和重试分别去了哪里。记录组件版本及 Service 流量策略，才有条件解释差异。</p>
+<p><a href="/zh-CN/2026/10/09/kubernetes-termination-budget/">优雅终止时间预算</a>讨论应用有多少退出时间，本篇补的是服务发现怎样描述退出中的目标。先把一条真实请求同端点状态线对上，再决定需要调整应用接收策略、代理配置还是终止预算；字段已经变了，只是调查起点。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/" rel="noopener">EndpointSlices | Kubernetes</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+            <a class="tag tag--kubernetes" href="/zh-CN/tags/Kubernetes/">Kubernetes</a>
+          
+            <a class="tag tag--endpointslice" href="/zh-CN/tags/EndpointSlice/">EndpointSlice</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F24%2Fkubernetes-endpointslice-terminating-serving%2F&text=EndpointSlice%20%E9%80%80%E5%87%BA%E7%AB%AF%E7%82%B9%EF%BC%9Aready%E3%80%81serving%E3%80%81terminating%20%E6%80%8E%E4%B9%88%E4%B8%80%E8%B5%B7%E8%AF%BB" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F24%2Fkubernetes-endpointslice-terminating-serving%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=EndpointSlice%20%E9%80%80%E5%87%BA%E7%AB%AF%E7%82%B9%EF%BC%9Aready%E3%80%81serving%E3%80%81terminating%20%E6%80%8E%E4%B9%88%E4%B8%80%E8%B5%B7%E8%AF%BB&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F24%2Fkubernetes-endpointslice-terminating-serving%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/24/node-buffer-allocunsafe-initialization/">
+              <span>上一篇</span>
+              <strong>allocUnsafe 分配以后，哪些字节可以发送？</strong>
+              <small>2026-10-24</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/24/javascript-flat-sparse-slots/">
+              <span>下一篇</span>
+              <strong>Array.flat 后少了位置：空槽和 undefined 有何区别？</strong>
+              <small>2026-10-24</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#三个字段回答不同的问题">三个字段回答不同的问题</a>
+          
+            <a class="toc-link toc-link--h2" href="#两个副本退出时，状态线怎样变化">两个副本退出时，状态线怎样变化</a>
+          
+            <a class="toc-link toc-link--h2" href="#不要把-serving-当成排空计数器">不要把 serving 当成排空计数器</a>
+          
+            <a class="toc-link toc-link--h2" href="#publishNotReadyAddresses-会改变什么？">publishNotReadyAddresses 会改变什么？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>281</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>128</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>89</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>62</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/24/compose-depends-on-health-startup/">Compose depends_on：健康启动门槛不负责持续恢复</a></h3>
+          <p>2026-10-24</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/24/otel-metric-cardinality-overflow/">OpenTelemetry 指标溢出：总量还在，细分身份去了哪里</a></h3>
+          <p>2026-10-24</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/24/promql-group-left-vector-matching/">PromQL group_left：保留左侧明细，先证明右侧唯一</a></h3>
+          <p>2026-10-24</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

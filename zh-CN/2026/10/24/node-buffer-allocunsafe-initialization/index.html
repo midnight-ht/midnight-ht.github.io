@@ -1,0 +1,404 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>allocUnsafe 分配以后，哪些字节可以发送？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="区分容量、已写长度和完整负载，以短写、错误日志及共享视图生命周期检查Buffer初始化边界。">
+  
+  
+    <meta name="keywords" content="allocUnsafe,initialized bytes,Buffer lifetime">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/24/node-buffer-allocunsafe-initialization/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/24/node-buffer-allocunsafe-initialization/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/24/node-buffer-allocunsafe-initialization/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/24/node-buffer-allocunsafe-initialization/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="allocUnsafe 分配以后，哪些字节可以发送？ | Midnight blog">
+    <meta property="og:description" content="区分容量、已写长度和完整负载，以短写、错误日志及共享视图生命周期检查Buffer初始化边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/24/node-buffer-allocunsafe-initialization/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/24/node-buffer-allocunsafe-initialization/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/24/node-buffer-allocunsafe-initialization/","name":"allocUnsafe 分配以后，哪些字节可以发送？ | Midnight blog","description":"区分容量、已写长度和完整负载，以短写、错误日志及共享视图生命周期检查Buffer初始化边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/24/node-buffer-allocunsafe-initialization/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/24/node-buffer-allocunsafe-initialization/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/24/node-buffer-allocunsafe-initialization/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/24/node-buffer-allocunsafe-initialization/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/24/node-buffer-allocunsafe-initialization/","headline":"allocUnsafe 分配以后，哪些字节可以发送？","description":"区分容量、已写长度和完整负载，以短写、错误日志及共享视图生命周期检查Buffer初始化边界。","inLanguage":"zh-CN","datePublished":"2026-10-23T19:34:07.000Z","dateModified":"2026-10-23T19:34:07.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://nodejs.org/docs/latest-v22.x/api/buffer.html"],"keywords":"Quality, Node.js, Buffer, Security"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/24/node-buffer-allocunsafe-initialization/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"allocUnsafe 分配以后，哪些字节可以发送？","item":"https://www.zyweb.vip/zh-CN/2026/10/24/node-buffer-allocunsafe-initialization/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/24/node-buffer-allocunsafe-initialization/" selected>zh-CN</option><option value="/en/2026/10/24/node-buffer-allocunsafe-initialization/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/24/node-buffer-allocunsafe-initialization/" selected>zh-CN</option><option value="/en/2026/10/24/node-buffer-allocunsafe-initialization/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--quality">Quality</span>
+      <time datetime="2026-10-23T19:34:07.000Z">2026-10-24</time>
+    </div>
+
+    <h1>allocUnsafe 分配以后，哪些字节可以发送？</h1>
+
+    
+      <p class="post-hero__summary">区分容量、已写长度和完整负载，以短写、错误日志及共享视图生命周期检查Buffer初始化边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-23T19:34:07.000Z">2026-10-24</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/24/node-buffer-allocunsafe-initialization/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/24/node-buffer-allocunsafe-initialization/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>分配容量不代表字节已经初始化。</li><li>有效长度与消息完整性分别验证。</li><li>subarray共享存储，复用要遵守消费时序。</li></ul></section>
+      <div class="article-content">
+        <p><code>Buffer.allocUnsafe(size)</code> 分配了容量，却不保证这些字节已初始化。只有你能证明已写入的范围，才可以作为负载读取、记录或发送。不能可靠维护这个范围时，应优先考虑零填充的 <code>Buffer.alloc</code>。判断安全性要覆盖短写和错误分支；某次成功路径写满缓冲区，不代表每条路径都满足条件。</p>
+<h2 id="容量、有效长度与内容不是一个数"><a href="#容量、有效长度与内容不是一个数" class="headerlink" title="容量、有效长度与内容不是一个数"></a>容量、有效长度与内容不是一个数</h2><p><a target="_blank" rel="noopener" href="https://nodejs.org/docs/latest-v22.x/api/buffer.html#static-method-bufferallocunsafesize">Node.js 22 的 Buffer 参考</a>说明，<code>allocUnsafe</code> 返回的内存可能包含旧数据，必须在读取前覆盖。这里的“可能”不能写成必然泄露某种秘密，也不能凭某次看到零字节就判断分配器会永远清零。文档提供的是初始化责任，不是可预测的旧内容。</p>
+<p>假设服务为回复准备一千字节容量，而实际短文本只占八十字节。把整个缓冲区交给发送函数，会把剩余区域也当成回复。那部分既不是文本本身，也没有因为容量已分配而获得业务含义。正确长度需要来自实际写入结果，不能只取输入字符串字符数，因为文本编码后的字节数与字符数量不是同一个计量。</p>
+<p>下面是未执行的说明代码，使用固定短文本，并且只暴露写入返回的字节范围。它没有连接网络，也没有读取未初始化区域。真实协议仍需按字段、编码与大小上限完成设计。</p>
+<pre><code class="js">const text = &#39;example reply&#39;;
+const storage = Buffer.allocUnsafe(64);
+const written = storage.write(text, 0, storage.length, &#39;utf8&#39;);
+const payload = storage.subarray(0, written);
+// Only payload is eligible for a later, separately defined send step.
+</code></pre>
+<p>若协议要求完整文本，切到已写长度仍不足以证明内容完整：容量可能限制写入，输出只是前缀。需要在分配前计算或限制编码后的长度，并在写入后核对是否完整。初始化边界防止越界公开旧内容，完整性边界防止把截断回复当作成功，两个检查不能互相代替。</p>
+<h2 id="错误处理也可能把内部容量变成公开负载"><a href="#错误处理也可能把内部容量变成公开负载" class="headerlink" title="错误处理也可能把内部容量变成公开负载"></a>错误处理也可能把内部容量变成公开负载</h2><p>反例是一段编码函数先分配大缓冲区，随后写头部、正文和校验字段。正文处理中途抛错，捕获函数为了帮助调试，把整个缓冲区转成字符串放入错误日志。即使正常发送路径只用有效长度，这条诊断路径仍绕过了边界。日志、追踪附件和错误响应都属于读取出口，不能只搜索网络发送调用。</p>
+<p>另一个反例是复用写入计数。上一条消息写了五百字节，下一条只写八十字节，却继续使用旧计数。发送范围可能落在已分配容量之内，仍包含不属于当前消息的内容。范围合法与数据归属正确不同；每条消息的长度和缓冲区所有权应随同一次操作初始化，失败时不能沿用上一请求的计数。</p>
+<p>如果操作分段填写缓冲区，只记录最大写入位置也不够。头部写在开头，尾部写在末尾，中间可能仍有未填区域。完整覆盖需要证明连续区间都写过，或先初始化整块再逐项覆盖。为了省掉一次初始化引入复杂覆盖账本，未必值得；没有实际测量的收益，不足以支持增加维护者无法审查的状态。</p>
+<h2 id="何时选择零填充，何时保留显式覆盖"><a href="#何时选择零填充，何时保留显式覆盖" class="headerlink" title="何时选择零填充，何时保留显式覆盖"></a>何时选择零填充，何时保留显式覆盖</h2><p><code>Buffer.alloc</code> 提供确定的零填充内容，适合不容易证明每个字节都被覆盖的路径。它不会把容量自动变成协议长度，也不会修复错误字段、截断文本或跨请求复用。选择它是缩小初始化责任，而不是宣布序列化已经正确。若手头已有完整字节来源，评估是否直接用符合复制或共享需求的构造方式，通常比先分配再手动追踪更清楚。</p>
+<p>只有完整覆盖能够被控制流与测试证明，并且确有分配方面需求时，才考虑保留不初始化分配。文档也提供强制零填充启动选项，但不能把某台机器的启动参数当作所有部署的代码合同。审查库代码时，调用方环境可能不同；测试配置和生产配置不一致，更容易让一次观察产生虚假的稳定感。</p>
+<p>验证不应通过打印“看看旧内存里有什么”完成。可以在可控测试中先填充已知标记，再模拟短写，检查公开负载只包含当前消息的预期字节；或者对编码函数的每个分支断言有效长度和完整内容。这样检验的是路径能否守住边界，而不是碰运气等待敏感内容出现。本文没有执行这些用例，也不提供泄露样本。</p>
+<h3 id="用-subarray-限制长度以后，还需要管所有权吗？"><a href="#用-subarray-限制长度以后，还需要管所有权吗？" class="headerlink" title="用 subarray 限制长度以后，还需要管所有权吗？"></a>用 subarray 限制长度以后，还需要管所有权吗？</h3><p>需要。它创建的是共享同一存储的视图，而不是独立副本。假设异步发送尚未消费字节，生产方已经把原缓冲区交给下一条消息重写，视图内容也会随之变化。是否需要复制、延迟复用或把所有权交给发送方，应依据下游接口消费时机确定；只把范围切对，没有定义生命周期。</p>
+<p>一个更明确的夹具是固定容量十六字节，先用已知标记初始化，再分别编码短消息甲和更短消息乙。预期负载由独立的固定字节清单给出，而不是从编码器自己的长度字段生成。核对乙只含自己的内容，不包含甲的尾部或标记，并确认返回长度与协议声明一致。夹具先初始化是为了控制输入，不是在真实旧内存中搜寻秘密。</p>
+<p>共享视图的时序另设用例：让拟议消费者暂停在读取之前，保留一份发送意图记录，然后尝试复用底层存储。若契约要求字节在消费完成前保持稳定，测试应观察到复用被阻止，或消费者获得独立副本。仅在同步回调里立即比较内容，会错过真实异步接口的生命周期要求。</p>
+<p>这两个用例分别回答当前消息范围与存储生存期，不能互相替代。若实现改变分配大小或编码方式，预期清单应按协议重新审查，而不是自动接受实现产生的新输出。</p>
+<p>本站的<a href="/zh-CN/2026/10/13/node-chunk-text-decoding/">分块字符解码</a>处理输入流中的字符边界，本篇处理输出存储中的初始化和归属边界。两者都需要长度信息，却不能共用一句“缓冲区正确”作为验收结论。本篇依据标为 v22.23.4 的文档，无代码或网络执行记录；交付时应能说明每个出口使用哪段字节、谁写过它，以及何时允许复用底层存储。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://nodejs.org/docs/latest-v22.x/api/buffer.html" rel="noopener">Node.js 22 — Buffer: Buffer.allocUnsafe(size)</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--quality" href="/zh-CN/tags/Quality/">Quality</a>
+          
+            <a class="tag tag--node-js" href="/zh-CN/tags/Node.js/">Node.js</a>
+          
+            <a class="tag tag--buffer" href="/zh-CN/tags/Buffer/">Buffer</a>
+          
+            <a class="tag tag--security" href="/zh-CN/tags/Security/">Security</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--quality" href="/zh-CN/categories/Quality/">Quality</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F24%2Fnode-buffer-allocunsafe-initialization%2F&text=allocUnsafe%20%E5%88%86%E9%85%8D%E4%BB%A5%E5%90%8E%EF%BC%8C%E5%93%AA%E4%BA%9B%E5%AD%97%E8%8A%82%E5%8F%AF%E4%BB%A5%E5%8F%91%E9%80%81%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F24%2Fnode-buffer-allocunsafe-initialization%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=allocUnsafe%20%E5%88%86%E9%85%8D%E4%BB%A5%E5%90%8E%EF%BC%8C%E5%93%AA%E4%BA%9B%E5%AD%97%E8%8A%82%E5%8F%AF%E4%BB%A5%E5%8F%91%E9%80%81%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F24%2Fnode-buffer-allocunsafe-initialization%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/24/otel-metric-cardinality-overflow/">
+              <span>上一篇</span>
+              <strong>OpenTelemetry 指标溢出：总量还在，细分身份去了哪里</strong>
+              <small>2026-10-24</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/24/kubernetes-endpointslice-terminating-serving/">
+              <span>下一篇</span>
+              <strong>EndpointSlice 退出端点：ready、serving、terminating 怎么一起读</strong>
+              <small>2026-10-24</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#容量、有效长度与内容不是一个数">容量、有效长度与内容不是一个数</a>
+          
+            <a class="toc-link toc-link--h2" href="#错误处理也可能把内部容量变成公开负载">错误处理也可能把内部容量变成公开负载</a>
+          
+            <a class="toc-link toc-link--h2" href="#何时选择零填充，何时保留显式覆盖">何时选择零填充，何时保留显式覆盖</a>
+          
+            <a class="toc-link toc-link--h3" href="#用-subarray-限制长度以后，还需要管所有权吗？">用 subarray 限制长度以后，还需要管所有权吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>281</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>128</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>89</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>62</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/24/postgres-security-definer-search-path/">SECURITY DEFINER 的 search_path 为什么要固定？</a></h3>
+          <p>2026-10-24</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/18/csp-form-action-destination/">CSP 表单提交目标要单列：default-src 不替代 form-action</a></h3>
+          <p>2026-10-18</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/24/cookie-host-prefix-origin-boundary/">__Host- Cookie 能隔离同一主机的不同端口吗？</a></h3>
+          <p>2026-10-24</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

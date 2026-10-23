@@ -1,0 +1,413 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>SECURITY DEFINER 的 search_path 为什么要固定？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="以可信schema、临时表顺序与事务化执行授权，审查高权限函数的名称解析和调用边界。">
+  
+  
+    <meta name="keywords" content="SECURITY DEFINER,search_path,pg_temp">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/24/postgres-security-definer-search-path/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/24/postgres-security-definer-search-path/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/24/postgres-security-definer-search-path/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/24/postgres-security-definer-search-path/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="SECURITY DEFINER 的 search_path 为什么要固定？ | Midnight blog">
+    <meta property="og:description" content="以可信schema、临时表顺序与事务化执行授权，审查高权限函数的名称解析和调用边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/24/postgres-security-definer-search-path/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/24/postgres-security-definer-search-path/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/24/postgres-security-definer-search-path/","name":"SECURITY DEFINER 的 search_path 为什么要固定？ | Midnight blog","description":"以可信schema、临时表顺序与事务化执行授权，审查高权限函数的名称解析和调用边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/24/postgres-security-definer-search-path/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/24/postgres-security-definer-search-path/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/24/postgres-security-definer-search-path/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/24/postgres-security-definer-search-path/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/24/postgres-security-definer-search-path/","headline":"SECURITY DEFINER 的 search_path 为什么要固定？","description":"以可信schema、临时表顺序与事务化执行授权，审查高权限函数的名称解析和调用边界。","inLanguage":"zh-CN","datePublished":"2026-10-23T19:34:07.000Z","dateModified":"2026-10-23T19:34:07.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/sql-createfunction.html"],"keywords":"Quality, PostgreSQL, Security, Authorization"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/24/postgres-security-definer-search-path/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"SECURITY DEFINER 的 search_path 为什么要固定？","item":"https://www.zyweb.vip/zh-CN/2026/10/24/postgres-security-definer-search-path/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/24/postgres-security-definer-search-path/" selected>zh-CN</option><option value="/en/2026/10/24/postgres-security-definer-search-path/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/24/postgres-security-definer-search-path/" selected>zh-CN</option><option value="/en/2026/10/24/postgres-security-definer-search-path/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--quality">Quality</span>
+      <time datetime="2026-10-23T19:34:07.000Z">2026-10-24</time>
+    </div>
+
+    <h1>SECURITY DEFINER 的 search_path 为什么要固定？</h1>
+
+    
+      <p class="post-hero__summary">以可信schema、临时表顺序与事务化执行授权，审查高权限函数的名称解析和调用边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-23T19:34:07.000Z">2026-10-24</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/24/postgres-security-definer-search-path/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/24/postgres-security-definer-search-path/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>高权限执行仍需可信名称解析。</li><li>可信schema必须排除低权限创建，pg_temp明确放末尾。</li><li>创建函数与收紧执行权限要一起审查。</li></ul></section>
+      <div class="article-content">
+        <p><code>SECURITY DEFINER</code> 函数以所有者权限执行，但未限定对象名仍需要解析。PostgreSQL 18 官方安全编写建议指出，这类函数的 <code>search_path</code> 排除不可信用户可写的 schema，并把 <code>pg_temp</code> 明确放在末尾。否则调用者可能影响高权限代码实际找到哪个对象。固定路径只是名称解析防线，函数执行授权和业务身份校验仍要分别设计。</p>
+<h2 id="权限提高了，表名却可能仍由调用环境决定"><a href="#权限提高了，表名却可能仍由调用环境决定" class="headerlink" title="权限提高了，表名却可能仍由调用环境决定"></a>权限提高了，表名却可能仍由调用环境决定</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-createfunction.html#SQL-CREATEFUNCTION-SECURITY">CREATE FUNCTION 的安全编写章节</a>把风险说得很具体：不可信用户创建的表、函数或运算符，可能遮蔽作者原本想使用的对象。给函数加上定义者权限，不会自动把其中每个名字绑定到作者预期的 schema。调用者没有直接读取受保护表的权限，也不代表他无法影响函数做出的判断。</p>
+<p>假设管理员维护一张允许操作名单，函数接收成员编号并返回是否允许。目标是读取可信 schema 里的名单。如果函数内部只写未限定表名，而调用者可以创建同名临时表，名称解析可能偏离作者预期。这里是依据官方机制设计的威胁模型，没有向任何在线数据库注入对象，也不声称本站存在该漏洞。</p>
+<p>审查时不要只看函数定义所在的 schema。函数存放的位置与函数体里未限定名称如何查找，是两件事。把函数命名为 admin.allowed，并不能单独证明内部查询的 allowed_members 来自 admin。应检查函数附带的配置、每个对象引用，以及这些 schema 实际允许哪些角色创建对象。</p>
+<h2 id="为什么只写可信-schema-仍不够"><a href="#为什么只写可信-schema-仍不够" class="headerlink" title="为什么只写可信 schema 仍不够"></a>为什么只写可信 schema 仍不够</h2><p>临时表 schema 是这个问题里容易漏掉的条件。官方示例说明，只把 admin 写进路径而不列 <code>pg_temp</code>，仍可能被同名临时表影响。把 <code>pg_temp</code> 明确列在最后，才让可信对象优先于临时对象。这里并不是建议关闭所有临时表，而是明确它在高权限函数解析中的顺序。</p>
+<p>下面是未执行的结构示例。它假定私有练习库已经存在受控角色、schema 和名单表；不是可以直接部署的完整授权系统。名单表、拥有者与调用者的创建和权限配置，都应由单独迁移审查。</p>
+<pre><code class="sql">BEGIN;
+CREATE FUNCTION admin.member_allowed(member_id bigint)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = admin, pg_temp
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM admin.allowed_members AS m WHERE m.id = $1
+  );
+$$;
+REVOKE ALL ON FUNCTION admin.member_allowed(bigint) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION admin.member_allowed(bigint) TO app_reader;
+COMMIT;
+</code></pre>
+<p>示例既限定了表名，也声明了路径，使审查者能看见两种意图。但 admin 必须确实是可信且不可由低权限调用者写入的 schema。若应用角色仍有创建对象能力，把它写在路径首位只是在配置中重复了不安全假设。权限验收应以实际角色检查，而不是按 schema 名字里的“管理员”含义推断。</p>
+<h2 id="发布函数时，还有一个默认开放窗口"><a href="#发布函数时，还有一个默认开放窗口" class="headerlink" title="发布函数时，还有一个默认开放窗口"></a>发布函数时，还有一个默认开放窗口</h2><p>官方文档提醒，新建函数默认向 <code>PUBLIC</code> 授予执行权限。如果目标只允许特定角色调用，应撤销默认权限后明确授予。把函数创建、撤销和授权放进同一事务，是为了避免对象先公开出现，随后才收紧的中间窗口。只在迁移脚本末尾看见一行撤销，不能证明前面的提交点没有暴露它。</p>
+<p>这也影响失败路径。假设函数创建成功后，下一条权限语句拼错，脚本又没有事务包裹。发布工具报告失败，并不说明前面创建的函数消失。维护者需要核对实际数据库状态，而非根据进程退出码推断“什么都没改变”。事务化迁移应同时测试授权语句失败时对象是否留下，以及普通角色是否始终无法越权调用。</p>
+<p>函数所有者也应按所需能力选择。若只需读取一张受保护表，就不应默认给函数超级用户拥有者。减少所有者权限不能替代可信路径，却能限制设计错误的影响范围。本站关于<a href="/zh-CN/2026/10/12/postgres-rls-runtime-role/">RLS 运行角色</a>讨论同样需要核实的身份问题，但这里关注的是被调用函数的有效权限与对象解析，不能拿普通连接角色测试代替函数调用测试。</p>
+<h3 id="表名已经完全限定，还要继续检查哪些地方？"><a href="#表名已经完全限定，还要继续检查哪些地方？" class="headerlink" title="表名已经完全限定，还要继续检查哪些地方？"></a>表名已经完全限定，还要继续检查哪些地方？</h3><p>还要检查函数调用、运算符解析、动态 SQL 和参数授权。限定一个表名只解决那一个引用，不应据此宣布整个函数安全。动态 SQL 若把输入当标识符或表达式拼接，固定路径也不会自动将其变为受信任输入。是否允许调用者查询任意成员，还是只能查询自身成员身份，同样属于业务授权，不是 <code>search_path</code> 能回答的问题。</p>
+<p>拟议验证应建立一个低权限调用角色，在只读业务预期下调用函数，再构造同名临时对象作为负例。对照函数应始终读取可信表；未授权角色应无法调用；授权角色也不能通过另一个成员编号获得越权结果。测试记录要保留函数定义、所有者、schema 创建权限、执行授权和实际返回值，避免只保存管理员成功查询的一张截图。</p>
+<p>练习前应写一份实际权限表：函数所有者能读取名单，调用角色能使用函数所在schema并执行指定签名，调用角色不能在可信schema创建对象，也不能直接读取受保护名单。先证明被允许的函数调用成功，再验证无权限调用失败。否则一个缺少schema使用权限的角色可能什么都调用不了，看起来拦住攻击，却没有测试到预期函数边界。</p>
+<p>还应准备可信名单允许成员甲、不允许成员乙的固定输入，然后给调用者的临时同名表放入相反数据。安全配置下返回值应继续来自可信名单，而不是只检查函数没有报错。测试应恢复相同初始状态，避免第一次调用或临时对象残留改变下一次输入；审查完整函数定义和实际授权，与记录的测试角色对应。</p>
+<p>这些检查并不要求应用向普通用户暴露完整名单。函数只返回受限结果时，测试证据也应遵守相同信息边界。管理员为了准备预期值看到的内容，不能自动成为应用角色应该得到的内容。</p>
+<p>本篇核对 PostgreSQL 18 官方文档，没有建库、授权或执行攻击验证。实际交付应证明三个选择都符合需求：谁的权限在执行，解析到了哪些可信对象，以及调用者被允许请求什么结果。只配置其中一项，就不宜把高权限入口视为验收完成。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-createfunction.html" rel="noopener">PostgreSQL 18 — CREATE FUNCTION: Writing SECURITY DEFINER Functions Safely</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--quality" href="/zh-CN/tags/Quality/">Quality</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--security" href="/zh-CN/tags/Security/">Security</a>
+          
+            <a class="tag tag--authorization" href="/zh-CN/tags/Authorization/">Authorization</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--quality" href="/zh-CN/categories/Quality/">Quality</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F24%2Fpostgres-security-definer-search-path%2F&text=SECURITY%20DEFINER%20%E7%9A%84%20search_path%20%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E5%9B%BA%E5%AE%9A%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F24%2Fpostgres-security-definer-search-path%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=SECURITY%20DEFINER%20%E7%9A%84%20search_path%20%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E5%9B%BA%E5%AE%9A%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F24%2Fpostgres-security-definer-search-path%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/24/postgres-truncate-identity-transaction/">
+              <span>上一篇</span>
+              <strong>TRUNCATE 清空后，编号和回滚会怎样变化？</strong>
+              <small>2026-10-24</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/24/postgres-identity-override-values/">
+              <span>下一篇</span>
+              <strong>导入 identity 列，OVERRIDING 应该保留谁的值？</strong>
+              <small>2026-10-24</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#权限提高了，表名却可能仍由调用环境决定">权限提高了，表名却可能仍由调用环境决定</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么只写可信-schema-仍不够">为什么只写可信 schema 仍不够</a>
+          
+            <a class="toc-link toc-link--h2" href="#发布函数时，还有一个默认开放窗口">发布函数时，还有一个默认开放窗口</a>
+          
+            <a class="toc-link toc-link--h3" href="#表名已经完全限定，还要继续检查哪些地方？">表名已经完全限定，还要继续检查哪些地方？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>281</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>128</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>89</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>62</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/24/node-buffer-allocunsafe-initialization/">allocUnsafe 分配以后，哪些字节可以发送？</a></h3>
+          <p>2026-10-24</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/18/csp-form-action-destination/">CSP 表单提交目标要单列：default-src 不替代 form-action</a></h3>
+          <p>2026-10-18</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/24/cookie-host-prefix-origin-boundary/">__Host- Cookie 能隔离同一主机的不同端口吗？</a></h3>
+          <p>2026-10-24</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

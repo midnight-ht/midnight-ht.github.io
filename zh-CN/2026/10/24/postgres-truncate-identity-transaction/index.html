@@ -1,0 +1,410 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>TRUNCATE 清空后，编号和回滚会怎样变化？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="区分清空数据、重启序列与会话最近值，核对事务回滚、锁、外键范围及旧快照边界。">
+  
+  
+    <meta name="keywords" content="TRUNCATE,RESTART IDENTITY,currval">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/24/postgres-truncate-identity-transaction/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/24/postgres-truncate-identity-transaction/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/24/postgres-truncate-identity-transaction/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/24/postgres-truncate-identity-transaction/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="TRUNCATE 清空后，编号和回滚会怎样变化？ | Midnight blog">
+    <meta property="og:description" content="区分清空数据、重启序列与会话最近值，核对事务回滚、锁、外键范围及旧快照边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/24/postgres-truncate-identity-transaction/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/24/postgres-truncate-identity-transaction/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/24/postgres-truncate-identity-transaction/","name":"TRUNCATE 清空后，编号和回滚会怎样变化？ | Midnight blog","description":"区分清空数据、重启序列与会话最近值，核对事务回滚、锁、外键范围及旧快照边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/24/postgres-truncate-identity-transaction/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/24/postgres-truncate-identity-transaction/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/24/postgres-truncate-identity-transaction/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/24/postgres-truncate-identity-transaction/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/24/postgres-truncate-identity-transaction/","headline":"TRUNCATE 清空后，编号和回滚会怎样变化？","description":"区分清空数据、重启序列与会话最近值，核对事务回滚、锁、外键范围及旧快照边界。","inLanguage":"zh-CN","datePublished":"2026-10-23T19:34:07.000Z","dateModified":"2026-10-23T19:34:07.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/sql-truncate.html","https://www.postgresql.org/docs/18/functions-sequence.html"],"keywords":"Development, PostgreSQL, TRUNCATE, identity"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/24/postgres-truncate-identity-transaction/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"TRUNCATE 清空后，编号和回滚会怎样变化？","item":"https://www.zyweb.vip/zh-CN/2026/10/24/postgres-truncate-identity-transaction/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/24/postgres-truncate-identity-transaction/" selected>zh-CN</option><option value="/en/2026/10/24/postgres-truncate-identity-transaction/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/24/postgres-truncate-identity-transaction/" selected>zh-CN</option><option value="/en/2026/10/24/postgres-truncate-identity-transaction/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-23T19:34:07.000Z">2026-10-24</time>
+    </div>
+
+    <h1>TRUNCATE 清空后，编号和回滚会怎样变化？</h1>
+
+    
+      <p class="post-hero__summary">区分清空数据、重启序列与会话最近值，核对事务回滚、锁、外键范围及旧快照边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-23T19:34:07.000Z">2026-10-24</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/24/postgres-truncate-identity-transaction/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/24/postgres-truncate-identity-transaction/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>默认清空保留序列进度。</li><li>RESTART的事务恢复与currval会话观察分别检查。</li><li>整表范围、阻塞与旧快照需要独立验收。</li></ul></section>
+      <div class="article-content">
+        <p><code>TRUNCATE</code> 清空表时默认保留序列进度，只有明确选择 <code>RESTART IDENTITY</code> 才重启被清空表的列所拥有的序列。在 PostgreSQL 18 中，表数据清空及这次隐含重启都能随外围事务回滚；但同一会话的 <code>currval()</code> 可能仍显示失败事务里取得的值。判断恢复是否正确，要分别检查数据、序列和会话观察，不能只看下一条编号。</p>
+<h2 id="清空数据与重新发号是两个决定"><a href="#清空数据与重新发号是两个决定" class="headerlink" title="清空数据与重新发号是两个决定"></a>清空数据与重新发号是两个决定</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-truncate.html">PostgreSQL 18 的 TRUNCATE 参考</a>把默认行为写为 <code>CONTINUE IDENTITY</code>。这里的重启范围是被清空表中列所拥有的序列，不是数据库里全部名称看起来相关的序列。维护脚本若只写一句清空，再凭习惯认为下一条记录从一开始，就已经把未选择的行为当成了合同。</p>
+<p>假设一个可丢弃练习库有批次表，身份列使用默认起点，已有两行，编号分别为一和二。普通清空后再插入一行，预期编号沿原进度继续；重建相同初始状态，改用重启身份选项，才应检验重新开始的效果。这里的编号只是便于推演的假设，不代表业务主键必须连续。序列是否有缓存、是否被其他入口调用，都要在真实环境单独确认。</p>
+<p>下面是未执行的说明性 SQL，仅供独立练习库复现。先在一个事务中清空并插入，再回滚，让数据恢复与编号观察同时暴露出来。它没有在本站数据库运行，也不是生产清理建议。</p>
+<pre><code class="sql">CREATE TABLE scratch_batches (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  label text NOT NULL
+);
+INSERT INTO scratch_batches(label) VALUES (&#39;A&#39;), (&#39;B&#39;);
+BEGIN;
+TRUNCATE scratch_batches RESTART IDENTITY;
+INSERT INTO scratch_batches(label) VALUES (&#39;C&#39;) RETURNING id;
+SELECT currval(pg_get_serial_sequence(&#39;scratch_batches&#39;, &#39;id&#39;));
+ROLLBACK;
+SELECT id, label FROM scratch_batches ORDER BY id;
+</code></pre>
+<p>按文档，回滚应撤销清空及隐含序列重启，原来的两行应恢复。事务内插入返回的编号只能证明当时分配了一个值，不能证明那行仍存在。回滚后若直接在原会话读取最近序列值，它还可能反映失败事务中的分配；这项会话记忆不应被误读成序列恢复失败，也不能用来识别已提交记录。</p>
+<h2 id="为什么普通序列空洞规则不能直接套过来"><a href="#为什么普通序列空洞规则不能直接套过来" class="headerlink" title="为什么普通序列空洞规则不能直接套过来"></a>为什么普通序列空洞规则不能直接套过来</h2><p>本站关于<a href="/zh-CN/2026/10/15/postgres-sequence-gap/">序列编号与事务回滚</a>讨论普通取号不会因为事务失败就回收。这里增加的是另一个操作的特定合同：重启身份引出的序列重启本身按事务执行。两者并不矛盾，差异在于究竟观察普通取号，还是观察清空命令所做的重启。</p>
+<p>验证时应先保存初始表内容及序列配置，在失败事务内记录插入返回值，然后在回滚后检查原行。若要再插入核对后续发号，必须在隔离练习中明确那次插入会再次消耗编号；不要在共享库里反复调用取号函数，最后拿被诊断动作改变过的进度作为原始故障证据。独立会话的首次最近值查询还可能没有定义，因此也不能把它当成通用观测入口。</p>
+<p>另一个反例是清空后立即向外部系统宣布“编号一可复用”，随后事务回滚。数据库能够恢复本地状态，外部已收到的消息却不因此消失。即使练习库可以重新开始编号，外部链接、审计记录与缓存也可能把旧编号当成稳定身份。是否重用身份必须按系统边界决定，不能由表空了推导。</p>
+<h2 id="选择命令以前，先确认阻塞与关联范围"><a href="#选择命令以前，先确认阻塞与关联范围" class="headerlink" title="选择命令以前，先确认阻塞与关联范围"></a>选择命令以前，先确认阻塞与关联范围</h2><p>该命令会对涉及的表取得排他级别很高的锁，文档明确说明它阻止表上的其他并发操作；重启的序列也会独占锁定。需要持续并发访问时，官方建议考虑 <code>DELETE</code>。这不是在两条语句之间只比较写法长短：如果业务只删除部分过期行，需要行级条件，整表清空本身就不满足要求。</p>
+<p>外键也会改变操作范围。默认 <code>RESTRICT</code> 会拒绝遗漏引用表的清空；<code>CASCADE</code> 则可把关联表加入。为了消除报错而追加级联选项，会把一个范围问题变成更多数据被清空的问题。较清楚的维护方案应列出准确表清单，核对引用关系和预计行数，再确定是否允许整组清空，而非把级联当成修复按钮。</p>
+<p>触发器需要另查。官方参考区分清空触发器与删除触发器；依赖逐行删除审计的系统不能假设清空会走相同路径。预检应列出真正依赖的副作用，再在可恢复环境验证它们。事务可回滚也不能自动证明命令满足原业务流程，尤其当某些触发逻辑会碰到库外服务时。</p>
+<h3 id="有事务保护，就能让旧快照继续看到清空前数据吗？"><a href="#有事务保护，就能让旧快照继续看到清空前数据吗？" class="headerlink" title="有事务保护，就能让旧快照继续看到清空前数据吗？"></a>有事务保护，就能让旧快照继续看到清空前数据吗？</h3><p>不能从可回滚推导出这种保证。文档明确说明清空不是 MVCC 安全的，使用清空前快照的并发事务可能看到空表。数据恢复合同与并发快照合同分别成立。若应用需要跨维护过程保留一致读取，应先设计维护窗口或选择符合读取要求的操作，再用两个受控会话核对，而不是把一次回滚成功当作并发验收。</p>
+<p>还可以把练习拆成四份独立初始状态：保留身份后提交、重启身份后提交、保留身份后回滚、重启身份后回滚。每份都从相同的两行和相同序列配置开始，避免上一轮插入影响下一轮。提交组检查旧行确实消失且新行存在，回滚组检查旧行恢复且新行不存在；之后才按所选身份行为核对发号。这样每个断言都有明确来源，不会把表恢复与序列恢复混成一个数字比较。</p>
+<p>维护过程还要定义等待上限。假设另一个会话持有访问所需的锁，清空任务可能先停在锁等待，而不是已经完成一半。应按维护要求设置可接受的等待和执行期限，并记录失败后事务是否仍待结束。未取得预期终态时，不应继续发布重置完成通知。超时究竟中止哪条语句、应用如何结束事务，要按实际会话配置验证。</p>
+<p>普通取号与会话最近值的区别，可直接对照<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-sequence.html">十八版本序列函数说明</a>。这里引用它是解释观察来源，不是建议通过修改序列来修正一次看起来不连续的输出。</p>
+<p>本篇只依据十八版本文档推演，没有执行 SQL、锁等待或并发快照实验。实际验收至少要解释初始行、清空范围、身份选项、事务终态和观察会话五项。选择整表重置之前，先证明业务确实允许这些状态一起变化。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-truncate.html" rel="noopener">PostgreSQL 18 — TRUNCATE</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-sequence.html" rel="noopener">PostgreSQL 18 — 9.17 Sequence Manipulation Functions</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--truncate" href="/zh-CN/tags/TRUNCATE/">TRUNCATE</a>
+          
+            <a class="tag tag--identity" href="/zh-CN/tags/identity/">identity</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F24%2Fpostgres-truncate-identity-transaction%2F&text=TRUNCATE%20%E6%B8%85%E7%A9%BA%E5%90%8E%EF%BC%8C%E7%BC%96%E5%8F%B7%E5%92%8C%E5%9B%9E%E6%BB%9A%E4%BC%9A%E6%80%8E%E6%A0%B7%E5%8F%98%E5%8C%96%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F24%2Fpostgres-truncate-identity-transaction%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=TRUNCATE%20%E6%B8%85%E7%A9%BA%E5%90%8E%EF%BC%8C%E7%BC%96%E5%8F%B7%E5%92%8C%E5%9B%9E%E6%BB%9A%E4%BC%9A%E6%80%8E%E6%A0%B7%E5%8F%98%E5%8C%96%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F24%2Fpostgres-truncate-identity-transaction%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/24/promise-any-fulfillment-aggregateerror/">
+              <span>上一篇</span>
+              <strong>Promise.any 等到的是成功请求，还是业务有效结果？</strong>
+              <small>2026-10-24</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/24/postgres-security-definer-search-path/">
+              <span>下一篇</span>
+              <strong>SECURITY DEFINER 的 search_path 为什么要固定？</strong>
+              <small>2026-10-24</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#清空数据与重新发号是两个决定">清空数据与重新发号是两个决定</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么普通序列空洞规则不能直接套过来">为什么普通序列空洞规则不能直接套过来</a>
+          
+            <a class="toc-link toc-link--h2" href="#选择命令以前，先确认阻塞与关联范围">选择命令以前，先确认阻塞与关联范围</a>
+          
+            <a class="toc-link toc-link--h3" href="#有事务保护，就能让旧快照继续看到清空前数据吗？">有事务保护，就能让旧快照继续看到清空前数据吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>281</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>128</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>89</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>62</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/24/postgres-identity-override-values/">导入 identity 列，OVERRIDING 应该保留谁的值？</a></h3>
+          <p>2026-10-24</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/postgres-default-privileges-future-owner/">PostgreSQL 默认权限没给新表：先查建表时的角色</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/postgres-lock-statement-timeout-scope/">PostgreSQL 等锁超时与语句超时：两个预算怎样配合</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
