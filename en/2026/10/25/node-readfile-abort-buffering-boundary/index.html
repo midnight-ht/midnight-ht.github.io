@@ -1,0 +1,410 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>readFile was cancelled: why does that not prove disk reads stopped? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Limit AbortSignal claims to documented readFile buffering and verify result ownership and FileHandle cleanup separately.">
+  
+  
+    <meta name="keywords" content="readFile,AbortSignal,FileHandle">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/25/node-readfile-abort-buffering-boundary/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/25/node-readfile-abort-buffering-boundary/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="readFile was cancelled: why does that not prove disk reads stopped? | Midnight blog">
+    <meta property="og:description" content="Limit AbortSignal claims to documented readFile buffering and verify result ownership and FileHandle cleanup separately.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/25/node-readfile-abort-buffering-boundary/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/25/node-readfile-abort-buffering-boundary/#webpage","url":"https://www.zyweb.vip/en/2026/10/25/node-readfile-abort-buffering-boundary/","name":"readFile was cancelled: why does that not prove disk reads stopped? | Midnight blog","description":"Limit AbortSignal claims to documented readFile buffering and verify result ownership and FileHandle cleanup separately.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/25/node-readfile-abort-buffering-boundary/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/25/node-readfile-abort-buffering-boundary/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/25/node-readfile-abort-buffering-boundary/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/25/node-readfile-abort-buffering-boundary/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/25/node-readfile-abort-buffering-boundary/","headline":"readFile was cancelled: why does that not prove disk reads stopped?","description":"Limit AbortSignal claims to documented readFile buffering and verify result ownership and FileHandle cleanup separately.","inLanguage":"en","datePublished":"2026-10-24T19:34:39.000Z","dateModified":"2026-10-24T19:34:39.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://nodejs.org/docs/latest-v24.x/api/fs.html#fspromisesreadfilepath-options"],"keywords":"Delivery, Node.js, Cancellation"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/25/node-readfile-abort-buffering-boundary/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"readFile was cancelled: why does that not prove disk reads stopped?","item":"https://www.zyweb.vip/en/2026/10/25/node-readfile-abort-buffering-boundary/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/">zh-CN</option><option value="/en/2026/10/25/node-readfile-abort-buffering-boundary/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/">zh-CN</option><option value="/en/2026/10/25/node-readfile-abort-buffering-boundary/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-24T19:34:39.000Z">2026-10-25</time>
+    </div>
+
+    <h1>readFile was cancelled: why does that not prove disk reads stopped?</h1>
+
+    
+      <p class="post-hero__summary">Limit AbortSignal claims to documented readFile buffering and verify result ownership and FileHandle cleanup separately.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-24T19:34:39.000Z">2026-10-25</time> · Estimated read 15 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/25/node-readfile-abort-buffering-boundary/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Cancelling internal buffering does not withdraw every OS request.</li><li>A timeout does not automatically cancel the original operation.</li><li>Caller-owned handles need explicit cleanup ownership.</li></ul></section>
+      <div class="article-content">
+        <p>When <code>readFile</code> responds to cancellation by rejecting with AbortError, that does not mean the operating system has withdrawn every file-read request. Node documents a specific boundary: cancellation affects readFile’s internal buffering rather than aborting individual operating-system requests. “The user stopped waiting,” “the read Promise rejected,” and “resource cleanup completed” need separately explainable states.</p>
+<h2 id="Identify-the-layer-being-cancelled"><a href="#Identify-the-layer-being-cancelled" class="headerlink" title="Identify the layer being cancelled"></a>Identify the layer being cancelled</h2><p>The <a target="_blank" rel="noopener" href="https://nodejs.org/docs/latest-v24.x/api/fs.html#fspromisesreadfilepath-options">fsPromises.readFile documentation</a> describes AbortSignal support and explicitly states that operating-system boundary. The page checked here is labelled v24.22.1 and records signal support in v15.2.0 and v14.17.0. This article discusses path-based reading and caller-owned FileHandle objects, not a universal cancellation guarantee for streams, devices, or third-party libraries.</p>
+<p>Suppose a background importer reads a file and the user cancels before reading finishes. Pass the signal to that read and prevent its result from reaching parsing when cancellation applies. If cancellation takes effect before completion, the Promise rejects with AbortError. This does not establish that disk activity immediately reaches zero or reveal how many requests remain, how long they take, or when memory must be reclaimed. Without measurements, the button should not promise those resource outcomes.</p>
+<p>This unexecuted example connects the signal to the actual operation instead of equating a closed waiting screen with cancellation. The file and application behavior are hypothetical.</p>
+<pre><code class="js">import { readFile } from &#39;node:fs/promises&#39;;
+async function loadDraft(path, signal) {
+  try {
+    return await readFile(path, { encoding: &#39;utf8&#39;, signal });
+  } catch (error) {
+    if (error.name === &#39;AbortError&#39;) return null;
+    throw error;
+  }
+}
+const controller = new AbortController();
+const pending = loadDraft(&#39;./draft.txt&#39;, controller.signal);
+controller.abort();
+const text = await pending;
+</code></pre>
+<p>The example uses null for cancellation. A real API can return a tagged result to avoid confusing cancellation with ordinary empty content. It neither invokes a parser nor proves any file was closed. Immediate abort demonstrates wiring, not a promise that cancellation wins every real race. A signal sent after successful completion cannot make that success never have happened.</p>
+<h2 id="A-timeout-does-not-automatically-notify-the-worker"><a href="#A-timeout-does-not-automatically-notify-the-worker" class="headerlink" title="A timeout does not automatically notify the worker"></a>A timeout does not automatically notify the worker</h2><p>Promise.race can select between reading and a timeout so the caller stops waiting sooner. It does not automatically send cancellation to readFile; the original operation may continue. If cancellation is required, retain a controller, supply its signal, and handle the original operation’s eventual completion or rejection. A timeout branch should not abandon responsibility for background work. This compares completion relationships, not measured performance.</p>
+<p>Cancelling a read also does not undo subsequent parsing or database writes. Suppose reading completes, parsing begins, and the user then cancels. Whether parsing responds depends on its own support and the application’s wiring. A requirement to undo the whole batch needs a commit boundary and recovery protocol. A file-level AbortSignal is not a transaction rollback.</p>
+<p>The UI can show “cancellation requested” before reporting cancellation or completion according to actual task state. If work finishes before the request takes effect, an explicit policy should describe that outcome instead of reporting cancellation while a save succeeded. Give each attempt an identity so an old result cannot overwrite a newer task. Cancellation and result ownership are related responsibilities, but neither substitutes for the other.</p>
+<h2 id="Set-buffering-budgets-before-cancellation"><a href="#Set-buffering-budgets-before-cancellation" class="headerlink" title="Set buffering budgets before cancellation"></a>Set buffering budgets before cancellation</h2><p>Ordinary readFile usage produces the file contents as a result and suits files within an acceptable size budget. Cancellation does not turn it into chunk-by-chunk consumption with fixed memory. Large imports may justify streaming and incremental parsing, but budget downstream buffers, parsed objects, and concurrent tasks too. The word “stream” alone does not establish constant memory use.</p>
+<p>The article on <a href="/en/2026/10/13/node-stream-backpressure/">Node stream backpressure</a> explains when a producer should pause. Here the concern is the layer affected by cancellation. Backpressure, cancellation, and concurrency limits address different resource problems. One request stopping internal buffering does not establish that other simultaneous reads stopped. Unbounded immediate retries after cancellation can still exceed the resource budget.</p>
+<p>For a known small configuration file, a path-based readFile call can express the requirement clearly. If position, chunking, and ownership need closer control, choose the corresponding interface and inspect its documentation. No universal size threshold is recommended here: acceptable limits depend on environment, decoding, concurrency, and parsed data, none of which was measured.</p>
+<h3 id="Does-cancellation-close-a-FileHandle-supplied-by-the-caller"><a href="#Does-cancellation-close-a-FileHandle-supplied-by-the-caller" class="headerlink" title="Does cancellation close a FileHandle supplied by the caller?"></a>Does cancellation close a FileHandle supplied by the caller?</h3><p>Do not treat cancellation as an explicit close operation. A caller holding a handle obtained through open needs its own cleanup responsibility and must await the relevant cleanup. The <a target="_blank" rel="noopener" href="https://nodejs.org/docs/latest-v24.x/api/fs.html#filehandleclose">filehandle.close documentation</a> says close waits for pending operations on that handle before closing it. Reading and closing are separate actions; AbortError is not a close receipt.</p>
+<p>A function that opens its own file can await close in its cleanup path. If a handle comes from outside, document whether that function has authority to close it. Silently closing an externally shared handle can disrupt another user; each party assuming the other will close it leaves an ownership gap. Define how cleanup failure is reported without obscuring the original cancellation or read error. The example does not implement a complete handle manager and cannot prove those responsibilities fulfilled.</p>
+<p>Consider two imports. The first read is slow; the user cancels and selects a second file. Even if the first later emits a completion notification, it should not overwrite the second file’s name, preview, or button state. Check task identity when accepting results, not only when the button is clicked. Timely cancellation and rejection of obsolete results require separate controls.</p>
+<p>If the second attempt fails, the first attempt’s late success is not an automatic fallback unless the product explicitly permits that behavior and identifies its source. Verify which file supplies the preview and which attempt owns the save. Seeing one cancellation indicator disappear does not cover this interleaving. No real disk timing was simulated and no maximum wait between attempts is asserted.</p>
+<p>Proposed verification separates an already-aborted signal, cancellation during reading, cancellation after success, ordinary read failure, and cleanup failure. Record Promise outcome, whether parsing began, whether handle cleanup completed, and whether an old result was accepted. Resource observations need their own environment and time window. No file reading, cancellation, or resource measurement was performed here. Limit an acceptance conclusion to the layer actually observed rather than expanding one rejection into a claim that disk, memory, and business processing all stopped.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://nodejs.org/docs/latest-v24.x/api/fs.html#fspromisesreadfilepath-options" rel="noopener">Node.js v24.22.1 File system — fsPromises.readFile and filehandle.close</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--delivery" href="/en/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--node-js" href="/en/tags/Node.js/">Node.js</a>
+          
+            <a class="tag tag--cancellation" href="/en/tags/Cancellation/">Cancellation</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--delivery" href="/en/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F25%2Fnode-readfile-abort-buffering-boundary%2F&text=readFile%20was%20cancelled%3A%20why%20does%20that%20not%20prove%20disk%20reads%20stopped%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F25%2Fnode-readfile-abort-buffering-boundary%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=readFile%20was%20cancelled%3A%20why%20does%20that%20not%20prove%20disk%20reads%20stopped%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F25%2Fnode-readfile-abort-buffering-boundary%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/25/otel-log-severity-number-text/">
+              <span>Previous Post</span>
+              <strong>OpenTelemetry log severity: preserve SeverityText and compare SeverityNumber</strong>
+              <small>2026-10-25</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/25/node-promisify-receiver-custom/">
+              <span>Next Post</span>
+              <strong>After promisify loses this, which function should be bound?</strong>
+              <small>2026-10-25</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Identify-the-layer-being-cancelled">Identify the layer being cancelled</a>
+          
+            <a class="toc-link toc-link--h2" href="#A-timeout-does-not-automatically-notify-the-worker">A timeout does not automatically notify the worker</a>
+          
+            <a class="toc-link toc-link--h2" href="#Set-buffering-budgets-before-cancellation">Set buffering budgets before cancellation</a>
+          
+            <a class="toc-link toc-link--h3" href="#Does-cancellation-close-a-FileHandle-supplied-by-the-caller">Does cancellation close a FileHandle supplied by the caller?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>286</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>135</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>96</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>66</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/25/kubernetes-init-container-resource-requests/">Regular init-container requests: compare per-resource maxima with application sums</a></h3>
+          <p>2026-10-25</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/25/kubernetes-internal-traffic-policy-local/">Healthy Service endpoints can still fail locally: internalTrafficPolicy Local</a></h3>
+          <p>2026-10-25</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/25/node-promisify-receiver-custom/">After promisify loses this, which function should be bound?</a></h3>
+          <p>2026-10-25</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,410 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>readFile 取消了，为什么不能宣称磁盘读取归零？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="限定AbortSignal对readFile内部缓冲的作用，把Promise拒绝、任务结果采用与FileHandle清理分别验收。">
+  
+  
+    <meta name="keywords" content="readFile,AbortSignal,FileHandle">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/25/node-readfile-abort-buffering-boundary/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="readFile 取消了，为什么不能宣称磁盘读取归零？ | Midnight blog">
+    <meta property="og:description" content="限定AbortSignal对readFile内部缓冲的作用，把Promise拒绝、任务结果采用与FileHandle清理分别验收。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/","name":"readFile 取消了，为什么不能宣称磁盘读取归零？ | Midnight blog","description":"限定AbortSignal对readFile内部缓冲的作用，把Promise拒绝、任务结果采用与FileHandle清理分别验收。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/","headline":"readFile 取消了，为什么不能宣称磁盘读取归零？","description":"限定AbortSignal对readFile内部缓冲的作用，把Promise拒绝、任务结果采用与FileHandle清理分别验收。","inLanguage":"zh-CN","datePublished":"2026-10-24T19:34:39.000Z","dateModified":"2026-10-24T19:34:39.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://nodejs.org/docs/latest-v24.x/api/fs.html#fspromisesreadfilepath-options"],"keywords":"Delivery, Node.js, 取消与资源"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"readFile 取消了，为什么不能宣称磁盘读取归零？","item":"https://www.zyweb.vip/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/" selected>zh-CN</option><option value="/en/2026/10/25/node-readfile-abort-buffering-boundary/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/" selected>zh-CN</option><option value="/en/2026/10/25/node-readfile-abort-buffering-boundary/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-24T19:34:39.000Z">2026-10-25</time>
+    </div>
+
+    <h1>readFile 取消了，为什么不能宣称磁盘读取归零？</h1>
+
+    
+      <p class="post-hero__summary">限定AbortSignal对readFile内部缓冲的作用，把Promise拒绝、任务结果采用与FileHandle清理分别验收。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-24T19:34:39.000Z">2026-10-25</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/25/node-readfile-abort-buffering-boundary/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/25/node-readfile-abort-buffering-boundary/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>取消readFile内部缓冲不等于撤回每个系统读取请求。</li><li>超时结束等待不自动通知原任务取消。</li><li>外部FileHandle的关闭责任需要显式合同。</li></ul></section>
+      <div class="article-content">
+        <p><code>readFile</code> 收到取消信号并以 AbortError 拒绝，不等于操作系统已经撤回每一次文件读取。Node 文档把作用范围写得很具体：取消的是 readFile 内部的缓冲处理，不是逐个中止操作系统请求。因此，“用户不再等待”“读取 Promise 已拒绝”“资源清理完成”应该是分别能解释的状态。</p>
+<h2 id="取消发生在哪一层"><a href="#取消发生在哪一层" class="headerlink" title="取消发生在哪一层"></a>取消发生在哪一层</h2><p><a target="_blank" rel="noopener" href="https://nodejs.org/docs/latest-v24.x/api/fs.html#fspromisesreadfilepath-options">Node.js 文件系统文档的 fsPromises.readFile 小节</a>说明该接口支持 AbortSignal，并明确上述操作系统请求边界。本文读取的是标为 v24.22.1 的页面；它记录 signal 支持加入 v15.2.0、v14.17.0。下面讨论路径读取和调用者持有的 FileHandle，不扩展成所有流、设备或第三方库的统一保证。</p>
+<p>假设后台导入一个文件，用户在文件尚未读完时点击取消。应用可以向这次读取传递 signal，并在取消后停止把结果交给解析阶段。若取消确实在请求完成前生效，返回的 Promise 会以 AbortError 拒绝。但这不能证明磁盘活动当场归零，也不能从文档推算还有多少读取、多久结束或何时内存一定回收。没有测量时，不应给取消按钮附上这些资源承诺。</p>
+<p>下面是未执行的示意代码。它展示如何把信号交给原操作，而不是用等待界面的结束代替取消原操作。文件、定时预算与处理函数均为假设。</p>
+<pre><code class="js">import { readFile } from &#39;node:fs/promises&#39;;
+async function loadDraft(path, signal) {
+  try {
+    return await readFile(path, { encoding: &#39;utf8&#39;, signal });
+  } catch (error) {
+    if (error.name === &#39;AbortError&#39;) return null;
+    throw error;
+  }
+}
+const controller = new AbortController();
+const pending = loadDraft(&#39;./draft.txt&#39;, controller.signal);
+controller.abort();
+const text = await pending;
+</code></pre>
+<p>这里选择 null 表示取消，真实 API 可以返回带状态的结果对象，避免与正常空内容混淆。代码没有调用解析器或保存数据，也没有证明任何实际文件被关闭。立即 abort 用来说明连线关系，不承诺每次真实竞速都由取消获胜；如果读取已经完成，后来发信号不能把既成成功改写成未发生。</p>
+<h2 id="超时不等于把信号送到了工作方"><a href="#超时不等于把信号送到了工作方" class="headerlink" title="超时不等于把信号送到了工作方"></a>超时不等于把信号送到了工作方</h2><p>仅用 Promise.race 在读取与超时之间选先完成者，会让调用者较早结束等待，却不自动把取消请求送给 readFile。原任务可能继续进行。需要取消时，应显式持有控制器、传入信号，并处理原任务最终的完成或拒绝，不能让超时分支把它变成无人认领的后台工作。这里比较的是完成关系，不是性能基准。</p>
+<p>同样，取消读取不负责撤销后续解析或已经写出的数据库记录。假设读取完成后，解析器开始处理文本，用户随后点击取消；signal 是否还能影响解析器，要看解析器有没有独立支持以及应用怎样连接。若业务需要整批撤销，还需定义提交边界与恢复协议，不能把文件层 AbortSignal 当作事务回滚。</p>
+<p>界面可以显示“已请求取消”，随后依据任务状态更新为“已取消”或“已完成”。若工作在取消请求之前完成，应按明确策略报告实际结果，避免一边保存成功、一边提示可放心重试。给每次任务一个身份，防止旧任务的迟到结果覆盖新任务，也是调用方责任。底层取消和结果归属相关，但不能互相替代。</p>
+<h2 id="缓冲预算应在取消以前设计"><a href="#缓冲预算应在取消以前设计" class="headerlink" title="缓冲预算应在取消以前设计"></a>缓冲预算应在取消以前设计</h2><p>readFile 的普通用途是把文件内容读入结果，适合已知可接受大小的文件。给它加上取消能力，不会让这条接口自动成为按块消费、固定内存的方案。若导入文件可能很大，可以评估流式读取与增量解析，但仍要预算下游缓冲、业务对象与并发任务数，而不是只看到“流”就宣称内存恒定。</p>
+<p>本站的<a href="/zh-CN/2026/10/13/node-stream-backpressure/">Node 流背压</a>说明生产者何时暂停。这里强调取消处理的层级。背压、取消和并发上限解决不同的资源问题；某个请求停止缓冲，不证明同时存在的其他读取也停止。取消后立即无上限重试，仍可能让资源占用超出预算。</p>
+<p>对已知小配置文件，路径形式 readFile 通常更容易表达所需读取。若需要精细控制位置、分块与资源所有权，应选择相应接口并核对文档。本文不推荐某个固定文件大小阈值，因为可接受范围取决于运行环境、编码转换、并发和解析后数据，而这些都没有在此测量。</p>
+<h3 id="传入-FileHandle-后，取消会替调用者关闭它吗？"><a href="#传入-FileHandle-后，取消会替调用者关闭它吗？" class="headerlink" title="传入 FileHandle 后，取消会替调用者关闭它吗？"></a>传入 FileHandle 后，取消会替调用者关闭它吗？</h3><p>不要把取消当成显式关闭。调用方通过 open 持有句柄时，应为它安排自己的关闭责任，并等待相应清理完成。<a target="_blank" rel="noopener" href="https://nodejs.org/docs/latest-v24.x/api/fs.html#filehandleclose">同一文档的 filehandle.close 小节</a>说明，close 会等待该句柄的待处理操作完成后关闭。调用读取与调用关闭是两个动作，AbortError 也不是关闭回执。</p>
+<p>假设函数自己打开文件，就可在明确的清理分支等待关闭；若句柄由外部传入，函数是否有权关闭应写进接口合同。把外部共享句柄悄悄关闭，可能破坏其他使用者；反过来，双方都以为对方负责，也会留下归属空白。还要考虑清理自身失败怎样报告，不让关闭错误掩盖原始取消或读取错误。示例没有演示完整的句柄管理器，不能据此宣称这些责任已实现。</p>
+<p>可以再用两次导入区分这份责任。假设第一次读取较慢，用户取消后马上选择第二个文件。即使第一次最终仍产生某种完成通知，界面也不应拿它替换第二次的文件名、预览和按钮状态。比较任务身份应发生在采用结果的入口，而不只是按钮点击时；取消信号是否及时生效与旧结果能否被采用，需要分别受控。</p>
+<p>第二次任务若失败，不能把第一次的迟到成功当作自动回退，除非产品明确允许并告诉用户来源。验证应同时检查展示内容对应哪个文件，以及保存动作究竟绑定哪次导入。仅观察一次取消提示消失，没有覆盖这条交错路径。这里没有模拟真实磁盘时序，更没有给出两次任务之间的最大等待时间。</p>
+<p>拟议验证分开检查预先取消、读取中取消、成功后才取消、普通读取错误，以及清理失败。记录 Promise 的状态、解析是否被启动、句柄清理是否完成和旧结果是否被采用，资源观测另列环境与时间窗口。本文没有执行文件读取、取消或资源测量。验收结论应限定为确实观察到的层级，不把一个拒绝结果扩大成整个磁盘、内存和业务流程都已经停止。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://nodejs.org/docs/latest-v24.x/api/fs.html#fspromisesreadfilepath-options" rel="noopener">Node.js v24.22.1 File system — fsPromises.readFile and filehandle.close</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--node-js" href="/zh-CN/tags/Node.js/">Node.js</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%8F%96%E6%B6%88%E4%B8%8E%E8%B5%84%E6%BA%90/">取消与资源</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F25%2Fnode-readfile-abort-buffering-boundary%2F&text=readFile%20%E5%8F%96%E6%B6%88%E4%BA%86%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E8%83%BD%E5%AE%A3%E7%A7%B0%E7%A3%81%E7%9B%98%E8%AF%BB%E5%8F%96%E5%BD%92%E9%9B%B6%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F25%2Fnode-readfile-abort-buffering-boundary%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=readFile%20%E5%8F%96%E6%B6%88%E4%BA%86%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E8%83%BD%E5%AE%A3%E7%A7%B0%E7%A3%81%E7%9B%98%E8%AF%BB%E5%8F%96%E5%BD%92%E9%9B%B6%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F25%2Fnode-readfile-abort-buffering-boundary%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/25/otel-log-severity-number-text/">
+              <span>上一篇</span>
+              <strong>OpenTelemetry 日志等级：保留 SeverityText，用 SeverityNumber 比较</strong>
+              <small>2026-10-25</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/25/node-promisify-receiver-custom/">
+              <span>下一篇</span>
+              <strong>promisify 之后 this 丢了，应该绑定哪一层？</strong>
+              <small>2026-10-25</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#取消发生在哪一层">取消发生在哪一层</a>
+          
+            <a class="toc-link toc-link--h2" href="#超时不等于把信号送到了工作方">超时不等于把信号送到了工作方</a>
+          
+            <a class="toc-link toc-link--h2" href="#缓冲预算应在取消以前设计">缓冲预算应在取消以前设计</a>
+          
+            <a class="toc-link toc-link--h3" href="#传入-FileHandle-后，取消会替调用者关闭它吗？">传入 FileHandle 后，取消会替调用者关闭它吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>286</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>135</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>95</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>66</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/25/kubernetes-init-container-resource-requests/">普通 init 容器的资源请求：逐资源比较最大值与应用之和</a></h3>
+          <p>2026-10-25</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/25/kubernetes-internal-traffic-policy-local/">Service 有健康端点仍访问失败：internalTrafficPolicy Local 的节点边界</a></h3>
+          <p>2026-10-25</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/25/node-promisify-receiver-custom/">promisify 之后 this 丢了，应该绑定哪一层？</a></h3>
+          <p>2026-10-25</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

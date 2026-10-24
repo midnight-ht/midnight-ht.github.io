@@ -1,0 +1,420 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>SQLite WAL 回写不等于文件缩小：先查读事务，再选 checkpoint 模式 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用双连接时间线区分回写、日志复用与物理截断，解释 PASSIVE 返回、长读事务和维护模式的边界。">
+  
+  
+    <meta name="keywords" content="SQLite WAL,wal_checkpoint,长读事务">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="SQLite WAL 回写不等于文件缩小：先查读事务，再选 checkpoint 模式 | Midnight blog">
+    <meta property="og:description" content="用双连接时间线区分回写、日志复用与物理截断，解释 PASSIVE 返回、长读事务和维护模式的边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/","name":"SQLite WAL 回写不等于文件缩小：先查读事务，再选 checkpoint 模式 | Midnight blog","description":"用双连接时间线区分回写、日志复用与物理截断，解释 PASSIVE 返回、长读事务和维护模式的边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/","headline":"SQLite WAL 回写不等于文件缩小：先查读事务，再选 checkpoint 模式","description":"用双连接时间线区分回写、日志复用与物理截断，解释 PASSIVE 返回、长读事务和维护模式的边界。","inLanguage":"zh-CN","datePublished":"2026-10-24T19:34:39.000Z","dateModified":"2026-10-24T19:34:39.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://sqlite.org/wal.html","https://sqlite.org/pragma.html#pragma_wal_checkpoint","https://sqlite.org/c3ref/wal_checkpoint_v2.html"],"keywords":"Delivery, Engineering, SQLite"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"SQLite WAL 回写不等于文件缩小：先查读事务，再选 checkpoint 模式","item":"https://www.zyweb.vip/zh-CN/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/" selected>zh-CN</option><option value="/en/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/" selected>zh-CN</option><option value="/en/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-24T19:34:39.000Z">2026-10-25</time>
+    </div>
+
+    <h1>SQLite WAL 回写不等于文件缩小：先查读事务，再选 checkpoint 模式</h1>
+
+    
+      <p class="post-hero__summary">用双连接时间线区分回写、日志复用与物理截断，解释 PASSIVE 返回、长读事务和维护模式的边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-24T19:34:39.000Z">2026-10-25</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>PASSIVE 首列为零不证明全部日志已经回写。</li><li>逻辑回写、可复用和物理截断需要分别验证。</li><li>缩短读事务必须保留导出一致性与版本修复边界。</li></ul></section>
+      <div class="article-content">
+        <p>SQLite 执行过 checkpoint，不等于 WAL 文件已经缩小。先分清三件事：日志内容回写到哪里，旧读事务是否仍需要日志，以及本次模式是否要求截断文件。长读者可以限制回写和复用；即使全部回写，保留原有文件长度用于下次覆盖，也可能是正常行为。不能只凭一次返回或文件大小判断失败。</p>
+<h2 id="长读事务保留的是什么"><a href="#长读事务保留的是什么" class="headerlink" title="长读事务保留的是什么"></a>长读事务保留的是什么</h2><p><a target="_blank" rel="noopener" href="https://sqlite.org/wal.html#concurrency">SQLite 的 WAL 文档</a>说明，读事务会固定开始读取时的提交边界，使它持续看到同一快照。后续写入可以追加日志，但 checkpoint 不能为追赶新写入而破坏旧读者所依赖的内容。因此，读写并发可用与日志能否及时回收，是不同约束。</p>
+<p>这里的寿命是读事务的寿命，不是界面是否还显示加载。导出程序取完一批数据后等待网络上传，如果事务仍然打开，就可能继续占着快照。连接池归还对象、关闭游标和结束事务在具体绑定中是什么关系，应查实际接口；不能看到查询函数返回，就假定数据库事务已经结束。</p>
+<p>本文的两连接流程仅用于解释机制，未运行。拟议并发验证应采用包含官方 WAL-reset 修复的运行库：官方页面列明三点五十一点三及以后版本，并提供三点四十四点六与三点五十点七的回补。供应商回补需另查证，不能只看系统命令版本代表应用嵌入版本。增长还可能有写入量、维护配置、锁竞争或版本问题，长读者不是未经观察即可宣布的唯一根因。</p>
+<h2 id="两个连接怎样复现这条责任链"><a href="#两个连接怎样复现这条责任链" class="headerlink" title="两个连接怎样复现这条责任链"></a>两个连接怎样复现这条责任链</h2><p>在可删除的测试数据库中，连接乙先启用 WAL 并确认返回模式，暂时关闭自身自动 checkpoint，建立表并提交一条初始记录。这样做是为了让手动实验的时间线容易解释，不是生产配置建议。接着连接甲开始显式读事务，真正执行一次查询取得快照，并保持事务不结束。</p>
+<pre><code class="sql">-- Connection B: isolated setup, not executed.
+PRAGMA journal_mode=WAL;
+PRAGMA wal_autocheckpoint=0;
+CREATE TABLE sample(id INTEGER PRIMARY KEY, value INTEGER);
+INSERT INTO sample VALUES(1, 0);
+-- Connection A: establish and keep the read transaction.
+BEGIN;
+SELECT value FROM sample WHERE id=1;
+-- Connection B: commit a later version, then inspect progress.
+UPDATE sample SET value=value+1 WHERE id=1;
+UPDATE sample SET value=value+1 WHERE id=1;
+PRAGMA main.wal_checkpoint(PASSIVE);
+</code></pre>
+<p>代码应分别送到标明的连接，不能整段粘在同一个会话。假设甲仍依赖旧 WAL 快照，乙已把较新版本提交到其边界之后，PASSIVE 可以推进允许的部分，却不能越过保护旧读者的边界。甲在同一事务再次查询，应仍看到原快照，而非乙的新值。实际日志页数取决于页面和既有状态，本文不给出伪造的固定返回行。</p>
+<p>然后甲明确提交或回滚读事务，确认相关语句已释放，乙再尝试 checkpoint。若没有其他读写者和错误，原来的读者障碍消失；还要观察实际结果，不能仅根据甲点击“完成”就登记回收成功。需要验证物理截断时，可由乙在这个隔离窗口请求 <code>PRAGMA main.wal_checkpoint(TRUNCATE)</code>，并把返回与文件长度一起记录。</p>
+<pre><code class="sql">-- Connection A: explicitly release the read transaction.
+COMMIT;
+-- Connection B: compare progress after release, then request truncation.
+PRAGMA main.wal_checkpoint(PASSIVE);
+PRAGMA main.wal_checkpoint(TRUNCATE);
+</code></pre>
+<h2 id="PASSIVE-的首列为零，证明什么"><a href="#PASSIVE-的首列为零，证明什么" class="headerlink" title="PASSIVE 的首列为零，证明什么"></a>PASSIVE 的首列为零，证明什么</h2><p><a target="_blank" rel="noopener" href="https://sqlite.org/pragma.html#pragma_wal_checkpoint">wal_checkpoint 的 PRAGMA 定义</a>返回三个整数：首列对应是否遇到阻止指定操作完成的忙状态，后两列描述日志中的页数与已完成回写的页数。PASSIVE 不等待读写者，也不调用忙处理器；首列为零仍可能只做了部分工作，必须结合后两列判断。</p>
+<p>后两列是该次结束时日志与已回写进度的描述，不应把第三列当作“这一次新增搬运量”，再把多次结果累加。两列相等支持当时逻辑回写已追上该日志范围，却没有承诺物理文件为零，也不保证下一次写入不会马上产生新日志。非 WAL 等场景可能出现负一，应先核对模式和错误，不能算成负积压。</p>
+<p>同样，目录中一个较大的日志文件可能已经可供覆盖复用。把字节长度当作未回写工作量，会把正常预留误报为积压；只看页数差，又可能忽略磁盘容量压力。监控应分别保存逻辑进展、文件长度和采样时间，解释各自承担的判断。</p>
+<h2 id="FULL、RESTART-与-TRUNCATE-怎么选"><a href="#FULL、RESTART-与-TRUNCATE-怎么选" class="headerlink" title="FULL、RESTART 与 TRUNCATE 怎么选"></a>FULL、RESTART 与 TRUNCATE 怎么选</h2><p><a target="_blank" rel="noopener" href="https://sqlite.org/c3ref/wal_checkpoint_v2.html">checkpoint 接口文档</a>区分了等待目标。FULL 等待写者结束以及读者达到最新快照，再完成回写；RESTART 在此之外等待读者不再使用 WAL，以便下一位写者从头复用；TRUNCATE 再增加成功完成前将日志截成零字节的要求。更强模式可能等待并影响写入，不适合因为文件大就无条件放进请求路径。</p>
+<p>后台希望少干扰业务，可选择尽力推进的 PASSIVE，并监控读事务寿命和进度；维护窗口明确需要空间归还，才评估带等待预算的截断。忙处理器拒绝继续等待时，较强模式可能仅完成部分工作并报告忙，不能把发出 TRUNCATE 当成已经清零。另一个 checkpoint 占用检查点锁时，也可能直接失败，调长忙超时不能保证所有锁竞争都会等待。</p>
+<p>不要直接删除活动数据库的 <code>-wal</code> 文件。尚未回写的已提交内容可能仍在其中，手工删文件绕过了 SQLite 的一致性管理。磁盘告警应触发识别持有者、限制新工作及受控维护，不能把删除日志当作“清缓存”。这一失败路径与模式选择是同一份运维责任。</p>
+<h2 id="提前结束导出读事务，会丢掉快照一致性吗？"><a href="#提前结束导出读事务，会丢掉快照一致性吗？" class="headerlink" title="提前结束导出读事务，会丢掉快照一致性吗？"></a>提前结束导出读事务，会丢掉快照一致性吗？</h2><p>可能改变语义。若导出要求整个结果来自同一时点，分批结束再开始事务会让后续批次看到新提交，简单缩短事务可能产生前后不一致的文件。可评估更快消费同一快照、先生成受控中间结果，或按业务允许的版本边界分批；每种选择都要交代一致性、额外空间与恢复成本。</p>
+<p><a href="/zh-CN/2026/10/13/sqlite-foreign-key-connection/">每连接外键开关</a>处理连接初始化，本篇则要求沿实际读事务追踪释放责任。不要为了解决空间问题悄悄牺牲导出合同，也不要让用户等待期间无期限占着事务而无人知晓。</p>
+<h2 id="自动阈值能当作-WAL-文件硬上限吗？"><a href="#自动阈值能当作-WAL-文件硬上限吗？" class="headerlink" title="自动阈值能当作 WAL 文件硬上限吗？"></a>自动阈值能当作 WAL 文件硬上限吗？</h2><p>不能。自动 checkpoint 的页数阈值是触发维护的条件，默认自动操作属于 PASSIVE；遇到持续读者，不保证一次追平，更不等于每次都物理截断。应为容量、最长读事务、维护延迟分别设观察与处置依据，而不是把阈值乘页大小当作绝不会超过的磁盘预算。</p>
+<p>待执行验收应保留运行库身份、数据库模式、两个连接的事务时间线、每次三列结果、文件长度及等待和错误。分别覆盖甲保持旧快照、甲释放、并发维护争用和成功截断，并确认业务查询结果正确。本文没有创建数据库或执行命令；先证明哪个事务限制了哪一步，再让维护模式兑现回写、复用或物理回收中的明确目标。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://sqlite.org/wal.html" rel="noopener">Write-Ahead Logging — Checkpointing, Concurrency, Avoiding Excessively Large WAL Files</a></li><li><a target="_blank" href="https://sqlite.org/pragma.html#pragma_wal_checkpoint" rel="noopener">PRAGMA Statements — wal_checkpoint</a></li><li><a target="_blank" href="https://sqlite.org/c3ref/wal_checkpoint_v2.html" rel="noopener">Checkpoint a database — sqlite3_wal_checkpoint_v2</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+            <a class="tag tag--sqlite" href="/zh-CN/tags/SQLite/">SQLite</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F25%2Fsqlite-wal-checkpoint-reader-lifetime%2F&text=SQLite%20WAL%20%E5%9B%9E%E5%86%99%E4%B8%8D%E7%AD%89%E4%BA%8E%E6%96%87%E4%BB%B6%E7%BC%A9%E5%B0%8F%EF%BC%9A%E5%85%88%E6%9F%A5%E8%AF%BB%E4%BA%8B%E5%8A%A1%EF%BC%8C%E5%86%8D%E9%80%89%20checkpoint%20%E6%A8%A1%E5%BC%8F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F25%2Fsqlite-wal-checkpoint-reader-lifetime%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=SQLite%20WAL%20%E5%9B%9E%E5%86%99%E4%B8%8D%E7%AD%89%E4%BA%8E%E6%96%87%E4%BB%B6%E7%BC%A9%E5%B0%8F%EF%BC%9A%E5%85%88%E6%9F%A5%E8%AF%BB%E4%BA%8B%E5%8A%A1%EF%BC%8C%E5%86%8D%E9%80%89%20checkpoint%20%E6%A8%A1%E5%BC%8F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F25%2Fsqlite-wal-checkpoint-reader-lifetime%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/25/wcag-headings-labels-purpose/">
+              <span>上一篇</span>
+              <strong>标题层级全对，用户为什么还是找不到退款材料？</strong>
+              <small>2026-10-25</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/25/source-date-epoch-reproducible-scope/">
+              <span>下一篇</span>
+              <strong>固定 SOURCE_DATE_EPOCH 后产物仍不同：先界定可复现的范围</strong>
+              <small>2026-10-25</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#长读事务保留的是什么">长读事务保留的是什么</a>
+          
+            <a class="toc-link toc-link--h2" href="#两个连接怎样复现这条责任链">两个连接怎样复现这条责任链</a>
+          
+            <a class="toc-link toc-link--h2" href="#PASSIVE-的首列为零，证明什么">PASSIVE 的首列为零，证明什么</a>
+          
+            <a class="toc-link toc-link--h2" href="#FULL、RESTART-与-TRUNCATE-怎么选">FULL、RESTART 与 TRUNCATE 怎么选</a>
+          
+            <a class="toc-link toc-link--h2" href="#提前结束导出读事务，会丢掉快照一致性吗？">提前结束导出读事务，会丢掉快照一致性吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#自动阈值能当作-WAL-文件硬上限吗？">自动阈值能当作 WAL 文件硬上限吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>286</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>135</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>95</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>66</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/25/kubernetes-init-container-resource-requests/">普通 init 容器的资源请求：逐资源比较最大值与应用之和</a></h3>
+          <p>2026-10-25</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/25/kubernetes-internal-traffic-policy-local/">Service 有健康端点仍访问失败：internalTrafficPolicy Local 的节点边界</a></h3>
+          <p>2026-10-25</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/25/otel-log-severity-number-text/">OpenTelemetry 日志等级：保留 SeverityText，用 SeverityNumber 比较</a></h3>
+          <p>2026-10-25</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,409 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>字段从 NULL 变成文本，为什么变更检测没有命中？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用五组更新前后状态解释空值差异比较，避免哨兵碰撞，并保留部分更新中省略字段与显式清空的区别。">
+  
+  
+    <meta name="keywords" content="IS DISTINCT FROM,NULL,部分更新">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/25/postgres-is-distinct-from-null-equality/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/25/postgres-is-distinct-from-null-equality/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/25/postgres-is-distinct-from-null-equality/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/25/postgres-is-distinct-from-null-equality/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="字段从 NULL 变成文本，为什么变更检测没有命中？ | Midnight blog">
+    <meta property="og:description" content="用五组更新前后状态解释空值差异比较，避免哨兵碰撞，并保留部分更新中省略字段与显式清空的区别。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/25/postgres-is-distinct-from-null-equality/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/25/postgres-is-distinct-from-null-equality/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/25/postgres-is-distinct-from-null-equality/","name":"字段从 NULL 变成文本，为什么变更检测没有命中？ | Midnight blog","description":"用五组更新前后状态解释空值差异比较，避免哨兵碰撞，并保留部分更新中省略字段与显式清空的区别。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/25/postgres-is-distinct-from-null-equality/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/25/postgres-is-distinct-from-null-equality/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/25/postgres-is-distinct-from-null-equality/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/25/postgres-is-distinct-from-null-equality/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/25/postgres-is-distinct-from-null-equality/","headline":"字段从 NULL 变成文本，为什么变更检测没有命中？","description":"用五组更新前后状态解释空值差异比较，避免哨兵碰撞，并保留部分更新中省略字段与显式清空的区别。","inLanguage":"zh-CN","datePublished":"2026-10-24T19:34:39.000Z","dateModified":"2026-10-24T19:34:39.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/functions-comparison.html"],"keywords":"Development, PostgreSQL, 变更审计"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/25/postgres-is-distinct-from-null-equality/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"字段从 NULL 变成文本，为什么变更检测没有命中？","item":"https://www.zyweb.vip/zh-CN/2026/10/25/postgres-is-distinct-from-null-equality/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/25/postgres-is-distinct-from-null-equality/" selected>zh-CN</option><option value="/en/2026/10/25/postgres-is-distinct-from-null-equality/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/25/postgres-is-distinct-from-null-equality/" selected>zh-CN</option><option value="/en/2026/10/25/postgres-is-distinct-from-null-equality/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-24T19:34:39.000Z">2026-10-25</time>
+    </div>
+
+    <h1>字段从 NULL 变成文本，为什么变更检测没有命中？</h1>
+
+    
+      <p class="post-hero__summary">用五组更新前后状态解释空值差异比较，避免哨兵碰撞，并保留部分更新中省略字段与显式清空的区别。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-24T19:34:39.000Z">2026-10-25</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/25/postgres-is-distinct-from-null-equality/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/25/postgres-is-distinct-from-null-equality/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>空值参与普通不等比较时会得到未知。</li><li>IS DISTINCT FROM明确区分单侧空与双侧空。</li><li>请求省略字段的含义必须在比较之前保留。</li></ul></section>
+      <div class="article-content">
+        <p>用 <code>old_value &lt;&gt; new_value</code> 检测可空字段变更时，从 NULL 首次填写文本、或从文本清空成 NULL，都可能没有被条件选中。普通不等比较遇到 NULL 会得到未知。若业务需要把“两边都是空”看作没变、“只有一边为空”看作已变，应该考虑 <code>IS DISTINCT FROM</code>，并先定义输入缺失与显式清空的区别。</p>
+<h2 id="变更检测要比较完整状态"><a href="#变更检测要比较完整状态" class="headerlink" title="变更检测要比较完整状态"></a>变更检测要比较完整状态</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-comparison.html">PostgreSQL 18 比较函数与运算符文档</a>说明，IS DISTINCT FROM 对两个非空值按不等比较；两边都是 NULL 时为 false，只有一边为 NULL 时为 true。相反的 IS NOT DISTINCT FROM 对两个 NULL 返回 true。这是一份明确包含空状态的比较协议，不是把 SQL 的所有未知值普遍改成相等。</p>
+<p>假设资料审计记录联系人备注的更新前后状态。第一位用户原来没有备注，现在填入“晚间联系”；第二位原来有这段备注，现在明确清空；第三位前后都没有备注。业务要求前两位产生变更，第三位不产生。若只写普通不等条件，前两位也不会得到 true，审计就漏掉真正的状态迁移。</p>
+<p>下面给出完整假设输入与比较列。代码没有执行，结果解释是依据文档的纸面推演，不是数据库日志。</p>
+<pre><code class="sql">WITH changes(id, old_value, new_value) AS (
+  VALUES (1, NULL::text, &#39;evening&#39;),
+         (2, &#39;evening&#39;, NULL::text),
+         (3, NULL::text, NULL::text),
+         (4, &#39;&#39;, NULL::text),
+         (5, &#39;same&#39;, &#39;same&#39;)
+)
+SELECT id,
+       old_value &lt;&gt; new_value AS ordinary_different,
+       old_value IS DISTINCT FROM new_value AS changed
+FROM changes
+ORDER BY id;
+</code></pre>
+<p>按这份输入，changed 对一、二、四为真，对三、五为假。第四行故意加入空字符串与 NULL 的区别：若空字符串是合法的已提供值，转成 NULL 就应被记录。普通比较在前四行都受到空值影响，无法单独给出期望的二值变更标记。第五行则保留了普通非空相等的基准，避免测试只检查含 NULL 的例子。</p>
+<h2 id="COALESCE-哨兵可能吞掉合法变更"><a href="#COALESCE-哨兵可能吞掉合法变更" class="headerlink" title="COALESCE 哨兵可能吞掉合法变更"></a>COALESCE 哨兵可能吞掉合法变更</h2><p>常见补丁是把两侧 NULL 都替换成空字符串，再用不等比较。它会把第四行转换成空字符串对空字符串，于是把一项真实变化判成没有变化。换成某个特别的字符串也只是把冲突推迟到该值进入数据时。若字段没有约束保证哨兵永远不可能出现，比较过程就在悄悄合并两种真实状态。</p>
+<p>如果业务有意把空字符串、全空格与 NULL 统一成“未提供”，应先定义正规化规则，在边界明确处理，并决定是否保留原始输入用于审计。此时两种存储状态被视作相同是产品决定，而不是为了让 SQL 返回布尔值做的临时替换。IS DISTINCT FROM 同样不会替团队完成空白裁剪、大小写归一或电话格式转换。</p>
+<p>比如用户把带空格的备注改成不带空格的相同文字，是否产生审计事件，取决于比较原始输入还是规范化结果。若既要保留用户动作，也要避免内容相同的重复更新，可以分别记录请求事件与规范化状态变化。把两种目的塞进一个 changed 字段，会让以后的人无法判断它代表点击保存，还是存储内容真正不同。</p>
+<h2 id="条件更新与审计仍有各自的责任"><a href="#条件更新与审计仍有各自的责任" class="headerlink" title="条件更新与审计仍有各自的责任"></a>条件更新与审计仍有各自的责任</h2><p>对于只在备注真正改变时才更新的假设接口，可以把字段比较纳入 UPDATE 的 WHERE 条件，同时按稳定记录标识定位目标。这样表达的是“目标存在且当前字段与新值不同才更新”。但没有更新行可能表示内容相同，也可能表示记录不存在或其他筛选条件不满足，不能直接把零行翻译成“资料原本就一致”。</p>
+<p>审计还需要绑定实际变更的旧值、新值、操作人及事务归属。一次 SELECT 比较正确，不证明后来的 UPDATE 使用了同一版本状态，也不证明审计与变更一同提交。本文不提供完整事务实现或并发控制方案；它只解决字段差异比较的语义。实际服务仍需按当前授权、更新协议和事务设计验证结果，不能把一个谓词当作整套审计系统。</p>
+<p>拟议验收先写出五行示例的独立结果，再补充两个不同非空文本、普通相同文本、空字符串对空字符串。检查值之外，核对被更新的业务标识与审计条数。不要只验证一次从文本到另一个文本，因为最容易漏记的首次填写与清空根本没有经过那条路径。这里没有执行 SQL 或测量是否减少写入成本。</p>
+<h3 id="接口省略字段和显式传-NULL，能用同一比较处理吗？"><a href="#接口省略字段和显式传-NULL，能用同一比较处理吗？" class="headerlink" title="接口省略字段和显式传 NULL，能用同一比较处理吗？"></a>接口省略字段和显式传 NULL，能用同一比较处理吗？</h3><p>不能先把二者都变成 NULL 再期待数据库还原意图。对于部分更新，省略备注通常可表示保持原值，显式 NULL 则可能表示清空；这是需要由接口明确规定的假设合同。应用必须先保留字段是否存在，再决定是否把新值送入比较。比较谓词只看到收到的两个值，不知道请求里原先有没有这个字段。</p>
+<p>假设已有备注为 evening，甲请求完全不含备注字段，乙请求明确包含备注且值为 NULL。前者应按合同跳过备注更新，后者才比较 evening 与 NULL 并产生清空事件。若服务把甲缺失字段也默认赋成 NULL，两条请求就会意外做同一件事。测试因此要覆盖原始请求形状，而不只是直接调用数据库时的参数值。</p>
+<p>响应协议也要保留这份区别。假设客户端重复提交相同备注，服务可以报告内容未变化，但仍应先确认目标与访问权限，而不能仅凭更新零行就透露或推断记录状态。若需要把不存在、不可访问与无变更统一呈现，也应是明确的安全和产品选择，而不是查询偶然给出同一个计数。</p>
+<p>审计验收则可准备连续两次相同请求，核对实际变更事件没有被误记两次，同时保留接口确实收到两次请求所需的操作证据。请求次数与状态变化次数不必相同，两份记录可以服务不同调查目的。这个例子不承诺自动获得幂等处理；请求身份、事务与重复副作用仍需实际实现。先把事件名称写清楚，比让所有记录都叫更新成功更利于核查。</p>
+<p>本站的<a href="/zh-CN/2026/10/14/postgres-not-in-null/">NOT IN 与 NULL</a>解释集合筛选里的未知传播；这里的读者问题是更新前后状态怎么比较。不要因为都涉及 NULL，就把一种改写复制到全部查询。提交资料变更修复时，应交付输入存在性规则、空值等价规则与每种状态迁移的预期，再验证更新和审计确实遵循同一份规则。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-comparison.html" rel="noopener">PostgreSQL 18 — 9.2 Comparison Functions and Operators: IS DISTINCT FROM and NULL</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%8F%98%E6%9B%B4%E5%AE%A1%E8%AE%A1/">变更审计</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F25%2Fpostgres-is-distinct-from-null-equality%2F&text=%E5%AD%97%E6%AE%B5%E4%BB%8E%20NULL%20%E5%8F%98%E6%88%90%E6%96%87%E6%9C%AC%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%8F%98%E6%9B%B4%E6%A3%80%E6%B5%8B%E6%B2%A1%E6%9C%89%E5%91%BD%E4%B8%AD%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F25%2Fpostgres-is-distinct-from-null-equality%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E5%AD%97%E6%AE%B5%E4%BB%8E%20NULL%20%E5%8F%98%E6%88%90%E6%96%87%E6%9C%AC%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%8F%98%E6%9B%B4%E6%A3%80%E6%B5%8B%E6%B2%A1%E6%9C%89%E5%91%BD%E4%B8%AD%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F25%2Fpostgres-is-distinct-from-null-equality%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/25/postgres-join-using-output-contract/">
+              <span>上一篇</span>
+              <strong>JOIN USING 少了一列，接口为什么跟着变了？</strong>
+              <small>2026-10-25</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/25/postgres-bool-aggregate-null-input/">
+              <span>下一篇</span>
+              <strong>bool_and 为 true，为什么仍不能放行整批？</strong>
+              <small>2026-10-25</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#变更检测要比较完整状态">变更检测要比较完整状态</a>
+          
+            <a class="toc-link toc-link--h2" href="#COALESCE-哨兵可能吞掉合法变更">COALESCE 哨兵可能吞掉合法变更</a>
+          
+            <a class="toc-link toc-link--h2" href="#条件更新与审计仍有各自的责任">条件更新与审计仍有各自的责任</a>
+          
+            <a class="toc-link toc-link--h3" href="#接口省略字段和显式传-NULL，能用同一比较处理吗？">接口省略字段和显式传 NULL，能用同一比较处理吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>286</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>135</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>95</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>66</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/25/postgres-bool-aggregate-null-input/">bool_and 为 true，为什么仍不能放行整批？</a></h3>
+          <p>2026-10-25</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/25/postgres-join-using-output-contract/">JOIN USING 少了一列，接口为什么跟着变了？</a></h3>
+          <p>2026-10-25</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/24/postgres-identity-override-values/">导入 identity 列，OVERRIDING 应该保留谁的值？</a></h3>
+          <p>2026-10-24</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
