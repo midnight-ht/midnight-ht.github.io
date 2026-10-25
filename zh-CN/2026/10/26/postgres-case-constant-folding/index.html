@@ -1,0 +1,402 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>CASE 没进入分支，为什么仍可能常量除零 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="区分计划期折叠与运行时选择，用逐行分母、聚合参数与 NULLIF 明确错误保护的位置和数据口径。">
+  
+  
+    <meta name="keywords" content="CASE,NULLIF,常量折叠">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/26/postgres-case-constant-folding/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/26/postgres-case-constant-folding/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/26/postgres-case-constant-folding/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/26/postgres-case-constant-folding/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="CASE 没进入分支，为什么仍可能常量除零 | Midnight blog">
+    <meta property="og:description" content="区分计划期折叠与运行时选择，用逐行分母、聚合参数与 NULLIF 明确错误保护的位置和数据口径。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/26/postgres-case-constant-folding/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/26/postgres-case-constant-folding/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/26/postgres-case-constant-folding/","name":"CASE 没进入分支，为什么仍可能常量除零 | Midnight blog","description":"区分计划期折叠与运行时选择，用逐行分母、聚合参数与 NULLIF 明确错误保护的位置和数据口径。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/26/postgres-case-constant-folding/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/26/postgres-case-constant-folding/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/26/postgres-case-constant-folding/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/26/postgres-case-constant-folding/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/26/postgres-case-constant-folding/","headline":"CASE 没进入分支，为什么仍可能常量除零","description":"区分计划期折叠与运行时选择，用逐行分母、聚合参数与 NULLIF 明确错误保护的位置和数据口径。","inLanguage":"zh-CN","datePublished":"2026-10-25T19:36:08.000Z","dateModified":"2026-10-25T19:36:08.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/functions-conditional.html","https://www.postgresql.org/docs/18/sql-expressions.html"],"keywords":"Development, PostgreSQL"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/26/postgres-case-constant-folding/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"CASE 没进入分支，为什么仍可能常量除零","item":"https://www.zyweb.vip/zh-CN/2026/10/26/postgres-case-constant-folding/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/26/postgres-case-constant-folding/" selected>zh-CN</option><option value="/en/2026/10/26/postgres-case-constant-folding/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/26/postgres-case-constant-folding/" selected>zh-CN</option><option value="/en/2026/10/26/postgres-case-constant-folding/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-25T19:36:08.000Z">2026-10-26</time>
+    </div>
+
+    <h1>CASE 没进入分支，为什么仍可能常量除零</h1>
+
+    
+      <p class="post-hero__summary">区分计划期折叠与运行时选择，用逐行分母、聚合参数与 NULLIF 明确错误保护的位置和数据口径。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-25T19:36:08.000Z">2026-10-26</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/26/postgres-case-constant-folding/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/26/postgres-case-constant-folding/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>运行时分支选择不能禁止所有计划期常量求值。</li><li>零分母应按业务定义为缺失、错误或其他明确状态。</li><li>保护聚合里的危险运算，应检查输入而非只看外层结果。</li></ul></section>
+      <div class="article-content">
+        <p><code>CASE</code> 没有进入某个分支，仍可能因为那个分支里的常量除零而失败。PostgreSQL 的运行时条件选择，并不是对计划阶段所有表达式处理的禁止令。面对这种错误，应先问危险表达式在哪个阶段被求值，再决定保护条件应当写在它的外面，还是直接修正表达式的输入。</p>
+<h2 id="分支选择与表达式准备有不同时间"><a href="#分支选择与表达式准备有不同时间" class="headerlink" title="分支选择与表达式准备有不同时间"></a>分支选择与表达式准备有不同时间</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-conditional.html">PostgreSQL 18 的条件表达式文档</a>先说明 CASE 通常只求值所需的子表达式，随后明确限定：这项原则并非绝对，常量子表达式可能在规划时求值。因此，把 <code>1/0</code> 放进运行时认为不会执行的位置，仍可能在真正扫描数据之前报错。</p>
+<p>这不要求把 CASE 理解成无效工具。对逐行变化的分母，条件可以在正常执行时选择分支；问题是团队把运行时选择扩张成了跨越所有准备阶段的承诺。源代码里的文字位置与数据库实际求值阶段不总是同一条时间线。排查时若只打印每行条件为 false，就可能一直看不见发生在行处理之前的失败。</p>
+<p>假设一个报表在“没有配置费率”时显示空值，开发者为了占位在备用分支写了常量除零。这段未执行的教学片段只展示风险，不承诺每一种 CASE 形状都会以相同步骤失败。</p>
+<pre><code class="sql">SELECT CASE WHEN enabled THEN amount ELSE 1 / 0 END
+FROM report_inputs;
+</code></pre>
+<p>即使测试数据里 enabled 全为真，也不能据此声称备用分支在任何计划下都不会导致错误。这里缺少的不是更多同样为真的数据，而是表达式本身对“无费率”状态的合法表示。占位应该是合适类型的 NULL、明确状态或另一路错误处理，不能把一定无定义的算术埋在分支里。</p>
+<h2 id="把保护放进危险操作的输入"><a href="#把保护放进危险操作的输入" class="headerlink" title="把保护放进危险操作的输入"></a>把保护放进危险操作的输入</h2><p>另一个假设报表要计算每件平均金额，输入分别为总金额一百、件数四，以及总金额一百、件数零。若业务选择“零件数没有平均值”，可把零转换成空值，再做除法。下面代码未执行，按给定数字推导的期望是二十五和 NULL。</p>
+<pre><code class="sql">WITH inputs(total, quantity) AS (
+  VALUES (100::numeric, 4), (100::numeric, 0)
+)
+SELECT total / NULLIF(quantity, 0) AS average
+FROM inputs;
+</code></pre>
+<p>NULLIF 在两项相等时返回 NULL，这是同一官方文档给出的语义。这里的选择避免把零当作除法的有效分母，同时保留结果未知。不能未经讨论就再把 NULL 改成零：平均值为零与平均值不存在，不是同一个业务事实。需要对外显示横线或“无件数”时，可以在展示层映射，但统计计算仍应保留定义域区别。</p>
+<p>如果件数零本来就属于数据错误，则返回 NULL 可能过于宽容。应在输入校验或数据约束处拒绝，附上能定位记录的错误。算术不报错只代表表达式有了返回方式，不能证明脏数据可以继续结算。选择 NULLIF、业务校验或独立错误状态，要由零分母在领域中的含义决定。</p>
+<h2 id="外层-CASE-能挡住聚合里的除零吗？"><a href="#外层-CASE-能挡住聚合里的除零吗？" class="headerlink" title="外层 CASE 能挡住聚合里的除零吗？"></a>外层 CASE 能挡住聚合里的除零吗？</h2><p>不能把外层条件当作聚合输入的普遍保护。聚合参数的表达式在聚合得到结果之前就需要处理。假设先计算每行金额除以件数，再把这些值求平均，最后才用外层 CASE 判断是否有零件数；那个判断可能来得太晚。保护应当在每行危险操作发生的地方，或在业务上合理的输入过滤阶段生效。</p>
+<p>两种修正并不等价。过滤掉零件数行，会把这些记录从统计对象中移除；给它们产生 NULL，则依赖后续聚合怎样处理 NULL。若报表还要报告异常记录数，直接过滤可能把证据也删掉。评审时应同时写清分子、分母和异常数量的口径，而不是以“查询不再报错”作为唯一结果。</p>
+<p>站内<a href="/zh-CN/2026/10/25/postgres-bool-aggregate-null-input/">布尔聚合与未知输入</a>解释了聚合可以忽略某些未知信息。本题的下一步也是追踪输入：修复除零之后，那一行究竟还在不在，是否仍被计入对象总数，界面能否区分没有数据与存在无效数据。这些问题决定报告是否诚实。</p>
+<h2 id="参数不是一张通用的延期求值许可证"><a href="#参数不是一张通用的延期求值许可证" class="headerlink" title="参数不是一张通用的延期求值许可证"></a>参数不是一张通用的延期求值许可证</h2><p>把常量改成参数，并不能独自构成可靠的安全合同。参数取值如何进入计划、查询是否被重复使用、函数声明与表达式所处位置，都需要按真实调用方式核对。本文不对某个驱动或预备语句策略作未验证的保证。最容易审查的修复，通常是让危险操作在允许的输入范围内本身有定义。</p>
+<p>同样，不应为了阻止折叠就随意改函数的易变性声明。声明承载的是函数真实行为，错误声明可能影响其他查询的优化与正确性。若团队需要精确分析自定义函数的计划期行为，应该补查函数分类和表达式求值文档，并留下实际环境的说明计划；这超出了这里对 CASE 与 NULLIF 的局部讨论。</p>
+<p>建议保留一份最小诊断记录：具体数据库版本、原始表达式、参数类型和值，以及错误在准备还是执行时出现。若应用只保留最终异常文字，可能无法区分数据库规划失败与客户端预先计算失败。把这份记录连同独立期望交给评审，比反复增加全为真的样本更能检验修复是否作用在正确阶段。</p>
+<p>拟议验证分成三组：常量无效表达式位于未选分支；变量分母为正、零和 NULL；危险除法位于聚合参数而外层有 CASE。每组先写明业务预期，再记录错误发生于准备还是执行。对修正后的查询还要断言有效结果、无效行计数和总记录数。本文没有执行 SQL，也没有证明任何线上报表已修复；“分支没有进入”只能说明一项运行时观察，不能替整个查询的定义域作担保。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-conditional.html" rel="noopener">PostgreSQL 18 — Conditional Expressions: CASE evaluation caveat</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-expressions.html" rel="noopener">PostgreSQL 18 — Value Expressions: aggregate inputs and expression evaluation rules</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F26%2Fpostgres-case-constant-folding%2F&text=CASE%20%E6%B2%A1%E8%BF%9B%E5%85%A5%E5%88%86%E6%94%AF%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E5%8F%AF%E8%83%BD%E5%B8%B8%E9%87%8F%E9%99%A4%E9%9B%B6" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F26%2Fpostgres-case-constant-folding%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=CASE%20%E6%B2%A1%E8%BF%9B%E5%85%A5%E5%88%86%E6%94%AF%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E5%8F%AF%E8%83%BD%E5%B8%B8%E9%87%8F%E9%99%A4%E9%9B%B6&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F26%2Fpostgres-case-constant-folding%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/26/postgres-string-agg-input-order/">
+              <span>上一篇</span>
+              <strong>string_agg 内部排序：外层 ORDER BY 为什么无效</strong>
+              <small>2026-10-26</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/26/playwright-trial-actionability-side-effects/">
+              <span>下一篇</span>
+              <strong>trial 点击跳过动作，为何仍可能按下修饰键？</strong>
+              <small>2026-10-26</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#分支选择与表达式准备有不同时间">分支选择与表达式准备有不同时间</a>
+          
+            <a class="toc-link toc-link--h2" href="#把保护放进危险操作的输入">把保护放进危险操作的输入</a>
+          
+            <a class="toc-link toc-link--h2" href="#外层-CASE-能挡住聚合里的除零吗？">外层 CASE 能挡住聚合里的除零吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#参数不是一张通用的延期求值许可证">参数不是一张通用的延期求值许可证</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>283</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>143</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>100</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>70</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/26/postgres-string-agg-input-order/">string_agg 内部排序：外层 ORDER BY 为什么无效</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/26/postgres-unnest-array-padding/">多数组 unnest 长度不等：补 NULL 不是拒绝输入</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/25/postgres-bool-aggregate-null-input/">bool_and 为 true，为什么仍不能放行整批？</a></h3>
+          <p>2026-10-25</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

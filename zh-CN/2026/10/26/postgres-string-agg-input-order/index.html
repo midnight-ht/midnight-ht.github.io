@@ -1,0 +1,403 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>string_agg 内部排序：外层 ORDER BY 为什么无效 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="从签署名单说明聚合输入顺序、并列键、连接扩行与缺失姓名，分别定义名单成员和文本先后。">
+  
+  
+    <meta name="keywords" content="string_agg,ORDER BY,聚合输入顺序">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/26/postgres-string-agg-input-order/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/26/postgres-string-agg-input-order/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/26/postgres-string-agg-input-order/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/26/postgres-string-agg-input-order/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="string_agg 内部排序：外层 ORDER BY 为什么无效 | Midnight blog">
+    <meta property="og:description" content="从签署名单说明聚合输入顺序、并列键、连接扩行与缺失姓名，分别定义名单成员和文本先后。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/26/postgres-string-agg-input-order/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/26/postgres-string-agg-input-order/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/26/postgres-string-agg-input-order/","name":"string_agg 内部排序：外层 ORDER BY 为什么无效 | Midnight blog","description":"从签署名单说明聚合输入顺序、并列键、连接扩行与缺失姓名，分别定义名单成员和文本先后。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/26/postgres-string-agg-input-order/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/26/postgres-string-agg-input-order/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/26/postgres-string-agg-input-order/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/26/postgres-string-agg-input-order/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/26/postgres-string-agg-input-order/","headline":"string_agg 内部排序：外层 ORDER BY 为什么无效","description":"从签署名单说明聚合输入顺序、并列键、连接扩行与缺失姓名，分别定义名单成员和文本先后。","inLanguage":"zh-CN","datePublished":"2026-10-25T19:36:08.000Z","dateModified":"2026-10-25T19:36:08.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/functions-aggregate.html","https://www.postgresql.org/docs/18/sql-expressions.html"],"keywords":"Development, PostgreSQL"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/26/postgres-string-agg-input-order/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"string_agg 内部排序：外层 ORDER BY 为什么无效","item":"https://www.zyweb.vip/zh-CN/2026/10/26/postgres-string-agg-input-order/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/26/postgres-string-agg-input-order/" selected>zh-CN</option><option value="/en/2026/10/26/postgres-string-agg-input-order/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/26/postgres-string-agg-input-order/" selected>zh-CN</option><option value="/en/2026/10/26/postgres-string-agg-input-order/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-25T19:36:08.000Z">2026-10-26</time>
+    </div>
+
+    <h1>string_agg 内部排序：外层 ORDER BY 为什么无效</h1>
+
+    
+      <p class="post-hero__summary">从签署名单说明聚合输入顺序、并列键、连接扩行与缺失姓名，分别定义名单成员和文本先后。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-25T19:36:08.000Z">2026-10-26</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/26/postgres-string-agg-input-order/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/26/postgres-string-agg-input-order/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>名单内部顺序写在聚合调用中，外层排序只排列结果行。</li><li>先确定每份签署记录身份，再处理连接扩行和同名。</li><li>可解析交换需要结构协议，展示拼接不证明完整性。</li></ul></section>
+      <div class="article-content">
+        <p>给客户导出签署人名单时，结果行按客户编号排列，并不能保证每行里的姓名也按签署时间排列。<code>string_agg</code> 的内部顺序取决于送进聚合的输入；若顺序属于导出合同，应把排序写在聚合调用内部，并为时间相同的记录补上能决定先后的键。</p>
+<h2 id="一行结果里也有自己的顺序"><a href="#一行结果里也有自己的顺序" class="headerlink" title="一行结果里也有自己的顺序"></a>一行结果里也有自己的顺序</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-aggregate.html">PostgreSQL 18 的聚合函数说明</a>指出，string_agg 等函数的结果依赖输入顺序，默认顺序未指定，可在聚合调用内控制。外层 ORDER BY 排的是聚合已经产生的结果行。若整条查询只有一个汇总行，外层再怎么排序，都没有机会重新排列那个字符串内部的片段。</p>
+<p>这不是数据库随机出错，也不意味着表格曾经按某个顺序插入，就应该一直按那个顺序读取。关系查询中需要的业务顺序应由查询表达。某次计划恰好顺着时间索引扫描，只能解释那次观察，不能代替输出合同；索引变化、连接和计划选择都可能让原先看似稳定的结果暴露问题。</p>
+<p>假设签署记录只有三条：客户甲在九点由林签署，九点由周签署，十点由陈签署。记录编号分别为十二、十一、十三。业务约定按签署时间升序，同一时间按记录编号升序。因此纸面期望为周、林、陈，而不是名字字母顺序，也不是示例书写的先后。下面 SQL 未执行，数据和预期都是教学设定。</p>
+<pre><code class="sql">WITH signatures(customer_id, id, signed_at, name) AS (
+  VALUES (7, 12, timestamp &#39;2026-10-26 09:00&#39;, &#39;Lin&#39;),
+         (7, 11, timestamp &#39;2026-10-26 09:00&#39;, &#39;Zhou&#39;),
+         (7, 13, timestamp &#39;2026-10-26 10:00&#39;, &#39;Chen&#39;)
+)
+SELECT customer_id,
+       string_agg(name, &#39;, &#39; ORDER BY signed_at, id) AS names
+FROM signatures
+GROUP BY customer_id
+ORDER BY customer_id;
+</code></pre>
+<p>这条查询里有两份排序责任。聚合内部的时间和编号决定名单，外部的客户编号决定不同客户出现的先后。它们可以同时存在，互相不能替代。若只按时间，九点的两个人仍没有被业务规则区分；增加一个真正唯一且稳定的记录编号，是为了补全先后关系，而不是为了让计划更好看。</p>
+<h2 id="先决定记录身份，再拼字符串"><a href="#先决定记录身份，再拼字符串" class="headerlink" title="先决定记录身份，再拼字符串"></a>先决定记录身份，再拼字符串</h2><p>名单的顺序正确，不证明名单的成员正确。假设签署记录再连接附件表，一位签署人有两个附件，聚合输入就可能出现两行同一个人。若业务要每次签署一次，就应先恢复到每份签署记录一行，再聚合。随手使用 DISTINCT name 会把同名不同人或同一个人的两次合法签署一起合并，掩盖输入粒度问题。</p>
+<p>同样，去重和排序可能要求不同字段。业务若只想列出每个参与人一次，先定义采用该人的哪次签署作为排序时间，例如第一次有效签署，再形成每人一行的中间结果。不能先选择任意一行，再把得到的字符串称为“按首次签署排序”。中间记录身份、取舍规则与最终展示应该能够从同一份输入逐项追踪。</p>
+<p>对这份假设导出，我会保留结构化的签署编号与时间，把字符串作为展示字段。逗号拼接不能无损承载姓名中本来就有逗号的情况；如果下游要重新解析，应该选择明确的结构格式和转义协议。string_agg 解决片段组合，不负责替团队定义交换格式。字符串看上去整齐，并不意味着以后能准确拆回原来的记录。</p>
+<h2 id="子查询排过序，连接后还能保证吗？"><a href="#子查询排过序，连接后还能保证吗？" class="headerlink" title="子查询排过序，连接后还能保证吗？"></a>子查询排过序，连接后还能保证吗？</h2><p>不能把“上游写过 ORDER BY”当成经过所有后续操作的保证。官方文档专门提醒：排序子查询通常能提供所需输入，但外层还有连接等处理时，可能在聚合前改变行的次序。若顺序直接影响聚合含义，把要求贴在聚合调用内更清楚，也使后来的维护者不必追踪多层查询才知道名单为什么这样排列。</p>
+<p>这不代表子查询排序永远没有用途。需要先限制候选集合，例如按某项规则选出最近几条记录，再把选中的记录按另一顺序展示，是两个阶段的问题。前一阶段排序参与“选谁”，后一阶段排序参与“怎样拼”。若维护时删除看似重复的一份排序，可能改变被选中的集合，或改变最终文本；应分别给两项职责写预期。</p>
+<p>可以把这一点与站内<a href="/zh-CN/2026/10/14/postgres-distinct-on-choice/">选择一条 DISTINCT ON 记录</a>对照：选代表行需要确定排序，代表行随后进入的聚合也需要自己的顺序约定。两个位置都出现时间字段，不表示它们承担相同责任。讨论性能前，应先确认改写仍选中了同一批签署记录。</p>
+<h2 id="NULL、空字符串与分隔符怎么区分？"><a href="#NULL、空字符串与分隔符怎么区分？" class="headerlink" title="NULL、空字符串与分隔符怎么区分？"></a>NULL、空字符串与分隔符怎么区分？</h2><p>string_agg 连接的是非空输入。假设周的姓名为 NULL，文本不会自动保留一个“未知姓名”的位置；空字符串则是另一种输入，可能产生相邻分隔符。若导出必须显示缺失，应明确是否把缺失映射成占位文字，并同时保留缺失计数。映射后的“未填写”是展示策略，不能再当作原始姓名。</p>
+<p>没有输入记录时，聚合结果的 NULL 与有记录但姓名都缺失，也需要按导出需求区分。可以另带记录总数和姓名有效数，防止调用方把空文本当作“无人参与”。这里不要求每个页面都展示两个数，而是要求决定是否完整时仍有原始证据，不让展示字段独自承担审核职责。</p>
+<p>拟议验证先准备时间并列、姓名重复、姓名为空、单人、零人五组输入，独立写出期望记录身份和字符串。随后给一名参与人增加两个附件，确认连接没有扩大名单，再改变原始输入顺序，确认结果仍符合显式排序。本文没有运行数据库或测量查询成本；可验收的承诺是这份 SQL 应表达的成员和先后，不是固定扫描方式或速度。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-aggregate.html" rel="noopener">PostgreSQL 18 — Aggregate Functions: order-sensitive aggregates</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-expressions.html" rel="noopener">PostgreSQL 18 — Value Expressions: aggregate inputs and expression evaluation rules</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F26%2Fpostgres-string-agg-input-order%2F&text=string_agg%20%E5%86%85%E9%83%A8%E6%8E%92%E5%BA%8F%EF%BC%9A%E5%A4%96%E5%B1%82%20ORDER%20BY%20%E4%B8%BA%E4%BB%80%E4%B9%88%E6%97%A0%E6%95%88" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F26%2Fpostgres-string-agg-input-order%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=string_agg%20%E5%86%85%E9%83%A8%E6%8E%92%E5%BA%8F%EF%BC%9A%E5%A4%96%E5%B1%82%20ORDER%20BY%20%E4%B8%BA%E4%BB%80%E4%B9%88%E6%97%A0%E6%95%88&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F26%2Fpostgres-string-agg-input-order%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/26/postgres-unnest-array-padding/">
+              <span>上一篇</span>
+              <strong>多数组 unnest 长度不等：补 NULL 不是拒绝输入</strong>
+              <small>2026-10-26</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/26/postgres-case-constant-folding/">
+              <span>下一篇</span>
+              <strong>CASE 没进入分支，为什么仍可能常量除零</strong>
+              <small>2026-10-26</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#一行结果里也有自己的顺序">一行结果里也有自己的顺序</a>
+          
+            <a class="toc-link toc-link--h2" href="#先决定记录身份，再拼字符串">先决定记录身份，再拼字符串</a>
+          
+            <a class="toc-link toc-link--h2" href="#子查询排过序，连接后还能保证吗？">子查询排过序，连接后还能保证吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#NULL、空字符串与分隔符怎么区分？">NULL、空字符串与分隔符怎么区分？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>283</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>143</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>100</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>70</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/26/postgres-case-constant-folding/">CASE 没进入分支，为什么仍可能常量除零</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/26/postgres-unnest-array-padding/">多数组 unnest 长度不等：补 NULL 不是拒绝输入</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/25/postgres-bool-aggregate-null-input/">bool_and 为 true，为什么仍不能放行整批？</a></h3>
+          <p>2026-10-25</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

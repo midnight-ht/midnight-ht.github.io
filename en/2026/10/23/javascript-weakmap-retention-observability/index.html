@@ -197,7 +197,7 @@
       <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>WeakMap lookup requires a known key and supplies no inventory.</li><li>Weak association promises neither collection timing nor resource closure.</li><li>Enumeration, capacity, and timely cleanup need explicit management.</li></ul></section>
       <div class="article-content">
         <p>If the requirement is “list every cached object and close its connections on time,” WeakMap cannot be the only management structure. It supports lookup with a known key, but offers no key enumeration and no deadline for reclaiming inaccessible objects. Weak association can avoid retention caused by the mapping itself; it does not supply capacity limits, resource shutdown, or a live inventory.</p>
-<h2 id="Identify-the-reference-being-weakened"><a href="#Identify-the-reference-being-weakened" class="headerlink" title="Identify the reference being weakened"></a>Identify the reference being weakened</h2><p>The <a target="_blank" rel="noopener" href="https://tc39.es/ecma262/multipage/keyed-collections.html#sec-weakmap-objects">ECMAScript WeakMap Objects specification</a> requires an observer to present the key and permits implementation-determined latency before removal of inaccessible entries. This article uses object keys, a common subset of the current online specification. It makes no promise about a runtime’s garbage-collection schedule or memory curve.</p>
+<h2 id="Identify-the-reference-being-weakened"><a href="#Identify-the-reference-being-weakened" class="headerlink" title="Identify the reference being weakened"></a>Identify the reference being weakened</h2><p>The <a target="_blank" rel="noopener" href="https://tc39.es/ecma262/multipage/keyed-collections.html#sec-weakmap-objects">ECMAScript WeakMap Objects specification</a> requires an observer to present the key and permits implementation-determined latency before removal of inaccessible entries. This article uses object keys, a common subset of the current online specification. It makes no promise about a runtime&#39;s garbage-collection schedule or memory curve.</p>
 <p>Imagine an editor storing an expensive layout result for each panel object. While the UI owns a panel, it can retrieve the result with that object. After the panel and other owners release it, the layout mapping should not be the sole reason the panel remains alive. The metadata follows object identity and needs no list of panels, so WeakMap fits that association.</p>
 <pre><code class="js">// Illustrative, not executed.
 const layoutByPanel = new WeakMap();
@@ -209,16 +209,16 @@ function read(panel) {
 }
 </code></pre>
 <p>Now add an “all open panels” view with a count, ordering, and close-all action. The mapping cannot produce that inventory; lookup requires an existing panel. Adding a permanent array of every panel restores a strong reference elsewhere. That array may be necessary, but its registration and removal lifecycle now controls retention. WeakMap cannot make those owners disappear automatically.</p>
-<p>Identity also differs from equal content. A newly created object with identical fields is a different key. Recreating a panel from parsed data does not retrieve the old object’s entry. A cross-request cache keyed by a business ID needs an independently designed structure and invalidation policy.</p>
+<p>Identity also differs from equal content. A newly created object with identical fields is a different key. Recreating a panel from parsed data does not retrieve the old object&#39;s entry. A cross-request cache keyed by a business ID needs an independently designed structure and invalidation policy.</p>
 <h2 id="Reclamation-is-not-resource-shutdown"><a href="#Reclamation-is-not-resource-shutdown" class="headerlink" title="Reclamation is not resource shutdown"></a>Reclamation is not resource shutdown</h2><p>Suppose opening a panel starts a polling timer and a network subscription. Closing it needs explicit cancellation, unsubscription, and inventory removal. Storing metadata weakly does not perform those actions. A timer callback that strongly references the panel may itself keep it reachable; changing the metadata mapping cannot eliminate that other reference.</p>
 <p>A counterexample proposes polling WeakMap.size every ten seconds and treating a reduced count as closed connections. There is no such inventory, and collection latency is not a timer contract. Even a diagnostic observation of memory dropping once cannot prove that every close finishes within ten seconds. Test actual resource cancellation through the close path.</p>
 <p>For a bounded cache with least-recently-used eviction, a count, or hit-rate reporting, a Map with explicit capacity and deletion can express the requirement more directly, at the cost of owning retention. For metadata attached to externally owned objects without enumeration, WeakMap may be appropriate. The question is whether the application must manage the collection itself.</p>
 <p>The structures can coexist: an enumerable registry owns currently open panels and explicitly removes them at close, while a weak mapping holds auxiliary calculations. Record each owner and removal point. Necessary registry retention then remains distinguishable from forgotten deregistration. Object counts, resource counts, and unfinished-job counts should not substitute for one another.</p>
 <h2 id="Test-deterministic-contracts-separately"><a href="#Test-deterministic-contracts-separately" class="headerlink" title="Test deterministic contracts separately"></a>Test deterministic contracts separately</h2><p>A deterministic mapping test can set and retrieve metadata with one panel, delete it explicitly, and confirm that a second object with equal fields does not hit the entry. That verifies operations and identity, not completed garbage collection. A lifecycle test invokes the actual close method and checks timers, subscriptions, registry membership, repeated closes, and failed closes.</p>
 <p>Memory diagnostics can investigate unexpected retainers such as global arrays, closures, and listeners. Compare repeated open-close cycles with the runtime version recorded. One heap snapshot cannot prove that every reference is gone, and the diagnostic tooling can influence observations. No snapshot or forced collection was performed here, and no memory reduction is claimed.</p>
-<p>Queued work can legitimately keep data alive. A weak metadata mapping does not remove a queue’s ownership of pending jobs. The guide to <a href="/en/2026/10/13/node-stream-backpressure/">Node.js backpressure and retained data</a> covers that producer-consumer budget. Weak keys do not cap the processing pipeline.</p>
+<p>Queued work can legitimately keep data alive. A weak metadata mapping does not remove a queue&#39;s ownership of pending jobs. The guide to <a href="/en/2026/10/13/node-stream-backpressure/">Node.js backpressure and retained data</a> covers that producer-consumer budget. Weak keys do not cap the processing pipeline.</p>
 <h3 id="Can-WeakMap-still-be-used-when-closing-must-perform-an-action"><a href="#Can-WeakMap-still-be-used-when-closing-must-perform-an-action" class="headerlink" title="Can WeakMap still be used when closing must perform an action?"></a>Can WeakMap still be used when closing must perform an action?</h3><p>Yes, for auxiliary data. Give the action an explicit lifecycle interface and retain what it needs until it completes. Distinguish open, closing, failed, and closed states. Whether metadata is retrievable is not evidence that a resource is closed. A later collection cannot turn a failed close into a success.</p>
-<p>Add a business invalidation control: two modules hold the same panel. Module A explicitly deletes its layout entry; module B then looks it up with that same object and should not find the layout. B’s continued ownership does not prevent explicit deletion, and deletion does not close resources owned by B. These are separate mapping, reachability, and resource states.</p>
+<p>Add a business invalidation control: two modules hold the same panel. Module A explicitly deletes its layout entry; module B then looks it up with that same object and should not find the layout. B&#39;s continued ownership does not prevent explicit deletion, and deletion does not close resources owned by B. These are separate mapping, reachability, and resource states.</p>
 <p>If B still needs the layout, define whether it recomputes and stores a new value. A miss must not automatically be described as garbage collection. Record who invalidates, who rebuilds, and how a failed rebuild is reported.</p>
 <p>This is an unexecuted design example. Before delivery, determine whether the requirement needs enumeration, capacity control, or external actions at a definite time. Each such requirement needs an explicit management mechanism.</p>
 
@@ -316,13 +316,13 @@ function read(panel) {
           <h2>Related Topics</h2>
           <p>Place this article back into long-running themes.</p>
           
-            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>286</b></a>
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>283</b></a>
           
-            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>135</b></a>
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>143</b></a>
           
-            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>96</b></a>
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>101</b></a>
           
-            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>66</b></a>
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>70</b></a>
           
         </section>
       
@@ -342,19 +342,19 @@ function read(panel) {
       
         <article class="related-card">
           
+          <h3><a href="/en/2026/10/26/javascript-object-entries-key-order/">Object.entries key order: why numeric-looking keys move ahead</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/26/node-fileurltopath-decoding/">Why a file URL pathname is not a reliable native path</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
           <h3><a href="/en/2026/10/24/javascript-assign-spread-setters/">Does Object.assign or Spread Invoke a Target Setter?</a></h3>
-          <p>2026-10-24</p>
-        </article>
-      
-        <article class="related-card">
-          
-          <h3><a href="/en/2026/10/24/javascript-flat-sparse-slots/">Why Does Array.flat Remove Slots but Keep undefined?</a></h3>
-          <p>2026-10-24</p>
-        </article>
-      
-        <article class="related-card">
-          
-          <h3><a href="/en/2026/10/24/promise-any-fulfillment-aggregateerror/">Does Promise.any Select a Fulfilled Value or a Valid Result?</a></h3>
           <p>2026-10-24</p>
         </article>
       

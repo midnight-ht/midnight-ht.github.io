@@ -201,7 +201,7 @@
 <p>为避免把想象写成实测，我在与本站仓库隔离的临时 Git 仓库执行了一个最小例子；脚本 <code>git-fixture.sh</code> 与原始输出 <code>git-fixture.txt</code> 保存在本批次审校归档中。环境报告为 Apple Git 2.50.1。脚本创建基线、<code>original</code> 修复分支和从相同基线独立提交同内容的 <code>replay</code> 分支。实际输出是 <code>tree_diff=empty</code>、<code>original_ancestor_of_replay=no</code>、<code>base_ancestor_of_replay=yes</code>；两分支的 merge base 是基线提交。这个结果只证明该临时 DAG 的性质，不是本站某个发布分支的验证。</p>
 <p>为什么发布团队仍要关心具体提交？如果变更请求、代码审查、签名、测试回执或漏洞工单绑定的是 X，那么 Y 虽然内容相同，却不自动继承 X 的审核链。Y 可能被重新提交后又改了父链，或者部署流水线按提交 ID 关联产物。反过来，审查目标若只是确认某一文件当前具有修复后的内容，树差异或针对性行为测试可能更贴题。先确定要证明的是“内容”“血缘”还是“产物已部署”，再选命令；不能拿一个命令的绿色结果回答另一个问题。</p>
 <h2 id="祖先断言怎样写进检查"><a href="#祖先断言怎样写进检查" class="headerlink" title="祖先断言怎样写进检查"></a>祖先断言怎样写进检查</h2><p>对于已知完整提交 ID <code>X</code> 和当前目标提交 <code>Y</code>，可以运行 <code>git merge-base --is-ancestor X Y</code>。退出码 0 支持 X 可从 Y 沿父链到达，退出码 1 表示不能到达。脚本应分别处理退出码 1 与异常退出，避免把仓库损坏或参数错误也写成“未包含”。还要先用 <code>git rev-parse --verify</code> 确认引用解析到了预期对象；分支名会移动，审查记录最好保存最终解析出的完整提交 ID 与目标远程引用状态。只比较本地过期的 <code>origin/release</code> 可能漏掉远端已更新的提交，需先明确拉取/核验范围。</p>
-<p><code>git merge-base X Y</code> 返回的是共同祖先，通常不是“X 已合入”的简单证明。存在交叉合并时可能有多个最佳共同祖先，官方文档也说明不加 <code>--all</code> 时返回哪一个并不确定。用“输出的 merge base 等于 X”作为判断虽是旧式惯用法，但 <code>--is-ancestor</code> 把问题与退出码写得更清楚。若 X 只是被 cherry-pick 到目标分支，目标有一个新提交 X’，原 X 通常不在祖先链上。此时断言失败不等于修复内容不存在；需要关联 cherry-pick 记录、补丁比较、针对性测试与目标构建回执。</p>
+<p><code>git merge-base X Y</code> 返回的是共同祖先，通常不是“X 已合入”的简单证明。存在交叉合并时可能有多个最佳共同祖先，官方文档也说明不加 <code>--all</code> 时返回哪一个并不确定。用“输出的 merge base 等于 X”作为判断虽是旧式惯用法，但 <code>--is-ancestor</code> 把问题与退出码写得更清楚。若 X 只是被 cherry-pick 到目标分支，目标有一个新提交 X&#39;，原 X 通常不在祖先链上。此时断言失败不等于修复内容不存在；需要关联 cherry-pick 记录、补丁比较、针对性测试与目标构建回执。</p>
 <h2 id="从代码审查到交付，证据链不能跳级"><a href="#从代码审查到交付，证据链不能跳级" class="headerlink" title="从代码审查到交付，证据链不能跳级"></a>从代码审查到交付，证据链不能跳级</h2><p>假设发布说明说“包含 X 修复”。若检查返回 1，应先问发布说明指的是原提交对象，还是同等补丁。若工单要求严格追溯原审核对象，就应处理合并路径或更新声明；若业务只要求修复行为，就用目标分支上的实际提交、测试和构建工件建立新的证据。<code>git diff</code> 空、测试通过、<code>--is-ancestor</code> 为 0，分别支持内容、行为样本和历史可达；它们没有一个单独证明生产已经部署。部署还需要把产物摘要和实际运行版本绑定到目标提交。</p>
 <p>临时例子中虽然 <code>original</code> 与 <code>replay</code> 文件相同，<code>original</code> 的提交 ID 与 <code>replay</code> 的提交 ID 不同。这样的反例提醒我们：若依赖关系来自“某个经过批准的提交”，不要把“文件一样”压缩成“已经批准”。但也不要把祖先断言当成安全魔法，祖先存在不说明后续提交没有撤销修复。对于重要变更，目标树和行为仍需复核。祖先检查回答“曾经包含这个对象”，最终树与运行验收回答“现在仍有预期效果”。</p>
 <p>若要把检查放进 CI，还要明确被检查的是哪一对引用。比如拉取请求的合并结果、源分支头和部署用 release 分支头可能是三个不同对象；检查源分支含 X，不能推断合并结果已发布。CI 应把目标提交 SHA 打印在日志里，并在构建清单中写入同一个 SHA。发布后若运行工件报告另一个 SHA，就要追查流水线选择，而不是继续争论本地 <code>git diff</code>。这个步骤让祖先断言与最终交付之间有可追溯的接点。</p>
@@ -299,13 +299,13 @@
           <h2>相关专题</h2>
           <p>把当前文章放回长期跟踪线索里。</p>
           
-            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>286</b></a>
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>283</b></a>
           
-            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>135</b></a>
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>143</b></a>
           
-            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>95</b></a>
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>100</b></a>
           
-            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>66</b></a>
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>70</b></a>
           
         </section>
       

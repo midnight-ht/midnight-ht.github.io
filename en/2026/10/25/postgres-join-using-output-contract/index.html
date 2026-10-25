@@ -197,7 +197,7 @@
       <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>USING changes the columns expanded by a star projection.</li><li>Explicit projection makes interface changes visible.</li><li>A merged key alone does not establish source provenance.</li></ul></section>
       <div class="article-content">
         <p>Changing <code>JOIN ON a.id = b.id</code> to <code>JOIN USING (id)</code> can preserve matched rows while changing the columns produced by <code>SELECT *</code>. USING merges the named join columns into one output column. The left and right keys no longer occupy separate positions. For exports, serializers, or consumers depending on column count and order, that is an output-contract change.</p>
-<h2 id="A-shorter-condition-also-changes-projection"><a href="#A-shorter-condition-also-changes-projection" class="headerlink" title="A shorter condition also changes projection"></a>A shorter condition also changes projection</h2><p>The <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/queries-table-expressions.html">PostgreSQL 18 table-expression documentation</a> specifies that ON produces all left columns followed by all right columns. USING produces the merged columns in the order listed, then the remaining left columns, then the remaining right columns. This article discusses that version’s result shape and makes no claim that one form is universally faster. All SQL here is unexecuted.</p>
+<h2 id="A-shorter-condition-also-changes-projection"><a href="#A-shorter-condition-also-changes-projection" class="headerlink" title="A shorter condition also changes projection"></a>A shorter condition also changes projection</h2><p>The <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/queries-table-expressions.html">PostgreSQL 18 table-expression documentation</a> specifies that ON produces all left columns followed by all right columns. USING produces the merged columns in the order listed, then the remaining left columns, then the remaining right columns. This article discusses that version&#39;s result shape and makes no claim that one form is universally faster. All SQL here is unexecuted.</p>
 <p>Suppose customers has columns id and name, while credits has id and points. Customers contains keys one and two; credits contains one and three. An equality inner join using ON produces id, name, id, points under a star projection. USING produces id, name, points. Customer one remains the same matched entity, but column four becomes column three and a duplicate name disappears. Comparing row counts cannot detect this.</p>
 <pre><code class="sql">WITH customers(id, name) AS (
   VALUES (1, &#39;A&#39;), (2, &#39;B&#39;)
@@ -206,7 +206,7 @@
 )
 SELECT * FROM customers c JOIN credits r USING (id);
 </code></pre>
-<p>Reasoning from this input, the result contains customer one with three values: one, A, and twenty. An old exporter reading points from position four now addresses a nonexistent position. If a driver converts rows into objects by field name, its handling of duplicate id fields is a separate driver concern. No particular overwrite rule should be presented as PostgreSQL’s universal contract. Verify the database result and object conversion separately.</p>
+<p>Reasoning from this input, the result contains customer one with three values: one, A, and twenty. An old exporter reading points from position four now addresses a nonexistent position. If a driver converts rows into objects by field name, its handling of duplicate id fields is a separate driver concern. No particular overwrite rule should be presented as PostgreSQL&#39;s universal contract. Verify the database result and object conversion separately.</p>
 <p>Multiple join keys create another ordering trap. USING (tenant_id, id) places the tenant key before the entity key even if their original table positions differ. Reordering that list for appearance can change how a positional consumer interprets values. When a shared query feeds a CSV export, report, or record-returning function, review its output list as an interface.</p>
 <h2 id="Explicit-projection-makes-refactoring-accountable"><a href="#Explicit-projection-makes-refactoring-accountable" class="headerlink" title="Explicit projection makes refactoring accountable"></a>Explicit projection makes refactoring accountable</h2><p>For an interface returning customer identity, name, and points, explicitly select <code>c.id AS customer_id, c.name, r.points</code>. The join condition can then change without using star expansion to redefine the interface. If both source keys matter, select <code>c.id AS customer_id</code> and <code>r.id AS credit_customer_id</code> separately. Identical source names should not conceal different responsibilities.</p>
 <p>Explicit projection has a maintenance cost: new business fields require a query and consumer-contract update. That cost makes change visible. Whether star projection is appropriate depends on whether this is temporary exploration, whether consumers depend on a stable structure, and whether a version boundary exists. A blanket prohibition is less useful than explaining the difference between inspecting data and exposing a long-lived interface.</p>
@@ -214,11 +214,11 @@ SELECT * FROM customers c JOIN credits r USING (id);
 <p>Separate predicate drift from projection drift. The former changes which rows match; the latter changes which columns consumers receive. USING constrains automatic predicate expansion but does not freeze star output. Review both “did the matching rule change?” and “did the visible fields change?” instead of attaching a single safety label to a keyword.</p>
 <h2 id="Test-the-column-contract-as-well-as-values"><a href="#Test-the-column-contract-as-well-as-values" class="headerlink" title="Test the column contract as well as values"></a>Test the column contract as well as values</h2><p>A proposed test should record field names, order, count, and business meaning, then independently check row membership and values. For positional access, run the old consumer against the new result and look for silent misalignment. For object access, inspect driver column metadata and duplicate-name handling. Comparing only unordered objects can discard the very duplicates or ordering being examined.</p>
 <p>Prepare left-only, right-only, and matching keys, plus non-key fields sharing a name. Explain which differences are intended and which must block the change. An interface can deliberately evolve when a new field is required. An internal readability refactor should preserve the agreed external projection. No driver, CSV export, or database was run here; these are acceptance proposals.</p>
-<h3 id="After-FULL-JOIN-merges-the-key-how-can-a-consumer-identify-each-source"><a href="#After-FULL-JOIN-merges-the-key-how-can-a-consumer-identify-each-source" class="headerlink" title="After FULL JOIN merges the key, how can a consumer identify each source?"></a>After FULL JOIN merges the key, how can a consumer identify each source?</h3><p>The merged id alone is insufficient. A full outer join retains unmatched rows from both sides, and its merged key may be populated without identifying which side supplied a record. Explicitly select each side’s non-null primary key under a separate name, or introduce source markers in the inputs and expose them deliberately. A provenance field must distinguish a real NULL value from an absent matched row. An arbitrary nullable business field cannot reliably do that.</p>
+<h3 id="After-FULL-JOIN-merges-the-key-how-can-a-consumer-identify-each-source"><a href="#After-FULL-JOIN-merges-the-key-how-can-a-consumer-identify-each-source" class="headerlink" title="After FULL JOIN merges the key, how can a consumer identify each source?"></a>After FULL JOIN merges the key, how can a consumer identify each source?</h3><p>The merged id alone is insufficient. A full outer join retains unmatched rows from both sides, and its merged key may be populated without identifying which side supplied a record. Explicitly select each side&#39;s non-null primary key under a separate name, or introduce source markers in the inputs and expose them deliberately. A provenance field must distinguish a real NULL value from an absent matched row. An arbitrary nullable business field cannot reliably do that.</p>
 <p>With customers one and two and credits one and three, the full join represents one as matched, two as customer-only, and three as credit-only. All three merged ids have values, so their presence does not reveal the missing side. Retain separate source keys, write independent expectations for each case, and verify that serialization does not merge them again. Provenance is an additional requirement; column-name guesses are inadequate.</p>
 <p>Nullable join keys need a separate decision. Two NULL keys do not become the same entity merely because USING merges output columns. Output merging does not change equality matching for NULL. If each side contains a record with a missing customer identifier, their empty-looking keys should not be interpreted as a successful association. Input constraints might prohibit missing identities altogether.</p>
 <p>If the business truly requires a relationship between empty states, write its matching condition explicitly and review possible many-to-many expansion. Column merging cannot supply missing identity semantics. Add NULL-key inputs on both sides and inspect matching rows and provenance markers. This checks column compatibility without mistaking an empty output cell for evidence that both sources identify the same entity.</p>
-<p>The earlier <a href="/en/2026/10/18/postgres-left-join-filter-location/">LEFT JOIN condition-placement article</a> examines why rows disappear. This article examines why fields can differ even while the rows remain. Include before-and-after column contracts with a join refactor and identify the consumer’s actual dependency. Equal row counts are useful evidence for one property, not a conclusion about result compatibility.</p>
+<p>The earlier <a href="/en/2026/10/18/postgres-left-join-filter-location/">LEFT JOIN condition-placement article</a> examines why rows disappear. This article examines why fields can differ even while the rows remain. Include before-and-after column contracts with a join refactor and identify the consumer&#39;s actual dependency. Equal row counts are useful evidence for one property, not a conclusion about result compatibility.</p>
 
       </div>
 
@@ -314,13 +314,13 @@ SELECT * FROM customers c JOIN credits r USING (id);
           <h2>Related Topics</h2>
           <p>Place this article back into long-running themes.</p>
           
-            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>286</b></a>
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>283</b></a>
           
-            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>135</b></a>
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>143</b></a>
           
-            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>96</b></a>
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>101</b></a>
           
-            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>66</b></a>
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>70</b></a>
           
         </section>
       
@@ -340,20 +340,20 @@ SELECT * FROM customers c JOIN credits r USING (id);
       
         <article class="related-card">
           
-          <h3><a href="/en/2026/10/25/postgres-bool-aggregate-null-input/">Why true from bool_and does not approve the whole batch</a></h3>
-          <p>2026-10-25</p>
+          <h3><a href="/en/2026/10/26/postgres-case-constant-folding/">Why an unselected CASE branch can still fail on constant division</a></h3>
+          <p>2026-10-26</p>
         </article>
       
         <article class="related-card">
           
-          <h3><a href="/en/2026/10/25/postgres-is-distinct-from-null-equality/">Why changing NULL to text can escape change detection</a></h3>
-          <p>2026-10-25</p>
+          <h3><a href="/en/2026/10/26/postgres-string-agg-input-order/">Ordering inside string_agg: why the outer ORDER BY cannot fix a list</a></h3>
+          <p>2026-10-26</p>
         </article>
       
         <article class="related-card">
           
-          <h3><a href="/en/2026/10/24/postgres-identity-override-values/">Whose Identity Does PostgreSQL OVERRIDING Preserve?</a></h3>
-          <p>2026-10-24</p>
+          <h3><a href="/en/2026/10/26/postgres-unnest-array-padding/">Unequal arrays in unnest: NULL padding is not input rejection</a></h3>
+          <p>2026-10-26</p>
         </article>
       
     </div>

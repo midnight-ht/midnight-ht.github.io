@@ -198,7 +198,7 @@
       <div class="article-content">
         <p>Object.assign(target, source) writes values into an existing target and can invoke its setters. Object spread creates data properties in a new object instead of following that target assignment path. Both operations read source properties, so source getters may still run. Before replacing assign with spread, decide which reads, writes, and object identity the code needs to preserve. Shorter syntax is not evidence of equivalent behavior.</p>
 <h2 id="The-same-property-name-can-describe-different-operations"><a href="#The-same-property-name-can-describe-different-operations" class="headerlink" title="The same property name can describe different operations"></a>The same property name can describe different operations</h2><p>The <a target="_blank" rel="noopener" href="https://tc39.es/ecma262/multipage/fundamental-objects.html#sec-object.assign">ECMAScript Object.assign algorithm</a> reads enumerable own source properties and performs Set on the target. The <a target="_blank" rel="noopener" href="https://tc39.es/ecma262/multipage/abstract-operations.html#sec-copydataproperties">CopyDataProperties algorithm</a> reads source values and creates data properties. The distinction explains whether target accessors participate. It is a language mechanism rather than an accidental result on one JavaScript engine.</p>
-<p>Imagine a controlled configuration object whose volume setter validates a value and updates internal state. Assign can enter that write path. Spreading a same-named field into a new ordinary object obtains a value without calling the original target’s validation. Describing both as interchangeable “merging” conceals a side effect that the change may remove.</p>
+<p>Imagine a controlled configuration object whose volume setter validates a value and updates internal state. Assign can enter that write path. Spreading a same-named field into a new ordinary object obtains a value without calling the original target&#39;s validation. Describing both as interchangeable “merging” conceals a side effect that the change may remove.</p>
 <p>This hypothetical, unexecuted example records setter calls in an array. It performs no external operation and does not suggest that every configuration system should implement validation with setters.</p>
 <pre><code class="js">const calls = [];
 const target = {
@@ -209,19 +209,19 @@ Object.assign(target, source);
 const copy = { ...source };
 // Proposed checks: calls contains one 7; copy has an own data property.
 </code></pre>
-<p>Proposed assertions should not merely compare values read from the two objects. The example target has a setter but no corresponding getter, so target.volume and copy.volume are different observations. Check the call count, the argument, and the copied property’s descriptor. If the real setter updates internal state, inspect that state as well. Requiring both objects to read identically would test a contract the example never intended.</p>
-<h2 id="Spread-does-not-make-source-reads-side-effect-free"><a href="#Spread-does-not-make-source-reads-side-effect-free" class="headerlink" title="Spread does not make source reads side-effect-free"></a>Spread does not make source reads side-effect-free</h2><p>Move the accessor to the source instead. Suppose source.volume is a getter that computes a current value or records access. Both assign and spread need the value of that enumerable own property, so both can invoke the getter. The resulting copy stores the value obtained by that read; it does not normally carry the getter itself. A later change in the getter’s external state does not recompute the copied primitive value.</p>
+<p>Proposed assertions should not merely compare values read from the two objects. The example target has a setter but no corresponding getter, so target.volume and copy.volume are different observations. Check the call count, the argument, and the copied property&#39;s descriptor. If the real setter updates internal state, inspect that state as well. Requiring both objects to read identically would test a contract the example never intended.</p>
+<h2 id="Spread-does-not-make-source-reads-side-effect-free"><a href="#Spread-does-not-make-source-reads-side-effect-free" class="headerlink" title="Spread does not make source reads side-effect-free"></a>Spread does not make source reads side-effect-free</h2><p>Move the accessor to the source instead. Suppose source.volume is a getter that computes a current value or records access. Both assign and spread need the value of that enumerable own property, so both can invoke the getter. The resulting copy stores the value obtained by that read; it does not normally carry the getter itself. A later change in the getter&#39;s external state does not recompute the copied primitive value.</p>
 <p>This gives snapshot design a concrete choice. If ordinary data at one moment is required, define which getters may run, how read failures are handled, and what controlled data shape is produced. If preserving accessor behavior is required, copying values is the wrong tool. Calling a getter result a preserved property can mislead future maintainers into assuming the original descriptor was retained.</p>
 <p>Object identity also changes. Assign modifies and returns the target supplied by the caller. Other holders of that target can observe its changes. Spread produces another object while old references still point to the original. A caller that ignores the new result may leave the configuration actually in use untouched. Decide whether subscribers rely on reference changes or on mutation according to their real contracts rather than applying a universal preference for new objects.</p>
 <p>A review should therefore inspect the whole assignment expression. Replacing a mutation with an object expression is incomplete when the surrounding code still expects the original target to carry the update. Conversely, deliberately publishing a new configuration can be appropriate when all consumers receive the new identity. Neither syntax establishes that handoff by itself.</p>
-<h2 id="Throwing-midway-does-not-undo-earlier-effects"><a href="#Throwing-midway-does-not-undo-earlier-effects" class="headerlink" title="Throwing midway does not undo earlier effects"></a>Throwing midway does not undo earlier effects</h2><p>Consider a source with three fields. The target’s first two setters run, but the third rejects its input by throwing. Assign is not a transaction, and earlier writes can remain. A catch block that tells the user nothing changed needs additional evidence. Failure to return normally is not evidence that the target kept its initial state.</p>
+<h2 id="Throwing-midway-does-not-undo-earlier-effects"><a href="#Throwing-midway-does-not-undo-earlier-effects" class="headerlink" title="Throwing midway does not undo earlier effects"></a>Throwing midway does not undo earlier effects</h2><p>Consider a source with three fields. The target&#39;s first two setters run, but the third rejects its input by throwing. Assign is not a transaction, and earlier writes can remain. A catch block that tells the user nothing changed needs additional evidence. Failure to return normally is not evidence that the target kept its initial state.</p>
 <p>Spread has a related limit. If a later source getter throws, a complete new result may never reach the caller, but earlier getter side effects are not automatically undone. Building a temporary object before publishing it can change when target state becomes visible; it cannot guarantee side-effect-free reading. Controlled plain data, explicit validation, and an understandable publication step are often easier to review than implicit accessor behavior. That is an engineering choice, not a rule imposed by the language.</p>
 <p>Both approaches are shallow. A nested object can remain shared between source and result, even when the outer object is new. The article on <a href="/en/2026/10/18/javascript-object-freeze-shallow/">shallow freezing and nested changes</a> examines whether referenced objects remain mutable. This article concerns the operations executed during copying. They address different stages of the same configuration lifecycle.</p>
 <h3 id="What-if-the-getter-itself-must-be-preserved"><a href="#What-if-the-getter-itself-must-be-preserved" class="headerlink" title="What if the getter itself must be preserved?"></a>What if the getter itself must be preserved?</h3><p>Evaluate descriptor-oriented APIs rather than describing value copying as accessor copying. Define which properties are eligible, the intended target prototype, and how non-configurable properties should be handled before selecting creation or definition operations. Preserving a getter can also preserve its dependence on external state or closure variables. It does not create an independent snapshot. An accessor relying on private instance state may need separate compatibility checks on another receiver.</p>
 <p>A focused acceptance exercise can combine a source getter, target setter, nested object, and a later throwing field. Observe read counts, write counts, descriptors, changes to the original target, and effects retained before failure. Use independently prepared expectations so assertions do not share mutable state with the objects under examination.</p>
-<p>For failure testing, prepare a fresh target whose first two fields accept writes and whose third setter rejects. Supply fields in a controlled order. After catching the exception, inspect the first two retained changes, the third field’s rejection, and each invocation count. Rebuild the target for every run rather than reusing partially changed state. Whole-update publication requires a design that actually validates and publishes under that contract.</p>
-<p>Separately let the second source getter throw and check whether the first getter’s counter remains and whether a complete new object reached the caller. This distinguishes target publication from source-read side effects. Use controlled recording substitutes for external getter actions rather than fabricating real sends or saves. Descriptor copying is not input validation either: it describes how a property works without establishing that its values satisfy business requirements.</p>
-<p>Proxies, custom prototypes, and special objects introduce additional paths; the ordinary-object example does not establish their compatibility. This article inspected the living ECMAScript specification on October 24, 2026, without executing JavaScript. A reviewable replacement should state whether the original target’s setter must still run, whether source getters may run, and which object consumers ultimately hold. “Standardize on spread syntax” alone does not explain the behavioral change.</p>
+<p>For failure testing, prepare a fresh target whose first two fields accept writes and whose third setter rejects. Supply fields in a controlled order. After catching the exception, inspect the first two retained changes, the third field&#39;s rejection, and each invocation count. Rebuild the target for every run rather than reusing partially changed state. Whole-update publication requires a design that actually validates and publishes under that contract.</p>
+<p>Separately let the second source getter throw and check whether the first getter&#39;s counter remains and whether a complete new object reached the caller. This distinguishes target publication from source-read side effects. Use controlled recording substitutes for external getter actions rather than fabricating real sends or saves. Descriptor copying is not input validation either: it describes how a property works without establishing that its values satisfy business requirements.</p>
+<p>Proxies, custom prototypes, and special objects introduce additional paths; the ordinary-object example does not establish their compatibility. This article inspected the living ECMAScript specification on October 24, 2026, without executing JavaScript. A reviewable replacement should state whether the original target&#39;s setter must still run, whether source getters may run, and which object consumers ultimately hold. “Standardize on spread syntax” alone does not explain the behavioral change.</p>
 
       </div>
 
@@ -319,13 +319,13 @@ const copy = { ...source };
           <h2>Related Topics</h2>
           <p>Place this article back into long-running themes.</p>
           
-            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>286</b></a>
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>283</b></a>
           
-            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>135</b></a>
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>143</b></a>
           
-            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>96</b></a>
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>101</b></a>
           
-            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>66</b></a>
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>70</b></a>
           
         </section>
       
@@ -345,20 +345,20 @@ const copy = { ...source };
       
         <article class="related-card">
           
+          <h3><a href="/en/2026/10/26/javascript-object-entries-key-order/">Object.entries key order: why numeric-looking keys move ahead</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/26/node-fileurltopath-decoding/">Why a file URL pathname is not a reliable native path</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
           <h3><a href="/en/2026/10/24/javascript-flat-sparse-slots/">Why Does Array.flat Remove Slots but Keep undefined?</a></h3>
           <p>2026-10-24</p>
-        </article>
-      
-        <article class="related-card">
-          
-          <h3><a href="/en/2026/10/24/promise-any-fulfillment-aggregateerror/">Does Promise.any Select a Fulfilled Value or a Valid Result?</a></h3>
-          <p>2026-10-24</p>
-        </article>
-      
-        <article class="related-card">
-          
-          <h3><a href="/en/2026/10/23/javascript-weakmap-retention-observability/">WeakMap Cannot Provide a Live Inventory or Timely Cleanup</a></h3>
-          <p>2026-10-23</p>
         </article>
       
     </div>

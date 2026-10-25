@@ -197,7 +197,7 @@
       <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Ordinary inequality with NULL yields unknown.</li><li>IS DISTINCT FROM distinguishes one NULL from two NULLs.</li><li>Preserve omitted-field intent before comparing values.</li></ul></section>
       <div class="article-content">
         <p>Using <code>old_value &lt;&gt; new_value</code> to detect changes in a nullable field can miss both the first value replacing NULL and an existing value explicitly cleared to NULL. Ordinary inequality produces unknown when NULL participates. If the business treats two NULLs as unchanged and exactly one NULL as changed, consider <code>IS DISTINCT FROM</code> and separately define omission versus explicit clearing.</p>
-<h2 id="Compare-complete-field-states"><a href="#Compare-complete-field-states" class="headerlink" title="Compare complete field states"></a>Compare complete field states</h2><p>The <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-comparison.html">PostgreSQL 18 comparison documentation</a> specifies that IS DISTINCT FROM behaves like inequality for non-null inputs, returns false for two NULLs, and true when exactly one input is NULL. Conversely, IS NOT DISTINCT FROM returns true for two NULLs. This is a defined comparison including empty state, not a universal change to SQL’s treatment of unknown values.</p>
+<h2 id="Compare-complete-field-states"><a href="#Compare-complete-field-states" class="headerlink" title="Compare complete field states"></a>Compare complete field states</h2><p>The <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-comparison.html">PostgreSQL 18 comparison documentation</a> specifies that IS DISTINCT FROM behaves like inequality for non-null inputs, returns false for two NULLs, and true when exactly one input is NULL. Conversely, IS NOT DISTINCT FROM returns true for two NULLs. This is a defined comparison including empty state, not a universal change to SQL&#39;s treatment of unknown values.</p>
 <p>Suppose a profile audit compares a contact note before and after an update. User one previously had no note and enters “evening.” User two removes that note explicitly. User three has no note before or after. The business expects changes for the first two and none for the third. Ordinary inequality does not return true for the first two, so the audit misses real transitions.</p>
 <p>This complete hypothetical input exposes the difference. The SQL was not executed; the explanation is derived from documentation rather than database logs.</p>
 <pre><code class="sql">WITH changes(id, old_value, new_value) AS (
@@ -217,11 +217,11 @@ ORDER BY id;
 <h2 id="A-COALESCE-sentinel-can-hide-a-legitimate-transition"><a href="#A-COALESCE-sentinel-can-hide-a-legitimate-transition" class="headerlink" title="A COALESCE sentinel can hide a legitimate transition"></a>A COALESCE sentinel can hide a legitimate transition</h2><p>A common patch replaces NULL on both sides with an empty string before comparing. Row four then becomes empty string versus empty string, turning a real transition into “unchanged.” A special-looking string merely postpones the collision until that value enters the data. Unless a constraint makes the sentinel impossible, the comparison silently merges distinct states.</p>
 <p>If the business intentionally treats empty strings, whitespace-only strings, and NULL as “not supplied,” define normalization first. Apply it at a clear boundary and decide whether audit needs the original input. Equating those storage states is then a product policy rather than a temporary trick to obtain a boolean. IS DISTINCT FROM does not trim whitespace, normalize case, or standardize phone formats for the team.</p>
 <p>For example, whether removing surrounding spaces creates an audit event depends on comparing raw input or normalized state. If the product needs both a record of user actions and suppression of identical normalized updates, record request events and actual state changes separately. One changed field serving both purposes makes it unclear whether it represents clicking Save or a stored difference.</p>
-<h2 id="Conditional-updates-do-not-implement-an-entire-audit"><a href="#Conditional-updates-do-not-implement-an-entire-audit" class="headerlink" title="Conditional updates do not implement an entire audit"></a>Conditional updates do not implement an entire audit</h2><p>A hypothetical endpoint that updates only genuinely different notes can include the comparison in UPDATE’s WHERE clause while locating the target by stable identity. This means “update if the target exists and its current field differs.” No updated row can mean identical content, an absent target, or another unsatisfied predicate. Zero rows cannot automatically be translated as “the profile already matched.”</p>
+<h2 id="Conditional-updates-do-not-implement-an-entire-audit"><a href="#Conditional-updates-do-not-implement-an-entire-audit" class="headerlink" title="Conditional updates do not implement an entire audit"></a>Conditional updates do not implement an entire audit</h2><p>A hypothetical endpoint that updates only genuinely different notes can include the comparison in UPDATE&#39;s WHERE clause while locating the target by stable identity. This means “update if the target exists and its current field differs.” No updated row can mean identical content, an absent target, or another unsatisfied predicate. Zero rows cannot automatically be translated as “the profile already matched.”</p>
 <p>An audit still needs old value, new value, actor, and transaction ownership bound to the actual change. A correct SELECT comparison does not establish that a later UPDATE uses the same state version or that audit and update commit together. This article does not implement complete transaction or concurrency control; it addresses field-comparison semantics. Verify actual authorization, update protocol, and transaction behavior independently. One predicate is not an audit system.</p>
 <p>Write independent expectations for the five rows, then add two different non-null texts, equal ordinary texts, and two empty strings. Check updated identities and audit counts as well as values. A single test changing one non-null text to another misses first-entry and clearing paths. No SQL was executed and no reduction in write cost was measured.</p>
-<h3 id="Can-an-omitted-request-field-and-explicit-NULL-use-the-same-comparison"><a href="#Can-an-omitted-request-field-and-explicit-NULL-use-the-same-comparison" class="headerlink" title="Can an omitted request field and explicit NULL use the same comparison?"></a>Can an omitted request field and explicit NULL use the same comparison?</h3><p>Do not turn both into NULL first and expect the database to recover intent. A partial-update contract may define omission as preserving the existing note and explicit NULL as clearing it. That contract must be stated. Preserve field presence before deciding whether a new value enters the comparison. The predicate sees two supplied values, not the original request’s shape.</p>
-<p>Suppose the stored note is evening. Request A omits the note field; request B explicitly provides it as NULL. Under this contract, A skips the note update, while B compares evening with NULL and produces a clearing event. Defaulting A’s missing field to NULL makes both requests perform the same action unintentionally. Tests must therefore cover raw request shape rather than only direct database parameters.</p>
+<h3 id="Can-an-omitted-request-field-and-explicit-NULL-use-the-same-comparison"><a href="#Can-an-omitted-request-field-and-explicit-NULL-use-the-same-comparison" class="headerlink" title="Can an omitted request field and explicit NULL use the same comparison?"></a>Can an omitted request field and explicit NULL use the same comparison?</h3><p>Do not turn both into NULL first and expect the database to recover intent. A partial-update contract may define omission as preserving the existing note and explicit NULL as clearing it. That contract must be stated. Preserve field presence before deciding whether a new value enters the comparison. The predicate sees two supplied values, not the original request&#39;s shape.</p>
+<p>Suppose the stored note is evening. Request A omits the note field; request B explicitly provides it as NULL. Under this contract, A skips the note update, while B compares evening with NULL and produces a clearing event. Defaulting A&#39;s missing field to NULL makes both requests perform the same action unintentionally. Tests must therefore cover raw request shape rather than only direct database parameters.</p>
 <p>The response contract should retain this distinction. If a client submits the same note twice, the service can report no content change, but it should establish target and access conditions rather than infer or disclose record state from zero updated rows. Deliberately presenting absent, inaccessible, and unchanged targets alike may be a product and security choice; an incidental shared count should not make that choice.</p>
 <p>For audit acceptance, send two identical requests in a proposed case. Check that an actual state-change event is not recorded twice while retaining whatever operation evidence is needed to establish that two requests arrived. Request counts and state-change counts need not match. This does not automatically provide idempotency: request identity, transactions, and repeated side effects still require implementation. Precise event names are easier to investigate than calling every record update success.</p>
 <p>The earlier article on <a href="/en/2026/10/14/postgres-not-in-null/">NOT IN and NULL</a> examines unknown propagation in set filtering. Here the question is comparison of before-and-after update states. Sharing a NULL theme does not make one rewrite suitable for every query. A profile-change repair should deliver field-presence rules, empty-state equivalence, and expected transitions, then verify that update and audit follow the same agreement.</p>
@@ -320,13 +320,13 @@ ORDER BY id;
           <h2>Related Topics</h2>
           <p>Place this article back into long-running themes.</p>
           
-            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>286</b></a>
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>283</b></a>
           
-            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>135</b></a>
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>143</b></a>
           
-            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>96</b></a>
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>101</b></a>
           
-            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>66</b></a>
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>70</b></a>
           
         </section>
       
@@ -346,20 +346,20 @@ ORDER BY id;
       
         <article class="related-card">
           
-          <h3><a href="/en/2026/10/25/postgres-bool-aggregate-null-input/">Why true from bool_and does not approve the whole batch</a></h3>
-          <p>2026-10-25</p>
+          <h3><a href="/en/2026/10/26/postgres-case-constant-folding/">Why an unselected CASE branch can still fail on constant division</a></h3>
+          <p>2026-10-26</p>
         </article>
       
         <article class="related-card">
           
-          <h3><a href="/en/2026/10/25/postgres-join-using-output-contract/">JOIN USING changed a column: why did the interface change too?</a></h3>
-          <p>2026-10-25</p>
+          <h3><a href="/en/2026/10/26/postgres-string-agg-input-order/">Ordering inside string_agg: why the outer ORDER BY cannot fix a list</a></h3>
+          <p>2026-10-26</p>
         </article>
       
         <article class="related-card">
           
-          <h3><a href="/en/2026/10/24/postgres-identity-override-values/">Whose Identity Does PostgreSQL OVERRIDING Preserve?</a></h3>
-          <p>2026-10-24</p>
+          <h3><a href="/en/2026/10/26/postgres-unnest-array-padding/">Unequal arrays in unnest: NULL padding is not input rejection</a></h3>
+          <p>2026-10-26</p>
         </article>
       
     </div>

@@ -1,0 +1,401 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Ordering inside string_agg: why the outer ORDER BY cannot fix a list | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Use a signature export to separate aggregate input order, tie-breakers, join multiplication and missing names.">
+  
+  
+    <meta name="keywords" content="string_agg,aggregate order,tie-breaker">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/26/postgres-string-agg-input-order/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/26/postgres-string-agg-input-order/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/26/postgres-string-agg-input-order/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/26/postgres-string-agg-input-order/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Ordering inside string_agg: why the outer ORDER BY cannot fix a list | Midnight blog">
+    <meta property="og:description" content="Use a signature export to separate aggregate input order, tie-breakers, join multiplication and missing names.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/26/postgres-string-agg-input-order/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/26/postgres-string-agg-input-order/#webpage","url":"https://www.zyweb.vip/en/2026/10/26/postgres-string-agg-input-order/","name":"Ordering inside string_agg: why the outer ORDER BY cannot fix a list | Midnight blog","description":"Use a signature export to separate aggregate input order, tie-breakers, join multiplication and missing names.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/26/postgres-string-agg-input-order/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/26/postgres-string-agg-input-order/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/26/postgres-string-agg-input-order/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/26/postgres-string-agg-input-order/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/26/postgres-string-agg-input-order/","headline":"Ordering inside string_agg: why the outer ORDER BY cannot fix a list","description":"Use a signature export to separate aggregate input order, tie-breakers, join multiplication and missing names.","inLanguage":"en","datePublished":"2026-10-25T19:36:08.000Z","dateModified":"2026-10-25T19:36:08.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.postgresql.org/docs/18/functions-aggregate.html","https://www.postgresql.org/docs/18/sql-expressions.html"],"keywords":"Development, PostgreSQL"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/26/postgres-string-agg-input-order/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Ordering inside string_agg: why the outer ORDER BY cannot fix a list","item":"https://www.zyweb.vip/en/2026/10/26/postgres-string-agg-input-order/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/26/postgres-string-agg-input-order/">zh-CN</option><option value="/en/2026/10/26/postgres-string-agg-input-order/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/26/postgres-string-agg-input-order/">zh-CN</option><option value="/en/2026/10/26/postgres-string-agg-input-order/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-25T19:36:08.000Z">2026-10-26</time>
+    </div>
+
+    <h1>Ordering inside string_agg: why the outer ORDER BY cannot fix a list</h1>
+
+    
+      <p class="post-hero__summary">Use a signature export to separate aggregate input order, tie-breakers, join multiplication and missing names.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-25T19:36:08.000Z">2026-10-26</time> · Estimated read 10 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/26/postgres-string-agg-input-order/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/26/postgres-string-agg-input-order/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Order fragments inside the aggregate and result rows outside it.</li><li>Establish signature identity before fixing join multiplication or duplicate names.</li><li>A display string is not a completeness or interchange contract.</li></ul></section>
+      <div class="article-content">
+        <p>Sorting customer rows does not sort the names inside each customer&#39;s exported signature list. If the list must follow signing time, put the order inside <code>string_agg</code>, and add a stable tie-breaker for signatures with the same timestamp. The outer order and the aggregate&#39;s input order have separate jobs.</p>
+<h2 id="A-result-row-contains-another-ordering-decision"><a href="#A-result-row-contains-another-ordering-decision" class="headerlink" title="A result row contains another ordering decision"></a>A result row contains another ordering decision</h2><p>The <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-aggregate.html">PostgreSQL 18 aggregate reference</a> identifies string_agg as order-sensitive and allows ordering within the aggregate call. An outer ORDER BY acts on result rows after aggregation. With one summary row, there is no second row to move, and no instruction to rearrange fragments already joined into a string.</p>
+<p>Consider a hypothetical customer with three signatures: Lin at nine, Zhou at nine, and Chen at ten. Their record identifiers are twelve, eleven, and thirteen. The export contract says earliest time first, then identifier. The independently derived expectation is Zhou, Lin, Chen. The following teaching query has not been executed.</p>
+<pre><code class="sql">WITH signatures(customer_id, id, signed_at, name) AS (
+  VALUES (7, 12, timestamp &#39;2026-10-26 09:00&#39;, &#39;Lin&#39;),
+         (7, 11, timestamp &#39;2026-10-26 09:00&#39;, &#39;Zhou&#39;),
+         (7, 13, timestamp &#39;2026-10-26 10:00&#39;, &#39;Chen&#39;)
+)
+SELECT customer_id,
+       string_agg(name, &#39;, &#39; ORDER BY signed_at, id) AS names
+FROM signatures
+GROUP BY customer_id
+ORDER BY customer_id;
+</code></pre>
+<p>Time and identifier control the list; customer identifier controls the order of customer rows. Time alone leaves the two nine o&#39;clock records tied. A stable unique identifier completes the requested relation. It is a correctness decision, not a promise about which index or scan the planner will use.</p>
+<h2 id="Establish-record-identity-before-joining-text"><a href="#Establish-record-identity-before-joining-text" class="headerlink" title="Establish record identity before joining text"></a>Establish record identity before joining text</h2><p>Correct order does not establish correct membership. Suppose signatures are joined to attachments, and one signature has two attachments. The aggregate may receive the signer twice. Recover one input row per signature before aggregating if that is the intended unit. DISTINCT name can hide this mistake while also merging different people with the same name, or legitimate repeat signatures.</p>
+<p>If the requirement is one appearance per participant, define which signature determines that participant&#39;s position. For example, derive the first valid signature and then order those representative records. Arbitrarily selecting one record cannot support a claim that the list follows first signing time.</p>
+<p>Keep structured identifiers and timestamps alongside the display field. A comma-separated string is not automatically a reversible interchange format: a name can itself contain a comma. Choose a structured representation or an explicit escaping protocol when consumers must parse the output. Joining fragments and designing an exchange contract are different responsibilities.</p>
+<h2 id="Is-ordering-a-subquery-sufficient-after-a-join"><a href="#Is-ordering-a-subquery-sufficient-after-a-join" class="headerlink" title="Is ordering a subquery sufficient after a join?"></a>Is ordering a subquery sufficient after a join?</h2><p>The official reference warns that additional outer processing, including joins, can reorder a sorted subquery before aggregation. Place an order that directly affects aggregate meaning in the aggregate call, so maintenance does not depend on tracing several query layers.</p>
+<p>A subquery order can still serve a separate purpose. Selecting a limited set of recent records is a membership decision; ordering that selected set for display is another. Removing an apparently repeated order can alter either the selected records or the final text. Preserve an expectation for each stage. The site&#39;s <a href="/en/2026/10/14/postgres-distinct-on-choice/">DISTINCT ON discussion</a> addresses representative-row choice; this article addresses the later order in which selected fragments are combined.</p>
+<h2 id="How-do-missing-names-differ-from-empty-strings"><a href="#How-do-missing-names-differ-from-empty-strings" class="headerlink" title="How do missing names differ from empty strings?"></a>How do missing names differ from empty strings?</h2><p>string_agg combines non-null inputs. A missing name does not automatically leave an unknown-name slot. An empty string is different and can produce adjacent delimiters. If the export requires a visible placeholder, define the mapping deliberately and retain a missing-value count when completeness matters.</p>
+<p>Zero signatures and signatures whose names are all missing may need different business states even when their aggregate text provides no useful distinction. Carry total records and known names rather than making a display string prove participation or completeness.</p>
+<p>A proposed verification set includes tied timestamps, duplicate names, missing names, one signer and zero signers. Write expected record identities before running the query. Add two attachments to one signature to expose accidental multiplication, then permute input rows and check that explicit ordering still yields the same contracted list. No database execution or cost measurement is reported here. The claim is about expressed membership and ordering, not a fixed plan or runtime.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-aggregate.html" rel="noopener">PostgreSQL 18 — Aggregate Functions: order-sensitive aggregates</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-expressions.html" rel="noopener">PostgreSQL 18 — Value Expressions: aggregate inputs and expression evaluation rules</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/en/tags/PostgreSQL/">PostgreSQL</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F26%2Fpostgres-string-agg-input-order%2F&text=Ordering%20inside%20string_agg%3A%20why%20the%20outer%20ORDER%20BY%20cannot%20fix%20a%20list" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F26%2Fpostgres-string-agg-input-order%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Ordering%20inside%20string_agg%3A%20why%20the%20outer%20ORDER%20BY%20cannot%20fix%20a%20list&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F26%2Fpostgres-string-agg-input-order%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/26/postgres-unnest-array-padding/">
+              <span>Previous Post</span>
+              <strong>Unequal arrays in unnest: NULL padding is not input rejection</strong>
+              <small>2026-10-26</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/26/postgres-case-constant-folding/">
+              <span>Next Post</span>
+              <strong>Why an unselected CASE branch can still fail on constant division</strong>
+              <small>2026-10-26</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#A-result-row-contains-another-ordering-decision">A result row contains another ordering decision</a>
+          
+            <a class="toc-link toc-link--h2" href="#Establish-record-identity-before-joining-text">Establish record identity before joining text</a>
+          
+            <a class="toc-link toc-link--h2" href="#Is-ordering-a-subquery-sufficient-after-a-join">Is ordering a subquery sufficient after a join?</a>
+          
+            <a class="toc-link toc-link--h2" href="#How-do-missing-names-differ-from-empty-strings">How do missing names differ from empty strings?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>283</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>143</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>101</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>70</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/26/postgres-case-constant-folding/">Why an unselected CASE branch can still fail on constant division</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/26/postgres-unnest-array-padding/">Unequal arrays in unnest: NULL padding is not input rejection</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/25/postgres-bool-aggregate-null-input/">Why true from bool_and does not approve the whole batch</a></h3>
+          <p>2026-10-25</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

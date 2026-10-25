@@ -197,26 +197,26 @@
       <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Defaults apply to future objects; existing grants need a separate review.</li><li>The current creating role determines which defaults apply.</li><li>Test different creators with the actual reader role.</li></ul></section>
       <div class="article-content">
         <p>A migration login belongs to the table-owner role, yet a newly created table still rejects the reporting account. Check the current role at object creation. In PostgreSQL 18, default privileges follow that role; membership does not combine the defaults of other roles. A repair has two separate jobs: grant what existing objects require, and establish which role will create future objects.</p>
-<h2 id="Defaults-apply-at-creation"><a href="#Defaults-apply-at-creation" class="headerlink" title="Defaults apply at creation"></a>Defaults apply at creation</h2><p>The <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-alterdefaultprivileges.html">PostgreSQL 18 ALTER DEFAULT PRIVILEGES reference</a> limits these rules to future objects. Rules can apply throughout the current database or within named schemas. Changing a rule does not recalculate privileges on existing tables. A successful command therefore does not establish that yesterday’s table is readable.</p>
-<p>Only the current creating role’s defaults apply. Distinguish the login, the role currently executing SQL, and the resulting object owner. A deployment configuration naming a login is insufficient: determine whether the migration changes roles before creating tables. A role change on one connection is not evidence about a fresh connection opened by the migration tool.</p>
-<p>Consider an unexecuted example. The app schema and three roles already exist: owner_role owns tables, migrator may switch to it, and reporter needs read access. Migrator creates app.before without switching. An administrator then grants reporter default SELECT for tables created by owner_role. This does not repair app.before. If migrator subsequently creates app.after while still acting as migrator, membership alone does not make owner_role’s defaults apply.</p>
-<p>One design standardizes creation: switch to owner_role before creating app.future and configure defaults explicitly for owner_role. Another permits several creating roles and maintains each role’s defaults. The tradeoff is how many creation identities the team must maintain. Granting everything to PUBLIC to clear the error broadens a reporting requirement into access for unrelated users.</p>
+<h2 id="Defaults-apply-at-creation"><a href="#Defaults-apply-at-creation" class="headerlink" title="Defaults apply at creation"></a>Defaults apply at creation</h2><p>The <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-alterdefaultprivileges.html">PostgreSQL 18 ALTER DEFAULT PRIVILEGES reference</a> limits these rules to future objects. Rules can apply throughout the current database or within named schemas. Changing a rule does not recalculate privileges on existing tables. A successful command therefore does not establish that yesterday&#39;s table is readable.</p>
+<p>Only the current creating role&#39;s defaults apply. Distinguish the login, the role currently executing SQL, and the resulting object owner. A deployment configuration naming a login is insufficient: determine whether the migration changes roles before creating tables. A role change on one connection is not evidence about a fresh connection opened by the migration tool.</p>
+<p>Consider an unexecuted example. The app schema and three roles already exist: owner_role owns tables, migrator may switch to it, and reporter needs read access. Migrator creates app.before without switching. An administrator then grants reporter default SELECT for tables created by owner_role. This does not repair app.before. If migrator subsequently creates app.after while still acting as migrator, membership alone does not make owner_role&#39;s defaults apply.</p>
+<p>One design standardizes creation: switch to owner_role before creating app.future and configure defaults explicitly for owner_role. Another permits several creating roles and maintains each role&#39;s defaults. The tradeoff is how many creation identities the team must maintain. Granting everything to PUBLIC to clear the error broadens a reporting requirement into access for unrelated users.</p>
 <pre><code class="sql">-- Illustrative SQL, not executed; requires authority over these defaults.
 ALTER DEFAULT PRIVILEGES FOR ROLE owner_role IN SCHEMA app
   GRANT SELECT ON TABLES TO reporter;
 -- Existing objects need a separately reviewed grant.
 GRANT SELECT ON app.before TO reporter;
 </code></pre>
-<p>The example assumes reporter already has the required USAGE on app. Table SELECT does not supply schema access. Use schema-qualified names so a search path cannot direct the check toward another table. An administrator’s successful query is not a substitute for reporter’s result.</p>
+<p>The example assumes reporter already has the required USAGE on app. Table SELECT does not supply schema access. Use schema-qualified names so a search path cannot direct the check toward another table. An administrator&#39;s successful query is not a substitute for reporter&#39;s result.</p>
 <h2 id="A-schema-level-revoke-cannot-cancel-a-global-grant"><a href="#A-schema-level-revoke-cannot-cancel-a-global-grant" class="headerlink" title="A schema-level revoke cannot cancel a global grant"></a>A schema-level revoke cannot cancel a global grant</h2><p>The reference also explains that schema defaults are added to global defaults. If a privilege is granted globally, a schema-level REVOKE cannot subtract it. Review where the effective privilege originates before changing either level.</p>
 <p>Suppose reporter should read most schemas but never payroll. A global default SELECT followed by a payroll-specific revoke does not express that exception. A reviewable alternative removes the overly broad global default and grants defaults in the intended schemas, then examines existing objects separately. This is a design example, not an instruction to change an existing database without an inventory.</p>
 <p>Object classes require their own decisions. Defaults for tables do not establish grants for sequences, functions, or every other object type. A read-only reporting contract should start with table reads. If a writing service needs sequence permissions, derive them from its actual statements and object model. A broad permission template is harder to justify than a specific business requirement.</p>
-<h2 id="Test-the-creation-path-that-deployments-use"><a href="#Test-the-creation-path-that-deployments-use" class="headerlink" title="Test the creation path that deployments use"></a>Test the creation path that deployments use</h2><p>In a disposable database, prepare an old table, a new table created by the intended role, and a control table created by another role. Record current_user during creation, the owner, the configured defaults, and reporter’s actual queries. State expectations beforehand: the old table needs an explicit grant; the intended creator’s new table should be readable; the control creator should not inherit another role’s defaults merely through membership.</p>
+<h2 id="Test-the-creation-path-that-deployments-use"><a href="#Test-the-creation-path-that-deployments-use" class="headerlink" title="Test the creation path that deployments use"></a>Test the creation path that deployments use</h2><p>In a disposable database, prepare an old table, a new table created by the intended role, and a control table created by another role. Record current_user during creation, the owner, the configured defaults, and reporter&#39;s actual queries. State expectations beforehand: the old table needs an explicit grant; the intended creator&#39;s new table should be readable; the control creator should not inherit another role&#39;s defaults merely through membership.</p>
 <p>Repeat creation through a fresh migration connection. This catches role switching that exists only in a manual session. Pools, migration runners, and scheduled jobs may use different entry points. Distinguish failures of schema access, object privileges, and row security. The related guide to <a href="/en/2026/10/12/postgres-rls-runtime-role/">runtime roles and RLS</a> covers a boundary that remains after table access is granted.</p>
-<h3 id="Should-every-old-table-receive-the-new-grant"><a href="#Should-every-old-table-receive-the-new-grant" class="headerlink" title="Should every old table receive the new grant?"></a>Should every old table receive the new grant?</h3><p>No automatic conclusion follows from changing defaults. Inventory reporter’s business scope first: historical tables may contain data excluded from reporting. Future and existing objects can share an intended policy while requiring separate actions and evidence. For a bulk repair, review the exact schema and table set and its rollback plan.</p>
-<p>During a handover, retain the creation record rather than relying only on today’s owner field. If ownership is transferred after deployment, the final inventory establishes current ownership but cannot alone reconstruct which defaults applied at creation. Record role switching, creation statements, the migration identity, and a snapshot of relevant defaults.</p>
+<h3 id="Should-every-old-table-receive-the-new-grant"><a href="#Should-every-old-table-receive-the-new-grant" class="headerlink" title="Should every old table receive the new grant?"></a>Should every old table receive the new grant?</h3><p>No automatic conclusion follows from changing defaults. Inventory reporter&#39;s business scope first: historical tables may contain data excluded from reporting. Future and existing objects can share an intended policy while requiring separate actions and evidence. For a bulk repair, review the exact schema and table set and its rollback plan.</p>
+<p>During a handover, retain the creation record rather than relying only on today&#39;s owner field. If ownership is transferred after deployment, the final inventory establishes current ownership but cannot alone reconstruct which defaults applied at creation. Record role switching, creation statements, the migration identity, and a snapshot of relevant defaults.</p>
 <p>Assign an owner to the creation entry point too. A second migration runner or background partition task requires a new identity check. A previous successful reader query does not validate a new creator. Review both creators and readers whenever the permission policy changes.</p>
-<p>No roles, migrations, or queries were executed for this article. It describes PostgreSQL 18’s documented behavior and a validation design. Useful evidence connects creation identity, future defaults, existing grants, and reader results. A receipt for changing defaults alone cannot establish how the next migration will act.</p>
+<p>No roles, migrations, or queries were executed for this article. It describes PostgreSQL 18&#39;s documented behavior and a validation design. Useful evidence connects creation identity, future defaults, existing grants, and reader results. A receipt for changing defaults alone cannot establish how the next migration will act.</p>
 
       </div>
 
@@ -312,13 +312,13 @@ GRANT SELECT ON app.before TO reporter;
           <h2>Related Topics</h2>
           <p>Place this article back into long-running themes.</p>
           
-            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>286</b></a>
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>283</b></a>
           
-            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>135</b></a>
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>143</b></a>
           
-            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>96</b></a>
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>101</b></a>
           
-            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>66</b></a>
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>70</b></a>
           
         </section>
       
@@ -338,20 +338,20 @@ GRANT SELECT ON app.before TO reporter;
       
         <article class="related-card">
           
-          <h3><a href="/en/2026/10/25/postgres-bool-aggregate-null-input/">Why true from bool_and does not approve the whole batch</a></h3>
-          <p>2026-10-25</p>
+          <h3><a href="/en/2026/10/26/postgres-case-constant-folding/">Why an unselected CASE branch can still fail on constant division</a></h3>
+          <p>2026-10-26</p>
         </article>
       
         <article class="related-card">
           
-          <h3><a href="/en/2026/10/25/postgres-is-distinct-from-null-equality/">Why changing NULL to text can escape change detection</a></h3>
-          <p>2026-10-25</p>
+          <h3><a href="/en/2026/10/26/postgres-string-agg-input-order/">Ordering inside string_agg: why the outer ORDER BY cannot fix a list</a></h3>
+          <p>2026-10-26</p>
         </article>
       
         <article class="related-card">
           
-          <h3><a href="/en/2026/10/25/postgres-join-using-output-contract/">JOIN USING changed a column: why did the interface change too?</a></h3>
-          <p>2026-10-25</p>
+          <h3><a href="/en/2026/10/26/postgres-unnest-array-padding/">Unequal arrays in unnest: NULL padding is not input rejection</a></h3>
+          <p>2026-10-26</p>
         </article>
       
     </div>

@@ -1,0 +1,401 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>TaskGroup child failure: cancellation scope and cleanup ownership | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Use a two-list import to examine peer cancellation, handled item errors, detached tasks and the separate commit boundary.">
+  
+  
+    <meta name="keywords" content="TaskGroup,CancelledError,structured concurrency">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/26/python-asyncio-taskgroup-failure-scope/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/26/python-asyncio-taskgroup-failure-scope/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/26/python-asyncio-taskgroup-failure-scope/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/26/python-asyncio-taskgroup-failure-scope/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="TaskGroup child failure: cancellation scope and cleanup ownership | Midnight blog">
+    <meta property="og:description" content="Use a two-list import to examine peer cancellation, handled item errors, detached tasks and the separate commit boundary.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/26/python-asyncio-taskgroup-failure-scope/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/26/python-asyncio-taskgroup-failure-scope/#webpage","url":"https://www.zyweb.vip/en/2026/10/26/python-asyncio-taskgroup-failure-scope/","name":"TaskGroup child failure: cancellation scope and cleanup ownership | Midnight blog","description":"Use a two-list import to examine peer cancellation, handled item errors, detached tasks and the separate commit boundary.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/26/python-asyncio-taskgroup-failure-scope/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/26/python-asyncio-taskgroup-failure-scope/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/26/python-asyncio-taskgroup-failure-scope/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/26/python-asyncio-taskgroup-failure-scope/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/26/python-asyncio-taskgroup-failure-scope/","headline":"TaskGroup child failure: cancellation scope and cleanup ownership","description":"Use a two-list import to examine peer cancellation, handled item errors, detached tasks and the separate commit boundary.","inLanguage":"en","datePublished":"2026-10-25T19:36:08.000Z","dateModified":"2026-10-25T19:36:08.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://docs.python.org/3.14/library/asyncio-task.html"],"keywords":"Quality, Python"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/26/python-asyncio-taskgroup-failure-scope/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"TaskGroup child failure: cancellation scope and cleanup ownership","item":"https://www.zyweb.vip/en/2026/10/26/python-asyncio-taskgroup-failure-scope/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/26/python-asyncio-taskgroup-failure-scope/">zh-CN</option><option value="/en/2026/10/26/python-asyncio-taskgroup-failure-scope/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/26/python-asyncio-taskgroup-failure-scope/">zh-CN</option><option value="/en/2026/10/26/python-asyncio-taskgroup-failure-scope/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--quality">Quality</span>
+      <time datetime="2026-10-25T19:36:08.000Z">2026-10-26</time>
+    </div>
+
+    <h1>TaskGroup child failure: cancellation scope and cleanup ownership</h1>
+
+    
+      <p class="post-hero__summary">Use a two-list import to examine peer cancellation, handled item errors, detached tasks and the separate commit boundary.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-25T19:36:08.000Z">2026-10-26</time> · Estimated read 10 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/26/python-asyncio-taskgroup-failure-scope/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/26/python-asyncio-taskgroup-failure-scope/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>A non-cancellation failure cancels remaining group members and waits for exit.</li><li>Cancellation does not roll back external effects.</li><li>Handled item outcomes and detached tasks need separate contracts.</li></ul></section>
+      <div class="article-content">
+        <p>When a TaskGroup child fails with a non-cancellation exception, remaining children in that group are cancelled, and context exit waits for them to finish. This establishes a failure scope. It does not undo files already written or requests already accepted by another service.</p>
+<h2 id="Make-decisions-after-the-group-has-finished"><a href="#Make-decisions-after-the-group-has-finished" class="headerlink" title="Make decisions after the group has finished"></a>Make decisions after the group has finished</h2><p>The <a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/asyncio-task.html#task-groups">Python task-group reference</a> defines waiting, cancellation and exception grouping. The retrieved 3.14 page is labelled 3.14.9. The API was introduced in 3.11; version-specific additions should not be assumed for every runtime. This article focuses on ordinary non-cancellation failures.</p>
+<p>Imagine an import requiring both a product list and a price list. Neither is useful as a complete published version alone. Placing their reads in one group expresses that one failed dependency should end continued production of the other result. Commit only after normal group exit and completeness checks.</p>
+<p>This teaching code is unexecuted. The read functions are hypothetical asynchronous dependencies, not validated clients.</p>
+<pre><code class="python">import asyncio
+
+async def prepare_import():
+    async with asyncio.TaskGroup() as group:
+        products = group.create_task(read_products())
+        prices = group.create_task(read_prices())
+    return build_import(products.result(), prices.result())
+</code></pre>
+<p>If the price read fails while the product read is waiting, the group requests cancellation of unfinished members and waits for their cleanup. Normal execution does not continue to build_import. No exact completion order or maximum cancellation time follows: responsiveness depends on suspension points and task behavior.</p>
+<h2 id="Cancellation-does-not-roll-back-external-effects"><a href="#Cancellation-does-not-roll-back-external-effects" class="headerlink" title="Cancellation does not roll back external effects"></a>Cancellation does not roll back external effects</h2><p>Suppose the product reader has already written part of a cache. A later price failure does not delete that cache or retract a remote request. Stage task-owned temporary outputs, validate both results after normal exit, and define a separate commit boundary if they must become visible together. That is application design, not a filesystem transaction supplied by TaskGroup.</p>
+<p>Resource owners should arrange cleanup, commonly in finally. A task that creates a temporary file can close or remove its own file; it should not arbitrarily close a shared connection or external handle. Failure containment requires ownership as well as cancellation.</p>
+<p>The Python documentation warns that structured-concurrency mechanisms use cancellation internally and can misbehave when CancelledError is swallowed. Cleanup and cancellation propagation are separate decisions. Catching cancellation to release a resource should not silently turn that task into a successful business result.</p>
+<h2 id="What-if-a-child-catches-an-expected-error"><a href="#What-if-a-child-catches-an-expected-error" class="headerlink" title="What if a child catches an expected error?"></a>What if a child catches an expected error?</h2><p>A child that catches an expected exception and returns a result object completes normally from the group&#39;s perspective. That handled error does not automatically trigger cancellation of peers. This can support partial-success batches, but normal context exit then proves only task completion, not business success for every item.</p>
+<p>For ten URL checks, a missing page might be data worth collecting, while an unavailable shared connection pool might justify failing the group. Classify expected item outcomes separately from failures that invalidate the operation. Catching every Exception merely to keep the context successful removes that distinction.</p>
+<p>For the two-list import, returning an empty list after a price failure can instead produce a plausible but incomplete import. Use an explicit status and check it before commit. Tolerance should preserve explainable outcomes rather than force every path through a success-shaped return.</p>
+<h2 id="Work-created-outside-the-group-stays-outside-its-scope"><a href="#Work-created-outside-the-group-stays-outside-its-scope" class="headerlink" title="Work created outside the group stays outside its scope"></a>Work created outside the group stays outside its scope</h2><p>A task launched elsewhere with create_task is not a group member merely because it shares a function or request identifier. Group exit cannot certify its completion. Detached background work needs its own lifecycle, error route and shutdown responsibility.</p>
+<p>The site&#39;s <a href="/en/2026/10/23/node-eventemitter-async-rejection/">asynchronous listener article</a> separates dispatch from completion. Here, group membership gives the concrete Python boundary: identify what was created through group.create_task and therefore waited for by this context.</p>
+<p>After members finish, ordinary non-cancellation failures are raised in an ExceptionGroup or BaseExceptionGroup as appropriate. KeyboardInterrupt and SystemExit receive special treatment. Preserve child-error identity at the group boundary rather than collapsing all failures into one source-free message; matching syntax should be checked for the target Python version.</p>
+<p>Proposed verification uses controlled suspension points, fails one child, and records peer cancellation, cleanup and context exit. Add voluntary cancellation, expected errors converted to data, cleanup failure, detached work and near-simultaneous failures. Avoid relying on real network timing. No tasks or fault injections were executed for this article. Verify membership, terminal outcomes and the commit boundary before treating a cancellation message as completion evidence.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/asyncio-task.html" rel="noopener">Python 3.14.9 — Coroutines and tasks: Task Groups and cancellation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--quality" href="/en/tags/Quality/">Quality</a>
+          
+            <a class="tag tag--python" href="/en/tags/Python/">Python</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--quality" href="/en/categories/Quality/">Quality</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F26%2Fpython-asyncio-taskgroup-failure-scope%2F&text=TaskGroup%20child%20failure%3A%20cancellation%20scope%20and%20cleanup%20ownership" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F26%2Fpython-asyncio-taskgroup-failure-scope%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=TaskGroup%20child%20failure%3A%20cancellation%20scope%20and%20cleanup%20ownership&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F26%2Fpython-asyncio-taskgroup-failure-scope%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/26/python-contextmanager-single-yield-cleanup/">
+              <span>Previous Post</span>
+              <strong>Why contextmanager must yield exactly once</strong>
+              <small>2026-10-26</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/26/prometheus-rule-evaluation-limit/">
+              <span>Next Post</span>
+              <strong>Why does exceeding a Prometheus rule limit discard every result?</strong>
+              <small>2026-10-26</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Make-decisions-after-the-group-has-finished">Make decisions after the group has finished</a>
+          
+            <a class="toc-link toc-link--h2" href="#Cancellation-does-not-roll-back-external-effects">Cancellation does not roll back external effects</a>
+          
+            <a class="toc-link toc-link--h2" href="#What-if-a-child-catches-an-expected-error">What if a child catches an expected error?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Work-created-outside-the-group-stays-outside-its-scope">Work created outside the group stays outside its scope</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>283</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>143</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>101</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>70</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/26/python-contextmanager-single-yield-cleanup/">Why contextmanager must yield exactly once</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/26/http-421-misdirected-retry/">Why Retrying HTTP 421 on the Same Connection Can Fail</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/26/playwright-trial-actionability-side-effects/">Why can a Playwright trial click still press modifier keys?</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

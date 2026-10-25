@@ -162,7 +162,7 @@
         
 
 
-        <small>Updated <time datetime="2026-10-23T19:34:07.000Z">2026-10-24</time> · Estimated read 15 min</small>
+        <small>Updated <time datetime="2026-10-23T19:34:07.000Z">2026-10-24</time> · Estimated read 16 min</small>
       </div>
     </div>
 
@@ -208,14 +208,14 @@ const payload = storage.subarray(0, written);
 </code></pre>
 <p>If the protocol requires the complete text, restricting the payload to written bytes still does not establish completeness. Limited capacity can produce a prefix. Calculate or constrain the encoded length before allocation and verify completion after writing. The initialization boundary prevents exposing bytes outside the written range; the completeness boundary prevents claiming success for truncated output. Neither check replaces the other.</p>
 <h2 id="Failure-handling-can-expose-internal-capacity-too"><a href="#Failure-handling-can-expose-internal-capacity-too" class="headerlink" title="Failure handling can expose internal capacity too"></a>Failure handling can expose internal capacity too</h2><p>Consider a hypothetical encoder that allocates a large Buffer, writes a header, then writes a body and checksum. Body encoding throws halfway through. To help diagnosis, a catch block converts the entire allocation to a string and records it in an error log. The normal send path might respect valid length while this diagnostic path bypasses it. Logs, tracing attachments, and error responses are reading exits too. Searching only for network writes leaves the review incomplete.</p>
-<p>A second failure reuses an old length counter. The preceding message wrote five hundred bytes; the next writes eighty but retains the previous counter. The chosen range can remain inside allocated capacity and still include content that does not belong to the current message. Valid bounds and correct data ownership are separate properties. Initialize message length and buffer ownership together for each operation rather than borrowing the last request’s state.</p>
+<p>A second failure reuses an old length counter. The preceding message wrote five hundred bytes; the next writes eighty but retains the previous counter. The chosen range can remain inside allocated capacity and still include content that does not belong to the current message. Valid bounds and correct data ownership are separate properties. Initialize message length and buffer ownership together for each operation rather than borrowing the last request&#39;s state.</p>
 <p>Segmented writes introduce another distinction. Recording the highest written offset does not establish that every earlier byte was filled. A header at the beginning and a trailer at the end can leave an unwritten gap between them. Either prove continuous coverage or initialize the whole allocation before selectively overwriting fields. A complicated coverage ledger may be a poor trade for avoiding initialization when no measured benefit has been established.</p>
 <h2 id="Choose-a-simpler-initialization-responsibility-when-possible"><a href="#Choose-a-simpler-initialization-responsibility-when-possible" class="headerlink" title="Choose a simpler initialization responsibility when possible"></a>Choose a simpler initialization responsibility when possible</h2><p>Buffer.alloc provides deterministic zero-filled storage. It is a reasonable default when complete overwriting is difficult to prove. It does not turn capacity into protocol length, fix malformed fields, complete truncated text, or prevent incorrect cross-request reuse. The benefit is a smaller initialization obligation, not proof that serialization is correct. If complete source bytes already exist, consider whether a constructor matching the required copying or sharing behavior is clearer than manual allocation and tracking.</p>
-<p>Retain uninitialized allocation only when control flow and tests can establish complete overwriting and there is a concrete reason to need it. The documented startup option for forced zero filling can also change runtime behavior, but one machine’s launch configuration is not a contract for every deployment. Library callers may run under different flags. A test environment that masks incomplete initialization can produce unjustified confidence about another environment.</p>
-<p>Verification should not print arbitrary old memory to see what happens. A controlled test can fill storage with a known marker, simulate a short write, and assert that public output contains only the current message’s expected bytes. Another approach checks valid length and complete content on every encoder branch. These tests investigate whether paths preserve a boundary rather than waiting for sensitive data to happen to appear. No such test was executed for this article, and no leakage sample is supplied.</p>
+<p>Retain uninitialized allocation only when control flow and tests can establish complete overwriting and there is a concrete reason to need it. The documented startup option for forced zero filling can also change runtime behavior, but one machine&#39;s launch configuration is not a contract for every deployment. Library callers may run under different flags. A test environment that masks incomplete initialization can produce unjustified confidence about another environment.</p>
+<p>Verification should not print arbitrary old memory to see what happens. A controlled test can fill storage with a known marker, simulate a short write, and assert that public output contains only the current message&#39;s expected bytes. Another approach checks valid length and complete content on every encoder branch. These tests investigate whether paths preserve a boundary rather than waiting for sensitive data to happen to appear. No such test was executed for this article, and no leakage sample is supplied.</p>
 <p>A useful test fixture also separates capacity from payload length in its expected values. If both values are copied from the same mistaken counter, the test can approve the bug. Independently encode the intended message or enumerate expected bytes for a small case. Include empty input, a capacity limit, and a failure between two fields because they exercise different parts of the write contract.</p>
-<h3 id="Does-subarray-eliminate-the-ownership-problem"><a href="#Does-subarray-eliminate-the-ownership-problem" class="headerlink" title="Does subarray eliminate the ownership problem?"></a>Does subarray eliminate the ownership problem?</h3><p>No. It creates a view sharing storage, not an independent copy. Suppose an asynchronous send has not consumed the bytes when the producer reuses the original allocation for another message. The view changes with the underlying storage. Whether to copy, delay reuse, or transfer ownership depends on the downstream consumer’s timing contract. A correct range alone does not define lifetime.</p>
-<p>A more explicit fixture uses sixteen initialized bytes containing a known marker, then encodes a short message A and a shorter message B. Prepare expected payload bytes independently rather than deriving them from the encoder’s own length field. B should contain neither A’s tail nor the marker, and its length must match the protocol declaration. Initializing the fixture controls input; it does not search real old memory for secrets.</p>
+<h3 id="Does-subarray-eliminate-the-ownership-problem"><a href="#Does-subarray-eliminate-the-ownership-problem" class="headerlink" title="Does subarray eliminate the ownership problem?"></a>Does subarray eliminate the ownership problem?</h3><p>No. It creates a view sharing storage, not an independent copy. Suppose an asynchronous send has not consumed the bytes when the producer reuses the original allocation for another message. The view changes with the underlying storage. Whether to copy, delay reuse, or transfer ownership depends on the downstream consumer&#39;s timing contract. A correct range alone does not define lifetime.</p>
+<p>A more explicit fixture uses sixteen initialized bytes containing a known marker, then encodes a short message A and a shorter message B. Prepare expected payload bytes independently rather than deriving them from the encoder&#39;s own length field. B should contain neither A&#39;s tail nor the marker, and its length must match the protocol declaration. Initializing the fixture controls input; it does not search real old memory for secrets.</p>
 <p>Test lifetime separately by holding a proposed consumer before it reads and then attempting to reuse the storage. If the contract requires stability until consumption finishes, reuse must be prevented or the consumer must receive an independent copy. An immediate synchronous comparison misses that asynchronous requirement. Range and lifetime tests establish different properties; changing allocation size or encoding should trigger review of protocol expectations rather than automatic acceptance of new output.</p>
 <p>The article on <a href="/en/2026/10/13/node-chunk-text-decoding/">decoding across network chunks</a> examines input character boundaries. This one concerns initialized output storage and ownership. Both involve lengths, but “the buffer is correct” is too vague to validate either. The inspected documentation was labeled v22.23.4. No code or network operations were run. A delivery should explain the bytes each exit uses, who initialized them, and when their storage may be reused.</p>
 
@@ -315,13 +315,13 @@ const payload = storage.subarray(0, written);
           <h2>Related Topics</h2>
           <p>Place this article back into long-running themes.</p>
           
-            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>286</b></a>
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>283</b></a>
           
-            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>135</b></a>
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>143</b></a>
           
-            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>96</b></a>
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>101</b></a>
           
-            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>66</b></a>
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>70</b></a>
           
         </section>
       
@@ -353,8 +353,8 @@ const payload = storage.subarray(0, written);
       
         <article class="related-card">
           
-          <h3><a href="/en/2026/10/25/http-401-403-auth-challenge/">Why must a 401 response include WWW-Authenticate?</a></h3>
-          <p>2026-10-25</p>
+          <h3><a href="/en/2026/10/26/http-421-misdirected-retry/">Why Retrying HTTP 421 on the Same Connection Can Fail</a></h3>
+          <p>2026-10-26</p>
         </article>
       
     </div>

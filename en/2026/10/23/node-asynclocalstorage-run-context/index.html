@@ -196,9 +196,9 @@
 
       <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Create inheriting work inside the run callback.</li><li>enterWith affects the remaining synchronous execution.</li><li>Test interleaving, nested restoration, and exceptional bridges.</li></ul></section>
       <div class="article-content">
-        <p>When request logs need an identifier, prefer AsyncLocalStorage.run around the callback that starts the request’s work. enterWith changes the remainder of the current synchronous execution, so later listeners in the same event can see the new context. Treating it like an ordinary local assignment misses that scope. First identify where work is created and who should inherit the identifier.</p>
+        <p>When request logs need an identifier, prefer AsyncLocalStorage.run around the callback that starts the request&#39;s work. enterWith changes the remainder of the current synchronous execution, so later listeners in the same event can see the new context. Treating it like an ordinary local assignment misses that scope. First identify where work is created and who should inherit the identifier.</p>
 <h2 id="Context-follows-execution-paths"><a href="#Context-follows-execution-paths" class="headerlink" title="Context follows execution paths"></a>Context follows execution paths</h2><p>This article checked the <a target="_blank" rel="noopener" href="https://nodejs.org/api/async_context.html">Node.js v26.12.1 asynchronous-context reference</a>. It covers run, enterWith, and getStore; it does not assume newer APIs exist on older runtimes. run synchronously invokes its callback with a store available to asynchronous work created inside that callback. The surrounding synchronous execution has its own context after the call leaves that scope.</p>
-<p>Consider two unexecuted requests, req-a and req-b. Each entry creates its own store and starts configuration reads, database work, and response logging inside run. A’s database work is slower, so B finishes first. Each chain should retain its identifier despite interleaving. A process-global “latest request ID” cannot represent that relationship.</p>
+<p>Consider two unexecuted requests, req-a and req-b. Each entry creates its own store and starts configuration reads, database work, and response logging inside run. A&#39;s database work is slower, so B finishes first. Each chain should retain its identifier despite interleaving. A process-global “latest request ID” cannot represent that relationship.</p>
 <pre><code class="js">import { AsyncLocalStorage } from &#39;node:async_hooks&#39;;
 const context = new AsyncLocalStorage();
 function handle(requestId) {
@@ -208,18 +208,18 @@ function handle(requestId) {
   });
 }
 </code></pre>
-<p>handle returns the callback’s return value. Its caller must still await or handle the promise. Context propagation neither succeeds nor cancels the business operation. Dropping that promise can leave errors unhandled even when every log has the correct identifier. A correlated log is not a completed request receipt.</p>
+<p>handle returns the callback&#39;s return value. Its caller must still await or handle the promise. Context propagation neither succeeds nor cancels the business operation. Dropping that promise can leave errors unhandled even when every log has the correct identifier. A correlated log is not a completed request receipt.</p>
 <h2 id="The-enterWith-counterexample-needs-only-one-dispatch"><a href="#The-enterWith-counterexample-needs-only-one-dispatch" class="headerlink" title="The enterWith counterexample needs only one dispatch"></a>The enterWith counterexample needs only one dispatch</h2><p>The reference warns that enterWith inside an event handler also affects subsequent handlers unless they are specifically bound to another context. That is why it prefers run unless there is a strong reason for enterWith. Two concurrent network requests are not required to expose the scope difference.</p>
-<p>Suppose a notification bus’s first listener enters an order context. Its second listener only counts notifications, but getStore now returns that order. If the counter starts asynchronous work, the unintended label can propagate. The issue is who may establish the context, rather than whether the logger prints it correctly. Wrapping the first listener’s work in run gives that work a boundary and preserves the surrounding synchronous context.</p>
+<p>Suppose a notification bus&#39;s first listener enters an order context. Its second listener only counts notifications, but getStore now returns that order. If the counter starts asynchronous work, the unintended label can propagate. The issue is who may establish the context, rather than whether the logger prints it correctly. Wrapping the first listener&#39;s work in run gives that work a boundary and preserves the surrounding synchronous context.</p>
 <p>A distinct context is not automatically immutable. Reusing the same store object across requests, or permitting downstream code to overwrite requestId, can undermine attribution. Create a small store per entry and separate stable identifiers from mutable business data. Correlation is also not authorization: a client-supplied label and an authenticated identity have different origins.</p>
 <p>For libraries that save callbacks and invoke them later, inspect the context at invocation as well as registration. Custom thenables and callback bridges may require the documented context-loss investigation and possibly AsyncResource integration. Adding enterWith at every missing label can repair one log while widening another synchronous scope.</p>
 <h2 id="Test-ownership-rather-than-log-order"><a href="#Test-ownership-rather-than-log-order" class="headerlink" title="Test ownership rather than log order"></a>Test ownership rather than log order</h2><p>A proposed test holds both work chains, completes B first, then releases A. Compare expected IDs with getStore at each stage rather than requiring sequential logs. Add nested run calls and inspect restoration of the outer store after the inner callback. Outside all initialized scopes, check the documented baseline state.</p>
-<p>A separate event test uses two synchronous listeners. Compare the second listener’s observed value when the first uses enterWith and when its work is bounded by run. For a suspected bridge, read getStore immediately before and after each boundary and locate the first loss. Execute with the actual runtime and dependency versions; comments in a sample do not establish compatibility.</p>
+<p>A separate event test uses two synchronous listeners. Compare the second listener&#39;s observed value when the first uses enterWith and when its work is bounded by run. For a suspected bridge, read getStore immediately before and after each boundary and locate the first loss. Execute with the actual runtime and dependency versions; comments in a sample do not establish compatibility.</p>
 <p>Keep initialization inputs in the reproduction record. The article on <a href="/en/2026/10/17/node-env-string-boolean/">environment-variable string parsing</a> helps confirm that a textual flag actually enables the intended entry behavior. It does not solve propagation, but it can explain a mismatch between test configuration and execution.</p>
 <h3 id="Does-the-store-cross-a-service-boundary-automatically"><a href="#Does-the-store-cross-a-service-boundary-automatically" class="headerlink" title="Does the store cross a service boundary automatically?"></a>Does the store cross a service boundary automatically?</h3><p>A process-local asynchronous store is not a network protocol. Cross-service correlation requires explicitly transmitting approved fields and having the receiving service validate them and establish its own context. Decide which identifiers may cross the trust boundary and which should be regenerated. Local context continuity and distributed correlation are separate acceptance goals; the example implements no network propagation.</p>
-<p>A creation-point control is useful: start one operation before entering the request boundary and another inside run. Awaiting preexisting work inside the callback should not be treated as changing that work’s origin retroactively. Read context in the actual callbacks and compare the intended ownership. If an external result must be associated with a request, establish that association at a controlled receiving boundary.</p>
-<p>Test restoration on failure too. Throw synchronously in a nested callback, inspect the outer store at the catch site, then reject asynchronous work and inspect both error-log attribution and the caller’s failure. Correct correlation and delivered errors are two assertions; either can pass while the other fails.</p>
-<p>No Node.js request, event-dispatch, or library-bridge test was run. A useful delivery record covers entry, asynchronous creation, nested restoration, and failure paths. Those boundaries make a log’s request label meaningful before anyone uses it to infer progress.</p>
+<p>A creation-point control is useful: start one operation before entering the request boundary and another inside run. Awaiting preexisting work inside the callback should not be treated as changing that work&#39;s origin retroactively. Read context in the actual callbacks and compare the intended ownership. If an external result must be associated with a request, establish that association at a controlled receiving boundary.</p>
+<p>Test restoration on failure too. Throw synchronously in a nested callback, inspect the outer store at the catch site, then reject asynchronous work and inspect both error-log attribution and the caller&#39;s failure. Correct correlation and delivered errors are two assertions; either can pass while the other fails.</p>
+<p>No Node.js request, event-dispatch, or library-bridge test was run. A useful delivery record covers entry, asynchronous creation, nested restoration, and failure paths. Those boundaries make a log&#39;s request label meaningful before anyone uses it to infer progress.</p>
 
       </div>
 
@@ -315,13 +315,13 @@ function handle(requestId) {
           <h2>Related Topics</h2>
           <p>Place this article back into long-running themes.</p>
           
-            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>286</b></a>
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>283</b></a>
           
-            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>135</b></a>
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>143</b></a>
           
-            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>96</b></a>
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>101</b></a>
           
-            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>66</b></a>
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>70</b></a>
           
         </section>
       
@@ -353,8 +353,8 @@ function handle(requestId) {
       
         <article class="related-card">
           
-          <h3><a href="/en/2026/10/25/html-button-default-submit-type/">Preview submits the form? Inspect the button type first</a></h3>
-          <p>2026-10-25</p>
+          <h3><a href="/en/2026/10/26/css-visibility-hidden-descendant-override/">Why Is a Child Button Visible Inside a Hidden Parent?</a></h3>
+          <p>2026-10-26</p>
         </article>
       
     </div>

@@ -1,0 +1,406 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>contextmanager 为什么只能 yield 一次 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="按进入、借用与退出解释一次 yield，补足异常被吞、清理失败、实例复用和部分文件的责任边界。">
+  
+  
+    <meta name="keywords" content="contextmanager,yield,资源清理">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/26/python-contextmanager-single-yield-cleanup/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/26/python-contextmanager-single-yield-cleanup/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/26/python-contextmanager-single-yield-cleanup/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/26/python-contextmanager-single-yield-cleanup/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="contextmanager 为什么只能 yield 一次 | Midnight blog">
+    <meta property="og:description" content="按进入、借用与退出解释一次 yield，补足异常被吞、清理失败、实例复用和部分文件的责任边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/26/python-contextmanager-single-yield-cleanup/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/26/python-contextmanager-single-yield-cleanup/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/26/python-contextmanager-single-yield-cleanup/","name":"contextmanager 为什么只能 yield 一次 | Midnight blog","description":"按进入、借用与退出解释一次 yield，补足异常被吞、清理失败、实例复用和部分文件的责任边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/26/python-contextmanager-single-yield-cleanup/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/26/python-contextmanager-single-yield-cleanup/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/26/python-contextmanager-single-yield-cleanup/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/26/python-contextmanager-single-yield-cleanup/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/26/python-contextmanager-single-yield-cleanup/","headline":"contextmanager 为什么只能 yield 一次","description":"按进入、借用与退出解释一次 yield，补足异常被吞、清理失败、实例复用和部分文件的责任边界。","inLanguage":"zh-CN","datePublished":"2026-10-25T19:36:08.000Z","dateModified":"2026-10-25T19:36:08.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.14/library/contextlib.html"],"keywords":"Quality, Python"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/26/python-contextmanager-single-yield-cleanup/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"contextmanager 为什么只能 yield 一次","item":"https://www.zyweb.vip/zh-CN/2026/10/26/python-contextmanager-single-yield-cleanup/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/26/python-contextmanager-single-yield-cleanup/" selected>zh-CN</option><option value="/en/2026/10/26/python-contextmanager-single-yield-cleanup/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/26/python-contextmanager-single-yield-cleanup/" selected>zh-CN</option><option value="/en/2026/10/26/python-contextmanager-single-yield-cleanup/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--quality">Quality</span>
+      <time datetime="2026-10-25T19:36:08.000Z">2026-10-26</time>
+    </div>
+
+    <h1>contextmanager 为什么只能 yield 一次</h1>
+
+    
+      <p class="post-hero__summary">按进入、借用与退出解释一次 yield，补足异常被吞、清理失败、实例复用和部分文件的责任边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-25T19:36:08.000Z">2026-10-26</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/26/python-contextmanager-single-yield-cleanup/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/26/python-contextmanager-single-yield-cleanup/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>一次 yield 划分进入与退出，不是多次资源迭代。</li><li>只记录主体异常时，需要保留传播合同。</li><li>生成器式实例通常一次使用，重复借用应新建实例。</li></ul></section>
+      <div class="article-content">
+        <p>用 <code>@contextmanager</code> 写资源管理时，生成器必须恰好 yield 一次：yield 之前负责进入，yield 交出 with 使用的值，随后继续执行退出逻辑。它不是让调用方逐个消费的普通迭代器。若清理代码捕获了 with 主体抛回来的异常却没有重新抛出，调用方还可能误以为操作成功。</p>
+<h2 id="一次暂停定义了一次借用"><a href="#一次暂停定义了一次借用" class="headerlink" title="一次暂停定义了一次借用"></a>一次暂停定义了一次借用</h2><p><a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/contextlib.html#contextlib.contextmanager">Python 3.14 contextlib 文档</a>明确要求 contextmanager 的生成器只 yield 一个值，并说明主体异常会在 yield 位置重新抛入生成器。本次打开的页面标为 3.14.9。下面只讨论同步生成器式管理器，不把它与异步管理器或可重入对象的行为混为一谈。</p>
+<p>假设导出器借用一个临时文本文件句柄，在 with 主体写入内容，离开时关闭。下面未执行的教学代码使用普通文件接口展示所有权，路径与内容为假设。代码不宣称写入具备事务性、落盘耐久性或导出已通过验收。</p>
+<pre><code class="python">from contextlib import contextmanager
+
+@contextmanager
+def report_file(path):
+    handle = open(path, &#39;w&#39;, encoding=&#39;utf-8&#39;)
+    try:
+        yield handle
+    finally:
+        handle.close()
+
+with report_file(&#39;example-report.txt&#39;) as output:
+    output.write(&#39;draft\n&#39;)
+</code></pre>
+<p>获取发生在 try 之前，是为了让“已经获得资源以后才承担关闭责任”的范围清楚。若 open 失败，没有 handle 可以借用，主体不会开始；若写入失败，异常会在 yield 的位置进入管理器，finally 仍安排关闭。关闭与写入成功是两个独立事实，不能因为 close 被调用就把主体结果改成成功。</p>
+<p>对于真实导出，还要决定失败后如何处理半份文件。关闭句柄只释放资源，不自动删除失败产物。如果用户只能看见完整版本，可以考虑临时产物与单独发布步骤，并在失败路径按所有权清理。这里不提供通用原子替换方案，因为目标文件系统、并发写入和耐久要求都需要另外核对。</p>
+<h2 id="零次或两次-yield-都破坏协议"><a href="#零次或两次-yield-都破坏协议" class="headerlink" title="零次或两次 yield 都破坏协议"></a>零次或两次 yield 都破坏协议</h2><p>如果生成器在第一次 yield 前正常返回，管理器没有交出可进入主体的值，属于协议错误。它不能被当作“跳过这次 with 主体”的自然写法。需要条件跳过操作时，应在调用方明确判断，或选择满足合同的管理器，而不是让资源工厂突然变成零次产出的迭代器。</p>
+<p>如果主体正常结束以后，生成器又 yield 第二次，退出流程仍未按合同结束，同样会导致错误。想管理两个资源，不应连续 yield 两个句柄给同一个 with；可以一次 yield 一个含两者的结构，并安排清理，或者使用嵌套 with 与 ExitStack。一次借用可以包含多个资源，但进入和退出的握手仍只有一对。</p>
+<p>这一区别也帮助读日志。看到第一次 yield 前的“已打开”日志，并不能证明主体已经执行；看到主体结束日志，也不能证明退出逻辑已经成功。拟议状态记录应分别区分获取、主体完成和清理完成，尤其清理可能抛错时。不要给所有阶段统一写一个 completed，让后续排错失去原始失败位置。</p>
+<h2 id="为什么只记录异常会把失败变成功？"><a href="#为什么只记录异常会把失败变成功？" class="headerlink" title="为什么只记录异常会把失败变成功？"></a>为什么只记录异常会把失败变成功？</h2><p>生成器在 yield 周围捕获异常，如果记录以后正常结束，contextmanager 会把这种行为解释为异常已处理。假设写文件失败，管理器只是打印错误再返回，外层调用者可能继续执行“发布成功”路径。问题不在日志有没有打印，而在管理器改变了异常传播合同。</p>
+<p>若目的只是记录，应在记录后重新抛出；如果确实要抑制某个已知异常，就给这种策略起清楚名字，并让调用方知道没有正常完成。宽泛捕获后继续的写法，会把权限失败、磁盘不足和业务校验失败压成相同的表面成功。它们的后续动作可能完全不同，不能由一个便利包装偷偷决定。</p>
+<p>清理自身也可能失败。若主体和关闭都抛异常，需要明确怎样保留原始失败与清理失败的诊断关系。不能只测试主体成功时 close 是否被调用，就宣称所有失败都可定位。这里要求的是可追踪性，不是建议一律吞掉关闭错误。实际异常链和日志内容应在所用资源类型上验证。</p>
+<p>站内<a href="/zh-CN/2026/10/25/node-promisify-receiver-custom/">promisify 接收者与回调协议</a>说明包装器不能替代原接口合同。contextmanager 也一样：装饰器减少进入退出的样板代码，却不会决定文件属于谁、哪些错误可以忽略、什么时候可以宣布业务完成。</p>
+<h2 id="每次-with-都必须重新调用工厂吗？"><a href="#每次-with-都必须重新调用工厂吗？" class="headerlink" title="每次 with 都必须重新调用工厂吗？"></a>每次 with 都必须重新调用工厂吗？</h2><p>contextmanager 产生的普通管理器实例是一次使用的对象。需要重复使用时，每次调用工厂获得新实例；不要保存一次调用的结果，然后把同一个实例用于多个 with。生成器的执行位置会前进，一次退出后并没有自动复位。可复用、可重入与生成器式一次使用，是不同的能力。</p>
+<p>这也意味着不要把实例当全局共享资源管理器。两个请求同时借用它，可能在不符合预期的执行位置进入。若真实需求是共享连接池，应该使用该库正式提供的获取与归还接口；若需求是可重入锁，也应选择具有相应合同的对象，不能因为都写成 with 就推断生命周期相同。</p>
+<p>拟议验证分别让获取失败、主体成功、主体抛错、清理抛错和记录器失败，再检查主体是否执行、资源释放次数、调用方收到的异常与是否误走成功分支。另测零次 yield、两次 yield、重复使用同一实例，以及重新调用工厂的正常路径。本文没有执行这些代码；“资源关闭了”只有和主体结果及异常传播一起核对，才能成为有边界的验收结论。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/contextlib.html" rel="noopener">Python 3.14.9 — contextlib: contextmanager generator protocol</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--quality" href="/zh-CN/tags/Quality/">Quality</a>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--quality" href="/zh-CN/categories/Quality/">Quality</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F26%2Fpython-contextmanager-single-yield-cleanup%2F&text=contextmanager%20%E4%B8%BA%E4%BB%80%E4%B9%88%E5%8F%AA%E8%83%BD%20yield%20%E4%B8%80%E6%AC%A1" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F26%2Fpython-contextmanager-single-yield-cleanup%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=contextmanager%20%E4%B8%BA%E4%BB%80%E4%B9%88%E5%8F%AA%E8%83%BD%20yield%20%E4%B8%80%E6%AC%A1&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F26%2Fpython-contextmanager-single-yield-cleanup%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/26/wcag-bypass-blocks-keyboard/">
+              <span>上一篇</span>
+              <strong>跳到正文后，下一次 Tab 为什么又回导航？</strong>
+              <small>2026-10-26</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/26/python-asyncio-taskgroup-failure-scope/">
+              <span>下一篇</span>
+              <strong>TaskGroup 子任务失败：取消范围与清理责任</strong>
+              <small>2026-10-26</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#一次暂停定义了一次借用">一次暂停定义了一次借用</a>
+          
+            <a class="toc-link toc-link--h2" href="#零次或两次-yield-都破坏协议">零次或两次 yield 都破坏协议</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么只记录异常会把失败变成功？">为什么只记录异常会把失败变成功？</a>
+          
+            <a class="toc-link toc-link--h2" href="#每次-with-都必须重新调用工厂吗？">每次 with 都必须重新调用工厂吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>283</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>143</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>100</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>70</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/26/python-asyncio-taskgroup-failure-scope/">TaskGroup 子任务失败：取消范围与清理责任</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/26/http-421-misdirected-retry/">收到421后，原连接上反复重试为什么无效？</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/26/playwright-trial-actionability-side-effects/">trial 点击跳过动作，为何仍可能按下修饰键？</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
