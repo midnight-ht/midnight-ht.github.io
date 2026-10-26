@@ -1,0 +1,415 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>连续 await 两个 once，第二个事件为何已经错过 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用ready与closed的发送时序定位监听空窗，先注册全部等待，再分别处理取消、归属与超时。">
+  
+  
+    <meta name="keywords" content="events.once,EventEmitter,nextTick">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/27/node-events-once-synchronous-emission-race/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/27/node-events-once-synchronous-emission-race/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/27/node-events-once-synchronous-emission-race/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/27/node-events-once-synchronous-emission-race/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="连续 await 两个 once，第二个事件为何已经错过 | Midnight blog">
+    <meta property="og:description" content="用ready与closed的发送时序定位监听空窗，先注册全部等待，再分别处理取消、归属与超时。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/27/node-events-once-synchronous-emission-race/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/node-events-once-synchronous-emission-race/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/27/node-events-once-synchronous-emission-race/","name":"连续 await 两个 once，第二个事件为何已经错过 | Midnight blog","description":"用ready与closed的发送时序定位监听空窗，先注册全部等待，再分别处理取消、归属与超时。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/node-events-once-synchronous-emission-race/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/node-events-once-synchronous-emission-race/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/node-events-once-synchronous-emission-race/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/node-events-once-synchronous-emission-race/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/27/node-events-once-synchronous-emission-race/","headline":"连续 await 两个 once，第二个事件为何已经错过","description":"用ready与closed的发送时序定位监听空窗，先注册全部等待，再分别处理取消、归属与超时。","inLanguage":"zh-CN","datePublished":"2026-10-26T19:26:58.000Z","dateModified":"2026-10-26T19:26:58.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://nodejs.org/api/events.html"],"keywords":"Quality, Node.js"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/node-events-once-synchronous-emission-race/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"连续 await 两个 once，第二个事件为何已经错过","item":"https://www.zyweb.vip/zh-CN/2026/10/27/node-events-once-synchronous-emission-race/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/27/node-events-once-synchronous-emission-race/" selected>zh-CN</option><option value="/en/2026/10/27/node-events-once-synchronous-emission-race/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/27/node-events-once-synchronous-emission-race/" selected>zh-CN</option><option value="/en/2026/10/27/node-events-once-synchronous-emission-race/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--quality">Quality</span>
+      <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time>
+    </div>
+
+    <h1>连续 await 两个 once，第二个事件为何已经错过</h1>
+
+    
+      <p class="post-hero__summary">用ready与closed的发送时序定位监听空窗，先注册全部等待，再分别处理取消、归属与超时。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/27/node-events-once-synchronous-emission-race/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/27/node-events-once-synchronous-emission-race/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>先注册全部等待，再启动可能同步发事件的生产者。</li><li>同名事件的多个 once 不等于连续消息队列。</li><li>聚合失败后的取消和监听清理需明确负责。</li></ul></section>
+      <div class="article-content">
+        <p>假设同一个 nextTick 回调先发 <code>ready</code> 再发 <code>closed</code>，消费方却先 await ready，再注册 closed。第二次等待开始时，closed 可能早已分发完毕。<code>events.once()</code> 不保存注册以前的事件；要接住同一批连续事件，需要在等待任意一个之前先建立全部监听。</p>
+<h2 id="第二个-await-还没走到，事件已发完"><a href="#第二个-await-还没走到，事件已发完" class="headerlink" title="第二个 await 还没走到，事件已发完"></a>第二个 await 还没走到，事件已发完</h2><p><a target="_blank" rel="noopener" href="https://nodejs.org/api/events.html#caveats-when-awaiting-multiple-events">Node.js Events 文档</a>专门说明连续等待多个事件的陷阱。EventEmitter 同步调用监听器，而 Promise 的后续任务要等当前执行栈结束。nextTick 批次也可能先于 Promise 任务完成，所以第一个事件解决 Promise 后，生产者仍能立即发送第二个事件，消费函数还没有从 await 恢复。</p>
+<p>下面是未执行的教学反例。producer 不是实际网络客户端，只用一个 nextTick 回调表达两个同步分发。若第二次事件不再发出，第二个等待不会凭空完成；这不是回调“偶尔很慢”，而是监听注册已经错过发送时点。</p>
+<pre><code class="js">import { EventEmitter, once } from &#39;node:events&#39;;
+const bus = new EventEmitter();
+async function consume() {
+  await once(bus, &#39;ready&#39;);
+  await once(bus, &#39;closed&#39;);
+}
+const completion = consume();
+process.nextTick(() =&gt; {
+  bus.emit(&#39;ready&#39;);
+  bus.emit(&#39;closed&#39;);
+});
+</code></pre>
+<p>按时序展开：consume 首先注册 ready 并暂停；生产回调发 ready，ready 对应 Promise 得到解决；生产回调继续发 closed，但尚无 closed 监听；生产回调结束后消费函数才恢复，终于安装 closed 监听。事件总线不会为了这位迟到的监听者重新播放上一批事件。把两条 await 写得紧挨着，不能消除两次注册之间的异步恢复边界。</p>
+<p>这种缺陷容易被慢速模拟器隐藏。如果测试把两个 emit 分别放进不同计时器，消费方可能刚好有时间恢复，于是看起来通过。真实适配器若在同一次调用中同步发状态与结束，就会暴露问题。验证必须覆盖允许的最紧凑发送方式，不能以人为拉开的网络延迟代表所有生产行为。</p>
+<h2 id="先建等待，再允许生产者启动"><a href="#先建等待，再允许生产者启动" class="headerlink" title="先建等待，再允许生产者启动"></a>先建等待，再允许生产者启动</h2><p>官方建议在等待任意一个之前建立所有 Promise。若生产者的启动函数自身就可能发事件，注册还应早于启动调用，而不是等启动函数返回。以下示例同样未执行，展示的只是无错误路径下的订阅顺序。</p>
+<pre><code class="js">const ready = once(bus, &#39;ready&#39;);
+const closed = once(bus, &#39;closed&#39;);
+const completion = Promise.all([ready, closed]);
+process.nextTick(() =&gt; {
+  bus.emit(&#39;ready&#39;);
+  bus.emit(&#39;closed&#39;);
+});
+await completion;
+</code></pre>
+<p>Promise.all 在这里方便等待两项，关键修复却是两个 once 都已先调用。仅把原来的两次 await 藏进另一个异步函数，再把函数交给 Promise.all，并不能证明订阅已经提前。评审者应指出哪一行实际安装监听，以及生产者最早在哪一行有权发送事件。</p>
+<p>这个模式也有条件：事件名称不同、每个等待对应本次操作的那次事件。如果要收集同名事件的连续三次发送，简单创建三个 once 会让它们都被第一次发送满足，并不构成三条消息的队列。持续消费需要缓冲或迭代合同，并定义速率、容量和停止条件。不要把本题修复扩成所有事件流都应使用 Promise.all。</p>
+<h2 id="Promise-all-有一项拒绝后，其他-once-会自己取消吗？"><a href="#Promise-all-有一项拒绝后，其他-once-会自己取消吗？" class="headerlink" title="Promise.all 有一项拒绝后，其他 once 会自己取消吗？"></a>Promise.all 有一项拒绝后，其他 once 会自己取消吗？</h2><p>不会因为聚合 Promise 已经失败，就自动为你完成全部业务取消。events.once 支持 AbortSignal 取消等待，可以让同一次操作的等待共享一个受控取消入口。若一个条件失败后其他条件不再需要，应在明确的失败或 finally 路径触发取消，并处理各等待的拒绝，避免留下无主监听或未观察错误。具体取消策略是应用责任。</p>
+<p>错误事件还有特殊规则：<a target="_blank" rel="noopener" href="https://nodejs.org/api/events.html#eventsonceemitter-name-options">once 参考</a>说明，等待其他事件时，EventEmitter 的 error 会让 Promise 拒绝；如果本来就是等待 error，则按普通目标事件处理。不能用一个“都会抛错”的断言覆盖这两种情形。生产者自己发生的其他异常，也不能据此推断全都自动路由到这个等待。</p>
+<p>假设连接已经 ready，却从未 closed，业务允许十秒后放弃等待。超时用于界定等待预算，同时还应取消残留监听、关闭归本次操作所有的资源，并记录缺的是哪项条件。把预算改成二十秒不会补回注册之前已丢的 closed；注册时序修好后，超时才有清楚的诊断意义。任务身份也应随本次等待保留，不能让下一条连接的 closed 满足上一条请求。</p>
+<h2 id="用可控发送顺序验收"><a href="#用可控发送顺序验收" class="headerlink" title="用可控发送顺序验收"></a>用可控发送顺序验收</h2><p>拟议测试先对反例保持两个 emit 在同一个 nextTick 回调里，通过独立检测器观察第二个等待未结束；再对修复版断言两个结果都收到。检测器自己的计时器会维持测试进程，因此“测试还在等待”不等于“生产进程永远不会退出”。另设子进程检查退出行为，避免测试框架的活跃句柄掩盖事实。</p>
+<p>对于可能在订阅之前已经完成的对象，单靠事件订阅无法知道过去状态。假设调用方拿到连接对象时它早已关闭，再安装关闭监听只会等待未来事件。接口可以提供有一致性约定的当前状态读取或直接返回完成承诺，但必须处理读取状态与安装监听之间的竞态。先读一次状态再订阅仍有空窗，不应把这个顺序写成万能修复。</p>
+<p>另一项检查是多请求共用同一个总线。若两个连接都发送相同事件名，监听者必须确认发送源或任务身份，否则收到两项事件也可能属于两条不同连接。可以按实例隔离总线，或在消费协议中严格关联负载；选哪一种取决于接口合同。验收需要一条连接成功、另一条失败的交叉样本，不能只用单连接证明归属正确。</p>
+<p>再覆盖启动内同步发送、先发 closed 后发 ready、某项永不发送、error 先到、取消后监听数量，以及重复运行是否累积监听。是否接受反向顺序应由业务合同决定；Promise.all 只收集两个结果，不验证状态转换合法。回归断言也应检查两个返回负载分别属于本次操作，不能只用两个已完成布尔值通过。取消之后再发送下一批事件，确认上一批监听已经退出，才算覆盖清理责任。</p>
+<p>本篇依据读取时 v26.12.1 文档，没有执行上述业务示例或测试。本站<a href="/zh-CN/2026/10/23/node-eventemitter-async-rejection/">异步监听器拒绝处理</a>处理已注册监听器返回的失败；这里首先要证明监听确实赶在事件之前存在。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://nodejs.org/api/events.html" rel="noopener">Node.js v26.12.1 — Events: Awaiting multiple events</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--quality" href="/zh-CN/tags/Quality/">Quality</a>
+          
+            <a class="tag tag--node-js" href="/zh-CN/tags/Node.js/">Node.js</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--quality" href="/zh-CN/categories/Quality/">Quality</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fnode-events-once-synchronous-emission-race%2F&text=%E8%BF%9E%E7%BB%AD%20await%20%E4%B8%A4%E4%B8%AA%20once%EF%BC%8C%E7%AC%AC%E4%BA%8C%E4%B8%AA%E4%BA%8B%E4%BB%B6%E4%B8%BA%E4%BD%95%E5%B7%B2%E7%BB%8F%E9%94%99%E8%BF%87" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fnode-events-once-synchronous-emission-race%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E8%BF%9E%E7%BB%AD%20await%20%E4%B8%A4%E4%B8%AA%20once%EF%BC%8C%E7%AC%AC%E4%BA%8C%E4%B8%AA%E4%BA%8B%E4%BB%B6%E4%B8%BA%E4%BD%95%E5%B7%B2%E7%BB%8F%E9%94%99%E8%BF%87&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fnode-events-once-synchronous-emission-race%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/27/node-timer-unref-exit-liveness/">
+              <span>上一篇</span>
+              <strong>unref 的五秒计时器，为什么进程能提前退出</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/27/node-buffer-slice-shared-memory/">
+              <span>下一篇</span>
+              <strong>Buffer.slice 后再改原数据，为什么切片也变了</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#第二个-await-还没走到，事件已发完">第二个 await 还没走到，事件已发完</a>
+          
+            <a class="toc-link toc-link--h2" href="#先建等待，再允许生产者启动">先建等待，再允许生产者启动</a>
+          
+            <a class="toc-link toc-link--h2" href="#Promise-all-有一项拒绝后，其他-once-会自己取消吗？">Promise.all 有一项拒绝后，其他 once 会自己取消吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#用可控发送顺序验收">用可控发送顺序验收</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>280</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>151</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>105</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>74</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/24/node-buffer-allocunsafe-initialization/">allocUnsafe 分配以后，哪些字节可以发送？</a></h3>
+          <p>2026-10-24</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/27/http-101-protocol-handoff/">收到101以后，为什么不能继续等普通HTTP正文？</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/27/node-buffer-slice-shared-memory/">Buffer.slice 后再改原数据，为什么切片也变了</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,397 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why must HTTP handling hand off after a 101 response? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Inspect HTTP/1.1 protocol selection, header boundaries, and buffered-byte ownership, with separate proxy-leg evidence.">
+  
+  
+    <meta name="keywords" content="HTTP,Protocols">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/27/http-101-protocol-handoff/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/27/http-101-protocol-handoff/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/27/http-101-protocol-handoff/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/27/http-101-protocol-handoff/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why must HTTP handling hand off after a 101 response? | Midnight blog">
+    <meta property="og:description" content="Inspect HTTP/1.1 protocol selection, header boundaries, and buffered-byte ownership, with separate proxy-leg evidence.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/27/http-101-protocol-handoff/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/27/http-101-protocol-handoff/#webpage","url":"https://www.zyweb.vip/en/2026/10/27/http-101-protocol-handoff/","name":"Why must HTTP handling hand off after a 101 response? | Midnight blog","description":"Inspect HTTP/1.1 protocol selection, header boundaries, and buffered-byte ownership, with separate proxy-leg evidence.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/27/http-101-protocol-handoff/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/27/http-101-protocol-handoff/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/27/http-101-protocol-handoff/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/27/http-101-protocol-handoff/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/27/http-101-protocol-handoff/","headline":"Why must HTTP handling hand off after a 101 response?","description":"Inspect HTTP/1.1 protocol selection, header boundaries, and buffered-byte ownership, with separate proxy-leg evidence.","inLanguage":"en","datePublished":"2026-10-26T19:26:58.000Z","dateModified":"2026-10-26T19:26:58.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.rfc-editor.org/rfc/rfc9110.html#section-7.8","https://www.rfc-editor.org/rfc/rfc9112.html#section-6.3"],"keywords":"Quality, HTTP, Protocols"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/27/http-101-protocol-handoff/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why must HTTP handling hand off after a 101 response?","item":"https://www.zyweb.vip/en/2026/10/27/http-101-protocol-handoff/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/27/http-101-protocol-handoff/">zh-CN</option><option value="/en/2026/10/27/http-101-protocol-handoff/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/27/http-101-protocol-handoff/">zh-CN</option><option value="/en/2026/10/27/http-101-protocol-handoff/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--quality">Quality</span>
+      <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time>
+    </div>
+
+    <h1>Why must HTTP handling hand off after a 101 response?</h1>
+
+    
+      <p class="post-hero__summary">Inspect HTTP/1.1 protocol selection, header boundaries, and buffered-byte ownership, with separate proxy-leg evidence.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time> · Estimated read 10 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/27/http-101-protocol-handoff/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/27/http-101-protocol-handoff/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Process subsequent bytes using the selected protocol.</li><li>Preserve buffered bytes across the handoff.</li><li>Backend 101 does not establish the frontend transition.</li></ul></section>
+      <div class="article-content">
+        <p>An HTTP/1.1 client requests an upgrade, receives 101, and sends the next bytes to its JSON-response parser. The defect is at the protocol handoff. After the 101 header section ends, subsequent data belongs to the selected protocol rather than an ordinary HTTP response body.</p>
+<h2 id="What-did-101-agree-to"><a href="#What-did-101-agree-to" class="headerlink" title="What did 101 agree to?"></a>What did 101 agree to?</h2><p><a target="_blank" rel="noopener" href="https://www.rfc-editor.org/rfc/rfc9110.html#section-7.8">RFC 9110&#39;s Upgrade definition</a> describes an application-protocol change on an existing HTTP/1.1 connection. The server&#39;s 101 must identify its selection in Upgrade and must not select a protocol the client did not offer. A sender of Upgrade also lists upgrade in Connection. This changes neither the underlying transport nor the connection itself.</p>
+<p><a target="_blank" rel="noopener" href="https://www.rfc-editor.org/rfc/rfc9112.html#section-6.3">RFC 9112 section6.3</a> terminates a 1xx response at the first empty line after its fields, with no HTTP message body or trailers. New-protocol bytes following 101 are therefore not an ordinary body to read until closure. This article concerns HTTP/1.1 Upgrade, not HTTP/2 handshakes.</p>
+<p>Verify the selected protocol against the request. A status line alone does not justify dispatching arbitrary bytes to an arbitrary decoder. The selected protocol can impose additional handshake checks; generic 101 semantics do not establish complete WebSocket security or readiness.</p>
+<h2 id="Who-owns-the-bytes-after-the-boundary"><a href="#Who-owns-the-bytes-after-the-boundary" class="headerlink" title="Who owns the bytes after the boundary?"></a>Who owns the bytes after the boundary?</h2><p>Consider an unexecuted receiver design. A bodyless GET offers an upgrade. The server sends 101 and the required fields, followed by new-protocol traffic. The HTTP parser reads through the terminating empty line, validates negotiation, then transfers any buffered remainder to the selected parser.</p>
+<p>One network read can contain both the complete header section and the new protocol&#39;s initial bytes. Signalling an upgrade while discarding that remainder can leave the new decoder waiting for an opening it will never receive. Leaving both parsers reading can make them compete. Specify buffer ownership, the unconsumed offset, subsequent read routing, and responsibility for closing after errors. These are proposed engineering checks, not a diagnosis of a particular library.</p>
+<p>Sending has its own boundary. The client cannot begin using the upgraded protocol before completely sending its request message. The bodyless example avoids that complication; requests with content or a continue expectation require the specification&#39;s ordering rules. Do not reduce the bidirectional state machine to one received-101 flag.</p>
+<h2 id="Why-not-reuse-the-100-response-loop"><a href="#Why-not-reuse-the-100-response-loop" class="headerlink" title="Why not reuse the 100-response loop?"></a>Why not reuse the 100-response loop?</h2><p>A loop that discards every 1xx and waits for 200 confuses continuation with protocol switching. The site&#39;s <a href="/en/2026/10/25/http-100-continue-upload/">100-continue article</a> concerns permission to continue the current request and reach its final result. After a valid 101 handoff, ordinary HTTP processing must give way to the new protocol.</p>
+<p>The reverse mistake is marking the business connection fully usable immediately. New-protocol authentication, application messages, or closure can still fail. A subscription being established or the first message being accepted needs its own evidence. The status code cannot report that work complete.</p>
+<p>Proposed tests split headers and new data across reads, combine them in one read, fragment the boundary, and provide an unacceptable protocol selection. Record which parser consumes each portion and how errors terminate. No client, packet capture, or fixture was executed here. A server access-log entry cannot establish that the receiver preserved the initial bytes.</p>
+<h2 id="Does-backend-101-establish-a-frontend-proxy-handoff"><a href="#Does-backend-101-establish-a-frontend-proxy-handoff" class="headerlink" title="Does backend 101 establish a frontend proxy handoff?"></a>Does backend 101 establish a frontend proxy handoff?</h2><p>No. Upgrade is connection-related negotiation. Inspect client-to-proxy and proxy-to-origin legs independently. A backend agreement does not establish that the frontend stopped ordinary HTTP handling and began the corresponding transfer.</p>
+<p>Check the actual proxy product and version, both negotiations, byte boundaries, and closure reasons. Forwarding, buffering, and timeout behavior need implementation evidence. If the proxy terminates and reinitiates the new protocol, its two identities and lifecycles need explicit treatment. No proxy configuration was verified here.</p>
+<h2 id="What-if-the-server-sends-200-instead"><a href="#What-if-the-server-sends-200-instead" class="headerlink" title="What if the server sends 200 instead?"></a>What if the server sends 200 instead?</h2><p>The server may ignore the upgrade invitation and continue HTTP. Handle that ordinary response, or report that the application&#39;s upgrade requirement was not met. Do not decode its HTML or JSON as new-protocol frames. Whether fallback is useful is a product decision; the invitation does not compel acceptance.</p>
+<p>Distinguish refusal, invalid selection, post-handoff decoding failure, and application-message failure. They point toward different repairs: support and routing, negotiation, framing, or business rules. Preserve the phase in the error record instead of collapsing them into connection failure.</p>
+<p>A reviewable result identifies the offer, selected protocol, header boundary, buffered remainder, and first valid new-protocol interaction. Without those, only the status code is established. For the initial JSON error, first ask whether those bytes belonged to HTTP at all.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.rfc-editor.org/rfc/rfc9110.html#section-7.8" rel="noopener">RFC 9110 HTTP Semantics §7.8 Upgrade and §15.2.2 101 Switching Protocols</a></li><li><a target="_blank" href="https://www.rfc-editor.org/rfc/rfc9112.html#section-6.3" rel="noopener">RFC 9112 HTTP/1.1 §6.3 Message Body Length (June2022)</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--quality" href="/en/tags/Quality/">Quality</a>
+          
+            <a class="tag tag--http" href="/en/tags/HTTP/">HTTP</a>
+          
+            <a class="tag tag--protocols" href="/en/tags/Protocols/">Protocols</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--quality" href="/en/categories/Quality/">Quality</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F27%2Fhttp-101-protocol-handoff%2F&text=Why%20must%20HTTP%20handling%20hand%20off%20after%20a%20101%20response%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F27%2Fhttp-101-protocol-handoff%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20must%20HTTP%20handling%20hand%20off%20after%20a%20101%20response%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F27%2Fhttp-101-protocol-handoff%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/27/jsonschema-format-annotation-assertion/">
+              <span>Previous Post</span>
+              <strong>Why can an invalid email pass a format:email schema?</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/27/html-textarea-maxlength-utf16/">
+              <span>Next Post</span>
+              <strong>Why can five emoji exhaust a textarea maxlength of ten?</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#What-did-101-agree-to">What did 101 agree to?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Who-owns-the-bytes-after-the-boundary">Who owns the bytes after the boundary?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Why-not-reuse-the-100-response-loop">Why not reuse the 100-response loop?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Does-backend-101-establish-a-frontend-proxy-handoff">Does backend 101 establish a frontend proxy handoff?</a>
+          
+            <a class="toc-link toc-link--h2" href="#What-if-the-server-sends-200-instead">What if the server sends 200 instead?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>280</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>151</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>106</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>74</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/26/http-421-misdirected-retry/">Why Retrying HTTP 421 on the Same Connection Can Fail</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/25/http-401-403-auth-challenge/">Why must a 401 response include WWW-Authenticate?</a></h3>
+          <p>2026-10-25</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/24/cookie-host-prefix-origin-boundary/">Can __Host- cookies isolate different ports on one host?</a></h3>
+          <p>2026-10-24</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

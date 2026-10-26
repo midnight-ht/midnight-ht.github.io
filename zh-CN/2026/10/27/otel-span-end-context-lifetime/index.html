@@ -1,0 +1,409 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Span 已经 end，下一次调用为什么还认它作父级？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="分清 Span 结束与 Context 作用域恢复，借 C、A、B 例子分析父级、异常清理、后台工作和导出验证边界。">
+  
+  
+    <meta name="keywords" content="Span end,Context scope,parent Span">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/27/otel-span-end-context-lifetime/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/27/otel-span-end-context-lifetime/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/27/otel-span-end-context-lifetime/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/27/otel-span-end-context-lifetime/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Span 已经 end，下一次调用为什么还认它作父级？ | Midnight blog">
+    <meta property="og:description" content="分清 Span 结束与 Context 作用域恢复，借 C、A、B 例子分析父级、异常清理、后台工作和导出验证边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/27/otel-span-end-context-lifetime/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/otel-span-end-context-lifetime/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/27/otel-span-end-context-lifetime/","name":"Span 已经 end，下一次调用为什么还认它作父级？ | Midnight blog","description":"分清 Span 结束与 Context 作用域恢复，借 C、A、B 例子分析父级、异常清理、后台工作和导出验证边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/otel-span-end-context-lifetime/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/otel-span-end-context-lifetime/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/otel-span-end-context-lifetime/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/otel-span-end-context-lifetime/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/27/otel-span-end-context-lifetime/","headline":"Span 已经 end，下一次调用为什么还认它作父级？","description":"分清 Span 结束与 Context 作用域恢复，借 C、A、B 例子分析父级、异常清理、后台工作和导出验证边界。","inLanguage":"zh-CN","datePublished":"2026-10-26T19:26:58.000Z","dateModified":"2026-10-26T19:26:58.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://opentelemetry.io/docs/specs/otel/trace/api/","https://opentelemetry.io/docs/specs/otel/context/"],"keywords":"Delivery, OpenTelemetry, Context"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/otel-span-end-context-lifetime/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Span 已经 end，下一次调用为什么还认它作父级？","item":"https://www.zyweb.vip/zh-CN/2026/10/27/otel-span-end-context-lifetime/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/27/otel-span-end-context-lifetime/" selected>zh-CN</option><option value="/en/2026/10/27/otel-span-end-context-lifetime/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/27/otel-span-end-context-lifetime/" selected>zh-CN</option><option value="/en/2026/10/27/otel-span-end-context-lifetime/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time>
+    </div>
+
+    <h1>Span 已经 end，下一次调用为什么还认它作父级？</h1>
+
+    
+      <p class="post-hero__summary">分清 Span 结束与 Context 作用域恢复，借 C、A、B 例子分析父级、异常清理、后台工作和导出验证边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/27/otel-span-end-context-lifetime/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/27/otel-span-end-context-lifetime/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>Span.end 不会让它在当前 Context 中自动失活。</li><li>结束记录与恢复先前上下文需要分别承担清理责任。</li><li>后台关系与数据导出还需各自验证，不能从 end 推导。</li></ul></section>
+      <div class="article-content">
+        <p>假设一个任务把 Span A 设为当前 Span，调用 <code>end()</code> 后直接启动 Span B，却发现 B 仍然关联 A。OpenTelemetry 将操作结束与上下文作用域分开，结束 A 不会把它从当前 Context 自动移走。排查父级关系时，需要同时看 Span 的记录状态和当前执行单元携带的上下文。</p>
+<h2 id="End-不负责把谁设为当前-Span"><a href="#End-不负责把谁设为当前-Span" class="headerlink" title="End 不负责把谁设为当前 Span"></a>End 不负责把谁设为当前 Span</h2><p><a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/specs/otel/trace/api/#end">OpenTelemetry Trace API 的 End 规范</a>明确要求，End 不得在任何仍激活该 Span 的 Context 中使它失活；已经结束的 Span 仍然可以经由 Context 作为父级。End 也不得影响子 Span，子操作可以继续运行并在之后结束。本文核对的在线规范标示<code>1.62.0</code> 版本，讨论的是接口契约，不能据此假定每种语言的便捷方法都只做这一项动作。</p>
+<p>End 表达“这次被记录的操作已经结束”。作用域恢复表达“后续代码应该看到之前的上下文”。有的 SDK 采用上下文管理器或回调帮助同时处理两件事，有的 API 要求分别处理；必须看所用语言、SDK 和调用方法。把便捷方法的组合行为外推给最基本的 end 调用，正是这类误判的来源。</p>
+<p>结束后的 Span 通常不再记录后续修改，但这与身份不能再用于建立关系不同。诊断时也不要从导出界面里看不到新事件，推导出当前 Span 已经被清空。记录内容是否仍可更改、当前 Context 指向谁、下一个 Span 选择谁为父级，是三个可分别检查的问题。</p>
+<h2 id="把-A、B-和外层-C-放在同一条执行路径"><a href="#把-A、B-和外层-C-放在同一条执行路径" class="headerlink" title="把 A、B 和外层 C 放在同一条执行路径"></a>把 A、B 和外层 C 放在同一条执行路径</h2><p>设想请求外层已经有 Span C，内部执行短任务 A。A 临时成为当前 Span，处理结束后，后续操作 B 应恢复为 C 的子操作。下面是语言中立的伪代码，没有使用某个 SDK 的真实函数签名，也没有运行；实现时需用该语言文档支持的作用域工具替换。</p>
+<pre><code class="text">previous = current_context()          # contains C
+span_a = start_span(parent=previous)
+token = attach(context_with(span_a))
+try:
+    run_a()
+finally:
+    try:
+        end(span_a)
+    finally:
+        detach(token)                # restore previous
+
+span_b = start_span(parent=current_context())
+</code></pre>
+<p><a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/specs/otel/context/#optional-global-operations">Context 规范</a>说明，在提供隐式上下文的相应 API 中，attach 返回可恢复先前 Context 的 token，每次 attach 应对应 detach。这里保留的是完整的先前上下文，而不是凭记忆再造一个只有 C 的对象。原上下文还可能承载其他执行范围的值，恢复责任不应被简化成随意替换一个 Span 标识。</p>
+<p>沿这个假设路径推演，若只调用 end 而遗漏 detach，B 从当前上下文取得的仍可能是 A，因此它的父级身份并没有按预期回到 C。若正确恢复先前上下文，B 的父级来源才与设计一致。即使两种情况下 A 都已有结束时间，树的关系也会不同。解决这个差异不需要人为拉长 A 的持续时间。</p>
+<p>异常路径同样需要走完。A 的业务处理抛错时，必须保留原错误传播，同时按 SDK 约定结束记录、退出作用域；代码不应因为清理遗漏让后续错误处理也继承错误的当前 Span。伪代码用嵌套 finally 表达两份清理责任，不声称所有语言都应采用这套写法。优先使用 SDK 推荐的作用域工具，并验证它在异常路径的行为。</p>
+<h2 id="为什么不能一律在-end-时清掉上下文？"><a href="#为什么不能一律在-end-时清掉上下文？" class="headerlink" title="为什么不能一律在 end 时清掉上下文？"></a>为什么不能一律在 end 时清掉上下文？</h2><p>“清成空”并不等于“恢复原值”。在上面的例子里，外层 C 仍有合法工作，直接清空会让 B 丢掉正确父级。嵌套作用域应按进入和退出顺序恢复，否则一个内部操作可能破坏调用者的上下文。规范中的 token 正是在表达这种恢复关系，而非让内部代码独占全局状态。</p>
+<p>还有合法的时间重叠。若 A 已启动一个明确建模的异步子操作，该子操作在 A 结束后仍可继续，End 不会强行结束它。后端时间条出现子操作晚于父操作结束，并不单独证明 SDK 出错。要问 A 与子操作的边界是否真实、父级关系是否符合任务语义，再核对上下文传播。为了图形齐整提前结束子 Span，会改变记录事实。</p>
+<p>对并发工作尤其不能把一个可变“当前 Span”变量当成所有请求共享的捷径。每个执行单元需要正确的传播机制，且异步任务捕获了什么上下文要按语言运行方式核对。本篇没有运行并发测试，不给出某种线程或协程实现一定安全的结论。局部代码看起来恢复了，也不能替代跨异步边界的验证。</p>
+<h2 id="想让后台任务脱离请求，只要提前结束请求-Span-吗？"><a href="#想让后台任务脱离请求，只要提前结束请求-Span-吗？" class="headerlink" title="想让后台任务脱离请求，只要提前结束请求 Span 吗？"></a>想让后台任务脱离请求，只要提前结束请求 Span 吗？</h2><p>不够。结束请求 Span 不会删除已传播给后台任务的上下文，后台工作仍可能把它当父级。先决定后台工作与原请求的真实关系：继续属于该请求、开启独立操作并保留关联，或有其他约定。然后用语言 SDK 支持的显式父级、根上下文或链接等方式表达；不能靠早调用 end 来暗示关系已经切断。</p>
+<p>独立操作也不代表业务只会执行一次。重试和队列确认仍需由业务机制处理，Span 关系只描述观测结构。本站<a href="/zh-CN/2026/10/17/otel-links-versus-parent/">多来源 Span 链接的选择</a>讨论的是关联模型，本题增加的是上下文作用域的退出责任：模型选对以后，仍要确保下一段代码实际读到正确上下文。</p>
+<p>验证还应包含一个真正会暴露恢复错误的负例。可以在隔离测试里故意遗漏内部作用域退出，确认 B 的父级检查能够失败，再恢复正确实现；若两种实现都通过，说明测试可能只检查 Span 的结束时间，并未检查当前身份。另安排 A 内再进入一个短作用域，按相反次序退出，核对 token 是否与对应进入动作配对。不要把两份 token 随意交换后仅以“没有抛异常”为成功标准，错误顺序的诊断能力依语言实现而异。</p>
+<p>观测字段的采集点也要固定。记录“进入 A 前”“A 结束但作用域尚未退出”“作用域退出后”三个时点，比只在函数末尾打印一次标识更容易说明生命周期差异。日志读取当前 Span 的方式仍需按 SDK 文档选择，不能让诊断代码本身创建新 Span 而改变要观察的关系。上述设计没有执行，实际结果应绑定所用语言与 SDK 版本。</p>
+<p>待执行验证应记录 C、A、B 的身份和父级，在正常结束、A 抛错、嵌套操作及异步分支中分别检查：A 是否结束，作用域退出后当前身份是否回到 C，B 的父级是否符合设计。若还要检查导出，另行确认采样、处理器和刷新结果；上下文正确不保证每个 Span 都已保存到后端。验收记录把这两层分开，才能区分关系错误与导出缺失。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://opentelemetry.io/docs/specs/otel/trace/api/" rel="noopener">OpenTelemetry Specification 1.62.0 — Trace API — End — Trace API End</a></li><li><a target="_blank" href="https://opentelemetry.io/docs/specs/otel/context/" rel="noopener">OpenTelemetry Specification 1.62.0 — Context — Attach Context and Detach Context</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--opentelemetry" href="/zh-CN/tags/OpenTelemetry/">OpenTelemetry</a>
+          
+            <a class="tag tag--context" href="/zh-CN/tags/Context/">Context</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fotel-span-end-context-lifetime%2F&text=Span%20%E5%B7%B2%E7%BB%8F%20end%EF%BC%8C%E4%B8%8B%E4%B8%80%E6%AC%A1%E8%B0%83%E7%94%A8%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E8%AE%A4%E5%AE%83%E4%BD%9C%E7%88%B6%E7%BA%A7%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fotel-span-end-context-lifetime%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Span%20%E5%B7%B2%E7%BB%8F%20end%EF%BC%8C%E4%B8%8B%E4%B8%80%E6%AC%A1%E8%B0%83%E7%94%A8%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E8%AE%A4%E5%AE%83%E4%BD%9C%E7%88%B6%E7%BA%A7%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fotel-span-end-context-lifetime%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/27/postgres-character-padding-contract/">
+              <span>上一篇</span>
+              <strong>char(4) 里的 AB：为什么相等却不能照猜 LIKE</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/27/node-timer-unref-exit-liveness/">
+              <span>下一篇</span>
+              <strong>unref 的五秒计时器，为什么进程能提前退出</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#End-不负责把谁设为当前-Span">End 不负责把谁设为当前 Span</a>
+          
+            <a class="toc-link toc-link--h2" href="#把-A、B-和外层-C-放在同一条执行路径">把 A、B 和外层 C 放在同一条执行路径</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么不能一律在-end-时清掉上下文？">为什么不能一律在 end 时清掉上下文？</a>
+          
+            <a class="toc-link toc-link--h2" href="#想让后台任务脱离请求，只要提前结束请求-Span-吗？">想让后台任务脱离请求，只要提前结束请求 Span 吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>280</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>151</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>105</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>74</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/25/otel-log-severity-number-text/">OpenTelemetry 日志等级：保留 SeverityText，用 SeverityNumber 比较</a></h3>
+          <p>2026-10-25</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/24/otel-metric-cardinality-overflow/">OpenTelemetry 指标溢出：总量还在，细分身份去了哪里</a></h3>
+          <p>2026-10-24</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/18/otel-histogram-unit-boundary/">直方图改成秒，分桶和历史值该怎样迁移？</a></h3>
+          <p>2026-10-18</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

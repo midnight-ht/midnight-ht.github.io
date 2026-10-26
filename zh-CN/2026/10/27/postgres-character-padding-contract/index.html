@@ -1,0 +1,395 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>char(4) 里的 AB：为什么相等却不能照猜 LIKE | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="区分char补齐、character等值比较、LIKE与显式转换，避免文件宽度改变商品码身份。">
+  
+  
+    <meta name="keywords" content="char(n),LIKE,trailing spaces">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/27/postgres-character-padding-contract/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/27/postgres-character-padding-contract/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/27/postgres-character-padding-contract/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/27/postgres-character-padding-contract/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="char(4) 里的 AB：为什么相等却不能照猜 LIKE | Midnight blog">
+    <meta property="og:description" content="区分char补齐、character等值比较、LIKE与显式转换，避免文件宽度改变商品码身份。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/27/postgres-character-padding-contract/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-character-padding-contract/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-character-padding-contract/","name":"char(4) 里的 AB：为什么相等却不能照猜 LIKE | Midnight blog","description":"区分char补齐、character等值比较、LIKE与显式转换，避免文件宽度改变商品码身份。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-character-padding-contract/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-character-padding-contract/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-character-padding-contract/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-character-padding-contract/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-character-padding-contract/","headline":"char(4) 里的 AB：为什么相等却不能照猜 LIKE","description":"区分char补齐、character等值比较、LIKE与显式转换，避免文件宽度改变商品码身份。","inLanguage":"zh-CN","datePublished":"2026-10-26T19:26:58.000Z","dateModified":"2026-10-26T19:26:58.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/datatype-character.html"],"keywords":"Development, PostgreSQL"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-character-padding-contract/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"char(4) 里的 AB：为什么相等却不能照猜 LIKE","item":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-character-padding-contract/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/27/postgres-character-padding-contract/" selected>zh-CN</option><option value="/en/2026/10/27/postgres-character-padding-contract/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/27/postgres-character-padding-contract/" selected>zh-CN</option><option value="/en/2026/10/27/postgres-character-padding-contract/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time>
+    </div>
+
+    <h1>char(4) 里的 AB：为什么相等却不能照猜 LIKE</h1>
+
+    
+      <p class="post-hero__summary">区分char补齐、character等值比较、LIKE与显式转换，避免文件宽度改变商品码身份。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/27/postgres-character-padding-contract/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/27/postgres-character-padding-contract/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>char 的等值、模式匹配和转 text 要分别检查。</li><li>固定文件宽度不等于业务码长度。</li><li>超长拒绝应放在显式截断之前。</li></ul></section>
+      <div class="article-content">
+        <p>假设商品码存为 <code>char(4)</code>，输入 <code>AB</code> 后按等号查询能找到，换成 LIKE 条件却得到不同判断。排查应同时看类型和运算符，而不是只看客户端显示的两个字母。PostgreSQL 的固定宽度字符具有补空格和忽略尾空格的特定规则，这些规则没有统一覆盖所有字符串操作。</p>
+<h2 id="同一份码，为什么出现两种观察？"><a href="#同一份码，为什么出现两种观察？" class="headerlink" title="同一份码，为什么出现两种观察？"></a>同一份码，为什么出现两种观察？</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/datatype-character.html">PostgreSQL 18 字符类型文档</a>说明，<code>character(n)</code> 会把短值补空格到声明宽度。两个 character 值比较时，尾部空格没有语义意义；转成其他字符串类型时，尾空格被移除。LIKE 和正则匹配中的尾空格则有意义。必须保留“两个 character 值”这个条件，不能将它改写为所有文本比较都忽略空格。</p>
+<p>下面是未执行的教学查询，比较对象和显式转换都写在语句内，避免依赖驱动绑定参数时推断出的类型。这里没有真实商品库，也没有提交查询结果。</p>
+<pre><code class="sql">SELECT &#39;AB&#39;::char(4) = &#39;AB  &#39;::char(4) AS same_code;
+SELECT &#39;AB&#39;::char(4) LIKE &#39;AB&#39; AS exact_pattern;
+SELECT (&#39;AB&#39;::char(4))::text LIKE &#39;AB&#39; AS after_text_cast;
+</code></pre>
+<p>依照文档推演，第一个表达式应为真；第二个模式没有消费补入的空格，不能因为等号为真就推断它也为真；第三个先经过文本转换，观察的是去掉尾空格后的文本。验证时应逐条记录布尔值和表达式类型。界面把尾空格隐藏起来，或者表格列宽刚好挡住空格，都不能替这些表达式解释差异。</p>
+<p>长度也是观察规则的一部分。产品所说的“码有四位”，可能指四个有效输入字符，也可能只指文件里占四个位置。类型补齐只保证它所定义的存储表示，不能证明用户曾输入四个非空格字符。若业务要求恰好四个有效字符，应该先给出允许字符集和空格政策，在转换前检查输入。数据库类型无法从已经补齐的值恢复用户原来输入了几位。</p>
+<h2 id="文件宽度放在哪一层？"><a href="#文件宽度放在哪一层？" class="headerlink" title="文件宽度放在哪一层？"></a>文件宽度放在哪一层？</h2><p>假设上游只允许两位或四位码，外部固定宽度文件却要求每条码占四个位置。内部用 text 或 varchar 保存规范码、导出时按文件规范补齐，是一种可审查的选择。它让数据库中的业务身份与文件布局分别维护。代价是导出程序必须处理编码、分隔和补齐，不能把所有格式责任交给列类型。</p>
+<p>如果既有系统确实依赖 char 的比较语义，保留它也可能合理。但要明确哪些查询比较 character、哪些查询显式转 text，以及接口是否保留尾空格。迁移时只改列类型可能改变匹配结果，不能假设原查询仍然表达同一份身份规则。代码评审应找到实际操作符和参数类型，而不是只看建表脚本上的四位声明。</p>
+<p>反例是把所有查询都加 <code>rtrim</code>，声称这样最一致。如果尾空格在某个来源里属于合法标识，这会主动合并原本不同的输入。相反，如果码不允许任何空格，直到查询时才修剪又可能让错误数据长期存在。修剪是业务规范化决定，应写明位置和可逆性，不能充当不了解类型差异时的通用补丁。</p>
+<p>同样，不要为了让 LIKE 找到短码就随手追加百分号。<code>AB%</code> 也会接纳其他以 AB 开头的码，扩大了原来的精确匹配条件。假设有 AB 与 ABCD 两个码，模糊查询可能同时选中它们，随后一笔更新就不再只针对原来的商品。修复匹配差异时，必须保留调用方要找哪一个身份的要求。</p>
+<h2 id="显式转成-char-n-会拒绝超长商品码吗？"><a href="#显式转成-char-n-会拒绝超长商品码吗？" class="headerlink" title="显式转成 char(n) 会拒绝超长商品码吗？"></a>显式转成 char(n) 会拒绝超长商品码吗？</h2><p>不会可靠地替你做这项输入校验。官方文档规定，显式转换为 char(n) 或 varchar(n) 时，超长字符串会被截到指定长度，而不是因超长报错。假设调用方提交 ABCDE，先转成 char(4) 后只剩前四位；下游再检查长度，已经看不到第五位。这与普通向列赋值遇到非空格超长字符时的报错路径不同。</p>
+<p>这个追问改变了验证位置：若产品要求拒绝超长原文，应在显式转换之前断言输入，并让导入失败记录保留可定位的行号。是否允许尾部多余空格也要单独写清，不能依赖数据库关于全空格超长部分的例外，偷偷替产品选定宽容策略。错误提示应说明违反哪条码规则，而非只回显数据库异常。</p>
+<p>拟议验证准备 AB、AB加尾空格、ABCD、ABCDE，以及含内部空格的码。分别检查原始输入、类型转换后的值、两个 character 的等号、文本等号和 LIKE，给每种表达式独立写期望。再经过真实驱动读写一次，确认绑定参数和输出字符串有没有增加转换。本文没有执行这些查询或驱动检查，不能把上述推演记成已通过。</p>
+<p>迁移字符类型时，唯一性也需要预演。假设旧列把带尾空格与不带尾空格的两个输入视作相等，新列保留了尾空格的差异，业务是否允许它们成为两个身份需要明确。反向迁移也可能把原本不同的文本合并到同一种比较结果。不能只用迁移语句能够执行证明身份关系未变，应在变更前对候选数据做冲突分析，并让业务确认合并或拒绝方式。</p>
+<p>还要检查导出再导入的往返。假设文件格式补了两个空格，接收系统又把它们当作码的一部分，回传时产生与内部规范码不同的字符串。验收应同时核对文件字节布局和回传后的业务身份，避免只验证导出文件看起来对齐。若选择在边界剥离填充，先确认该格式确实把它定义为填充，而不是擅自删除来源数据。</p>
+<p>本站的<a href="/zh-CN/2026/10/15/postgres-numeric-rounding/">数值舍入与输入校验</a>也讨论类型转换会丢失原始信息，但字符比较还有操作符这一层。最终需要留下的不是“长度正确”四个字，而是允许哪些输入、按什么类型比较、在哪个出口补齐，以及哪组反例必须被拒绝。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/datatype-character.html" rel="noopener">PostgreSQL 18 — 8.3 Character Types</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fpostgres-character-padding-contract%2F&text=char(4)%20%E9%87%8C%E7%9A%84%20AB%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88%E7%9B%B8%E7%AD%89%E5%8D%B4%E4%B8%8D%E8%83%BD%E7%85%A7%E7%8C%9C%20LIKE" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fpostgres-character-padding-contract%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=char(4)%20%E9%87%8C%E7%9A%84%20AB%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88%E7%9B%B8%E7%AD%89%E5%8D%B4%E4%B8%8D%E8%83%BD%E7%85%A7%E7%8C%9C%20LIKE&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fpostgres-character-padding-contract%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/">
+              <span>上一篇</span>
+              <strong>临时表提交后还在：连接池下一位借用者会遇到什么</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/27/otel-span-end-context-lifetime/">
+              <span>下一篇</span>
+              <strong>Span 已经 end，下一次调用为什么还认它作父级？</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#同一份码，为什么出现两种观察？">同一份码，为什么出现两种观察？</a>
+          
+            <a class="toc-link toc-link--h2" href="#文件宽度放在哪一层？">文件宽度放在哪一层？</a>
+          
+            <a class="toc-link toc-link--h2" href="#显式转成-char-n-会拒绝超长商品码吗？">显式转成 char(n) 会拒绝超长商品码吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>280</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>151</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>105</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>74</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/">临时表提交后还在：连接池下一位借用者会遇到什么</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/27/postgres-union-unknown-type-resolution/">两个 NULL 先 UNION，为什么后面的 1 救不了类型</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/26/postgres-case-constant-folding/">CASE 没进入分支，为什么仍可能常量除零</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

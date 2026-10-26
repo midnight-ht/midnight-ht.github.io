@@ -1,0 +1,405 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>集群里的 HTTPS 别名为什么会证书不匹配？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="解释 ExternalName 的 DNS 别名与 HTTP、TLS 身份差异，用账单查询定位失败，并比较客户端地址与代理方案。">
+  
+  
+    <meta name="keywords" content="ExternalName,DNS alias,TLS identity">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-externalname-dns-not-proxy/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-externalname-dns-not-proxy/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-externalname-dns-not-proxy/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/27/kubernetes-externalname-dns-not-proxy/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="集群里的 HTTPS 别名为什么会证书不匹配？ | Midnight blog">
+    <meta property="og:description" content="解释 ExternalName 的 DNS 别名与 HTTP、TLS 身份差异，用账单查询定位失败，并比较客户端地址与代理方案。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-externalname-dns-not-proxy/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-externalname-dns-not-proxy/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-externalname-dns-not-proxy/","name":"集群里的 HTTPS 别名为什么会证书不匹配？ | Midnight blog","description":"解释 ExternalName 的 DNS 别名与 HTTP、TLS 身份差异，用账单查询定位失败，并比较客户端地址与代理方案。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-externalname-dns-not-proxy/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-externalname-dns-not-proxy/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-externalname-dns-not-proxy/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-externalname-dns-not-proxy/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-externalname-dns-not-proxy/","headline":"集群里的 HTTPS 别名为什么会证书不匹配？","description":"解释 ExternalName 的 DNS 别名与 HTTP、TLS 身份差异，用账单查询定位失败，并比较客户端地址与代理方案。","inLanguage":"zh-CN","datePublished":"2026-10-26T19:26:58.000Z","dateModified":"2026-10-26T19:26:58.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://kubernetes.io/docs/concepts/services-networking/service/"],"keywords":"Delivery, ExternalName, Kubernetes"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-externalname-dns-not-proxy/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"集群里的 HTTPS 别名为什么会证书不匹配？","item":"https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-externalname-dns-not-proxy/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/27/kubernetes-externalname-dns-not-proxy/" selected>zh-CN</option><option value="/en/2026/10/27/kubernetes-externalname-dns-not-proxy/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/27/kubernetes-externalname-dns-not-proxy/" selected>zh-CN</option><option value="/en/2026/10/27/kubernetes-externalname-dns-not-proxy/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time>
+    </div>
+
+    <h1>集群里的 HTTPS 别名为什么会证书不匹配？</h1>
+
+    
+      <p class="post-hero__summary">解释 ExternalName 的 DNS 别名与 HTTP、TLS 身份差异，用账单查询定位失败，并比较客户端地址与代理方案。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/27/kubernetes-externalname-dns-not-proxy/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/27/kubernetes-externalname-dns-not-proxy/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>ExternalName 返回 DNS 别名，不承担 HTTP 改写或代理。</li><li>解析成功仍需分别验证 TLS 身份、HTTP 路由与业务读取。</li><li>固定 IP 与内部 URL 需求各需明确的配置及恢复责任。</li></ul></section>
+      <div class="article-content">
+        <p>假设账单服务把 <code>https://billing.prod.svc.cluster.local</code> 指向 <code>api.vendor.example</code>，DNS 已能解析，HTTPS 却仍报证书名称不匹配。ExternalName 只给 DNS 别名，不会把客户端使用的主机身份改成供应商域名。应沿名称解析、请求身份和服务端响应分别定位，而不是继续修改 Service 的端口。</p>
+<h2 id="CNAME-解决了哪一步？"><a href="#CNAME-解决了哪一步？" class="headerlink" title="CNAME 解决了哪一步？"></a>CNAME 解决了哪一步？</h2><p><a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/services-networking/service/#externalname">Kubernetes 的 Service 文档中 ExternalName 一节</a>说明，这种 Service 把服务映射到一个 DNS 名称，返回相应 CNAME；重定向发生在 DNS 层，不经过代理或转发。本文按二〇二六年十月二十七日核对的在线说明分析，未创建集群。具体环境仍需记录 Kubernetes、DNS 和客户端实现版本，不能用在线文档替代连接测试。</p>
+<p>DNS 查询回答的是“这个名称可以继续向哪里解析”。客户端实际发出的 URL 仍可能使用内部名称，HTTP 请求携带的 Host 以及 TLS 校验针对的名称，也没有被这条 DNS 记录改写。供应商能够提供外部域名的证书，不表示它也持有内部服务域名的证书。文档专门提醒 HTTP 和 HTTPS 存在这种主机名差异问题；解析成功只能把排障推进到下一层。</p>
+<p>这里有一个容易混淆的成功条件。若测试仅查询内部名称并取得外部名称，DNS 别名已符合预期；若业务要求客户端通过该内部 HTTPS 地址完成账单查询，还要满足服务器名称识别、证书和应用路由等条件。两项需求可以分别验收，不能把第一项通过写成整个外部 API 已接通。</p>
+<h2 id="走完一次账单查询的假设诊断"><a href="#走完一次账单查询的假设诊断" class="headerlink" title="走完一次账单查询的假设诊断"></a>走完一次账单查询的假设诊断</h2><p>设想调用方运行在 <code>prod</code> 命名空间，希望使用服务完整名称访问供应商。下面是说明性的清单，没有应用到集群，也没有真实账单数据。</p>
+<pre><code class="yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: billing
+  namespace: prod
+spec:
+  type: ExternalName
+  externalName: api.vendor.example
+</code></pre>
+<p>调用方先查内部服务名，检查获得的别名及后续地址解析。如果这一阶段失败，排查名称拼写、命名空间、集群 DNS 与外部解析条件；没有地址时，讨论 HTTP Host 还为时过早。若这一阶段正常，就记录实际请求 URL，确认客户端仍然在使用哪个主机名，而不是只保存最终连接的 IP。</p>
+<p>下一步检查 TLS 错误发生在何处。假设供应商证书只包含 <code>api.vendor.example</code>，调用方仍按内部名称验证，那么名称不匹配就是可解释的结果。这不证明证书失效或供应商服务不可用。切换到供应商正式域名进行受控对照，可以帮助区分别名身份与外部服务本身，但应使用正常验证，不能通过关闭证书检查来制造“接通”的结果。</p>
+<p>再设想使用明文 HTTP 作教学对照，供应商按主机名区分租户。连接建立后，内部名称对应的 Host 不被识别，可能得到意外站点或错误响应。TLS 校验和 HTTP 虚拟主机是两层问题：只解决其中之一，并不证明另一层已符合供应商接口约定。实际错误码由服务实现决定，本文不预言某个统一状态码。</p>
+<p>最后用没有真实写入副作用的查询验证响应身份和内容：确认请求到达正确 API、返回符合约定的数据结构，并且认证范围仍属于目标账号。一个可解析名称或一个成功握手，都不能代替这一步。失败报告应保留各层的观测顺序，避免把多种失败压成“ExternalName 不工作”。</p>
+<h2 id="是改客户端地址，还是增加代理？"><a href="#是改客户端地址，还是增加代理？" class="headerlink" title="是改客户端地址，还是增加代理？"></a>是改客户端地址，还是增加代理？</h2><p>如果目的只是方便集中管理供应商地址，而应用可以使用供应商正式 URL，直接让客户端采用该域名通常更容易保持原有身份契约。配置管理仍可统一维护 URL，但它不必表现为一个内部 HTTP 主机别名。代价是应用配置需要明确携带外部地址，而不是假定所有依赖都能靠 Service 名访问。</p>
+<p>如果产品或现有客户端必须保留内部 URL，且需要改写应用请求身份，就应评估具有相应能力的受控代理。它要明确上游名称、TLS 校验、请求头、超时、认证与错误传播；增加这层也带来维护、容量和故障责任。ExternalName 没有替代这些职责，不能因为清单更短就宣布功能相同。某个具体网关是否支持所需改写，仍须查其版本和配置，并做真实验证。</p>
+<p>反例是在客户端里关闭 TLS 验证，再因为查询返回了内容就提交修复。这样绕开的是身份判断，未解决别名与供应商身份的矛盾；中间得到的数据也未必来自期望服务。另一个反例是反复增加 <code>targetPort</code>。普通 Service 的端口映射是另一套机制，不能给 DNS 别名附加原本不存在的 HTTP 代理能力。</p>
+<h2 id="如果供应商只开放固定-IP，可以把-externalName-写成-IP-吗？"><a href="#如果供应商只开放固定-IP，可以把-externalName-写成-IP-吗？" class="headerlink" title="如果供应商只开放固定 IP，可以把 externalName 写成 IP 吗？"></a>如果供应商只开放固定 IP，可以把 externalName 写成 IP 吗？</h2><p>不能把它当成直接映射 IP 的方式。官方说明，形似 IPv4 的 externalName 仍按由数字组成的 DNS 名称解释，不作为 IP 地址处理。若确实需要表示固定外部地址，应按环境选择适当的无选择器服务及端点等方案，并单独核对其维护方式；这不是把字符串换成数字就完成了迁移。</p>
+<p>即使最终能到达固定 IP，应用协议中的主机身份仍需单独成立。供应商换地址、证书续期或租户路由变化时，应有明确负责人更新配置和执行检查。IP 可达解决的是一层路径，不能让 HTTPS 名称问题自行消失。</p>
+<p>还有一个对照需要固定认证条件。若直连供应商域名用的是另一组凭据，返回成功并不能只归功于域名变化；应在允许的受控范围内保持账号、路径和请求内容一致，只改变要验证的名称条件。若客户端自动跟随重定向，也要记录最后到达的位置，避免供应商先返回一个页面跳转，就被误认为内部别名直接支持了原接口。这个对照设计只缩小解释范围，不替真实供应商的接入文档作决定。</p>
+<p>待执行验证先记录内部名称、CNAME 目标、客户端 URL 与供应商认可的名称，再分别检查解析、正常 TLS 校验和受控业务读取。修改方案前后用同一调用身份比较，保留失败分支，不写入敏感凭据。本站<a href="/zh-CN/2026/10/17/kubernetes-service-targetport-name/">Service 入口与目标端口的区别</a>讨论的是代理型服务的端口契约；本题先确认所选服务类型根本是否承担那层职责，再选择客户端配置或代理方案。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://kubernetes.io/docs/concepts/services-networking/service/" rel="noopener">Kubernetes — Service — ExternalName — ExternalName maps a Service to a DNS name</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--externalname" href="/zh-CN/tags/ExternalName/">ExternalName</a>
+          
+            <a class="tag tag--kubernetes" href="/zh-CN/tags/Kubernetes/">Kubernetes</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fkubernetes-externalname-dns-not-proxy%2F&text=%E9%9B%86%E7%BE%A4%E9%87%8C%E7%9A%84%20HTTPS%20%E5%88%AB%E5%90%8D%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BC%9A%E8%AF%81%E4%B9%A6%E4%B8%8D%E5%8C%B9%E9%85%8D%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fkubernetes-externalname-dns-not-proxy%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E9%9B%86%E7%BE%A4%E9%87%8C%E7%9A%84%20HTTPS%20%E5%88%AB%E5%90%8D%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BC%9A%E8%AF%81%E4%B9%A6%E4%B8%8D%E5%8C%B9%E9%85%8D%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fkubernetes-externalname-dns-not-proxy%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/27/kubernetes-termination-message-truncation/">
+              <span>上一篇</span>
+              <strong>容器的终止消息少了一半，先检查字节预算</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/27/jsonschema-prefixitems-tuple-length/">
+              <span>下一篇</span>
+              <strong>prefixItems写了两项，为什么一项数组也通过？</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#CNAME-解决了哪一步？">CNAME 解决了哪一步？</a>
+          
+            <a class="toc-link toc-link--h2" href="#走完一次账单查询的假设诊断">走完一次账单查询的假设诊断</a>
+          
+            <a class="toc-link toc-link--h2" href="#是改客户端地址，还是增加代理？">是改客户端地址，还是增加代理？</a>
+          
+            <a class="toc-link toc-link--h2" href="#如果供应商只开放固定-IP，可以把-externalName-写成-IP-吗？">如果供应商只开放固定 IP，可以把 externalName 写成 IP 吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>280</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>151</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>105</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>74</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/27/kubernetes-termination-message-truncation/">容器的终止消息少了一半，先检查字节预算</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/26/kubernetes-hostpath-node-trust/">Pod 重建后路径相同，文件为何不同？</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/26/kubernetes-job-active-deadline-limit/">Job 重试还没用完，为何已经 DeadlineExceeded？</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

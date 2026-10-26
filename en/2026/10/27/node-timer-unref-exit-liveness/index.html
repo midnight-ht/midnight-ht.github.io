@@ -1,0 +1,399 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why a Process Can Exit Before Its Unreferenced Timer Fires | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Distinguish unref, ref, and cancellation when reviewing optional telemetry, required delivery, and promise waiting.">
+  
+  
+    <meta name="keywords" content="unref,Timeout,event loop">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/27/node-timer-unref-exit-liveness/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/27/node-timer-unref-exit-liveness/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/27/node-timer-unref-exit-liveness/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/27/node-timer-unref-exit-liveness/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why a Process Can Exit Before Its Unreferenced Timer Fires | Midnight blog">
+    <meta property="og:description" content="Distinguish unref, ref, and cancellation when reviewing optional telemetry, required delivery, and promise waiting.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/27/node-timer-unref-exit-liveness/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/27/node-timer-unref-exit-liveness/#webpage","url":"https://www.zyweb.vip/en/2026/10/27/node-timer-unref-exit-liveness/","name":"Why a Process Can Exit Before Its Unreferenced Timer Fires | Midnight blog","description":"Distinguish unref, ref, and cancellation when reviewing optional telemetry, required delivery, and promise waiting.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/27/node-timer-unref-exit-liveness/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/27/node-timer-unref-exit-liveness/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/27/node-timer-unref-exit-liveness/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/27/node-timer-unref-exit-liveness/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/27/node-timer-unref-exit-liveness/","headline":"Why a Process Can Exit Before Its Unreferenced Timer Fires","description":"Distinguish unref, ref, and cancellation when reviewing optional telemetry, required delivery, and promise waiting.","inLanguage":"en","datePublished":"2026-10-26T19:26:58.000Z","dateModified":"2026-10-26T19:26:58.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://nodejs.org/api/timers.html","https://nodejs.org/api/process.html"],"keywords":"Delivery, Node.js"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/27/node-timer-unref-exit-liveness/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why a Process Can Exit Before Its Unreferenced Timer Fires","item":"https://www.zyweb.vip/en/2026/10/27/node-timer-unref-exit-liveness/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/27/node-timer-unref-exit-liveness/">zh-CN</option><option value="/en/2026/10/27/node-timer-unref-exit-liveness/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/27/node-timer-unref-exit-liveness/">zh-CN</option><option value="/en/2026/10/27/node-timer-unref-exit-liveness/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time>
+    </div>
+
+    <h1>Why a Process Can Exit Before Its Unreferenced Timer Fires</h1>
+
+    
+      <p class="post-hero__summary">Distinguish unref, ref, and cancellation when reviewing optional telemetry, required delivery, and promise waiting.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time> · Estimated read 11 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/27/node-timer-unref-exit-liveness/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/27/node-timer-unref-exit-liveness/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>unref removes liveness responsibility without cancelling scheduling.</li><li>Required delivery needs more than an optional tail timer.</li><li>A test runner can mask the process-exit condition.</li></ul></section>
+      <div class="article-content">
+        <p>Suppose a command-line tool finishes its main output, schedules a retry five seconds later, and calls unref on the timer. If nothing else keeps the event loop active, the process may leave before the retry runs. unref does not cancel the timer; it removes that timer&#39;s responsibility for keeping Node.js alive.</p>
+<h2 id="Scheduling-a-future-callback-does-not-guarantee-reaching-it"><a href="#Scheduling-a-future-callback-does-not-guarantee-reaching-it" class="headerlink" title="Scheduling a future callback does not guarantee reaching it"></a>Scheduling a future callback does not guarantee reaching it</h2><p>The <a target="_blank" rel="noopener" href="https://nodejs.org/api/timers.html#timeoutunref">Timers reference</a>, retrieved as v26.12.1, says active timeouts normally keep the event loop running. An unreferenced timeout no longer requires that liveness. Without other activity, exit can precede its callback. This is a liveness rule, not a timing or delivery guarantee.</p>
+<p>This unexecuted teaching script can be observed in an isolated child process. It performs no real remote retry or log delivery.</p>
+<pre><code class="js">const timer = setTimeout(() =&gt; {
+  console.log(&#39;retry callback reached&#39;);
+}, 5000);
+timer.unref();
+console.log(&#39;main work finished&#39;);
+</code></pre>
+<p>With no other active work, the process can finish without printing the callback marker. A development server, test runner, or interactive environment may keep other handles alive, allowing the same callback to appear. Those observations are compatible because the liveness conditions differ. Record the process environment rather than merely claiming the source code was identical.</p>
+<p>Consider tail-end telemetry. A tool retains a statistic in memory and schedules a later upload with an unreferenced timer. That can express “statistics may be abandoned at exit.” It cannot simultaneously promise that every statistic is delivered. A required order confirmation or audit operation needs an observable completion contract and appropriate waiting or reliable delivery machinery.</p>
+<h2 id="Reference-state-and-cancellation-are-different-controls"><a href="#Reference-state-and-cancellation-are-different-controls" class="headerlink" title="Reference state and cancellation are different controls"></a>Reference state and cancellation are different controls</h2><p>unref is not clearTimeout. If a listening service or other activity keeps the process running, the unreferenced timeout can still fire. Use the cancellation API to cancel, ref to restore the timer&#39;s liveness responsibility, and hasRef to inspect that timeout&#39;s state. hasRef neither inventories the whole process nor proves callback completion.</p>
+<p>Shutdown therefore needs task-specific policy. A heartbeat may not deserve to keep the process alive, but should still be cancelled if shutdown makes it unnecessary: other draining work could otherwise keep the process alive long enough to produce another heartbeat. A mandatory confirmation needs a defined waiting budget and failure result. Unreferencing every background timer does not create a shutdown protocol.</p>
+<p>A callback can also launch asynchronous work. Printing “sending” at callback entry does not prove a send completed. Define who observes the later rejection, who owns required resources, and how termination is handled. Referencing the timer is not persistent ownership of every operation its callback might start.</p>
+<h2 id="Does-awaiting-a-promise-keep-an-unreferenced-timeout-alive"><a href="#Does-awaiting-a-promise-keep-an-unreferenced-timeout-alive" class="headerlink" title="Does awaiting a promise keep an unreferenced timeout alive?"></a>Does awaiting a promise keep an unreferenced timeout alive?</h2><p>Do not infer that from the presence of await. An unsettled promise is not automatically an active event-loop handle. If its only dependency is an unreferenced timer and there is no other work, waiting is not a guarantee that the callback will be reached. The <a target="_blank" rel="noopener" href="https://nodejs.org/api/process.html#event-beforeexit">Process exit description</a> connects natural exit to an empty event loop; explicit exit and uncaught exceptions have different paths.</p>
+<p>For a command that must wait for delivery, return a promise representing the delivery result and ensure the underlying operation has appropriate liveness, a deadline, and failure propagation. Wrapping an unreferenced timeout in a promise does not by itself supply those responsibilities. Top-level await exit status also depends on the actual module and runtime behavior; no universal code is promised here.</p>
+<p>The opposite mistake is keeping a referenced repeating timer forever while waiting for optional telemetry. If the remote destination remains unavailable, exit may be delayed indefinitely. A bounded flush budget with an explicit abandonment policy can be appropriate once necessary work is complete. State what may be lost instead of selecting “fast exit” or “wait for everything” without a task contract.</p>
+<p>Exit status alone is insufficient. A tool may exit successfully under its policy while an optional callback never ran. A parent requiring business delivery should inspect an explicit result or receipt. Distinguish deliberate abandonment, deadline expiry, and unexpected failure so callers can choose a valid retry policy.</p>
+<h2 id="Observe-isolated-processes"><a href="#Observe-isolated-processes" class="headerlink" title="Observe isolated processes"></a>Observe isolated processes</h2><p>A proposed comparison runs two otherwise identical scripts, one referenced and one unreferenced. The parent records output, status, and elapsed time with its own cleanup deadline. A third script keeps another bounded activity alive, demonstrating that an unreferenced timeout was not cancelled. These cases test different properties.</p>
+<p>Do not turn a measured millisecond value into a contract. Scheduling depends on loop load and environment. Check callback markers, the actual liveness owner, and the business terminal state. Framework servers and handles can mask the missing responsibility, which is why independent child processes are useful.</p>
+<p>These retry, telemetry, and subprocess teaching examples were not executed. No delivery success rate is reported. The <a href="/en/2026/10/21/node-fs-rename-durability/">rename and durability article</a> asks what a completed path operation establishes. This question comes earlier: does the process remain alive long enough for an operation even to begin? Choose unref only after naming optional work, required work, and the receipts proving completion.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://nodejs.org/api/timers.html" rel="noopener">Node.js v26.12.1 — Timers: timeout.unref</a></li><li><a target="_blank" href="https://nodejs.org/api/process.html" rel="noopener">Node.js v26.12.1 — Process: beforeExit</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--delivery" href="/en/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--node-js" href="/en/tags/Node.js/">Node.js</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--delivery" href="/en/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F27%2Fnode-timer-unref-exit-liveness%2F&text=Why%20a%20Process%20Can%20Exit%20Before%20Its%20Unreferenced%20Timer%20Fires" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F27%2Fnode-timer-unref-exit-liveness%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20a%20Process%20Can%20Exit%20Before%20Its%20Unreferenced%20Timer%20Fires&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F27%2Fnode-timer-unref-exit-liveness%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/27/otel-span-end-context-lifetime/">
+              <span>Previous Post</span>
+              <strong>Why an Ended Span Can Still Become the Next Span’s Parent</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/27/node-events-once-synchronous-emission-race/">
+              <span>Next Post</span>
+              <strong>Why Sequential once Waits Can Miss a Synchronous Event</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Scheduling-a-future-callback-does-not-guarantee-reaching-it">Scheduling a future callback does not guarantee reaching it</a>
+          
+            <a class="toc-link toc-link--h2" href="#Reference-state-and-cancellation-are-different-controls">Reference state and cancellation are different controls</a>
+          
+            <a class="toc-link toc-link--h2" href="#Does-awaiting-a-promise-keep-an-unreferenced-timeout-alive">Does awaiting a promise keep an unreferenced timeout alive?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Observe-isolated-processes">Observe isolated processes</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>280</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>151</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>106</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>74</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/25/node-readfile-abort-buffering-boundary/">readFile was cancelled: why does that not prove disk reads stopped?</a></h3>
+          <p>2026-10-25</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/27/git-bundle-prerequisite-restoration/">Why a Verified Git Bundle May Not Restore into an Empty Repository</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/27/kubernetes-externalname-dns-not-proxy/">Why an ExternalName HTTPS Alias Can Fail Certificate Verification</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

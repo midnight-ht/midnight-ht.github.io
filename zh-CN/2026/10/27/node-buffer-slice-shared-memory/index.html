@@ -1,0 +1,403 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Buffer.slice 后再改原数据，为什么切片也变了 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用初始化四字节对照共享视图与副本，检查异步交接时机、ArrayBuffer重载及非零偏移。">
+  
+  
+    <meta name="keywords" content="Buffer.slice,ArrayBuffer,byteOffset">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/27/node-buffer-slice-shared-memory/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/27/node-buffer-slice-shared-memory/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/27/node-buffer-slice-shared-memory/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/27/node-buffer-slice-shared-memory/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Buffer.slice 后再改原数据，为什么切片也变了 | Midnight blog">
+    <meta property="og:description" content="用初始化四字节对照共享视图与副本，检查异步交接时机、ArrayBuffer重载及非零偏移。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/27/node-buffer-slice-shared-memory/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/node-buffer-slice-shared-memory/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/27/node-buffer-slice-shared-memory/","name":"Buffer.slice 后再改原数据，为什么切片也变了 | Midnight blog","description":"用初始化四字节对照共享视图与副本，检查异步交接时机、ArrayBuffer重载及非零偏移。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/node-buffer-slice-shared-memory/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/node-buffer-slice-shared-memory/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/node-buffer-slice-shared-memory/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/node-buffer-slice-shared-memory/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/27/node-buffer-slice-shared-memory/","headline":"Buffer.slice 后再改原数据，为什么切片也变了","description":"用初始化四字节对照共享视图与副本，检查异步交接时机、ArrayBuffer重载及非零偏移。","inLanguage":"zh-CN","datePublished":"2026-10-26T19:26:58.000Z","dateModified":"2026-10-26T19:26:58.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://nodejs.org/api/buffer.html"],"keywords":"Development, Node.js"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/node-buffer-slice-shared-memory/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Buffer.slice 后再改原数据，为什么切片也变了","item":"https://www.zyweb.vip/zh-CN/2026/10/27/node-buffer-slice-shared-memory/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/27/node-buffer-slice-shared-memory/" selected>zh-CN</option><option value="/en/2026/10/27/node-buffer-slice-shared-memory/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/27/node-buffer-slice-shared-memory/" selected>zh-CN</option><option value="/en/2026/10/27/node-buffer-slice-shared-memory/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time>
+    </div>
+
+    <h1>Buffer.slice 后再改原数据，为什么切片也变了</h1>
+
+    
+      <p class="post-hero__summary">用初始化四字节对照共享视图与副本，检查异步交接时机、ArrayBuffer重载及非零偏移。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/27/node-buffer-slice-shared-memory/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/27/node-buffer-slice-shared-memory/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>Buffer.slice 与 subarray 共享底层字节。</li><li>独立快照要选择复制重载并在复用前完成。</li><li>ArrayBuffer共享范围需带上实际偏移和长度。</li></ul></section>
+      <div class="article-content">
+        <p>假设报文缓存是 <code>Buffer.from([10,20,30,40])</code>，记录器保存 <code>slice(1,3)</code>，生产方随后改写第二个字节。记录器保留的新对象仍然指向同一段存储。Buffer.slice 创建共享视图；如果要保留当时的独立字节，应在边界上明确复制。</p>
+<h2 id="新对象没有带来新字节"><a href="#新对象没有带来新字节" class="headerlink" title="新对象没有带来新字节"></a>新对象没有带来新字节</h2><p><a target="_blank" rel="noopener" href="https://nodejs.org/api/buffer.html#buffers-and-typedarrays">Node.js Buffer 文档</a>说明，Buffer 继承 Uint8Array，但两者同名 slice 的行为不同。TypedArray 的 slice 复制所选部分，Buffer 的 slice 因历史兼容而返回原存储上的视图。需要表达共享时，文档推荐 subarray，让 Buffer 和其他 TypedArray 使用一致的视图语义。</p>
+<p>以下是未执行的四字节教学示例。所有字节都明确初始化，不涉及读取未知内存。这里关注别名关系，与 allocUnsafe 的初始化责任不同。</p>
+<pre><code class="js">import { Buffer } from &#39;node:buffer&#39;;
+const packet = Buffer.from([10, 20, 30, 40]);
+const view = packet.slice(1, 3);
+const snapshot = Buffer.from(view);
+packet[1] = 99;
+// 按文档推演：view 为 [99,30]，snapshot 仍为 [20,30]。
+view[1] = 88;
+// 按文档推演：packet 的第三字节也变为 88。
+</code></pre>
+<p>共享是双向的，不仅是“原对象改动后切片跟着变”。消费方写视图，也会修改原存储对应位置。两个对象有不同长度和索引起点，可以指向重叠范围；对象身份不同不代表所有权隔离。测试应同时检查这两个方向，而不是只比较创建那一刻的内容相等。</p>
+<p><code>const</code> 只限制变量重新赋值，不禁止修改字节。只读类型声明也不自动让运行时的其他持有者失去写权限。假设记录器的参数在类型层被标成只读，但生产者仍保留 packet 并写入，记录器看到的数据照样可能改变。代码评审应找到所有能写底层存储的持有者，不能只检查当前函数有没有赋值。</p>
+<h2 id="在异步交接时决定所有权"><a href="#在异步交接时决定所有权" class="headerlink" title="在异步交接时决定所有权"></a>在异步交接时决定所有权</h2><p>假设生产者解析完报文就把 view 放入日志队列，队列消费者稍后才转换文本。入队后生产者立即复用 packet 填下一条消息，日志将读取复用后的字节。即便入队函数已经返回成功，也不证明消费者完成读取。选择应发生在入队之前：复制一份独立快照，或把底层存储的所有权交给消费者，或保证消费完成前不复用。</p>
+<p>复制会增加需要保留的字节量，尤其队列积压时；共享则增加生命周期协调。不能在没有测量的情况下声称复制一定昂贵，也不能为节省一次复制让队列依赖隐含时序。如果报文很小、消费者读取时间不可控，显式快照通常更容易审查。若是大块数据且读写所有权能够可靠转交，共享也可以有清楚的合同。</p>
+<p>快照时机本身是正确性条件。消费任务开始以后才调用 Buffer.from(view)，可能已经复制了被复用的新内容。应先定义“记录收到时的报文”还是“消费时的当前存储”，再把复制放在相应时点。后续附上的请求编号不能恢复已经覆盖的字节；元数据身份和负载身份必须对应同一次交接。</p>
+<h2 id="Buffer-from-view-buffer-也会复制吗？"><a href="#Buffer-from-view-buffer-也会复制吗？" class="headerlink" title="Buffer.from(view.buffer) 也会复制吗？"></a>Buffer.from(view.buffer) 也会复制吗？</h2><p>不能把所有 Buffer.from 都当成复制。<a target="_blank" rel="noopener" href="https://nodejs.org/api/buffer.html#static-method-bufferfrombuffer">Buffer 构造方法参考</a>区分重载：以 Buffer 为参数会复制它的字节，以 ArrayBuffer 为参数则可以共享内存。<code>view.buffer</code> 是底层 ArrayBuffer，不是 view 这个 Buffer。这个调用改变了选中的重载，也改变了所有权关系。</p>
+<p>范围还可能扩大。view 只是底层分配中的一段，ArrayBuffer 可能包含视图范围以外的字节。需要共享精确区间时，要同时使用 byteOffset 和 byteLength；需要独立快照时，直接 Buffer.from(view) 更明确。不要只把底层 buffer 交给消费者，再期待它自动知道原视图的起点和终点。范围正确与是否复制是两项独立判断。</p>
+<p>假设 packet 本来就是大分配中的一个子视图，view.byteOffset 不是零。只传 buffer 会丢掉这个偏移信息；错误可能表现为前缀混入或额外字节，而不仅是后续修改互相影响。验证夹具应让目标范围前后都有已知标记，以便识别区间错误，不需要也不应该打印任意旧内存寻找异常内容。</p>
+<h2 id="通用-Uint8Array-工具如何避免误判？"><a href="#通用-Uint8Array-工具如何避免误判？" class="headerlink" title="通用 Uint8Array 工具如何避免误判？"></a>通用 Uint8Array 工具如何避免误判？</h2><p>函数签名写 Uint8Array，实际仍可能收到 Buffer。若函数直接调用参数的 slice，行为取决于实际对象的方法。工具库需要独立副本时，应使用明确的复制路径，并测试普通 Uint8Array 与 Buffer 两种实例；需要共享视图时用 subarray，并在接口说明生命周期。不要根据方法名字猜测它是否复制。</p>
+<p>拟议测试固定四字节输入，建立共享视图与复制结果，修改原存储后分别断言；再修改视图检查原范围；最后模拟消费者暂停、生产者尝试复用的时序，验证合同是阻止复用还是先复制。补上非零偏移、空区间和完整区间，确保边界处理与所有权规则一致。本文没有执行这些示例或队列测试，不提供实际日志正确率。</p>
+<p>对长期保留的报文，副本的内容定义也要写清。假设协议头在发送前还要填入校验字段，记录器过早复制会保留尚未完成的报文；过晚复制又可能读到下一条消息。合适的交接点应位于编码和校验完成之后、允许复用之前。测试可以分别在填头之前、完成之后和复用之后暂停流程，核对记录器只接受中间那个有效版本。</p>
+<p>复制只隔离后续写入，不验证来源内容。若生产者已经把错误字节写入，复制会忠实保存错误；若消息应该经过脱敏，副本也不会自动删除敏感字段。把编码正确、允许公开与内存独立分开验收，才能避免一条“已复制”的日志掩盖协议或权限问题。这些判断来自交接流程分析，不是额外的运行时性能结论。</p>
+<p>如果只是持有一个很小的视图，也应评估它对较大底层分配的保留责任，不能仅从 view.length 推断存活内存总量。是否需要为长期保存的少量字节复制，应依据真实对象寿命和内存观察决定，本文没有测量收益。本站<a href="/zh-CN/2026/10/24/node-buffer-allocunsafe-initialization/">allocUnsafe 的有效字节范围</a>先问哪些字节可以公开，本篇接着问这些字节在消费者读取前由谁保持稳定。两项条件都满足，才有可核对的负载快照。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://nodejs.org/api/buffer.html" rel="noopener">Node.js v26.12.1 — Buffer: Buffers and TypedArrays</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--node-js" href="/zh-CN/tags/Node.js/">Node.js</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fnode-buffer-slice-shared-memory%2F&text=Buffer.slice%20%E5%90%8E%E5%86%8D%E6%94%B9%E5%8E%9F%E6%95%B0%E6%8D%AE%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%88%87%E7%89%87%E4%B9%9F%E5%8F%98%E4%BA%86" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fnode-buffer-slice-shared-memory%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Buffer.slice%20%E5%90%8E%E5%86%8D%E6%94%B9%E5%8E%9F%E6%95%B0%E6%8D%AE%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%88%87%E7%89%87%E4%B9%9F%E5%8F%98%E4%BA%86&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fnode-buffer-slice-shared-memory%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/27/node-events-once-synchronous-emission-race/">
+              <span>上一篇</span>
+              <strong>连续 await 两个 once，第二个事件为何已经错过</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/27/kubernetes-termination-message-truncation/">
+              <span>下一篇</span>
+              <strong>容器的终止消息少了一半，先检查字节预算</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#新对象没有带来新字节">新对象没有带来新字节</a>
+          
+            <a class="toc-link toc-link--h2" href="#在异步交接时决定所有权">在异步交接时决定所有权</a>
+          
+            <a class="toc-link toc-link--h2" href="#Buffer-from-view-buffer-也会复制吗？">Buffer.from(view.buffer) 也会复制吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#通用-Uint8Array-工具如何避免误判？">通用 Uint8Array 工具如何避免误判？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>280</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>151</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>105</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>74</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/25/node-promisify-receiver-custom/">promisify 之后 this 丢了，应该绑定哪一层？</a></h3>
+          <p>2026-10-25</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/node-asynclocalstorage-run-context/">AsyncLocalStorage：用 run 划定请求上下文的入口</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/node-eventemitter-async-rejection/">Node.js 异步监听器拒绝后，谁接住 EventEmitter 的错误</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

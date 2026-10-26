@@ -1,0 +1,405 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>bundle 在源仓库验证通过，空仓库为什么恢复失败？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用基线与增量包解释 verify 的当前仓库前提，给出未执行恢复路径，并区分对象历史、哈希清单和开发目录备份。">
+  
+  
+    <meta name="keywords" content="git bundle,prerequisite commits,offline recovery">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/27/git-bundle-prerequisite-restoration/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/27/git-bundle-prerequisite-restoration/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/27/git-bundle-prerequisite-restoration/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/27/git-bundle-prerequisite-restoration/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="bundle 在源仓库验证通过，空仓库为什么恢复失败？ | Midnight blog">
+    <meta property="og:description" content="用基线与增量包解释 verify 的当前仓库前提，给出未执行恢复路径，并区分对象历史、哈希清单和开发目录备份。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/27/git-bundle-prerequisite-restoration/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/git-bundle-prerequisite-restoration/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/27/git-bundle-prerequisite-restoration/","name":"bundle 在源仓库验证通过，空仓库为什么恢复失败？ | Midnight blog","description":"用基线与增量包解释 verify 的当前仓库前提，给出未执行恢复路径，并区分对象历史、哈希清单和开发目录备份。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/git-bundle-prerequisite-restoration/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/git-bundle-prerequisite-restoration/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/git-bundle-prerequisite-restoration/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/git-bundle-prerequisite-restoration/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/27/git-bundle-prerequisite-restoration/","headline":"bundle 在源仓库验证通过，空仓库为什么恢复失败？","description":"用基线与增量包解释 verify 的当前仓库前提，给出未执行恢复路径，并区分对象历史、哈希清单和开发目录备份。","inLanguage":"zh-CN","datePublished":"2026-10-26T19:26:58.000Z","dateModified":"2026-10-26T19:26:58.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://git-scm.com/docs/git-bundle"],"keywords":"Delivery, Git, Bundle"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/git-bundle-prerequisite-restoration/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"bundle 在源仓库验证通过，空仓库为什么恢复失败？","item":"https://www.zyweb.vip/zh-CN/2026/10/27/git-bundle-prerequisite-restoration/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/27/git-bundle-prerequisite-restoration/" selected>zh-CN</option><option value="/en/2026/10/27/git-bundle-prerequisite-restoration/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/27/git-bundle-prerequisite-restoration/" selected>zh-CN</option><option value="/en/2026/10/27/git-bundle-prerequisite-restoration/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time>
+    </div>
+
+    <h1>bundle 在源仓库验证通过，空仓库为什么恢复失败？</h1>
+
+    
+      <p class="post-hero__summary">用基线与增量包解释 verify 的当前仓库前提，给出未执行恢复路径，并区分对象历史、哈希清单和开发目录备份。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/27/git-bundle-prerequisite-restoration/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/27/git-bundle-prerequisite-restoration/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>verify 的前置对象检查取决于当前仓库。</li><li>增量包需要既有基线，自包含包可用于空仓库起步。</li><li>哈希清单和完整历史都不等于整个开发目录备份。</li></ul></section>
+      <div class="article-content">
+        <p>假设 <code>main</code> 比 <code>release-base</code> 多三个提交，团队生成 <code>release-base..main</code> 的 bundle 并在源仓库验证成功。接收方只有空目录，这份增量包仍需要被排除的基线历史。<code>git bundle verify</code> 的通过结论与执行校验的当前仓库有关，不能当作任意空仓库都能恢复的证明。</p>
+<h2 id="先问校验是在哪个对象库里通过的"><a href="#先问校验是在哪个对象库里通过的" class="headerlink" title="先问校验是在哪个对象库里通过的"></a>先问校验是在哪个对象库里通过的</h2><p><a target="_blank" rel="noopener" href="https://git-scm.com/docs/git-bundle#Documentation/git-bundle.txt-verifyltfilegt">Git bundle 手册的 verify 说明</a>要求检查包格式，以及前置提交是否存在并在当前仓库完整连接。源仓库原本就有完整历史，满足前置条件并不意外；空接收仓库没有这些对象，结论就不同。这里核对的手册最后变更于<code>2.48.0</code> 版本，页面列出直到<code>2.56.0</code> 版本没有该手册变更，不代表本机已经运行了这些版本。</p>
+<p>bundle 可以自包含，也可以在创建时排除一部分历史。带排除基线的范围要求接收仓库已有该基线及其可达对象；没有前置条件的自包含包才可以从空仓库开始恢复。文件可读取、格式有效和目标拥有必要历史，是不同检查。文件传输校验和只回答传到的字节是否相同，也不能证明接收仓库满足对象前提。</p>
+<p>把验证安排在目标侧，可以较早发现缺失历史。它不是贬低源侧检查：源侧依然能发现包生成或文件损坏问题，但两处检查使用的前提不同。交接单若只写“verify 成功”，却不记录校验仓库、包身份和所需基线，就丢掉了最能解释恢复失败的信息。</p>
+<h2 id="用-A、B、C、D-走完两种交接"><a href="#用-A、B、C、D-走完两种交接" class="headerlink" title="用 A、B、C、D 走完两种交接"></a>用 A、B、C、D 走完两种交接</h2><p>设想提交历史依次为 A、B、C、D，<code>release-base</code> 指向 A，<code>main</code> 指向 D。接收仓库已经保存 A 时，可以用从 A 之后到 D 的增量包推进。下面的命令只表达这份假设，不在当前仓库执行；引用名称必须事先存在，路径也需按隔离练习目录调整。</p>
+<pre><code class="sh"># Source repository with release-base=A and main=D.
+git bundle create delta.bundle release-base..main
+# Recipient repository that already contains A and its reachable history.
+git bundle verify /transfer/delta.bundle
+git fetch /transfer/delta.bundle main:refs/remotes/offline/main
+</code></pre>
+<p>增量包携带推进到 D 所需的新对象，并声明被排除历史的前置条件。接收方不是靠 tag 的相同拼写满足条件，而是其对象库确实拥有所需提交及连接历史。目标侧 verify 若报告缺失，应先停止导入流程并核对基线，不要为了继续操作去伪造一个同名分支。</p>
+<p>若接收方确实是空仓库，就改为交付自包含的基线包，或者直接交付覆盖目标引用完整可达历史的包。仍以这个假设为例，可先在源侧创建 main 的自包含包，再让接收方克隆该包。</p>
+<p>在源仓库用 <code>git bundle create full.bundle main</code> 创建完整 main 历史包，接收方再用 <code>git clone -b main /transfer/full.bundle recovered</code> 恢复。这两步同样未执行。</p>
+<p>这两条命令描述历史恢复入口，不证明业务环境已能运行。克隆后应核对恢复出的 main 是否指向预期 D，再检查文件内容和项目所需的正常构建条件。若计划长期使用“基线加增量”，则每个增量都要关联明确的基线身份和顺序。少一份中间包、基线被替换或恢复顺序错误，都可能破坏整条离线恢复链。</p>
+<h2 id="完整包和增量链怎样选择？"><a href="#完整包和增量链怎样选择？" class="headerlink" title="完整包和增量链怎样选择？"></a>完整包和增量链怎样选择？</h2><p>接收方状态未知、灾难恢复或首次交接时，自包含包更容易解释：接收方不需要事先拥有特定历史。代价是传输可能更大，且打包范围仍需明确。只打包 main 代表保留该引用可达的历史，不自动包含其他未被它覆盖的分支；需要哪些引用，应在创建前清点。</p>
+<p>接收方已有可靠基线、带宽受限且能保存恢复顺序时，增量有实际用途。节省传输量的代价是管理依赖链。建议保留包校验和、所含引用、前置提交、对应接收方和实际恢复记录；何时生成新的完整基线，应按保留成本与恢复复杂度决定。不能仅看某份包很小，就认定备份设计更优。</p>
+<p>反例是在源仓库 verify 后立即删除唯一的基线副本，再把增量包称为全量备份。包本身可能完全有效，但接收方没有重建历史的起点。另一个反例是只检查 bundle 的 list-heads 输出，看到 main 就宣布可恢复：引用清单说明包提供什么入口，不证明前置对象已经具备。</p>
+<h2 id="拿到前置提交的哈希，就够了吗？"><a href="#拿到前置提交的哈希，就够了吗？" class="headerlink" title="拿到前置提交的哈希，就够了吗？"></a>拿到前置提交的哈希，就够了吗？</h2><p>不够。文本里写着 A 的哈希，只是告诉接收方需要哪个对象，不会把 A、其树、文件内容和祖先对象放进对象库。verify 要求的是所需提交存在且完整连接，必须通过合适的历史传输满足。相同分支名称也不能弥补缺失对象，复制一个哈希到交接表更不能代替传输。</p>
+<p>反过来，如果目标已经有这些对象，即使本地分支名称不同，也应以实际对象关系验证，而非只凭命名宣布不兼容。恢复流程应保留机器可核对的对象身份，并让目标仓库实际执行验证。本文没有执行打包、克隆、fetch 或任何恢复演练；命令预期属于依据手册设计的检查路径。</p>
+<h2 id="历史恢复还缺哪些本地状态？"><a href="#历史恢复还缺哪些本地状态？" class="headerlink" title="历史恢复还缺哪些本地状态？"></a>历史恢复还缺哪些本地状态？</h2><p>bundle 传输引用及可达对象，不等于整个开发目录快照。未提交的工作区内容、索引状态、仓库配置和 hooks 等需要单独安排。外部大文件服务、子模块仓库及构建所需秘密也不能因为主仓库有一个引用就被视为已备份。先定义恢复目标，再清点依赖，避免为了“全量”二字把私密配置随意装进传输包。</p>
+<p>恢复演练还应明确目标引用如何落地。示例 fetch 把远端 main 放在单独的 offline 远端跟踪位置，便于先比较目标提交，再决定如何更新本地工作分支；它没有自动覆盖接收方正在编辑的文件。若接收方有本地提交，应先查看分歧和合并要求，不能为了让分支名一致而强制重置。对象导入成功与工作分支完成集成是相邻而不同的步骤，后者仍要经过正常审查。</p>
+<p>本站<a href="/zh-CN/2026/10/17/git-stash-untracked-scope/">stash 保存范围</a>讨论的是临时工作，本题讨论提交历史在不同对象库间的前提。真正的验收应在隔离目录分别模拟“已有 A”和“完全空白”两种目标，验证增量只在前者满足条件，再从完整包恢复目标引用并核对内容。保留每一步的仓库身份与结果，才知道交接的是一份有效文件，还是一条真正能走通的恢复路径。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://git-scm.com/docs/git-bundle" rel="noopener">git-bundle(1) 2.48.0 — Move objects and refs by archive — git-bundle 2.48.0 OPTIONS verify</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--git" href="/zh-CN/tags/git/">Git</a>
+          
+            <a class="tag tag--bundle" href="/zh-CN/tags/Bundle/">Bundle</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fgit-bundle-prerequisite-restoration%2F&text=bundle%20%E5%9C%A8%E6%BA%90%E4%BB%93%E5%BA%93%E9%AA%8C%E8%AF%81%E9%80%9A%E8%BF%87%EF%BC%8C%E7%A9%BA%E4%BB%93%E5%BA%93%E4%B8%BA%E4%BB%80%E4%B9%88%E6%81%A2%E5%A4%8D%E5%A4%B1%E8%B4%A5%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fgit-bundle-prerequisite-restoration%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=bundle%20%E5%9C%A8%E6%BA%90%E4%BB%93%E5%BA%93%E9%AA%8C%E8%AF%81%E9%80%9A%E8%BF%87%EF%BC%8C%E7%A9%BA%E4%BB%93%E5%BA%93%E4%B8%BA%E4%BB%80%E4%B9%88%E6%81%A2%E5%A4%8D%E5%A4%B1%E8%B4%A5%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fgit-bundle-prerequisite-restoration%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/27/html-textarea-maxlength-utf16/">
+              <span>上一篇</span>
+              <strong>textarea限制十个字，为什么五个表情就满了？</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/27/css-transform-fixed-containing-block/">
+              <span>下一篇</span>
+              <strong>fixed 遮罩为什么只盖住卡片，还会跟着页面滚动？</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#先问校验是在哪个对象库里通过的">先问校验是在哪个对象库里通过的</a>
+          
+            <a class="toc-link toc-link--h2" href="#用-A、B、C、D-走完两种交接">用 A、B、C、D 走完两种交接</a>
+          
+            <a class="toc-link toc-link--h2" href="#完整包和增量链怎样选择？">完整包和增量链怎样选择？</a>
+          
+            <a class="toc-link toc-link--h2" href="#拿到前置提交的哈希，就够了吗？">拿到前置提交的哈希，就够了吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#历史恢复还缺哪些本地状态？">历史恢复还缺哪些本地状态？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>280</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>151</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>105</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>74</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/26/git-fetch-prune-tag-refspec/">fetch --prune 为何能删掉自己的标签？</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/git-restore-staged-working-tree/">git restore 先选来源，再决定改索引还是工作区</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/18/git-worktree-shared-refs/">两个 worktree 的文件独立，Git 引用和 stash 也独立吗</a></h3>
+          <p>2026-10-18</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

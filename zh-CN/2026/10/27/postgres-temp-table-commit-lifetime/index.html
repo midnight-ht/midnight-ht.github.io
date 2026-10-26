@@ -1,0 +1,401 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>临时表提交后还在：连接池下一位借用者会遇到什么 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="按真实后端会话、池重置和ON COMMIT策略检查临时表行、结构与名称遮蔽，给出显式事务例子。">
+  
+  
+    <meta name="keywords" content="ON COMMIT,temporary tables,session pooling">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/27/postgres-temp-table-commit-lifetime/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="临时表提交后还在：连接池下一位借用者会遇到什么 | Midnight blog">
+    <meta property="og:description" content="按真实后端会话、池重置和ON COMMIT策略检查临时表行、结构与名称遮蔽，给出显式事务例子。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/","name":"临时表提交后还在：连接池下一位借用者会遇到什么 | Midnight blog","description":"按真实后端会话、池重置和ON COMMIT策略检查临时表行、结构与名称遮蔽，给出显式事务例子。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/","headline":"临时表提交后还在：连接池下一位借用者会遇到什么","description":"按真实后端会话、池重置和ON COMMIT策略检查临时表行、结构与名称遮蔽，给出显式事务例子。","inLanguage":"zh-CN","datePublished":"2026-10-26T19:26:58.000Z","dateModified":"2026-10-26T19:26:58.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/sql-createtable.html"],"keywords":"Development, PostgreSQL"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"临时表提交后还在：连接池下一位借用者会遇到什么","item":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/" selected>zh-CN</option><option value="/en/2026/10/27/postgres-temp-table-commit-lifetime/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/" selected>zh-CN</option><option value="/en/2026/10/27/postgres-temp-table-commit-lifetime/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time>
+    </div>
+
+    <h1>临时表提交后还在：连接池下一位借用者会遇到什么</h1>
+
+    
+      <p class="post-hero__summary">按真实后端会话、池重置和ON COMMIT策略检查临时表行、结构与名称遮蔽，给出显式事务例子。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/27/postgres-temp-table-commit-lifetime/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>请求结束不等于数据库会话结束。</li><li>PRESERVE、DELETE ROWS 与 DROP 留下不同状态。</li><li>ON COMMIT DROP 需要覆盖使用过程的事务窗口。</li></ul></section>
+      <div class="article-content">
+        <p>假设批次甲在池连接里建了 <code>stage_ids</code> 临时表，提交后归还连接；批次乙借到同一数据库会话，再建同名表。TEMP 不会因一次请求结束就自动消失。PostgreSQL 默认保留临时表及其行直到会话结束，提交动作需要用 ON COMMIT 另外定义。</p>
+<h2 id="先把请求、事务、会话分开"><a href="#先把请求、事务、会话分开" class="headerlink" title="先把请求、事务、会话分开"></a>先把请求、事务、会话分开</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-createtable.html#SQL-CREATETABLE-TEMPORARY">PostgreSQL 18 CREATE TABLE 文档</a>说明，临时表通常在会话结束时删除，也可以选择在事务结束时删除。这里的会话必须是同一个数据库后端会话。应用把连接对象归还池、结束一次 HTTP 请求，都不能单独证明这个后端会话已经关闭。</p>
+<p>甲和乙如果确实落到不同会话，各自的临时表彼此独立，不会因为名称相同就共享行。连接池如果归还时执行了有效的会话重置，也可能清理临时对象；具体效果要查实际池配置和重置命令。事务池化还可能让相邻事务使用不同后端。因此，“用了连接池就会串数据”同样不准确，风险成立需要后端复用、对象残留及后续查询这几个条件同时出现。</p>
+<p>假设连接池只有一个后端，甲创建表并放入订单编号101，提交后没有清理。乙在相同会话执行无条件 CREATE TEMP TABLE，可能遇到关系已存在；如果改成 IF NOT EXISTS 后直接追加编号202，又没有核对旧行，就可能处理甲的101。后者不是容错成功，而是绕过创建错误后继续使用残留状态。这里只作机制推演，没有运行连接池或导入任务。</p>
+<h2 id="三种提交策略留下什么？"><a href="#三种提交策略留下什么？" class="headerlink" title="三种提交策略留下什么？"></a>三种提交策略留下什么？</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-createtable.html#SQL-CREATETABLE-PARMS-ON-COMMIT">ON COMMIT 章节</a>给出三种策略。PRESERVE ROWS 是默认值，提交不做特别处理；DELETE ROWS 在每次提交清除行，表结构仍在；DROP 在当前事务提交时删除表。选择需要同时回答是否保留行、是否保留结构，以及下一事务是否还需要这个对象。</p>
+<p>假设导入只在一笔事务里暂存本批订单，可以把范围直接写进 SQL。以下代码未执行；订单表和实际导入步骤需要按项目补充，这里只演示临时对象的生命周期。</p>
+<pre><code class="sql">BEGIN;
+CREATE TEMP TABLE stage_ids (id integer) ON COMMIT DROP;
+INSERT INTO stage_ids VALUES (101), (102);
+SELECT id FROM stage_ids ORDER BY id;
+COMMIT;
+-- 此后在同一会话查询 stage_ids，预期不再存在。
+</code></pre>
+<p>中间 SELECT 应在表存在时读取本批编号，COMMIT 后表结构消失。若任务确实跨两笔事务使用同一批暂存行，这个策略就不合适；应重新审查为什么需要会话级暂存、谁拥有会话，以及失败后谁回收对象，而不是机械替换所有临时表为 DROP。</p>
+<p>DELETE ROWS 适合保留结构而不保留上一事务行的设计，但下一位借用者仍会面对已存在的表。创建语句的列结构若发生版本变化，IF NOT EXISTS 不会验证现有表就是新结构。升级前后同时运行时尤其要小心：不能把“没有抛创建错误”当作表字段已经迁移。必要时按连接初始化版本或显式检查结构安排清理。</p>
+<h2 id="自动提交模式下，为什么创建后表就没了？"><a href="#自动提交模式下，为什么创建后表就没了？" class="headerlink" title="自动提交模式下，为什么创建后表就没了？"></a>自动提交模式下，为什么创建后表就没了？</h2><p>如果每条语句都是一个独立事务，CREATE TEMP TABLE 后那次隐式事务就会提交。此时 ON COMMIT DROP 会立即删除刚创建的表，后面的 INSERT 运行在新事务里，已经没有可用对象。因此需要上例的显式 BEGIN，把创建、使用和提交放在同一事务窗口。这个追问不是更换清理选项，而是检查事务包装是否符合设计。</p>
+<p>回滚路径也要独立验证。在事务内新建的临时表，创建会随该事务回滚而撤回；已经存在的会话临时表，则不能仅凭一次失败回滚就推断其结构必然被删除。不要用一条 finally 里的 ROLLBACK 来证明所有会话状态干净。清理代码应按当前对象来源和选定生命周期判断，并保留清理失败的可观察结果。</p>
+<h2 id="查询还可能碰到同名正式表"><a href="#查询还可能碰到同名正式表" class="headerlink" title="查询还可能碰到同名正式表"></a>查询还可能碰到同名正式表</h2><p>官方说明默认搜索路径把临时 schema 放在前面，同名永久表可能被临时表遮住。假设 public.stage_ids 是正式业务表，当前会话又有临时 stage_ids，未限定 schema 的查询可能读到临时对象。需要正式表时写明 public.stage_ids；需要临时表时，也应在设计中确认目标归属。改成 DELETE ROWS 只能清行，不能消除名称遮蔽。</p>
+<p>拟议测试应固定物理后端，记录 <code>pg_backend_pid()</code>，让甲提交后由乙继续借用，分别检查对象存在、行内容和再次创建。再用第二条真实会话作对照，验证临时对象不共享。最后分别开启池重置和事务池化配置，重复同一组观察，避免把驱动层对象编号当作后端身份。本文没有执行这些测试，不报告实际池清理能力。</p>
+<p>连接池验证还应带上两个不同的业务身份。让甲的暂存编号与乙的允许范围完全不重叠，乙的结果只能来自自己的清单；只断言条数正确，可能让一条甲的记录替代一条乙的记录而未被发现。若导入权限在正式表连接阶段才检查，仍要证明残留暂存行不会扩大操作范围，不能把临时表私有于会话当作业务用户隔离。</p>
+<p>连接归还失败也要有处理：假设提交成功后清理报错，应用不应把这条状态不确定的会话当作已清洁资源继续借出。可由连接管理层按实际能力隔离或销毁会话，并保留任务与后端身份以供排查。这是需要结合池实现验证的设计选择，不代表任意连接池已经提供该机制。</p>
+<p>测试报告应写出每次借用对应的后端编号，以及清理发生在提交、归还还是销毁阶段。若没有这些证据，就只能列出待验证的复用条件，不能把会话残留风险升级为已发生的数据泄露。</p>
+<p>临时表批量装载后还应根据复杂查询需要评估 ANALYZE；文档说明自动维护进程不能访问临时表，不能盼望它自动补齐所有统计工作。本题不提供任何性能收益或阈值。相关的<a href="/zh-CN/2026/10/13/postgres-advisory-lock-pool/">会话咨询锁与连接池</a>解释另一类会话状态；两者都要求认清后端寿命，但锁的释放次数与临时表的行、结构清理需要分别验收。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-createtable.html" rel="noopener">PostgreSQL 18 — CREATE TABLE: TEMPORARY and ON COMMIT</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fpostgres-temp-table-commit-lifetime%2F&text=%E4%B8%B4%E6%97%B6%E8%A1%A8%E6%8F%90%E4%BA%A4%E5%90%8E%E8%BF%98%E5%9C%A8%EF%BC%9A%E8%BF%9E%E6%8E%A5%E6%B1%A0%E4%B8%8B%E4%B8%80%E4%BD%8D%E5%80%9F%E7%94%A8%E8%80%85%E4%BC%9A%E9%81%87%E5%88%B0%E4%BB%80%E4%B9%88" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fpostgres-temp-table-commit-lifetime%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E4%B8%B4%E6%97%B6%E8%A1%A8%E6%8F%90%E4%BA%A4%E5%90%8E%E8%BF%98%E5%9C%A8%EF%BC%9A%E8%BF%9E%E6%8E%A5%E6%B1%A0%E4%B8%8B%E4%B8%80%E4%BD%8D%E5%80%9F%E7%94%A8%E8%80%85%E4%BC%9A%E9%81%87%E5%88%B0%E4%BB%80%E4%B9%88&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fpostgres-temp-table-commit-lifetime%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/27/postgres-union-unknown-type-resolution/">
+              <span>上一篇</span>
+              <strong>两个 NULL 先 UNION，为什么后面的 1 救不了类型</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/27/postgres-character-padding-contract/">
+              <span>下一篇</span>
+              <strong>char(4) 里的 AB：为什么相等却不能照猜 LIKE</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#先把请求、事务、会话分开">先把请求、事务、会话分开</a>
+          
+            <a class="toc-link toc-link--h2" href="#三种提交策略留下什么？">三种提交策略留下什么？</a>
+          
+            <a class="toc-link toc-link--h2" href="#自动提交模式下，为什么创建后表就没了？">自动提交模式下，为什么创建后表就没了？</a>
+          
+            <a class="toc-link toc-link--h2" href="#查询还可能碰到同名正式表">查询还可能碰到同名正式表</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>280</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>151</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>105</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>74</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/27/postgres-character-padding-contract/">char(4) 里的 AB：为什么相等却不能照猜 LIKE</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/27/postgres-union-unknown-type-resolution/">两个 NULL 先 UNION，为什么后面的 1 救不了类型</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/26/postgres-case-constant-folding/">CASE 没进入分支，为什么仍可能常量除零</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

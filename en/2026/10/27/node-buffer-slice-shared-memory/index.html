@@ -1,0 +1,404 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why Buffer.slice Changes When the Original Bytes Change | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Compare shared views and copies with four initialized bytes, including asynchronous handoff and ArrayBuffer offsets.">
+  
+  
+    <meta name="keywords" content="Buffer.slice,ArrayBuffer,byteOffset">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/27/node-buffer-slice-shared-memory/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/27/node-buffer-slice-shared-memory/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/27/node-buffer-slice-shared-memory/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/27/node-buffer-slice-shared-memory/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why Buffer.slice Changes When the Original Bytes Change | Midnight blog">
+    <meta property="og:description" content="Compare shared views and copies with four initialized bytes, including asynchronous handoff and ArrayBuffer offsets.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/27/node-buffer-slice-shared-memory/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/27/node-buffer-slice-shared-memory/#webpage","url":"https://www.zyweb.vip/en/2026/10/27/node-buffer-slice-shared-memory/","name":"Why Buffer.slice Changes When the Original Bytes Change | Midnight blog","description":"Compare shared views and copies with four initialized bytes, including asynchronous handoff and ArrayBuffer offsets.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/27/node-buffer-slice-shared-memory/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/27/node-buffer-slice-shared-memory/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/27/node-buffer-slice-shared-memory/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/27/node-buffer-slice-shared-memory/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/27/node-buffer-slice-shared-memory/","headline":"Why Buffer.slice Changes When the Original Bytes Change","description":"Compare shared views and copies with four initialized bytes, including asynchronous handoff and ArrayBuffer offsets.","inLanguage":"en","datePublished":"2026-10-26T19:26:58.000Z","dateModified":"2026-10-26T19:26:58.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://nodejs.org/api/buffer.html"],"keywords":"Development, Node.js"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/27/node-buffer-slice-shared-memory/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why Buffer.slice Changes When the Original Bytes Change","item":"https://www.zyweb.vip/en/2026/10/27/node-buffer-slice-shared-memory/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/27/node-buffer-slice-shared-memory/">zh-CN</option><option value="/en/2026/10/27/node-buffer-slice-shared-memory/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/27/node-buffer-slice-shared-memory/">zh-CN</option><option value="/en/2026/10/27/node-buffer-slice-shared-memory/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time>
+    </div>
+
+    <h1>Why Buffer.slice Changes When the Original Bytes Change</h1>
+
+    
+      <p class="post-hero__summary">Compare shared views and copies with four initialized bytes, including asynchronous handoff and ArrayBuffer offsets.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time> · Estimated read 11 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/27/node-buffer-slice-shared-memory/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/27/node-buffer-slice-shared-memory/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Buffer.slice and subarray share underlying bytes.</li><li>Choose a copying overload before the producer reuses storage.</li><li>An ArrayBuffer view needs the correct offset and length.</li></ul></section>
+      <div class="article-content">
+        <p>Suppose a packet is <code>Buffer.from([10,20,30,40])</code>. A recorder saves slice(1,3), then the producer rewrites the second byte. The recorder owns a different object but still observes the same storage. Buffer.slice creates a shared view. An independent byte snapshot requires an explicit copy at the intended handoff.</p>
+<h2 id="Different-objects-can-alias-the-same-bytes"><a href="#Different-objects-can-alias-the-same-bytes" class="headerlink" title="Different objects can alias the same bytes"></a>Different objects can alias the same bytes</h2><p>The <a target="_blank" rel="noopener" href="https://nodejs.org/api/buffer.html#buffers-and-typedarrays">Node.js Buffer reference</a> distinguishes Buffer.slice from TypedArray.slice. The former retains legacy view behavior; the latter copies the selected portion. For deliberately shared views, subarray communicates consistent behavior across Buffer and other TypedArrays.</p>
+<p>This four-byte teaching example was not executed. Every byte is initialized; the question is aliasing rather than unsafe allocation.</p>
+<pre><code class="js">import { Buffer } from &#39;node:buffer&#39;;
+const packet = Buffer.from([10, 20, 30, 40]);
+const view = packet.slice(1, 3);
+const snapshot = Buffer.from(view);
+packet[1] = 99;
+// Document-based expectation: view [99,30], snapshot [20,30].
+view[1] = 88;
+// The third packet byte should now also be 88.
+</code></pre>
+<p>Sharing works in both directions. A consumer writing the view changes the producer&#39;s corresponding bytes too. Different lengths and index origins do not imply independent ownership. Test both directions instead of comparing only the initial contents.</p>
+<p>Const prevents rebinding; it does not prevent byte writes. A readonly parameter annotation also does not revoke another holder&#39;s runtime write access. Review every holder capable of mutating the underlying storage, not merely assignments in the recording function.</p>
+<h2 id="Decide-ownership-at-the-asynchronous-handoff"><a href="#Decide-ownership-at-the-asynchronous-handoff" class="headerlink" title="Decide ownership at the asynchronous handoff"></a>Decide ownership at the asynchronous handoff</h2><p>Imagine enqueueing a view for later logging and immediately reusing packet for the next message. A later consumer can read the replacement bytes. An enqueue function returning does not establish that consumption finished. Copy before enqueueing, transfer ownership, or prevent reuse until consumption completes.</p>
+<p>An independent snapshot increases retained bytes, especially under backlog. Sharing introduces lifetime coordination. Neither cost should be declared decisive without measurement. Small packets with unpredictable consumer timing often favor an explicit snapshot; large buffers with enforceable ownership transfer may justify sharing.</p>
+<p>Timing is part of snapshot correctness. Copying when the consumer finally runs may faithfully copy already-reused storage. Define whether the record represents handoff-time content or consumer-time storage, and place copying accordingly. A request identifier cannot reconstruct overwritten bytes.</p>
+<p>There is also an earlier boundary. If a checksum is filled just before send, copying before that step records an incomplete packet. The intended handoff lies after encoding and validation but before reuse. A fixture can pause before header completion, after completion, and after reuse and ensure only the intended version is admitted.</p>
+<p>Copying isolates later writes; it does not validate content or redact sensitive fields. Check protocol correctness, permission to expose bytes, and storage independence separately. “Copied” is not a universal payload approval.</p>
+<h2 id="Does-Buffer-from-view-buffer-make-a-copy"><a href="#Does-Buffer-from-view-buffer-make-a-copy" class="headerlink" title="Does Buffer.from(view.buffer) make a copy?"></a>Does Buffer.from(view.buffer) make a copy?</h2><p>Not by virtue of its name. The <a target="_blank" rel="noopener" href="https://nodejs.org/api/buffer.html#static-method-bufferfrombuffer">constructor reference</a> distinguishes overloads: a Buffer argument is copied, whereas an ArrayBuffer argument can share its storage. view.buffer selects the underlying ArrayBuffer, not the Buffer view itself.</p>
+<p>It can also expand the range. A view may occupy only part of an allocation; the underlying ArrayBuffer can include bytes outside that view. Sharing the exact region requires its byteOffset and byteLength. For an independent copy of a Buffer&#39;s visible bytes, Buffer.from(view) expresses the purpose directly. Range correctness and copy semantics are separate decisions.</p>
+<p>Suppose packet is already a subview and its byteOffset is nonzero. Passing only its buffer loses the visible starting point and can introduce prefixes or extra bytes. Use known markers around the intended region in a test. There is no need to print arbitrary old memory to discover a range error.</p>
+<h2 id="Generic-Uint8Array-utilities-need-both-instance-cases"><a href="#Generic-Uint8Array-utilities-need-both-instance-cases" class="headerlink" title="Generic Uint8Array utilities need both instance cases"></a>Generic Uint8Array utilities need both instance cases</h2><p>A function typed to accept Uint8Array can receive a Buffer at runtime. Calling the instance&#39;s slice can therefore select different behavior. Choose a deliberate copy operation when independence is required, or subarray when sharing is intended, and document lifetime. Test ordinary Uint8Array and Buffer inputs.</p>
+<p>Proposed verification starts with the fixed four bytes, constructs a view and copy, mutates the source, and checks each outcome. Then mutate the view and check the original range. Hold an asynchronous consumer before reading and attempt producer reuse: the contract must either prevent reuse or give the consumer a prior copy. Add nonzero offsets, empty intervals, and full intervals. These examples and queue checks were not run.</p>
+<p>Long-lived small views can retain a larger underlying allocation. Do not infer retained memory solely from view.length; inspect actual lifetimes before choosing a copy for long-term storage. No memory or performance benefit was measured here.</p>
+<p>The <a href="/en/2026/10/24/node-buffer-allocunsafe-initialization/">allocUnsafe article</a> asks which bytes are initialized and eligible to leave the encoder. This article asks who keeps those bytes stable until consumption. A reliable snapshot needs both boundaries.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://nodejs.org/api/buffer.html" rel="noopener">Node.js v26.12.1 — Buffer: Buffers and TypedArrays</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--node-js" href="/en/tags/Node.js/">Node.js</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F27%2Fnode-buffer-slice-shared-memory%2F&text=Why%20Buffer.slice%20Changes%20When%20the%20Original%20Bytes%20Change" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F27%2Fnode-buffer-slice-shared-memory%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20Buffer.slice%20Changes%20When%20the%20Original%20Bytes%20Change&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F27%2Fnode-buffer-slice-shared-memory%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/27/node-events-once-synchronous-emission-race/">
+              <span>Previous Post</span>
+              <strong>Why Sequential once Waits Can Miss a Synchronous Event</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/27/kubernetes-termination-message-truncation/">
+              <span>Next Post</span>
+              <strong>Why Kubernetes Termination Messages Lose Part of a Stack Trace</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Different-objects-can-alias-the-same-bytes">Different objects can alias the same bytes</a>
+          
+            <a class="toc-link toc-link--h2" href="#Decide-ownership-at-the-asynchronous-handoff">Decide ownership at the asynchronous handoff</a>
+          
+            <a class="toc-link toc-link--h2" href="#Does-Buffer-from-view-buffer-make-a-copy">Does Buffer.from(view.buffer) make a copy?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Generic-Uint8Array-utilities-need-both-instance-cases">Generic Uint8Array utilities need both instance cases</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>280</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>151</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>106</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>74</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/25/node-promisify-receiver-custom/">After promisify loses this, which function should be bound?</a></h3>
+          <p>2026-10-25</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/23/node-asynclocalstorage-run-context/">Use AsyncLocalStorage.run to Bound Request Context</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/23/node-eventemitter-async-rejection/">Who Handles an Async EventEmitter Listener Rejection?</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,401 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>两个 NULL 先 UNION，为什么后面的 1 救不了类型 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="解释UNION两两解析如何先把unknown变text，比较分支声明类型、ALL与外层转换的不同作用。">
+  
+  
+    <meta name="keywords" content="UNION,unknown,type resolution">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/27/postgres-union-unknown-type-resolution/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/27/postgres-union-unknown-type-resolution/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/27/postgres-union-unknown-type-resolution/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/27/postgres-union-unknown-type-resolution/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="两个 NULL 先 UNION，为什么后面的 1 救不了类型 | Midnight blog">
+    <meta property="og:description" content="解释UNION两两解析如何先把unknown变text，比较分支声明类型、ALL与外层转换的不同作用。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/27/postgres-union-unknown-type-resolution/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-union-unknown-type-resolution/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-union-unknown-type-resolution/","name":"两个 NULL 先 UNION，为什么后面的 1 救不了类型 | Midnight blog","description":"解释UNION两两解析如何先把unknown变text，比较分支声明类型、ALL与外层转换的不同作用。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-union-unknown-type-resolution/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-union-unknown-type-resolution/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-union-unknown-type-resolution/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-union-unknown-type-resolution/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-union-unknown-type-resolution/","headline":"两个 NULL 先 UNION，为什么后面的 1 救不了类型","description":"解释UNION两两解析如何先把unknown变text，比较分支声明类型、ALL与外层转换的不同作用。","inLanguage":"zh-CN","datePublished":"2026-10-26T19:26:58.000Z","dateModified":"2026-10-26T19:26:58.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/typeconv-union-case.html"],"keywords":"Development, PostgreSQL"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-union-unknown-type-resolution/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"两个 NULL 先 UNION，为什么后面的 1 救不了类型","item":"https://www.zyweb.vip/zh-CN/2026/10/27/postgres-union-unknown-type-resolution/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/27/postgres-union-unknown-type-resolution/" selected>zh-CN</option><option value="/en/2026/10/27/postgres-union-unknown-type-resolution/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/27/postgres-union-unknown-type-resolution/" selected>zh-CN</option><option value="/en/2026/10/27/postgres-union-unknown-type-resolution/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time>
+    </div>
+
+    <h1>两个 NULL 先 UNION，为什么后面的 1 救不了类型</h1>
+
+    
+      <p class="post-hero__summary">解释UNION两两解析如何先把unknown变text，比较分支声明类型、ALL与外层转换的不同作用。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/27/postgres-union-unknown-type-resolution/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/27/postgres-union-unknown-type-resolution/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>两个unknown分支可能先解析为text。</li><li>空分支也应遵守报表列类型合同。</li><li>UNION ALL 与外层 CAST 不能替代分支类型声明。</li></ul></section>
+      <div class="article-content">
+        <p>假设报表生成器拼出 <code>SELECT NULL UNION SELECT NULL UNION SELECT 1</code>。前两个分支会先单独确定类型，最后一个整数不会让整条链重新推导。PostgreSQL 把多个 UNION 作为两两嵌套的集合操作处理，全是 unknown 的那一对先得到 text，随后就可能与 integer 冲突。</p>
+<h2 id="不是等全部分支出现后再投票"><a href="#不是等全部分支出现后再投票" class="headerlink" title="不是等全部分支出现后再投票"></a>不是等全部分支出现后再投票</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/typeconv-union-case.html">PostgreSQL 18 类型解析文档</a>规定，解析逐个输出列进行；全部输入都是 unknown 时选 text。多个 UNION 则按成对嵌套处理。文档直接给出了两个 NULL 后接整数失败的例子。NULL 在这里缺少明确类型，不代表它天然属于所有最终结果类型，也不代表已经被赋成整数空值。</p>
+<p>将语句写成括号形式，更容易看见失败位置。下面是未执行的教学查询，结果说明来自文档规则推演，没有数据库运行回执。</p>
+<pre><code class="sql">(SELECT NULL AS amount UNION SELECT NULL)
+UNION SELECT 1;
+</code></pre>
+<p>内层先处理两个未定类型输入，amount 被解析为 text；外层收到的是“文本类型的一列”与“整数类型的一列”。此时内层不再是一张可以随意重新选择类型的空白纸。外层不能匹配这两种输入，就在执行出报表行以前报错。生产系统应保留原始错误和实际 SQL，以免把解析失败误报为没有销售记录。</p>
+<p>假设生成器按月份拼金额列，一月和二月没有数据，生成占位 NULL；三月有整数金额。问题不在三月金额值太大，也不在前两个月数量为零，而在占位分支没有携带声明的输出类型。即使每个单独分支看起来都可以执行，组合后的类型仍然需要在局部解析点满足条件。</p>
+<h2 id="在最早的空分支声明金额类型"><a href="#在最早的空分支声明金额类型" class="headerlink" title="在最早的空分支声明金额类型"></a>在最早的空分支声明金额类型</h2><p>如果合同明确金额输出为 integer，可给最左边的 NULL 显式标类型。更稳妥的生成器让所有分支遵循同一个列契约，不把类型正确性依赖在偶然存在的某个月份数据上。</p>
+<pre><code class="sql">SELECT NULL::integer AS amount
+UNION SELECT NULL::integer
+UNION SELECT 1;
+</code></pre>
+<p>这个修正让空值从一开始就是整数空值。示例仍未执行。它表达的是 integer 合同，不是建议所有金额都用整数；金额单位、精度和取值范围需要另行确定。若实际报表要求 numeric，就应从占位到真实分支一起选择 numeric，而不能为了消除报错随手换成能容纳当前样本的类型。</p>
+<p>把带类型的真实分支挪到左侧，有时也能改变推导结果，但这种修复对生成顺序很脆弱。下个版本可能先拼两个空月份，问题又回来。显式类型更便于评审者看见预期，也让“所有月份都空”的报表仍有稳定元数据。对提供给驱动、导出器或其他视图的查询，空结果时列类型稳定也是接口的一部分。</p>
+<h2 id="UNION-ALL-与外层-CAST-分别修什么？"><a href="#UNION-ALL-与外层-CAST-分别修什么？" class="headerlink" title="UNION ALL 与外层 CAST 分别修什么？"></a>UNION ALL 与外层 CAST 分别修什么？</h2><p>将 UNION 改成 UNION ALL 改变重复行保留方式，却不撤掉对应列的类型兼容要求。报表需要保留每条明细时可以选 ALL，但应独立验证类型。反例是开发者把所有集合操作都改成 ALL，看到某一组样本不再去重，就以为类型问题也被解决；两个 NULL 先解析的根源没有改变。</p>
+<p>也不要在整条失败查询外包一层 CAST，期待它修复内部。外层转换必须先拿到一个可解析的内层表达式；如果内层在 text 与 integer 匹配时已经失败，就没有输出可供外层转换。应该在决定类型的分支位置处理，而不是等输出之后。这个追问增加的是解析先后关系，不能用“最后都转整数”概括。</p>
+<p>相反，把某个分支显式转 text 虽然可能让类型兼容，却会改变报表接口。后续按字符串排序时，数字的字符顺序不等于数值大小；下游如果期望金额计算，还可能重新解析。团队应先选数据含义，再选转换，不能把“不报错”当作类型选择的唯一标准。</p>
+<h2 id="多列和空数据怎样验？"><a href="#多列和空数据怎样验？" class="headerlink" title="多列和空数据怎样验？"></a>多列和空数据怎样验？</h2><p>解析按列发生，所以两列报表需要分别检查金额与来源名。给第一列加 integer 不会顺便修复第二列的未知类型。可以在独立环境里先对前两个分支形成的子查询调用 pg_typeof，再加入第三个分支，比较不带类型、只最左声明、每分支声明、外层才转换这几种情况。每个用例都应有列类型和接受或拒绝的明确预期。</p>
+<p>数据覆盖包括三个分支全空、最左有值、最右有值、某分支错误返回文本金额，以及金额范围超过原类型。最后一项用于检查合同本身是否过窄，不应通过把类型一律改 text 来掩盖。真实生成器还要核对参数绑定的类型，因为带参数查询的推导条件可能不同于直接写出的字面量。本文没有运行 SQL 或驱动测试。</p>
+<p>金额列的名称同样值得固定。假设最左分支原来来自真实月份，后来改为空占位，列别名若随生成顺序变化，导出器可能继续按旧字段名读取而得到空栏。类型修好只让查询可解析，不保证输出名称和单位保持稳定。可以由生成器维护一份输出列声明，同时规定名称、单位和类型，再让每个分支按该声明投影。</p>
+<p>这种声明还方便审查新增来源。假设另一个系统把金额作为含货币符号的文本传入，应先在来源边界明确解析与非法值拒绝，再转换成目标数值类型。把所有分支一起放宽成字符串会让错误更晚出现，也失去逐行解释非法输入的机会。类型契约应尽早揭露不兼容来源，而不是让每一条新数据都迫使下游重新猜测。</p>
+<p><a href="/zh-CN/2026/10/17/postgres-union-all-duplicates/">UNION 的去重与行身份</a>解决合并后为什么少行，本题解决的是为什么连合并结果都尚未产生。排查记录先保留嵌套结构、每列类型和最早的已定类型分支，再讨论保留重复行、排序和报表业务口径，才不会在错误的阶段调整正确的开关。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/typeconv-union-case.html" rel="noopener">PostgreSQL 18 — 10.5 UNION, CASE, and Related Constructs</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fpostgres-union-unknown-type-resolution%2F&text=%E4%B8%A4%E4%B8%AA%20NULL%20%E5%85%88%20UNION%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%90%8E%E9%9D%A2%E7%9A%84%201%20%E6%95%91%E4%B8%8D%E4%BA%86%E7%B1%BB%E5%9E%8B" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fpostgres-union-unknown-type-resolution%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E4%B8%A4%E4%B8%AA%20NULL%20%E5%85%88%20UNION%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%90%8E%E9%9D%A2%E7%9A%84%201%20%E6%95%91%E4%B8%8D%E4%BA%86%E7%B1%BB%E5%9E%8B&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fpostgres-union-unknown-type-resolution%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/27/pytest-warns-unmatched-reemission/">
+              <span>上一篇</span>
+              <strong>pytest.warns 已匹配成功，为什么还有警告冒出来？</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/">
+              <span>下一篇</span>
+              <strong>临时表提交后还在：连接池下一位借用者会遇到什么</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#不是等全部分支出现后再投票">不是等全部分支出现后再投票</a>
+          
+            <a class="toc-link toc-link--h2" href="#在最早的空分支声明金额类型">在最早的空分支声明金额类型</a>
+          
+            <a class="toc-link toc-link--h2" href="#UNION-ALL-与外层-CAST-分别修什么？">UNION ALL 与外层 CAST 分别修什么？</a>
+          
+            <a class="toc-link toc-link--h2" href="#多列和空数据怎样验？">多列和空数据怎样验？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>280</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>151</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>105</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>74</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/27/postgres-character-padding-contract/">char(4) 里的 AB：为什么相等却不能照猜 LIKE</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/">临时表提交后还在：连接池下一位借用者会遇到什么</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/26/postgres-case-constant-folding/">CASE 没进入分支，为什么仍可能常量除零</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

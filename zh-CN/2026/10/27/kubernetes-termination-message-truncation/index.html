@@ -1,0 +1,407 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>容器的终止消息少了一半，先检查字节预算 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="说明终止消息的单容器与共享字节预算、错误日志回退条件和重启后的状态归属，把短摘要连接到完整日志。">
+  
+  
+    <meta name="keywords" content="termination message,FallbackToLogsOnError,Pod diagnostics">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-termination-message-truncation/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-termination-message-truncation/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-termination-message-truncation/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/27/kubernetes-termination-message-truncation/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="容器的终止消息少了一半，先检查字节预算 | Midnight blog">
+    <meta property="og:description" content="说明终止消息的单容器与共享字节预算、错误日志回退条件和重启后的状态归属，把短摘要连接到完整日志。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-termination-message-truncation/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-termination-message-truncation/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-termination-message-truncation/","name":"容器的终止消息少了一半，先检查字节预算 | Midnight blog","description":"说明终止消息的单容器与共享字节预算、错误日志回退条件和重启后的状态归属，把短摘要连接到完整日志。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-termination-message-truncation/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-termination-message-truncation/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-termination-message-truncation/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-termination-message-truncation/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-termination-message-truncation/","headline":"容器的终止消息少了一半，先检查字节预算","description":"说明终止消息的单容器与共享字节预算、错误日志回退条件和重启后的状态归属，把短摘要连接到完整日志。","inLanguage":"zh-CN","datePublished":"2026-10-26T19:26:58.000Z","dateModified":"2026-10-26T19:26:58.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://kubernetes.io/docs/tasks/debug/debug-application/determine-reason-pod-failure/"],"keywords":"Delivery, Kubernetes, Termination"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-termination-message-truncation/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"容器的终止消息少了一半，先检查字节预算","item":"https://www.zyweb.vip/zh-CN/2026/10/27/kubernetes-termination-message-truncation/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/27/kubernetes-termination-message-truncation/" selected>zh-CN</option><option value="/en/2026/10/27/kubernetes-termination-message-truncation/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/27/kubernetes-termination-message-truncation/" selected>zh-CN</option><option value="/en/2026/10/27/kubernetes-termination-message-truncation/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time>
+    </div>
+
+    <h1>容器的终止消息少了一半，先检查字节预算</h1>
+
+    
+      <p class="post-hero__summary">说明终止消息的单容器与共享字节预算、错误日志回退条件和重启后的状态归属，把短摘要连接到完整日志。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-26T19:26:58.000Z">2026-10-27</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/27/kubernetes-termination-message-truncation/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/27/kubernetes-termination-message-truncation/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>终止消息受 4096 字节及全 Pod 12KiB 平分预算约束。</li><li>错误日志回退需要文件为空并错误退出，且只保留有限尾部。</li><li>重启诊断要将 state 或 lastState 对应到实际进程实例。</li></ul></section>
+      <div class="article-content">
+        <p>假设一个转换容器把六千字节的异常栈写到 <code>/dev/termination-log</code>，Pod 状态中却只剩一部分。终止消息有字节上限和整个 Pod 的共享预算，适合放故障摘要与查询线索。要找完整栈，应先核对日志留存；反复扩大应用写入量不会扩大状态字段的容量。</p>
+<h2 id="这里存的是简短终态"><a href="#这里存的是简短终态" class="headerlink" title="这里存的是简短终态"></a>这里存的是简短终态</h2><p><a target="_blank" rel="noopener" href="https://kubernetes.io/docs/tasks/debug/debug-application/determine-reason-pod-failure/">Kubernetes 的 Pod 失败原因指南</a>说明，kubelet 会截断超过 4096 字节的终止消息；整个 Pod 的消息总量还受 12KiB 限制，在各容器间平分。指南以十二个普通或初始化容器为例，每个容器只有 1024 字节空间。因此，单个容器写入四千字节以内，也不能在多容器 Pod 中直接假定完整可见。</p>
+<p>单位是字节，不能按编辑器显示的字符数推算。中文、表情和其他编码内容可能占多个字节，行数少也可能很长。诊断设计应给实际编码后的摘要留余量，把最重要的错误码、阶段和查询标识放在前面；不要让几十行通用环境信息把唯一有用的故障位置挤到末尾。这个排序是工程选择，不是承诺任何截断位置都能保住所有字段。</p>
+<p>本文依据二〇二六年十月二十七日核对的在线指南，未运行 Pod 或读取真实故障日志。部署前仍需核对实际集群和容器运行时条件。终止消息不是长期日志存储，也不应被当成诊断数据唯一副本。</p>
+<h2 id="一个十二容器任务怎样留下有用摘要？"><a href="#一个十二容器任务怎样留下有用摘要？" class="headerlink" title="一个十二容器任务怎样留下有用摘要？"></a>一个十二容器任务怎样留下有用摘要？</h2><p>设想一个文档转换 Pod，包含应用容器和若干初始化、辅助容器，总数为十二。为了推导预算，按指南给出的例子，每个容器可用空间为一千零二十四字节。转换阶段失败时，应用若把一份六千字节的异常栈直接写入终止文件，即使文件落盘完整，状态中的消息仍无法承载全部内容。其他容器暂时没有写满，也不应当作应用可以独占总预算的依据。</p>
+<p>可以改为写一份短摘要，例如错误类别、失败阶段、任务的非敏感查询编号，以及完整日志的检索线索。下面是未执行的说明性配置，镜像和内容均为假设；它只展示消息文件的使用方式，不代表完整可部署的业务任务。</p>
+<pre><code class="yaml">apiVersion: v1
+kind: Pod
+metadata:
+  name: conversion-example
+spec:
+  restartPolicy: Never
+  containers:
+    - name: convert
+      image: example.invalid/converter:demo
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+</code></pre>
+<p>假设任务进入解析阶段后遇到损坏输入，应用先把完整诊断写入已经配置的日志渠道，再把 <code>INPUT_INVALID phase=parse ref=job-42</code> 这样的小摘要写入终止文件，并以失败状态退出。值班人员从 Pod 状态判断错误类别，再按查询编号到受控日志系统定位。编号本身不是日志已经上传成功的证据：若日志采集延迟或不可用，报告要明确完整日志缺失，不能凭一个链接宣称故障已可重建。</p>
+<p>若需要成功退出的摘要，文件机制同样可以表达最终状态，指南说明文件内容可用于成功和失败的容器状态消息。不要让“没有错误”等占位文字在失败路径之前提前写入，然后期待日志回退自动用异常栈覆盖它。消息来源选择有自己的条件，并不理解应用叙事里哪一句更重要。</p>
+<h2 id="为什么-FallbackToLogsOnError-没有补齐栈？"><a href="#为什么-FallbackToLogsOnError-没有补齐栈？" class="headerlink" title="为什么 FallbackToLogsOnError 没有补齐栈？"></a>为什么 FallbackToLogsOnError 没有补齐栈？</h2><p>官方规则要求两个条件同时成立：终止消息文件为空，而且容器以错误状态退出，此时才取容器日志末尾作为消息。回退日志还限制为 2048 字节或 80 行，取较小者。它提供最后一小段线索，不是完整日志导出功能，也不会把文件内容与日志合并成更长的消息。</p>
+<p>因此，文件里已有“开始处理”，随后程序崩溃，回退并不会因为这句话信息不足而自动替换它。若文件为空但程序正常退出，也不能据此期待错误回退。若异常发生后又输出许多清理日志，日志末尾可能主要是清理信息，真正的触发原因反而不在那一段。选择这种策略前，要明确它对应用输出顺序的依赖。</p>
+<p>我会优先让能够控制退出路径的应用主动写短摘要；对难以改造的工具，才把错误日志回退作为有限补救。前者需要可靠的错误处理和写入路径，后者依赖日志尾部及退出码。两种方案都应保留独立日志渠道。若进程突然被杀，应用可能来不及写摘要，这时应结合退出原因和其他证据，不能把空消息解释成无故障。</p>
+<h2 id="容器重启后，该看-state-还是-lastState？"><a href="#容器重启后，该看-state-还是-lastState？" class="headerlink" title="容器重启后，该看 state 还是 lastState？"></a>容器重启后，该看 state 还是 lastState？</h2><p>要让字段对应实际那一次进程。指南中的重启诊断示例读取 <code>.lastState.terminated.message</code>：当前实例可能已重新运行，而前一次的终止信息在 lastState 中。若当前实例本身已经终止，则应检查当前 state 中的 terminated 信息。先确认容器名称、当前状态和重启次数，再判断消息属于哪一次；不能仅复制一个字段路径应用到所有状态。</p>
+<p>lastState 也不是无限次重启的历史账本。若需要追查连续多次失败，应及时保存带观察时间和实例身份的状态，并依赖适当的日志留存。多容器输出应带容器名，避免把初始化失败与应用失败的摘要混在一起。重启后的正常运行不能抹去前一轮失败，同样也不能用前一轮消息解释新一轮不同的输入。</p>
+<p>应用摘要还应避免一半是业务状态、一半是无法解析的长栈。若监控程序需要读取错误码，采用简短、稳定且可容忍缺失字段的格式，并在读取端保留原始消息供人工排查。不要把一个可能被截断的 JSON 文档直接当作完整事件入库；解析失败应显示“摘要不完整”而非“任务成功”。这是读取方的容错选择，具体格式仍由团队定义，不能让状态展示层擅自猜测被截去的内容。</p>
+<p>待执行检查可以构造短消息、超过单容器上限的消息、多容器共享预算和多字节内容，再分别安排空文件错误退出、非空文件错误退出、空文件正常退出。比较原文件、容器日志和状态字段，记录截断与回退实际结果；不要把这些预期当成本篇的运行日志。本站<a href="/zh-CN/2026/10/09/kubernetes-termination-budget/">终止时间预算</a>讨论的是退出机会，本题讨论退出后留下多少诊断信息。两项设计都要成立，摘要才能把值班人员带到仍然存在的证据。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://kubernetes.io/docs/tasks/debug/debug-application/determine-reason-pod-failure/" rel="noopener">Kubernetes — Determine the Reason for Pod Failure — Customizing the termination message — Customizing the termination message</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--kubernetes" href="/zh-CN/tags/Kubernetes/">Kubernetes</a>
+          
+            <a class="tag tag--termination" href="/zh-CN/tags/Termination/">Termination</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fkubernetes-termination-message-truncation%2F&text=%E5%AE%B9%E5%99%A8%E7%9A%84%E7%BB%88%E6%AD%A2%E6%B6%88%E6%81%AF%E5%B0%91%E4%BA%86%E4%B8%80%E5%8D%8A%EF%BC%8C%E5%85%88%E6%A3%80%E6%9F%A5%E5%AD%97%E8%8A%82%E9%A2%84%E7%AE%97" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fkubernetes-termination-message-truncation%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E5%AE%B9%E5%99%A8%E7%9A%84%E7%BB%88%E6%AD%A2%E6%B6%88%E6%81%AF%E5%B0%91%E4%BA%86%E4%B8%80%E5%8D%8A%EF%BC%8C%E5%85%88%E6%A3%80%E6%9F%A5%E5%AD%97%E8%8A%82%E9%A2%84%E7%AE%97&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F27%2Fkubernetes-termination-message-truncation%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/27/node-buffer-slice-shared-memory/">
+              <span>上一篇</span>
+              <strong>Buffer.slice 后再改原数据，为什么切片也变了</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/27/kubernetes-externalname-dns-not-proxy/">
+              <span>下一篇</span>
+              <strong>集群里的 HTTPS 别名为什么会证书不匹配？</strong>
+              <small>2026-10-27</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#这里存的是简短终态">这里存的是简短终态</a>
+          
+            <a class="toc-link toc-link--h2" href="#一个十二容器任务怎样留下有用摘要？">一个十二容器任务怎样留下有用摘要？</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么-FallbackToLogsOnError-没有补齐栈？">为什么 FallbackToLogsOnError 没有补齐栈？</a>
+          
+            <a class="toc-link toc-link--h2" href="#容器重启后，该看-state-还是-lastState？">容器重启后，该看 state 还是 lastState？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>280</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>151</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>105</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>74</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/27/kubernetes-externalname-dns-not-proxy/">集群里的 HTTPS 别名为什么会证书不匹配？</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/26/kubernetes-hostpath-node-trust/">Pod 重建后路径相同，文件为何不同？</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/26/kubernetes-job-active-deadline-limit/">Job 重试还没用完，为何已经 DeadlineExceeded？</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
