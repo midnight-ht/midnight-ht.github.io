@@ -1,0 +1,409 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>EXISTS 里的 SELECT 为什么不适合放审计副作用 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="区分存在性结果与投影执行，给出 INTERSECT 例外，并设计明确的审计尝试、结果和重试责任。">
+  
+  
+    <meta name="keywords" content="EXISTS projection,INTERSECT,audit side effects">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/28/postgres-exists-projection-evaluation/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/28/postgres-exists-projection-evaluation/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/28/postgres-exists-projection-evaluation/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/28/postgres-exists-projection-evaluation/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="EXISTS 里的 SELECT 为什么不适合放审计副作用 | Midnight blog">
+    <meta property="og:description" content="区分存在性结果与投影执行，给出 INTERSECT 例外，并设计明确的审计尝试、结果和重试责任。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/28/postgres-exists-projection-evaluation/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/28/postgres-exists-projection-evaluation/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/28/postgres-exists-projection-evaluation/","name":"EXISTS 里的 SELECT 为什么不适合放审计副作用 | Midnight blog","description":"区分存在性结果与投影执行，给出 INTERSECT 例外，并设计明确的审计尝试、结果和重试责任。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/28/postgres-exists-projection-evaluation/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/28/postgres-exists-projection-evaluation/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/28/postgres-exists-projection-evaluation/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/28/postgres-exists-projection-evaluation/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/28/postgres-exists-projection-evaluation/","headline":"EXISTS 里的 SELECT 为什么不适合放审计副作用","description":"区分存在性结果与投影执行，给出 INTERSECT 例外，并设计明确的审计尝试、结果和重试责任。","inLanguage":"zh-CN","datePublished":"2026-10-27T19:32:49.000Z","dateModified":"2026-10-27T19:32:49.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/functions-subquery.html"],"keywords":"Development, PostgreSQL, EXISTS"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/28/postgres-exists-projection-evaluation/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"EXISTS 里的 SELECT 为什么不适合放审计副作用","item":"https://www.zyweb.vip/zh-CN/2026/10/28/postgres-exists-projection-evaluation/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/28/postgres-exists-projection-evaluation/" selected>zh-CN</option><option value="/en/2026/10/28/postgres-exists-projection-evaluation/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/28/postgres-exists-projection-evaluation/" selected>zh-CN</option><option value="/en/2026/10/28/postgres-exists-projection-evaluation/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-27T19:32:49.000Z">2026-10-28</time>
+    </div>
+
+    <h1>EXISTS 里的 SELECT 为什么不适合放审计副作用</h1>
+
+    
+      <p class="post-hero__summary">区分存在性结果与投影执行，给出 INTERSECT 例外，并设计明确的审计尝试、结果和重试责任。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-27T19:32:49.000Z">2026-10-28</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/28/postgres-exists-projection-evaluation/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/28/postgres-exists-projection-evaluation/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>EXISTS 通常只关心有无行，不承诺投影副作用。</li><li>INTERSECT 等集合运算可能让投影内容影响结果。</li><li>审计应显式定义尝试、完成、失败与重试记录。</li></ul></section>
+      <div class="article-content">
+        <p>把记录审计的函数写进 EXISTS 的 SELECT 列，并不能保证每次检查都会写一条日志。存在性判断只需要确认有没有行，投影表达式通常不是它的结果合同。需要可靠记录判断过程时，应设计显式的记录动作，不能借用查询投影的副作用。</p>
+<h2 id="有一行，与计算那一列，是不同要求"><a href="#有一行，与计算那一列，是不同要求" class="headerlink" title="有一行，与计算那一列，是不同要求"></a>有一行，与计算那一列，是不同要求</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-subquery.html#FUNCTIONS-SUBQUERY-EXISTS">PostgreSQL 18 的 EXISTS 文档</a>说明，子查询返回至少一行时结果为真，没有行时为假。输出列表通常不决定真假，常见惯例是 SELECT 1。文档还特别警告，子查询通常只执行到足以确认存在，不宜放置依赖执行次数的副作用。本篇按第十八版讨论语义，没有执行数据库探针。</p>
+<p>假设业务要判断某订单是否存在可用凭证，开发者把一个审计函数放进子查询的投影，希望检查时顺便记录一次访问。函数名是教学假设，不是本站已有数据库函数。下面的写法把两个要求绑在了一起：是否存在符合条件的凭证，以及是否完成一条审计记录。</p>
+<pre><code class="sql">SELECT EXISTS (
+  SELECT write_audit_note(v.id)
+  FROM vouchers AS v
+  WHERE v.order_id = 42 AND v.active
+);
+</code></pre>
+<p>这段代码未运行。它的问题不是审计函数写得不够快，而是调用方依赖了 EXISTS 没有提供的执行承诺。即使某次观察到函数被调用，也不能推出所有计划、所有数据和所有执行分支都同样调用。把审计计数写成“一次查询必有一条”验收，会把一个偶然轨迹误当成接口保证。</p>
+<p>更清楚的存在性表达可以用常量投影，把关联条件留在筛选中。常量的作用是让读者看出这里只问有没有行，不是对引擎指定某种性能技巧。把 SELECT id 改成 SELECT 1，不能未经测量就声称扫描更少、延迟降低，更不能修正遗漏的关联条件。</p>
+<pre><code class="sql">SELECT EXISTS (
+  SELECT 1
+  FROM vouchers AS v
+  WHERE v.order_id = 42 AND v.active
+);
+</code></pre>
+<p>若忘记订单关联，只检查任意可用凭证是否存在，返回值可能在别的订单有凭证时变成真。投影写成一，查询仍然回答了错误问题。评审应先复述外层对象、关联键和有效条件，再考虑表达是否简洁；约定式写法不是业务正确性的证明。</p>
+<h2 id="可以无条件把投影换成一吗？"><a href="#可以无条件把投影换成一吗？" class="headerlink" title="可以无条件把投影换成一吗？"></a>可以无条件把投影换成一吗？</h2><p>不能。官方文档明确列出使用 INTERSECT 的子查询可能是例外。集合运算会利用输出值决定哪些行相交，因此输出内容可能影响是否还有结果。不要把“通常无关结果”删成“永远无关结果”。</p>
+<p>下面是未执行的最小推演，不包含真实业务表。第一条两侧输出不同值，没有公共行；第二条把两侧都改成一，有公共行，外部 EXISTS 的真假也随之改变。</p>
+<pre><code class="sql">SELECT EXISTS (SELECT 1 INTERSECT SELECT 2);
+SELECT EXISTS (SELECT 1 INTERSECT SELECT 1);
+</code></pre>
+<p>这个例外提供一个具体评审动作：替换投影前，先检查子查询是否仅仅筛选行，还是内部还要按值进行集合运算。若是后一种，需从完整运算推导结果，不能套用普通关联 EXISTS 的局部规则。这里没有承诺所有其他复杂子查询都能逐字替换；应先保证原结构的含义，再考虑统一格式。</p>
+<p>也不要用投影“无关结果”推断筛选表达式都不执行。关联与筛选决定哪些行存在，它们与输出列承担不同职责。本题拒绝的是某个不受保证的副作用设计，不是鼓励在任何 SQL 位置随意放副作用再猜测执行顺序。对确实允许的表达式，仍需核对函数自身的合同和完整查询语义。</p>
+<h2 id="需要记录每次判断，应该在哪里写？"><a href="#需要记录每次判断，应该在哪里写？" class="headerlink" title="需要记录每次判断，应该在哪里写？"></a>需要记录每次判断，应该在哪里写？</h2><p>把记录作为显式业务步骤，并先定义“每次”指什么。若要记录成功完成的一次判断，可以让应用在得到判断结果后，以明确字段写入请求标识、对象标识和结果；若要求判断与记录共同成功，则要设计适合该要求的事务与失败路径。这是应用设计建议，不是本文已经验证的审计实现。</p>
+<p>假设判断为真后记录失败，接口该返回失败，还是返回结果并另行补记？假设调用方超时重试，同一业务请求能否生成两条日志？这两项选择会决定幂等键和恢复动作，不能由投影函数恰好执行了几次来决定。审计如果包含外部服务，还需另外处理数据库事务与外部写入不能天然一起提交的边界。</p>
+<p>也可能要求记录“尝试”，包括查询本身失败的请求。只在成功拿到结果后写记录便不够，需要在更外层区分开始、结果、错误和记录失败。开始记录存在，不证明判断完成；记录里写了结果，也要能关联到当次输入，防止下一次重试覆盖了上一回的失败。先选择记录语义，再选择存储方案。</p>
+<p>验证应分开准备：无匹配、单匹配、多匹配、错误关联对象、记录步骤失败和请求重试。存在性部分断言真假及对象归属，记录部分断言明确约定的次数和状态。不能用“日志多了”作为存在性查询正确的唯一断言，也不能让一条真实匹配掩盖另一订单的错误关联。</p>
+<p>审计记录还应避免一个数量陷阱。假设请求甲第一次查到真，但响应传回前连接中断，调用方重试后再次查到真。若合同记录每次尝试，两条尝试记录可以合理；若合同记录每个逻辑请求的一次最终决定，就需要把同一请求身份与不同尝试身份分开。只断言日志总数等于二，无法知道是否重复创建了一个本应唯一的决定。待执行断言可以检查同一逻辑请求有两次尝试、至多一个按合同接纳的最终结果，并保留第一次响应未知的状态。若重试期间凭证可用性改变，还要决定是重新评估，还是返回先前已持久化的决定；后者需要真实保存结果，不能仅保存请求编号。本例是设计推演，未发生真实断线。</p>
+<p>关于观察计划与执行结果的区别，可读本站<a href="/zh-CN/2026/10/09/postgres-explain-evidence/">执行计划证据</a>。本篇没有运行上述查询，也没有实现审计事务；交付检查应保留输入、语义预期与实际执行证据，分别证明存在判断和记录动作兑现了各自承诺。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-subquery.html" rel="noopener">PostgreSQL 18 — 9.24.1 EXISTS</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--exists" href="/zh-CN/tags/EXISTS/">EXISTS</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F28%2Fpostgres-exists-projection-evaluation%2F&text=EXISTS%20%E9%87%8C%E7%9A%84%20SELECT%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E9%80%82%E5%90%88%E6%94%BE%E5%AE%A1%E8%AE%A1%E5%89%AF%E4%BD%9C%E7%94%A8" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F28%2Fpostgres-exists-projection-evaluation%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=EXISTS%20%E9%87%8C%E7%9A%84%20SELECT%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E9%80%82%E5%90%88%E6%94%BE%E5%AE%A1%E8%AE%A1%E5%89%AF%E4%BD%9C%E7%94%A8&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F28%2Fpostgres-exists-projection-evaluation%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/28/pytest-autouse-dependency-propagation/">
+              <span>上一篇</span>
+              <strong>没请求数据库 fixture，测试为何还是连接了数据库</strong>
+              <small>2026-10-28</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/28/postgres-array-containment-duplicates/">
+              <span>下一篇</span>
+              <strong>一个库存单位为什么能“包含”两个相同需求</strong>
+              <small>2026-10-28</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#有一行，与计算那一列，是不同要求">有一行，与计算那一列，是不同要求</a>
+          
+            <a class="toc-link toc-link--h2" href="#可以无条件把投影换成一吗？">可以无条件把投影换成一吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#需要记录每次判断，应该在哪里写？">需要记录每次判断，应该在哪里写？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>277</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>160</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>110</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>77</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/28/postgres-array-containment-duplicates/">一个库存单位为什么能“包含”两个相同需求</a></h3>
+          <p>2026-10-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/27/postgres-character-padding-contract/">char(4) 里的 AB：为什么相等却不能照猜 LIKE</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/">临时表提交后还在：连接池下一位借用者会遇到什么</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

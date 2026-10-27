@@ -1,0 +1,409 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why EXISTS Projection Is Not an Audit Hook | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Separate existence results from projection evaluation, retain the INTERSECT exception, and define explicit audit lifecycle and retry responsibilities.">
+  
+  
+    <meta name="keywords" content="EXISTS projection,INTERSECT,audit side effects">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/28/postgres-exists-projection-evaluation/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/28/postgres-exists-projection-evaluation/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/28/postgres-exists-projection-evaluation/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/28/postgres-exists-projection-evaluation/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why EXISTS Projection Is Not an Audit Hook | Midnight blog">
+    <meta property="og:description" content="Separate existence results from projection evaluation, retain the INTERSECT exception, and define explicit audit lifecycle and retry responsibilities.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/28/postgres-exists-projection-evaluation/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/28/postgres-exists-projection-evaluation/#webpage","url":"https://www.zyweb.vip/en/2026/10/28/postgres-exists-projection-evaluation/","name":"Why EXISTS Projection Is Not an Audit Hook | Midnight blog","description":"Separate existence results from projection evaluation, retain the INTERSECT exception, and define explicit audit lifecycle and retry responsibilities.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/28/postgres-exists-projection-evaluation/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/28/postgres-exists-projection-evaluation/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/28/postgres-exists-projection-evaluation/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/28/postgres-exists-projection-evaluation/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/28/postgres-exists-projection-evaluation/","headline":"Why EXISTS Projection Is Not an Audit Hook","description":"Separate existence results from projection evaluation, retain the INTERSECT exception, and define explicit audit lifecycle and retry responsibilities.","inLanguage":"en","datePublished":"2026-10-27T19:32:49.000Z","dateModified":"2026-10-27T19:32:49.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.postgresql.org/docs/18/functions-subquery.html"],"keywords":"Development, PostgreSQL, EXISTS"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/28/postgres-exists-projection-evaluation/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why EXISTS Projection Is Not an Audit Hook","item":"https://www.zyweb.vip/en/2026/10/28/postgres-exists-projection-evaluation/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/28/postgres-exists-projection-evaluation/">zh-CN</option><option value="/en/2026/10/28/postgres-exists-projection-evaluation/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/28/postgres-exists-projection-evaluation/">zh-CN</option><option value="/en/2026/10/28/postgres-exists-projection-evaluation/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-27T19:32:49.000Z">2026-10-28</time>
+    </div>
+
+    <h1>Why EXISTS Projection Is Not an Audit Hook</h1>
+
+    
+      <p class="post-hero__summary">Separate existence results from projection evaluation, retain the INTERSECT exception, and define explicit audit lifecycle and retry responsibilities.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-27T19:32:49.000Z">2026-10-28</time> · Estimated read 12 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/28/postgres-exists-projection-evaluation/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/28/postgres-exists-projection-evaluation/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>EXISTS normally tests row existence without promising projection effects.</li><li>INTERSECT can make projected values relevant to existence.</li><li>Audit recording needs explicit attempt, completion, failure, and retry semantics.</li></ul></section>
+      <div class="article-content">
+        <p>Putting an audit-writing function in an EXISTS subquery&#39;s SELECT list does not guarantee an audit entry for every check. EXISTS needs to establish whether a row exists; evaluating the projected expression is usually outside that result contract. Reliable recording needs an explicit operation with defined failure behavior.</p>
+<h2 id="Finding-a-row-is-different-from-evaluating-its-output"><a href="#Finding-a-row-is-different-from-evaluating-its-output" class="headerlink" title="Finding a row is different from evaluating its output"></a>Finding a row is different from evaluating its output</h2><p>The <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-subquery.html#FUNCTIONS-SUBQUERY-EXISTS">PostgreSQL 18 EXISTS reference</a> defines true for at least one returned row and false for none. The output list normally does not matter, hence the SELECT 1 convention. It also warns against side effects because evaluation generally proceeds only far enough to establish existence. This article discusses version 18 semantics; no database probe was executed.</p>
+<p>Imagine checking whether an order has an active voucher. A developer projects an audit function to record the check incidentally. The function name below is hypothetical, not an existing site function. The statement combines two requirements: finding an eligible voucher and creating a record of the check.</p>
+<pre><code class="sql">SELECT EXISTS (
+  SELECT write_audit_note(v.id)
+  FROM vouchers AS v
+  WHERE v.order_id = 42 AND v.active
+);
+</code></pre>
+<p>This unexecuted example has a contract problem rather than merely a slow logging function. Observing a function call in one run would not establish the same behavior for every plan, input, or branch. An assertion that every query must create exactly one entry would rely on execution behavior that EXISTS does not promise.</p>
+<p>A constant projection makes the intention clearer while leaving the correlation and eligibility conditions in the filter. It is a readability convention, not a performance result. Replacing SELECT id with SELECT 1 does not establish fewer reads or lower latency, and cannot repair a missing relationship condition.</p>
+<pre><code class="sql">SELECT EXISTS (
+  SELECT 1
+  FROM vouchers AS v
+  WHERE v.order_id = 42 AND v.active
+);
+</code></pre>
+<p>If the order condition disappears, an active voucher for another order can satisfy the query. A constant output does not rescue the wrong question. Review the outer entity, relationship key, and eligibility conditions before relying on a familiar SQL shape.</p>
+<h2 id="Can-every-output-list-be-replaced-with-one"><a href="#Can-every-output-list-be-replaced-with-one" class="headerlink" title="Can every output list be replaced with one?"></a>Can every output list be replaced with one?</h2><p>No. The reference explicitly identifies INTERSECT subqueries as a possible exception. Set operations can use output values to decide whether a row survives. “Normally unimportant” must retain its qualification.</p>
+<p>These unexecuted statements show the distinction without business tables. The first pair of outputs has no common row; the second pair does. EXISTS therefore has different truth values.</p>
+<pre><code class="sql">SELECT EXISTS (SELECT 1 INTERSECT SELECT 2);
+SELECT EXISTS (SELECT 1 INTERSECT SELECT 1);
+</code></pre>
+<p>Before changing a projection, inspect whether the subquery merely filters rows or also compares projected values through a set operation. For the latter, reason about the whole expression. This is not a claim that every other complex subquery permits a mechanical replacement.</p>
+<p>Nor does an unimportant output list imply that filter expressions are unimportant. Correlation and filtering establish which rows exist. Their role differs from the projected output. The lesson is to reject an unsupported side-effect dependency, not to move it to another SQL position and continue guessing about execution order. Functions and the surrounding query still need their own documented contracts.</p>
+<h2 id="Where-should-a-record-of-every-check-be-written"><a href="#Where-should-a-record-of-every-check-be-written" class="headerlink" title="Where should a record of every check be written?"></a>Where should a record of every check be written?</h2><p>Make recording an explicit application step and define “every check.” Recording a successfully completed decision might mean writing the request identifier, entity identifier, and result after obtaining it. Requiring both the decision and record to succeed together needs a suitable transaction and failure design. These are design choices, not an audit implementation validated here.</p>
+<p>If the decision is true but recording fails, should the interface fail or return with a separately managed recording obligation? If a caller retries after a timeout, can one logical request create two entries? Those choices determine idempotency and recovery requirements. Incidental projection-call counts cannot decide them. Recording to an external service also introduces a boundary beyond a local database transaction.</p>
+<p>A requirement to record attempts, including failed queries, needs an outer lifecycle: started, result obtained, query failed, or recording failed. A start record does not prove completion. Preserve the input and request identity so a retry does not obscure the earlier failure.</p>
+<p>Proposed checks cover no match, one match, multiple matches, another order&#39;s voucher, recording failure, and retries. Assert existence and entity ownership separately from the promised recording count and state. An increasing log count is not the sole proof that the query answered the correct question.</p>
+<p>Consider a retry receipt too. Request A can observe true, lose its response, and observe true again on retry. Two attempt records may be correct under an attempt contract; one final decision per logical request is a different contract. Distinguish logical-request identity from attempt identity. A log count of two cannot establish whether an intended unique decision was duplicated. Proposed assertions can retain two attempts and at most one accepted final result, including the unknown first response. If availability changes before retry, choose reevaluation or replay of a durably saved decision. Saving only the request identifier does not implement the latter. This is hypothetical, not an observed disconnect.</p>
+<p>The site&#39;s <a href="/en/2026/10/09/postgres-explain-evidence/">query-plan evidence article</a> distinguishes observing a plan from establishing execution outcomes. None of these queries or audit transactions was run here. Preserve inputs, expected semantics, and eventual execution evidence for the existence decision and the recording operation separately.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-subquery.html" rel="noopener">PostgreSQL 18 — 9.24.1 EXISTS</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/en/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--exists" href="/en/tags/EXISTS/">EXISTS</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F28%2Fpostgres-exists-projection-evaluation%2F&text=Why%20EXISTS%20Projection%20Is%20Not%20an%20Audit%20Hook" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F28%2Fpostgres-exists-projection-evaluation%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20EXISTS%20Projection%20Is%20Not%20an%20Audit%20Hook&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F28%2Fpostgres-exists-projection-evaluation%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/28/pytest-autouse-dependency-propagation/">
+              <span>Previous Post</span>
+              <strong>Why an Unrequested Fixture Can Run Through autouse</strong>
+              <small>2026-10-28</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/28/postgres-array-containment-duplicates/">
+              <span>Next Post</span>
+              <strong>Why Array Containment Can Match Two Demands With One Value</strong>
+              <small>2026-10-28</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Finding-a-row-is-different-from-evaluating-its-output">Finding a row is different from evaluating its output</a>
+          
+            <a class="toc-link toc-link--h2" href="#Can-every-output-list-be-replaced-with-one">Can every output list be replaced with one?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Where-should-a-record-of-every-check-be-written">Where should a record of every check be written?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>277</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>160</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>111</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>77</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/28/postgres-array-containment-duplicates/">Why Array Containment Can Match Two Demands With One Value</a></h3>
+          <p>2026-10-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/27/postgres-character-padding-contract/">Why char Padding Changes Equality, LIKE, and Input Checks</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/27/postgres-temp-table-commit-lifetime/">Temporary Tables Survive Commit: What the Next Pool Borrower Sees</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

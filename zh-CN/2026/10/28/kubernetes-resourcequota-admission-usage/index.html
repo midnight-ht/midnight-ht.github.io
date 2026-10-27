@@ -1,0 +1,397 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>节点 CPU 很空闲，新 Pod 为什么仍被命名空间配额拒绝？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用显式 requests.cpu 预算算例区分节点实际用量与命名空间配额，沿 Deployment、Pod 准入、调度和就绪定位失败。">
+  
+  
+    <meta name="keywords" content="ResourceQuota,requests.cpu,Pod 准入">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/28/kubernetes-resourcequota-admission-usage/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/28/kubernetes-resourcequota-admission-usage/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/28/kubernetes-resourcequota-admission-usage/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/28/kubernetes-resourcequota-admission-usage/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="节点 CPU 很空闲，新 Pod 为什么仍被命名空间配额拒绝？ | Midnight blog">
+    <meta property="og:description" content="用显式 requests.cpu 预算算例区分节点实际用量与命名空间配额，沿 Deployment、Pod 准入、调度和就绪定位失败。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/28/kubernetes-resourcequota-admission-usage/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/28/kubernetes-resourcequota-admission-usage/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/28/kubernetes-resourcequota-admission-usage/","name":"节点 CPU 很空闲，新 Pod 为什么仍被命名空间配额拒绝？ | Midnight blog","description":"用显式 requests.cpu 预算算例区分节点实际用量与命名空间配额，沿 Deployment、Pod 准入、调度和就绪定位失败。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/28/kubernetes-resourcequota-admission-usage/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/28/kubernetes-resourcequota-admission-usage/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/28/kubernetes-resourcequota-admission-usage/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/28/kubernetes-resourcequota-admission-usage/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/28/kubernetes-resourcequota-admission-usage/","headline":"节点 CPU 很空闲，新 Pod 为什么仍被命名空间配额拒绝？","description":"用显式 requests.cpu 预算算例区分节点实际用量与命名空间配额，沿 Deployment、Pod 准入、调度和就绪定位失败。","inLanguage":"zh-CN","datePublished":"2026-10-27T19:32:49.000Z","dateModified":"2026-10-27T19:32:49.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://kubernetes.io/docs/concepts/policy/resource-quotas/"],"keywords":"Delivery, Kubernetes, ResourceQuota"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/28/kubernetes-resourcequota-admission-usage/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"节点 CPU 很空闲，新 Pod 为什么仍被命名空间配额拒绝？","item":"https://www.zyweb.vip/zh-CN/2026/10/28/kubernetes-resourcequota-admission-usage/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/28/kubernetes-resourcequota-admission-usage/" selected>zh-CN</option><option value="/en/2026/10/28/kubernetes-resourcequota-admission-usage/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/28/kubernetes-resourcequota-admission-usage/" selected>zh-CN</option><option value="/en/2026/10/28/kubernetes-resourcequota-admission-usage/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-27T19:32:49.000Z">2026-10-28</time>
+    </div>
+
+    <h1>节点 CPU 很空闲，新 Pod 为什么仍被命名空间配额拒绝？</h1>
+
+    
+      <p class="post-hero__summary">用显式 requests.cpu 预算算例区分节点实际用量与命名空间配额，沿 Deployment、Pod 准入、调度和就绪定位失败。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-27T19:32:49.000Z">2026-10-28</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/28/kubernetes-resourcequota-admission-usage/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/28/kubernetes-resourcequota-admission-usage/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>节点实际空闲不能抵扣命名空间的请求账目。</li><li>Deployment 创建成功不代表管理的 Pod 已全部创建。</li><li>配额变更不自动回收已有资源，放行后仍需检查调度与就绪。</li></ul></section>
+      <div class="article-content">
+        <p>假设节点监控显示实际 CPU 用量很低，新 Pod 却收到 exceeded quota。ResourceQuota 检查命名空间被计入的资源声明与硬限制，节点实际空闲不能说明这项配额还有余额。先核对拒绝消息指向的配额项目，再决定是调整声明、释放占用，还是申请更多预算。</p>
+<h2 id="节点曲线与配额账目在回答不同问题"><a href="#节点曲线与配额账目在回答不同问题" class="headerlink" title="节点曲线与配额账目在回答不同问题"></a>节点曲线与配额账目在回答不同问题</h2><p><a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/policy/resource-quotas/">Kubernetes 的 Resource Quotas 文档</a>将资源配额定义为命名空间内聚合资源消耗和对象数量的约束。创建或更新违反配额的资源时，控制面会以 HTTP 403 Forbidden 拒绝请求，并在错误中解释约束。这里讨论当前在线文档的机制，不把网站更新日期当成集群版本，也没有连接真实集群。</p>
+<p>限制的名字很关键。<code>requests.cpu</code> 约束的是相应请求的合计，不能拿监控中的实际处理器使用量来抵扣。对象数配额又是在数相应对象，不是数正在处理业务的进程。排障记录应保留配额名称、资源项目、硬限制、已用值及本次请求增量，而不是把所有拒绝概括成“机器不够”。</p>
+<p>以下限定一个没有 scope 的命名空间配额，只讨论显式 CPU requests；不展开默认注入、Pod 级预算或混合初始化容器的计算。实际对象如果超出这个简例，应先查自己的最终配置和相应版本文档。源模板不一定就是最终提交或准入后的对象，不能只从仓库里的一行配置估算所有占用。</p>
+<h2 id="两个空闲副本，也可能用完声明预算"><a href="#两个空闲副本，也可能用完声明预算" class="headerlink" title="两个空闲副本，也可能用完声明预算"></a>两个空闲副本，也可能用完声明预算</h2><p>设想命名空间的 <code>requests.cpu</code> 硬限为二个 CPU，已经有两个被计入的 Pod，每个显式请求一个 CPU。账目合计为二，第三个同配置 Pod 再请求一个，新的合计就超过硬限。即使监控显示前两个副本此刻各只实际使用很少的 CPU，也不改变这笔声明账目。这是未执行的配置推演，不是集群返回结果。</p>
+<p>这个例子没有声称“已用小于硬限也一定拒绝”。若硬限提高为三个，且没有别的占用或约束，例子中的这一项不再因合计超过三而拒绝。但放行还可能受别的配额项目和准入政策影响，所以不能把通过 CPU 一项写成所有条件都通过。反过来，硬限二、已用一点五，也要比较新增请求；不能仅看还有零点五就断言能放入一个完整 CPU 的请求。</p>
+<p>选择修复方式要对应预算的来源。若副本确实需要这份请求，应评估提高命名空间预算或减少不再需要的占用；若请求明显高于合理需求，应通过应用与负载证据调整它。为了让部署通过而随意把请求调小，改变的是资源承诺，未必减少实际需求，还可能改变后续调度安排。本文没有测量该应用需求，不给出应该减到多少的建议。</p>
+<h2 id="Deployment-成功不是每个-Pod-都存在"><a href="#Deployment-成功不是每个-Pod-都存在" class="headerlink" title="Deployment 成功不是每个 Pod 都存在"></a>Deployment 成功不是每个 Pod 都存在</h2><p>官方文档特别说明，创建 Deployment 等工作负载对象可以成功，但它管理的 Pod 未必都能创建。控制器之后申请 Pod 时仍要经过相应约束。流水线若只检查 Deployment 创建请求成功，就可能把没有达到副本目标的发布记为完成。需要观察控制器状态和事件，确认失败发生在哪个对象请求上。</p>
+<p>假设目标从两个副本增到三个，工作负载声明更新成功，而第三个 Pod 因配额被拒。这时不断等待一个根本没有创建出来的 Pod 进入 Ready，容易遗漏真正的失败位置。应从控制器的失败事件找出拒绝原因，再核对相关配额账目。已有 Pod 的日志可能完全正常，因为拒绝的是新对象，旧进程没有经历同一次错误。</p>
+<p>这种定位也影响恢复动作。重新构建相同镜像、重启已经正常的旧副本，不会自动增加命名空间预算。若决定暂时减少目标副本数，应说明业务容量和可用性影响；若决定提高预算，则要确认共享集群的容量与管理授权。配额变更是一项配置动作，不能代替对服务恢复结果的观察。</p>
+<h2 id="下调配额会终止已经创建的-Pod-吗？"><a href="#下调配额会终止已经创建的-Pod-吗？" class="headerlink" title="下调配额会终止已经创建的 Pod 吗？"></a>下调配额会终止已经创建的 Pod 吗？</h2><p>不会因为这次配额下调就自动处理已经创建的资源。文档明确说明，争用或配额变化不影响已经创建的资源。因此，下调后的账目即便看起来超过新上限，也不能推导系统会自动删除旧 Pod 或把它们的请求缩小。存量回收需要有明确对象和业务后果的工作负载操作，而不是等待配额替管理员作决定。</p>
+<p>同理，释放占用时要核对实际对象和更新后的账目，不能仅凭应用已经不忙便认为预算已归还。若准备删除闲置工作负载，应先确认其所有者、业务用途与恢复材料。这里没有执行删除；建议表达的是要把“决定不再需要”与“配额记录已反映结果”分成可核对的状态，避免基于过时截图再次提交。</p>
+<h2 id="提高配额以后，为什么仍可能调度失败？"><a href="#提高配额以后，为什么仍可能调度失败？" class="headerlink" title="提高配额以后，为什么仍可能调度失败？"></a>提高配额以后，为什么仍可能调度失败？</h2><p>配额准入与节点放置是不同阶段。提高配额可以解除本例的命名空间预算限制，却不为 Pod 创造合适节点。节点可分配资源、已经承诺的请求以及其他调度条件仍需分别检查。本站<a href="/zh-CN/2026/10/25/kubernetes-init-container-resource-requests/">普通 init 容器的请求计算</a>提供另一种可能放大有效请求的情况；本例没有把那套简式混进配额算例。</p>
+<p>还要固定账目观察时点。假设两个发布任务先后读取同一份余额，随后各自申请一个副本，较早截图并不能保证两次申请都能满足预算。这里不预测控制面处理顺序，只要求记录本次拒绝发生时的相关对象与最新状态。若团队按流水线预检查配额，预检查应作为提示，而不能被写成随后创建必然成功的承诺。重新提交前也要确认不是另一个发布占用了原先空余。</p>
+<p>待执行验收应保存配额 hard 与 used、显式请求、目标副本数、控制器事件和最终 Pod 状态。先安排第三副本因本例预算不足而失败，再在隔离环境改变一项预算，确认对应拒绝消失，并继续检查调度与就绪；若仍失败，保留新的原因。本文没有执行这些步骤，不报告发布通过。验收结论应明确停在准入、调度还是服务就绪，而不是只附一张 CPU 空闲图。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://kubernetes.io/docs/concepts/policy/resource-quotas/" rel="noopener">Kubernetes Resource Quotas — namespace accounting and compute resource quota</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--kubernetes" href="/zh-CN/tags/Kubernetes/">Kubernetes</a>
+          
+            <a class="tag tag--resourcequota" href="/zh-CN/tags/ResourceQuota/">ResourceQuota</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F28%2Fkubernetes-resourcequota-admission-usage%2F&text=%E8%8A%82%E7%82%B9%20CPU%20%E5%BE%88%E7%A9%BA%E9%97%B2%EF%BC%8C%E6%96%B0%20Pod%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E8%A2%AB%E5%91%BD%E5%90%8D%E7%A9%BA%E9%97%B4%E9%85%8D%E9%A2%9D%E6%8B%92%E7%BB%9D%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F28%2Fkubernetes-resourcequota-admission-usage%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E8%8A%82%E7%82%B9%20CPU%20%E5%BE%88%E7%A9%BA%E9%97%B2%EF%BC%8C%E6%96%B0%20Pod%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E8%A2%AB%E5%91%BD%E5%90%8D%E7%A9%BA%E9%97%B4%E9%85%8D%E9%A2%9D%E6%8B%92%E7%BB%9D%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F28%2Fkubernetes-resourcequota-admission-usage%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/28/node-fs-mkdir-recursive-created-path/">
+              <span>上一篇</span>
+              <strong>mkdir recursive 返回路径，为什么不是最深目录</strong>
+              <small>2026-10-28</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/28/kubernetes-optional-secret-missing-key/">
+              <span>下一篇</span>
+              <strong>Secret 对象存在，Pod 为什么还起不来？</strong>
+              <small>2026-10-28</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#节点曲线与配额账目在回答不同问题">节点曲线与配额账目在回答不同问题</a>
+          
+            <a class="toc-link toc-link--h2" href="#两个空闲副本，也可能用完声明预算">两个空闲副本，也可能用完声明预算</a>
+          
+            <a class="toc-link toc-link--h2" href="#Deployment-成功不是每个-Pod-都存在">Deployment 成功不是每个 Pod 都存在</a>
+          
+            <a class="toc-link toc-link--h2" href="#下调配额会终止已经创建的-Pod-吗？">下调配额会终止已经创建的 Pod 吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#提高配额以后，为什么仍可能调度失败？">提高配额以后，为什么仍可能调度失败？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>277</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>160</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>110</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>77</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/28/kubernetes-optional-secret-missing-key/">Secret 对象存在，Pod 为什么还起不来？</a></h3>
+          <p>2026-10-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/27/kubernetes-externalname-dns-not-proxy/">集群里的 HTTPS 别名为什么会证书不匹配？</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/27/kubernetes-termination-message-truncation/">容器的终止消息少了一半，先检查字节预算</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

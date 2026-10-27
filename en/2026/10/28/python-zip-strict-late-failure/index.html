@@ -1,0 +1,408 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why zip strict Can Fail After Earlier Rows Were Processed | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Explain lazy tail mismatch detection, prefix effects, and early stopping, comparing materialization, staging, and per-row acceptance recovery.">
+  
+  
+    <meta name="keywords" content="zip strict,lazy validation,partial effects">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/28/python-zip-strict-late-failure/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/28/python-zip-strict-late-failure/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/28/python-zip-strict-late-failure/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/28/python-zip-strict-late-failure/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why zip strict Can Fail After Earlier Rows Were Processed | Midnight blog">
+    <meta property="og:description" content="Explain lazy tail mismatch detection, prefix effects, and early stopping, comparing materialization, staging, and per-row acceptance recovery.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/28/python-zip-strict-late-failure/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/28/python-zip-strict-late-failure/#webpage","url":"https://www.zyweb.vip/en/2026/10/28/python-zip-strict-late-failure/","name":"Why zip strict Can Fail After Earlier Rows Were Processed | Midnight blog","description":"Explain lazy tail mismatch detection, prefix effects, and early stopping, comparing materialization, staging, and per-row acceptance recovery.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/28/python-zip-strict-late-failure/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/28/python-zip-strict-late-failure/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/28/python-zip-strict-late-failure/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/28/python-zip-strict-late-failure/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/28/python-zip-strict-late-failure/","headline":"Why zip strict Can Fail After Earlier Rows Were Processed","description":"Explain lazy tail mismatch detection, prefix effects, and early stopping, comparing materialization, staging, and per-row acceptance recovery.","inLanguage":"en","datePublished":"2026-10-27T19:32:49.000Z","dateModified":"2026-10-27T19:32:49.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://docs.python.org/3.14/library/functions.html"],"keywords":"Quality, Python, Iterators"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/28/python-zip-strict-late-failure/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why zip strict Can Fail After Earlier Rows Were Processed","item":"https://www.zyweb.vip/en/2026/10/28/python-zip-strict-late-failure/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/28/python-zip-strict-late-failure/">zh-CN</option><option value="/en/2026/10/28/python-zip-strict-late-failure/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/28/python-zip-strict-late-failure/">zh-CN</option><option value="/en/2026/10/28/python-zip-strict-late-failure/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--quality">Quality</span>
+      <time datetime="2026-10-27T19:32:49.000Z">2026-10-28</time>
+    </div>
+
+    <h1>Why zip strict Can Fail After Earlier Rows Were Processed</h1>
+
+    
+      <p class="post-hero__summary">Explain lazy tail mismatch detection, prefix effects, and early stopping, comparing materialization, staging, and per-row acceptance recovery.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-27T19:32:49.000Z">2026-10-28</time> · Estimated read 12 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/28/python-zip-strict-late-failure/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/28/python-zip-strict-late-failure/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Strict mismatch detection occurs during consumption.</li><li>Materialization postpones later writes without undoing input effects.</li><li>An unconsumed tail proves no equal-length guarantee; recovery needs its own design.</li></ul></section>
+      <div class="article-content">
+        <p>zip(strict=True) is lazy: unequal lengths raise an error when consumption reaches the difference. A loop performing one write per pair may already have produced side effects. Strict checking exposes a mismatch; it does not turn the whole consumption process into advance validation or a transaction.</p>
+<h2 id="Constructing-an-iterator-does-not-finish-validation"><a href="#Constructing-an-iterator-does-not-finish-validation" class="headerlink" title="Constructing an iterator does not finish validation"></a>Constructing an iterator does not finish validation</h2><p>The <a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/functions.html#zip">Python 3.14 zip reference</a> describes lazy iteration and ValueError when one input is exhausted before the others under strict=True. The retrieved page is labelled 3.14.10; strict was added in 3.10. No code or real import was executed for this article.</p>
+<p>Imagine two identifiers and only one amount. Appending accepted pairs makes prefix consumption visible without pretending that a list is a database transaction.</p>
+<pre><code class="python">ids = [101, 102]
+amounts = [10]
+accepted = []
+
+for item_id, amount in zip(ids, amounts, strict=True):
+    accepted.append((item_id, amount))
+</code></pre>
+<p>The first pair can enter the loop before the mismatch raises. If append were replaced by a notification, external request, or individually committed write, earlier actions might already exist. A final ValueError is not evidence that nothing was processed or that earlier actions were undone.</p>
+<p>Default zip stops at the shortest input and ignores the longer remainder, potentially hiding an incomplete payload. Strict mode improves error visibility. It still needs a failure-state and recovery policy; adding the parameter does not establish all-or-nothing acceptance.</p>
+<h2 id="Which-actions-can-materialization-postpone"><a href="#Which-actions-can-materialization-postpone" class="headerlink" title="Which actions can materialization postpone?"></a>Which actions can materialization postpone?</h2><p>For finite inputs within an explicit size budget, consume the paired result into staging memory before starting later writes. Full consumption can establish the length condition first. It costs memory and is unsuitable as an unquestioned solution for unbounded inputs.</p>
+<pre><code class="python">pairs = list(zip(ids, amounts, strict=True))
+for item_id, amount in pairs:
+    pass  # Replace only after validation and commit policy are defined.
+</code></pre>
+<p>This unexecuted sketch contains no real commit function. If list construction fails, the following loop does not start. It postpones later business writes, but cannot undo input-reading effects. Iterators may advance a file position, consume a queue, or perform effectful reads. Materialization is not a rollback of the outside world.</p>
+<p>By mismatch detection, inputs have advanced; detecting a difference may consume an extra element from an input. This article promises neither exact consumption counts for every branch nor lossless replay after failure. Recovery must use actual replayability, acknowledged position, and task identity. Constructing another zip does not reset its sources.</p>
+<p>For a one-shot large stream, possible designs include a temporary batch or discardable staged artifact, fully consumed and validated before publication. An explicit per-row acceptance protocol is another choice when the product permits partial success. The former needs storage and cleanup; the latter needs receipts and idempotent retry. Both need real state rather than only exception logs.</p>
+<h2 id="Does-consuming-a-prefix-establish-equal-lengths"><a href="#Does-consuming-a-prefix-establish-equal-lengths" class="headerlink" title="Does consuming a prefix establish equal lengths?"></a>Does consuming a prefix establish equal lengths?</h2><p>No. A consumer that never reaches the tail has not checked for a tail mismatch. A preview of one pair succeeds whenever both first elements exist. Passing the iterator to another function also does not establish exhaustion: that consumer may return early or fail for another reason.</p>
+<p>Assign responsibility for completing validation. A limited preview should not claim the whole batch was checked. A submission entry needs its own completeness gate. A function called validate_pairs that returns an unconsumed generator has not made the check eager; review where iteration actually occurs.</p>
+<p>Tests should fully consume an input with a late mismatch rather than merely construct zip or call next once. Separately confirm that prefix-only consumption retains an incomplete-validation state. A preview can be useful without being a batch-acceptance receipt.</p>
+<h2 id="Equal-length-still-does-not-establish-correct-identity"><a href="#Equal-length-still-does-not-establish-correct-identity" class="headerlink" title="Equal length still does not establish correct identity"></a>Equal length still does not establish correct identity</h2><p>Strict checks relative exhaustion, not whether an identifier and amount came from the same row. Independently sorted equal-length lists can still mispair. Preserve row identity and validate association where needed. Fields belonging together are often easier to inspect when transported as structured records. That is a protocol decision, not another zip guarantee.</p>
+<p>The site&#39;s <a href="/en/2026/10/26/postgres-unnest-array-padding/">multi-array unnest article</a> discusses database NULL padding for unequal arrays. Here strict Python iteration raises instead, but only during consumption. Neither a normal return nor a final exception independently describes complete business state.</p>
+<p>Proposed tests cover equal length, immediate mismatch, a long common prefix before mismatch, prefix-only consumption, an input that raises, and equal lengths with wrong identities. Record consumption stage, whether later writes began, accepted rows, and recoverable input position. Checking only the exception name misses already completed actions.</p>
+<p>Use a receipt case where the first row is accepted and the second lacks an amount. Under all-or-nothing rejection, the visible target should contain no new batch rows, while staging remains unpublished or pending cleanup. Under partial acceptance, return the first row’s stable identity and accepted status with the incomplete-batch error. A retry must not interpret the exception as proof that row one was untouched, nor mark row two complete because row one succeeded. Keep acceptance, rejection, and unknown outcomes distinct, especially after a lost write response. Inspect the real target identity rather than only an in-memory accepted count. No remote write or receipt implementation occurred here.</p>
+<p>For staging, verify cleanup of unpublished artifacts. For partial acceptance, verify accurate row receipts and retries that do not repeat acknowledged actions. None of these tests was run here. Strict mode rejects silent truncation; batch commitment and recovery still need their own contract.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/functions.html" rel="noopener">Python 3.14.10 — Built-in Functions, zip</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--quality" href="/en/tags/Quality/">Quality</a>
+          
+            <a class="tag tag--python" href="/en/tags/Python/">Python</a>
+          
+            <a class="tag tag--iterators" href="/en/tags/Iterators/">Iterators</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--quality" href="/en/categories/Quality/">Quality</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F28%2Fpython-zip-strict-late-failure%2F&text=Why%20zip%20strict%20Can%20Fail%20After%20Earlier%20Rows%20Were%20Processed" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F28%2Fpython-zip-strict-late-failure%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20zip%20strict%20Can%20Fail%20After%20Earlier%20Rows%20Were%20Processed&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F28%2Fpython-zip-strict-late-failure%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/28/wcag-character-key-shortcuts/">
+              <span>Previous Post</span>
+              <strong>When one character deletes a ticket: who controls shortcuts?</strong>
+              <small>2026-10-28</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/28/python-timedelta-seconds-total-seconds/">
+              <span>Next Post</span>
+              <strong>Why timedelta.seconds Omits Whole Days</strong>
+              <small>2026-10-28</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Constructing-an-iterator-does-not-finish-validation">Constructing an iterator does not finish validation</a>
+          
+            <a class="toc-link toc-link--h2" href="#Which-actions-can-materialization-postpone">Which actions can materialization postpone?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Does-consuming-a-prefix-establish-equal-lengths">Does consuming a prefix establish equal lengths?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Equal-length-still-does-not-establish-correct-identity">Equal length still does not establish correct identity</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>277</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>160</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>111</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>77</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/27/python-lru-cache-concurrent-miss/">Why Thread-Safe lru_cache Can Compute the Same Miss Twice</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/26/python-asyncio-taskgroup-failure-scope/">TaskGroup child failure: cancellation scope and cleanup ownership</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/26/python-contextmanager-single-yield-cleanup/">Why contextmanager must yield exactly once</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

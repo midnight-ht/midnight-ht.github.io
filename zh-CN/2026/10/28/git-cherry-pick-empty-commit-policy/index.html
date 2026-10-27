@@ -1,0 +1,395 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>cherry-pick 变空后，--allow-empty 为什么还不够？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="区分原本为空与回补后冗余的提交，比较 stop、drop、keep 及 skip、abort 的结果，把历史策略与修复验证分开。">
+  
+  
+    <meta name="keywords" content="cherry-pick,empty commit,allow-empty">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/28/git-cherry-pick-empty-commit-policy/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/28/git-cherry-pick-empty-commit-policy/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/28/git-cherry-pick-empty-commit-policy/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/28/git-cherry-pick-empty-commit-policy/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="cherry-pick 变空后，--allow-empty 为什么还不够？ | Midnight blog">
+    <meta property="og:description" content="区分原本为空与回补后冗余的提交，比较 stop、drop、keep 及 skip、abort 的结果，把历史策略与修复验证分开。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/28/git-cherry-pick-empty-commit-policy/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/28/git-cherry-pick-empty-commit-policy/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/28/git-cherry-pick-empty-commit-policy/","name":"cherry-pick 变空后，--allow-empty 为什么还不够？ | Midnight blog","description":"区分原本为空与回补后冗余的提交，比较 stop、drop、keep 及 skip、abort 的结果，把历史策略与修复验证分开。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/28/git-cherry-pick-empty-commit-policy/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/28/git-cherry-pick-empty-commit-policy/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/28/git-cherry-pick-empty-commit-policy/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/28/git-cherry-pick-empty-commit-policy/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/28/git-cherry-pick-empty-commit-policy/","headline":"cherry-pick 变空后，--allow-empty 为什么还不够？","description":"区分原本为空与回补后冗余的提交，比较 stop、drop、keep 及 skip、abort 的结果，把历史策略与修复验证分开。","inLanguage":"zh-CN","datePublished":"2026-10-27T19:32:49.000Z","dateModified":"2026-10-27T19:32:49.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://git-scm.com/docs/git-cherry-pick"],"keywords":"Delivery, Git, Cherry-pick"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/28/git-cherry-pick-empty-commit-policy/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"cherry-pick 变空后，--allow-empty 为什么还不够？","item":"https://www.zyweb.vip/zh-CN/2026/10/28/git-cherry-pick-empty-commit-policy/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/28/git-cherry-pick-empty-commit-policy/" selected>zh-CN</option><option value="/en/2026/10/28/git-cherry-pick-empty-commit-policy/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/28/git-cherry-pick-empty-commit-policy/" selected>zh-CN</option><option value="/en/2026/10/28/git-cherry-pick-empty-commit-policy/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-27T19:32:49.000Z">2026-10-28</time>
+    </div>
+
+    <h1>cherry-pick 变空后，--allow-empty 为什么还不够？</h1>
+
+    
+      <p class="post-hero__summary">区分原本为空与回补后冗余的提交，比较 stop、drop、keep 及 skip、abort 的结果，把历史策略与修复验证分开。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-27T19:32:49.000Z">2026-10-28</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/28/git-cherry-pick-empty-commit-policy/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/28/git-cherry-pick-empty-commit-policy/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>原本空提交和重放后变空需要分别选择策略。</li><li>empty=keep 隐含 allow-empty，drop 与 stop 不单独允许原本空提交。</li><li>保留历史记录不能替代目标修复行为与产物验证。</li></ul></section>
+      <div class="article-content">
+        <p>一个原本有补丁的提交，在目标分支已包含相同改动时可能变空。<code>--allow-empty</code> 主要保留原本就空的提交，这与重放后才冗余的情况需要分开处理。先确定空来自哪里，再决定停下检查、丢弃，还是保留一条记录；不要只为让回补脚本继续而统一跳过。</p>
+<h2 id="原本没有树变化，与重放后没有树变化"><a href="#原本没有树变化，与重放后没有树变化" class="headerlink" title="原本没有树变化，与重放后没有树变化"></a>原本没有树变化，与重放后没有树变化</h2><p><a target="_blank" rel="noopener" href="https://git-scm.com/docs/git-cherry-pick">Git 的 cherry-pick 手册</a>把最初就是空的提交，解释为它记录的树与父提交相同。<code>--allow-empty</code> 允许保留这类提交，却不单独解决原本有改动、因当前历史已有对应变化而变空的提交。后者由 <code>--empty=drop|keep|stop</code> 表达策略。本文核对当前手册及官方仓库文档，不声称读者安装的旧版本都支持相同选项。</p>
+<p>空提交消息是另一回事。一个提交可以没有文件变化却有完整说明，也可以有文件变化但消息为空。<code>--allow-empty-message</code> 针对的是后者的消息规则，不能用来修复补丁冗余。排障时至少区分来源提交树、来源消息和应用后的目标树，三个条件不能因中文都叫“空”而混在一起。</p>
+<p>以下只讨论常规提交回补，不使用快进路径，也不处理合并提交主线选择。手册对快进保留空提交另有条件，因此这里的默认行为不能扩大成所有组合的断言。任何拟采用命令先核对 <code>git --version</code> 与该版本帮助；本站仓库没有为本文执行 cherry-pick，示例中的提交名都是假设身份。</p>
+<h2 id="把两个来源提交放进一张决策表"><a href="#把两个来源提交放进一张决策表" class="headerlink" title="把两个来源提交放进一张决策表"></a>把两个来源提交放进一张决策表</h2><p>假设基线 B 上产生提交 X，将 timeout 配置由十改为二十。维护分支后来经由另一条路径也已采用同样改动。再次回补 X 时，它原本有补丁，但在这个目标上下文里可能没有新增变化。这是“变成空”的候选，应该问当前分支是否已经有等效修复，以及是否需要保留这次回补的历史记录。</p>
+<p>再设提交 M 是有意创建的里程碑记录，树与自己的父提交完全相同，消息说明某次人工检查。M 从一开始就没有补丁。若政策要求在维护分支保留这样的标记，需要允许原本空的提交；若政策只关心实际变更，则应另外处理这个来源对象。不能用“重复修复自动丢弃”的策略，悄悄替团队决定里程碑记录没有价值。</p>
+<p>这两个例子都没有执行。它们的差别不在于文件名或消息写得是否漂亮，而在于来源提交是否原本改变树。自动化应在任务策略里区分两类意图，避免一次新的 Git 退出提示就触发无条件重试。重试同一补丁没有增加解释；先保留来源与目标完整提交标识，才有后续核对的基础。</p>
+<h2 id="drop、keep-与-stop-分别承担什么代价"><a href="#drop、keep-与-stop-分别承担什么代价" class="headerlink" title="drop、keep 与 stop 分别承担什么代价"></a>drop、keep 与 stop 分别承担什么代价</h2><p>当前手册说明，<code>--empty=stop</code> 是对重放后冗余提交的默认处理：在应用时停住，让操作者检查。<code>drop</code> 丢弃该提交；<code>keep</code> 保留它，并隐含允许原本空提交的选项。<code>drop</code> 与 <code>stop</code> 并不单独允许最初就空的提交。因此，选择自动丢弃冗余项，不等于所有空提交都能无条件走完。</p>
+<p><code>stop</code> 适合还需要解释为什么变空的交互式回补，但无人处理时会让流水线停在那里。<code>drop</code> 适合明确接受“目标已具备变化，不再制造记录”的流程，代价是少一条回补提交。<code>keep</code> 可以保留事件记录，但这条新记录没有新增文件差异，不能把它计成又实现了一次功能。选择应落在历史与审核要求上，而不是单纯追求提交数少或多。</p>
+<p>如果已经停住，先确认当前序列、工作树和索引，再决定后续动作。手册中的 <code>--skip</code> 跳过当前提交并继续余下序列，<code>--abort</code> 则取消操作并返回序列前状态。两者不是同义的“清除错误”。若后面还有几个依赖补丁，跳过这一项会让后续继续；取消则是在放弃这次序列。执行前应知道是哪一种结果符合任务。</p>
+<p>反例是任何非零退出都执行 skip。冲突、非法引用或其他错误不等于“已经有相同补丁”，而真正的冲突解决还可能改变业务行为。脚本应该保留明确错误与状态，并按被授权的场景处理；不能让一个宽泛的失败分支成为自动丢变更的入口。本文没有给出可直接用于生产的自动处理脚本。</p>
+<h2 id="保留空提交能证明修复仍然生效吗？"><a href="#保留空提交能证明修复仍然生效吗？" class="headerlink" title="保留空提交能证明修复仍然生效吗？"></a>保留空提交能证明修复仍然生效吗？</h2><p>不能。它可以记录一次决定，却不能证明目标当前行为符合修复要求。目标可能有等效代码，也可能只是在冲突处理时被人为清空；随后提交还可能再次撤销行为。需要检查目标树、相关调用路径和针对性验证。历史记录与运行结果分别提供证据，不能用一个漂亮的回补消息替代后者。</p>
+<p>本站<a href="/zh-CN/2026/10/20/git-merge-base-ancestry-evidence/">空 diff 与提交祖先关系</a>讨论内容与历史可达的区别。本篇新增的是空提交策略：即使已经判断两份内容等效，仍要决定是否保留回补对象。原提交标识与新提交标识通常不同，报告应记录实际目标对象，不把消息中的来源行当作原提交成为祖先的证明。</p>
+<p>一份可交接的回补记录可以直接列出来源 X、目标起点、处理空项的选项、作出决定的理由和剩余补丁列表。若选择丢弃 X，补充目标已具备所需变化的证据；若选择保留，说明这条空记录承载什么追溯要求。后续补丁若依赖的是功能行为而非某个提交对象，也要在目标分支重新验证，不能因序列继续运行就认为依赖自动成立。这些字段让停下来的任务能被下一位维护者解释。</p>
+<p>待执行验收可以在临时仓库准备 X 与 M 两类输入，固定目标基线，分别观察默认停止、丢弃冗余、保留空记录及允许原本空提交的结果。每次从干净且已知的起点重建序列，保存命令版本、退出码、最终树和提交图，再用一个真实冲突负例确认脚本不会自动误跳。本文没有运行这些场景。回补完成的结论应同时说明如何处理空项、保留了什么历史，以及目标修复行为验证到哪里。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://git-scm.com/docs/git-cherry-pick" rel="noopener">Git git-cherry-pick manual — allow-empty and allow-empty-message; official master source snapshot</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--git" href="/zh-CN/tags/git/">Git</a>
+          
+            <a class="tag tag--cherry-pick" href="/zh-CN/tags/Cherry-pick/">Cherry-pick</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F28%2Fgit-cherry-pick-empty-commit-policy%2F&text=cherry-pick%20%E5%8F%98%E7%A9%BA%E5%90%8E%EF%BC%8C--allow-empty%20%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E4%B8%8D%E5%A4%9F%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F28%2Fgit-cherry-pick-empty-commit-policy%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=cherry-pick%20%E5%8F%98%E7%A9%BA%E5%90%8E%EF%BC%8C--allow-empty%20%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E4%B8%8D%E5%A4%9F%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F28%2Fgit-cherry-pick-empty-commit-policy%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/28/html-checkbox-required-group/">
+              <span>上一篇</span>
+              <strong>三个复选框都加required，为什么全选才可提交？</strong>
+              <small>2026-10-28</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/28/dom-nodelist-live-static-membership/">
+              <span>下一篇</span>
+              <strong>删节点时隔一个漏一个：先看列表会不会跟着变</strong>
+              <small>2026-10-28</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#原本没有树变化，与重放后没有树变化">原本没有树变化，与重放后没有树变化</a>
+          
+            <a class="toc-link toc-link--h2" href="#把两个来源提交放进一张决策表">把两个来源提交放进一张决策表</a>
+          
+            <a class="toc-link toc-link--h2" href="#drop、keep-与-stop-分别承担什么代价">drop、keep 与 stop 分别承担什么代价</a>
+          
+            <a class="toc-link toc-link--h2" href="#保留空提交能证明修复仍然生效吗？">保留空提交能证明修复仍然生效吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>277</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>160</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>110</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>77</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/27/git-bundle-prerequisite-restoration/">bundle 在源仓库验证通过，空仓库为什么恢复失败？</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/26/git-fetch-prune-tag-refspec/">fetch --prune 为何能删掉自己的标签？</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/23/git-restore-staged-working-tree/">git restore 先选来源，再决定改索引还是工作区</a></h3>
+          <p>2026-10-23</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

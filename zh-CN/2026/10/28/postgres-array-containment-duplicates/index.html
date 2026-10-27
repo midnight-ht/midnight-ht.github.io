@@ -1,0 +1,399 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>一个库存单位为什么能“包含”两个相同需求 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="解释 PostgreSQL 数组包含不计重复次数，比较标签、数量与数组相等，给出配货校验的选择边界。">
+  
+  
+    <meta name="keywords" content="array containment,duplicates,inventory counts">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/28/postgres-array-containment-duplicates/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/28/postgres-array-containment-duplicates/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/28/postgres-array-containment-duplicates/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/28/postgres-array-containment-duplicates/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="一个库存单位为什么能“包含”两个相同需求 | Midnight blog">
+    <meta property="og:description" content="解释 PostgreSQL 数组包含不计重复次数，比较标签、数量与数组相等，给出配货校验的选择边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/28/postgres-array-containment-duplicates/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/28/postgres-array-containment-duplicates/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/28/postgres-array-containment-duplicates/","name":"一个库存单位为什么能“包含”两个相同需求 | Midnight blog","description":"解释 PostgreSQL 数组包含不计重复次数，比较标签、数量与数组相等，给出配货校验的选择边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/28/postgres-array-containment-duplicates/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/28/postgres-array-containment-duplicates/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/28/postgres-array-containment-duplicates/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/28/postgres-array-containment-duplicates/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/28/postgres-array-containment-duplicates/","headline":"一个库存单位为什么能“包含”两个相同需求","description":"解释 PostgreSQL 数组包含不计重复次数，比较标签、数量与数组相等，给出配货校验的选择边界。","inLanguage":"zh-CN","datePublished":"2026-10-27T19:32:49.000Z","dateModified":"2026-10-27T19:32:49.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/functions-array.html"],"keywords":"Development, PostgreSQL, Arrays"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/28/postgres-array-containment-duplicates/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"一个库存单位为什么能“包含”两个相同需求","item":"https://www.zyweb.vip/zh-CN/2026/10/28/postgres-array-containment-duplicates/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/28/postgres-array-containment-duplicates/" selected>zh-CN</option><option value="/en/2026/10/28/postgres-array-containment-duplicates/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/28/postgres-array-containment-duplicates/" selected>zh-CN</option><option value="/en/2026/10/28/postgres-array-containment-duplicates/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-27T19:32:49.000Z">2026-10-28</time>
+    </div>
+
+    <h1>一个库存单位为什么能“包含”两个相同需求</h1>
+
+    
+      <p class="post-hero__summary">解释 PostgreSQL 数组包含不计重复次数，比较标签、数量与数组相等，给出配货校验的选择边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-27T19:32:49.000Z">2026-10-28</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/28/postgres-array-containment-duplicates/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/28/postgres-array-containment-duplicates/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>数组包含检查元素存在，不为重复需求分配独立单位。</li><li>总长度相同与双向包含都不等于数量满足。</li><li>数组相等、标签集合和库存分配需要独立合同。</li></ul></section>
+      <div class="article-content">
+        <p>ARRAY[1] 与 ARRAY[1,1] 在 PostgreSQL 的数组包含判断中可以互相包含。这个运算检查每种元素是否出现，不替你核对库存数量。若一表示一种商品，一件库存不能因为包含判断为真，就被解释成足够交付两件同款。</p>
+<h2 id="包含运算没有替重复值计数"><a href="#包含运算没有替重复值计数" class="headerlink" title="包含运算没有替重复值计数"></a>包含运算没有替重复值计数</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-array.html">PostgreSQL 18 数组运算文档</a>把 @&gt; 定义为：右侧出现的每个元素，都能在左侧找到相等元素。重复值不会被特殊对待。本文依据第十八版讨论普通整数数组，示例没有执行，也不把未知元素、多维形状或其他类型的比较规则一起压成同一种业务集合。</p>
+<p>假设一个简单原型用商品编号数组表示可用单位，左侧只有编号七，需求数组含两个七。下面的包含判断按元素存在性可以成立。右侧第二个七不要求左侧再提供一个独立单位，两个需求位置可以由同一种值的存在满足。</p>
+<pre><code class="sql">SELECT ARRAY[7] @&gt; ARRAY[7,7];
+SELECT ARRAY[7,7] @&gt; ARRAY[7];
+SELECT ARRAY[7] = ARRAY[7,7];
+</code></pre>
+<p>前三行不是运行结果记录。按文档规则推导，前两项包含为真，第三项数组相等为假。把这些推演作为待执行测试的明确预期，可以防止验证只检查“查询有返回”，没有检查业务真正关心的数量差别。演示数字没有对应真实订单或仓库。</p>
+<p>这不意味着数组包含是坏工具。若商品只有一份去重标签集合，需求是同时具有“可回收”和“促销”，关注的是两类标签都出现。标签重复一般不提供额外价值，包含语义可能正好符合要求。错误发生在把这种存在性合同搬到数量合同，却继续使用同样的判断名称。</p>
+<p>接口里将字段命名为 items 也不足以决定语义。它可能表示商品种类、订单行、可售单位或任意重复的历史事件。先确定一个元素代表什么，再决定重复是否有信息；不要在查询之后才用返回值倒推产品想表达哪一种数量。</p>
+<h2 id="同样元素数量，并不保证同样配货"><a href="#同样元素数量，并不保证同样配货" class="headerlink" title="同样元素数量，并不保证同样配货"></a>同样元素数量，并不保证同样配货</h2><p>只比较两个数组总长度也不能修复这个问题。假设库存是七和八，需求是七和七；两边都有两项，但第二个商品种类不同。若先做总量相等，再做“存在任意交集”，仍会接受一份缺货的需求。需要的是按商品分别比较需求数量与可用数量。</p>
+<p>一种可讨论的数据模型是每个商品有显式数量，或者每件可追踪单位有独立身份。前者适合按商品汇总，后者适合序列号、批次或必须辨认单件的场景。选哪种取决于库存合同。本篇没有提供并发扣减 SQL，数量校验通过也不能独自证明后续写入不会与另一个订单争用同一库存。</p>
+<p>若继续用重复数组表达数量，可以先按元素分组计数，再比较每种值的计数是否足够；这只是语义层设计建议，还需明确空输入、未知输入和非法编号怎样处理。不能在计数前随手去重，因为去重恰好删除了待核对的数量。也不能遇到未知商品就静默略过，否则“全部可满足”只描述被留下的子集。</p>
+<p>把验证与分配分开也很重要。页面展示“目前可满足”，与提交订单时保留库存，是两项不同承诺。允许并发下结果变化的预览，应给出适当文字；承诺已经保留，则需要有实际持久状态和失败恢复规则。一个布尔包含表达式无法承担后者。</p>
+<h2 id="双向包含能当作数组相等吗？"><a href="#双向包含能当作数组相等吗？" class="headerlink" title="双向包含能当作数组相等吗？"></a>双向包含能当作数组相等吗？</h2><p>不能。双向包含不会自动比较重复次数或原始顺序。数组本身的相等比较保留数组的结构与元素信息，官方文档还说明维度信息也参与数组比较。不要把为标签集合选择的等价关系，推广为“任何数组都一样”。</p>
+<p>例如七、八和八、七可以互相包含，但不是同一顺序的数组；七与七、七也可以互相包含，但长度不同。若业务明确把普通非空整数标签规范化为去重且按固定方式排序的集合，可以建立自己的集合比较合同，但必须承认规范化已经丢弃了顺序和次数。需要保留这些信息的记录不能使用该合同。</p>
+<p>下界和多维形状如果携带领域含义，也要留在输入验证中。即使展示出来的数字相似，结构不同仍可能来自不同协议。最稳妥的评审方式是列出允许忽略的差异，再选择操作；不要以某一条包含结果碰巧相同，推导出所有差异都无关。</p>
+<p>本站<a href="/zh-CN/2026/10/16/postgres-empty-array-cardinality/">空数组长度与总元素数</a>讨论计数口径，与本题有关但不能替代它。总量能帮助描述输入规模，不能说明某种商品出现几次，更不能证明它们属于可售状态。统计、包含和分配应各自有清楚名称。</p>
+<p>待执行用例可从四个反例开始：一件同款对两件需求、同总量但商品种类不同、顺序相反、重复次数不同。分别写明标签筛选、数量满足和原始数组相等的预期，避免只维护一套真假断言却用于三种接口。再加入空输入、未知来源与非法商品，确认错误不会被包装成正常不匹配。</p>
+<p>可以把这个差异写成一张待验证的计数账：可用商品七为一件、商品八为三件，需求商品七为两件、商品八为一件。总库存四件大于总需求三件，但商品七仍缺一件，商品八的余量不能补成另一种商品。正确拒绝理由应指向商品七，而不是笼统报告总量不足。若需求按不同配送日期分组，同一种商品也未必能够跨日期合并；分组键应包含实际分配约束。把计数键写成商品编号只是本例的简化，不是要求忽略仓库、批次或可用状态。验证时故意让总量足够而单种不足，可以证明校验没有退化为总数比较；再让总量与各组都满足，确认合法需求不会因为原始重复表示而被误拒。</p>
+<p>若实际实现按数量分组，验证还应核对拒绝原因能定位到具体商品和缺少数量，而不是只给“数组不包含”。这会让调用方知道应该减少数量、补库存，还是修正输入。本文没有执行这些检查；决定采用 @&gt; 前，先写出“重复的一项是否代表更多需求”，就能排除这类最小但危险的语义误用。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-array.html" rel="noopener">PostgreSQL 18 — 9.19 Array Functions and Operators, Table 9.56</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--arrays" href="/zh-CN/tags/Arrays/">Arrays</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F28%2Fpostgres-array-containment-duplicates%2F&text=%E4%B8%80%E4%B8%AA%E5%BA%93%E5%AD%98%E5%8D%95%E4%BD%8D%E4%B8%BA%E4%BB%80%E4%B9%88%E8%83%BD%E2%80%9C%E5%8C%85%E5%90%AB%E2%80%9D%E4%B8%A4%E4%B8%AA%E7%9B%B8%E5%90%8C%E9%9C%80%E6%B1%82" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F28%2Fpostgres-array-containment-duplicates%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E4%B8%80%E4%B8%AA%E5%BA%93%E5%AD%98%E5%8D%95%E4%BD%8D%E4%B8%BA%E4%BB%80%E4%B9%88%E8%83%BD%E2%80%9C%E5%8C%85%E5%90%AB%E2%80%9D%E4%B8%A4%E4%B8%AA%E7%9B%B8%E5%90%8C%E9%9C%80%E6%B1%82&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F28%2Fpostgres-array-containment-duplicates%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/28/postgres-exists-projection-evaluation/">
+              <span>上一篇</span>
+              <strong>EXISTS 里的 SELECT 为什么不适合放审计副作用</strong>
+              <small>2026-10-28</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/28/playwright-evaluate-serialization-boundary/">
+              <span>下一篇</span>
+              <strong>page.evaluate 为什么读不到测试里的变量？</strong>
+              <small>2026-10-28</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#包含运算没有替重复值计数">包含运算没有替重复值计数</a>
+          
+            <a class="toc-link toc-link--h2" href="#同样元素数量，并不保证同样配货">同样元素数量，并不保证同样配货</a>
+          
+            <a class="toc-link toc-link--h2" href="#双向包含能当作数组相等吗？">双向包含能当作数组相等吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>277</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>160</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>110</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>77</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/28/postgres-exists-projection-evaluation/">EXISTS 里的 SELECT 为什么不适合放审计副作用</a></h3>
+          <p>2026-10-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/27/jsonschema-prefixitems-tuple-length/">prefixItems写了两项，为什么一项数组也通过？</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/27/postgres-character-padding-contract/">char(4) 里的 AB：为什么相等却不能照猜 LIKE</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
