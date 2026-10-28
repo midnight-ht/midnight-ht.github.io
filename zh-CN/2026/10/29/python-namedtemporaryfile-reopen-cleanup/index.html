@@ -1,0 +1,413 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Python 临时文件有路径，另一个读取者为什么打不开？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="基于 Python 3.12 以上的 delete_on_close，解释命名临时文件的交接时段、Windows 句柄条件与最终清理责任。">
+  
+  
+    <meta name="keywords" content="NamedTemporaryFile,delete_on_close,Windows 文件句柄">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/29/python-namedtemporaryfile-reopen-cleanup/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Python 临时文件有路径，另一个读取者为什么打不开？ | Midnight blog">
+    <meta property="og:description" content="基于 Python 3.12 以上的 delete_on_close，解释命名临时文件的交接时段、Windows 句柄条件与最终清理责任。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/","name":"Python 临时文件有路径，另一个读取者为什么打不开？ | Midnight blog","description":"基于 Python 3.12 以上的 delete_on_close，解释命名临时文件的交接时段、Windows 句柄条件与最终清理责任。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/","headline":"Python 临时文件有路径，另一个读取者为什么打不开？","description":"基于 Python 3.12 以上的 delete_on_close，解释命名临时文件的交接时段、Windows 句柄条件与最终清理责任。","inLanguage":"zh-CN","datePublished":"2026-10-28T19:35:06.000Z","dateModified":"2026-10-28T19:35:06.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.14/library/tempfile.html"],"keywords":"Development, Python, 临时文件, 资源清理"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Python 临时文件有路径，另一个读取者为什么打不开？","item":"https://www.zyweb.vip/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/" selected>zh-CN</option><option value="/en/2026/10/29/python-namedtemporaryfile-reopen-cleanup/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/" selected>zh-CN</option><option value="/en/2026/10/29/python-namedtemporaryfile-reopen-cleanup/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-28T19:35:06.000Z">2026-10-29</time>
+    </div>
+
+    <h1>Python 临时文件有路径，另一个读取者为什么打不开？</h1>
+
+    
+      <p class="post-hero__summary">基于 Python 3.12 以上的 delete_on_close，解释命名临时文件的交接时段、Windows 句柄条件与最终清理责任。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-28T19:35:06.000Z">2026-10-29</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/29/python-namedtemporaryfile-reopen-cleanup/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>默认关闭命名临时文件会触发删除。</li><li>推迟删除后，读取者仍须在拥有者退出前结束。</li><li>返回路径字符串不会延长临时文件的生命周期。</li></ul></section>
+      <div class="article-content">
+        <p><code>NamedTemporaryFile</code> 有一个文件路径，不代表关闭后还能沿着它读取。默认配置会在关闭文件时删除它；若要把路径交给另一个读取者，应让文件存活到读取结束，并明确谁负责最终删除。Python 3.12 起可以用 <code>delete_on_close=False</code> 将自动清理推迟到上下文退出，但这仍要求读取者及时关闭。</p>
+<h2 id="路径、句柄和删除时点分别安排"><a href="#路径、句柄和删除时点分别安排" class="headerlink" title="路径、句柄和删除时点分别安排"></a>路径、句柄和删除时点分别安排</h2><p><a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/tempfile.html#tempfile.NamedTemporaryFile">Python tempfile 文档</a>说明，NamedTemporaryFile 保证文件有可见名字。默认 delete 与 delete_on_close 都为真，close 会触发删除；delete 为真而 delete_on_close 为假时，自动删除安排在上下文退出等清理时点。本文于二〇二六年十月二十九日核对 Python 3.14.10 文档，该参数在三点十二版加入，不能将示例直接复制给更旧解释器。</p>
+<p>假设服务生成一份 CSV，把临时文件名字交给需要路径的转换器。若写完后先 close，再启动读取，默认文件可能已消失；若始终保持打开，又必须考虑目标平台对共享打开的规则。这个问题不是给文件名加随机数就能解决，因为冲突避免与生命周期是两个要求。读取者需要的是在约定时段内可打开的内容，而不是一段曾经存在过的路径。</p>
+<p>先明确三个角色：创建者写入内容，读取者在限定范围内使用内容，创建者在最后一个读取者结束后清理。一个函数可以兼任多个角色，但责任不能因为跨函数或子进程交接就丢失。路径本身不会告诉创建者消费者什么时候用完，必须由同步返回、可等待任务或另一个完成协议表达。</p>
+<h2 id="在-with-内完成第二次读取"><a href="#在-with-内完成第二次读取" class="headerlink" title="在 with 内完成第二次读取"></a>在 with 内完成第二次读取</h2><p>下面是未执行的完整教学函数，要求 Python 3.12 或更新版本。它用标准 open 模拟需要路径的读取者，刻意把读取结束放在外层 with 退出之前。返回的是内容，不是一个即将失效的临时路径。</p>
+<pre><code class="python">from tempfile import NamedTemporaryFile
+
+def read_through_path(text: str) -&gt; str:
+    with NamedTemporaryFile(
+        mode=&quot;w&quot;, encoding=&quot;utf-8&quot;, suffix=&quot;.txt&quot;,
+        delete=True, delete_on_close=False,
+    ) as temporary:
+        temporary.write(text)
+        temporary.flush()
+        path = temporary.name
+        temporary.close()
+        with open(path, encoding=&quot;utf-8&quot;) as reader:
+            result = reader.read()
+    return result
+</code></pre>
+<p>flush 和 close 确保这份写入不只留在当前对象的缓冲区，再打开同一路径读取。因为关闭不再立即触发删除，读取发生在文件仍由外层上下文管理的时段；内层 with 先关闭 reader，随后外层退出并尝试删除。这里没有承诺写入具有断电持久性，也没有验证编码在任何外部工具中都被同样解释。若接入实际转换器，还应检查它是否真的读取了本次内容。</p>
+<p>当消费者是子进程时，同样需要等待它完成，再退出临时文件的范围。只调用异步启动函数后马上返回路径，会让清理先于消费者访问。可以在这个作用域中使用会等待完成的调用并检查退出状态；若消费者必须长期后台运行，则需要改变文件所有权和清理协议，而不是通过延时碰运气。</p>
+<h2 id="Windows-为什么需要特别核对？"><a href="#Windows-为什么需要特别核对？" class="headerlink" title="Windows 为什么需要特别核对？"></a>Windows 为什么需要特别核对？</h2><p>官方文档区分 POSIX 和 Windows。POSIX 上仍打开的命名临时文件可以再次打开；Windows 需要满足允许再次打开的条件，例如关闭自动删除、额外打开共享删除访问，或保留 delete=True 并使用 delete_on_close=False。选择最后一种时，普通 open 创建的额外句柄必须在上下文退出前关闭，否则删除可能报 PermissionError。</p>
+<p>这说明成功打开与成功清理是两个验收点。读内容的代码没报错，仍可能在退出时因为读取者还持有文件而失败。如果临时目录缺少删除权限，使用推迟删除的方式也可能到退出时才暴露权限问题。不能把测试只放在 POSIX 开发机上，就宣称 Windows 文件交接已经验收。</p>
+<p>这个差异也不表示 Windows 上应该一律 delete=False。关掉自动清理只是把责任移给应用；若应用在异常路径漏掉 unlink，临时内容可能继续留在目录。文件中若含有客户数据，保留期限和访问范围应按业务规则安排，不能把临时目录当成自动保密或自动过期的存储服务。</p>
+<h2 id="delete-False-能解决所有交接问题吗？"><a href="#delete-False-能解决所有交接问题吗？" class="headerlink" title="delete=False 能解决所有交接问题吗？"></a>delete=False 能解决所有交接问题吗？</h2><p>它能让关闭不自动删除，但不能证明读取者已经完成，更不会替应用选择最终清理时间。若需要故障后保留诊断产物，可以采用明确的保留政策：只在受控失败分支登记文件身份、访问者与到期清理任务；成功分支主动删除。没有这样的登记，临时路径会成为没人知道还该不该删的遗留物。</p>
+<p>外层 finally 中删除也不是一个无条件可靠的答案。程序被强制杀死时，普通 Python 清理代码没有机会运行；官方文档特别提到 POSIX 的 SIGKILL 不能自动删除创建的命名临时文件。因此需要运行级别的遗留文件整理时，应基于任务身份和年龄等可审查条件，不要随便扫描一个共享目录删掉所有看似旧的文件。</p>
+<p>本题也不同于本站<a href="/zh-CN/2026/10/26/python-contextmanager-single-yield-cleanup/">contextmanager 单次 yield</a>讨论的控制流：即使上下文协议写得正确，文件是否仍供另一个进程使用仍需要单独表达。完成清理的代码位置，必须对应真实消费者结束的时点。</p>
+<p>拟议验证先检查相同文本经写入和重新读取保持一致，再核对函数返回后路径不再存在。分别注入写入失败、读取失败、读取者不关闭和消费者尚未完成，确认异常是否可见且没有把部分内容当成成功产物。Windows 与 POSIX 分别执行，记录解释器版本和目录权限；强杀后的遗留清理作为另一个运维用例，不以正常 with 测试代替。</p>
+<p>如果调用方真正需要的是可继续下载的文件，就不要返回这个函数里的 path。外层 with 正常退出后，该路径按设计已经进入删除流程；把字符串放进队列或数据库并不会延长文件寿命。应在作用域内把内容复制到具有独立保留规则的产物位置，并验证复制完成，或者明确把文件所有权移交给持久管理者。临时读取成功与可供用户日后取回的导出文件，是不同交付目标，不能共用同一句成功提示。</p>
+<p>本文没有运行文件程序、子进程或跨平台测试。交接前先画清路径在哪一段时间必须存在，随后让实际读取完整地落在这段范围内；如果做不到，就先改变所有权，而不是先关闭自动删除。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/tempfile.html" rel="noopener">tempfile — Generate temporary files and directories — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E4%B8%B4%E6%97%B6%E6%96%87%E4%BB%B6/">临时文件</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E8%B5%84%E6%BA%90%E6%B8%85%E7%90%86/">资源清理</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fpython-namedtemporaryfile-reopen-cleanup%2F&text=Python%20%E4%B8%B4%E6%97%B6%E6%96%87%E4%BB%B6%E6%9C%89%E8%B7%AF%E5%BE%84%EF%BC%8C%E5%8F%A6%E4%B8%80%E4%B8%AA%E8%AF%BB%E5%8F%96%E8%80%85%E4%B8%BA%E4%BB%80%E4%B9%88%E6%89%93%E4%B8%8D%E5%BC%80%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fpython-namedtemporaryfile-reopen-cleanup%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Python%20%E4%B8%B4%E6%97%B6%E6%96%87%E4%BB%B6%E6%9C%89%E8%B7%AF%E5%BE%84%EF%BC%8C%E5%8F%A6%E4%B8%80%E4%B8%AA%E8%AF%BB%E5%8F%96%E8%80%85%E4%B8%BA%E4%BB%80%E4%B9%88%E6%89%93%E4%B8%8D%E5%BC%80%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fpython-namedtemporaryfile-reopen-cleanup%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/29/sqlite-busy-timeout-connection-budget/">
+              <span>上一篇</span>
+              <strong>SQLite 配了五秒 busy_timeout，为什么写入仍失败？</strong>
+              <small>2026-10-29</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/29/python-hmac-compare-digest-representation/">
+              <span>下一篇</span>
+              <strong>签名用了 compare_digest，为什么仍然一直不匹配？</strong>
+              <small>2026-10-29</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#路径、句柄和删除时点分别安排">路径、句柄和删除时点分别安排</a>
+          
+            <a class="toc-link toc-link--h2" href="#在-with-内完成第二次读取">在 with 内完成第二次读取</a>
+          
+            <a class="toc-link toc-link--h2" href="#Windows-为什么需要特别核对？">Windows 为什么需要特别核对？</a>
+          
+            <a class="toc-link toc-link--h2" href="#delete-False-能解决所有交接问题吗？">delete=False 能解决所有交接问题吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>274</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>171</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>113</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>79</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/">Python wait_for 一秒超时，为什么一秒后还没返回？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/28/python-timedelta-seconds-total-seconds/">超过一天的耗时，为什么 seconds 只剩几小时</a></h3>
+          <p>2026-10-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/css-scroll-margin-fragment-target/">CSS目录跳到标题，为什么标题藏在固定栏下面？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

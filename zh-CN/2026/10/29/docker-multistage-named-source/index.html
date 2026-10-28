@@ -1,0 +1,406 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Dockerfile 插入阶段后，COPY --from=0 还指向原产物吗？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用同路径不同内容的阶段解释数字引用错位，改为命名依赖，并对最终镜像、构建目标和整组必要文件分别取证。">
+  
+  
+    <meta name="keywords" content="COPY --from,命名阶段,产物来源">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/29/docker-multistage-named-source/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/29/docker-multistage-named-source/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/29/docker-multistage-named-source/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/29/docker-multistage-named-source/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Dockerfile 插入阶段后，COPY --from=0 还指向原产物吗？ | Midnight blog">
+    <meta property="og:description" content="用同路径不同内容的阶段解释数字引用错位，改为命名依赖，并对最终镜像、构建目标和整组必要文件分别取证。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/29/docker-multistage-named-source/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/docker-multistage-named-source/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/29/docker-multistage-named-source/","name":"Dockerfile 插入阶段后，COPY --from=0 还指向原产物吗？ | Midnight blog","description":"用同路径不同内容的阶段解释数字引用错位，改为命名依赖，并对最终镜像、构建目标和整组必要文件分别取证。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/docker-multistage-named-source/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/docker-multistage-named-source/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/docker-multistage-named-source/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/docker-multistage-named-source/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/29/docker-multistage-named-source/","headline":"Dockerfile 插入阶段后，COPY --from=0 还指向原产物吗？","description":"用同路径不同内容的阶段解释数字引用错位，改为命名依赖，并对最终镜像、构建目标和整组必要文件分别取证。","inLanguage":"zh-CN","datePublished":"2026-10-28T19:35:06.000Z","dateModified":"2026-10-28T19:35:06.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.docker.com/build/building/multi-stage/"],"keywords":"Delivery, Docker, 多阶段构建"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/docker-multistage-named-source/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Dockerfile 插入阶段后，COPY --from=0 还指向原产物吗？","item":"https://www.zyweb.vip/zh-CN/2026/10/29/docker-multistage-named-source/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/29/docker-multistage-named-source/" selected>zh-CN</option><option value="/en/2026/10/29/docker-multistage-named-source/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/29/docker-multistage-named-source/" selected>zh-CN</option><option value="/en/2026/10/29/docker-multistage-named-source/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-28T19:35:06.000Z">2026-10-29</time>
+    </div>
+
+    <h1>Dockerfile 插入阶段后，COPY --from=0 还指向原产物吗？</h1>
+
+    
+      <p class="post-hero__summary">用同路径不同内容的阶段解释数字引用错位，改为命名依赖，并对最终镜像、构建目标和整组必要文件分别取证。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-28T19:35:06.000Z">2026-10-29</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/29/docker-multistage-named-source/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/29/docker-multistage-named-source/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>数字零指向第一条FROM阶段，不记住业务角色。</li><li>命名引用减少排列耦合，仍需评审来源、路径和目标。</li><li>检查最终镜像整组文件，不能用中间阶段或启动成功替代。</li></ul></section>
+      <div class="article-content">
+        <p>在 Dockerfile 前面插入一个构建阶段后，COPY --from=0 仍指向第一条 FROM 开始的阶段，并不会记住它过去承担的业务角色。跨阶段复制依赖产物来源时，应为阶段命名，再核对最终镜像中的内容。构建成功只能证明指令完成，不能证明复制来源符合发布意图。</p>
+<h2 id="零是位置，不是“应用构建”的名字"><a href="#零是位置，不是“应用构建”的名字" class="headerlink" title="零是位置，不是“应用构建”的名字"></a>零是位置，不是“应用构建”的名字</h2><p><a target="_blank" rel="noopener" href="https://docs.docker.com/build/building/multi-stage/#name-your-build-stages">Docker 多阶段构建文档的阶段命名说明</a>明确，未命名阶段从第一条 FROM 开始按零编号，也可以通过 AS 给阶段命名，再在 COPY 中引用。名字让依赖不再跟随指令排列的位置变化。本篇按二〇二六年十月二十九日核对的在线文档分析，没有执行镜像构建；示例版本是说明用途，不代表最新或项目选定版本。</p>
+<p>每条 FROM 开始一个阶段，跨阶段复制就是从指定阶段的文件系统取文件。数字引用很短，在只有两个阶段的文件里也容易理解。但它隐含了一条维护约定：源阶段前面不能插入会改变编号的阶段。代码评审若只看新增的审计步骤，而没有重新编号所有消费者，就可能漏掉这个依赖变化。</p>
+<p>最明显的故障是新阶段没有目标文件，构建直接失败。更值得警惕的反例是两个阶段恰好都有同路径文件，复制能够成功，但内容来自另一条生产路径。这时“构建变绿”不能帮你识别来源错位。不能为了尽快修复缺文件，就随便把数字从零改成一；需要先确认哪一个角色才是最终镜像应依赖的产物生产者。</p>
+<h2 id="用同路径标记看清来源变化"><a href="#用同路径标记看清来源变化" class="headerlink" title="用同路径标记看清来源变化"></a>用同路径标记看清来源变化</h2><p>下面是未执行的教学 Dockerfile，只生成文本标记，以免把依赖安装、网络和编译器差异混进同一个问题。</p>
+<pre><code class="dockerfile">FROM alpine:3.22 AS audit
+RUN mkdir -p /out &amp;&amp; printf &#39;audit-only\n&#39; &gt; /out/result.txt
+
+FROM alpine:3.22 AS release_build
+RUN mkdir -p /out &amp;&amp; printf &#39;release-content\n&#39; &gt; /out/result.txt
+
+FROM alpine:3.22 AS runtime
+COPY --from=0 /out/result.txt /result.txt
+CMD [&quot;cat&quot;, &quot;/result.txt&quot;]
+</code></pre>
+<p>假设文件原来只有 release_build 与 runtime 两段，数字零指向发布内容。现在在前面加了 audit，零指向审计阶段。因为审计阶段也有 /out/result.txt，错误来源仍能满足 COPY 的路径要求，最终读取到的将是 audit-only 标记。这里没有声称实际构建输出；这是按阶段编号和示例文件内容作出的推演。</p>
+<p>修复为 <code>COPY --from=release_build /out/result.txt /result.txt</code> 后，读取来源由名字明确表达。前面再增加其他阶段，不会仅因为编号变化就改为另一个来源。这个名字也给评审者一个检查入口：release_build 究竟是否生成了经过测试、允许进入运行镜像的那份文件？名字表达意图，文件检查才验证结果。</p>
+<p>如果团队把阶段重命名，仍应同时更新所有引用。命名不是永远不变的身份系统，也不能防止把一个阶段重新定义成完全不同的内容。应将名字、输出路径和消费者一起评审，避免把“名字没变”当作业务合同从未改变。不同构建目标也可能使用不同依赖，调试阶段成功不等于运行阶段拿到相同文件。</p>
+<h2 id="该固定数字，还是改成命名依赖？"><a href="#该固定数字，还是改成命名依赖？" class="headerlink" title="该固定数字，还是改成命名依赖？"></a>该固定数字，还是改成命名依赖？</h2><p>对于一次性的短示例，数字引用能清楚表达第一阶段。对于多人维护、会增加测试或审计阶段的 Dockerfile，命名通常更容易看出角色，也减少与排列顺序的耦合。代价是团队需要维护命名和输出约定；过于含糊的 base、stage1 并没有比数字增加多少业务信息。</p>
+<p>命名可以表达 build、test、runtime 等不同用途，但不能只靠读者的常识推断依赖。如果测试阶段检查过一份文件，而运行镜像仍复制测试前的另一份文件，就应追踪实际文件来源，而不是看到一个名叫 test 的阶段就认定发布内容已被测试。对需要强制经过检查的产物，把依赖关系和最终内容纳入流水线验证。</p>
+<p>Docker 文档还允许使用 --target 在指定阶段停止构建。它适合检查中间阶段，不等于整个最终镜像已经生成。记录命令时，应保存实际 target 与最终镜像标识。BuildKit 会按目标依赖处理需要的阶段，因此“Dockerfile 里写了测试阶段”本身也不是测试执行证据；必须证明目标确实依赖或显式执行了它。</p>
+<h2 id="命名之后，怎样验证运行镜像拿到了哪份内容？"><a href="#命名之后，怎样验证运行镜像拿到了哪份内容？" class="headerlink" title="命名之后，怎样验证运行镜像拿到了哪份内容？"></a>命名之后，怎样验证运行镜像拿到了哪份内容？</h2><p>先在无敏感内容的隔离样例中构建数字引用和命名引用两份输入，检查最终文件标记，再在源阶段前插入一个同路径不同内容的阶段。这个对照只改变阶段排列，能直接检验是否还依赖位置。随后故意改错源路径，确认错误被清楚暴露，而不是由另一个阶段的碰巧同名文件补上。</p>
+<p>真实项目不必把标记文件混进产品。可以在受控验证时提取最终镜像的目标文件，与批准产物的内容摘要、版本信息或可复核清单比较。注意最后一个阶段还可能在 COPY 之后修改文件；只检查源阶段摘要无法证明最终内容。若运行时挂载覆盖路径，还需要另查容器视图，相关例子见<a href="/zh-CN/2026/10/28/docker-bind-mount-obscured-files/">绑定挂载遮蔽镜像文件</a>。</p>
+<p>验证记录应同时写 Dockerfile 版本、构建目标、构建器版本、基础镜像身份和最终文件证据。本文没有运行这些检查，也没有测量镜像体积变化。把最终镜像变小与复制正确产物分开验收，否则一个很小但内容错误的镜像仍会被误认为成功。</p>
+<p>另一个边界是外部镜像来源。COPY --from 还可以引用外部镜像，不能把任何看起来像名字的值都自动理解成当前文件的本地阶段。评审时应确认每个引用解析到哪里，是否需要远程获取，以及使用的是可变标签还是经过选择的内容身份。先把来源关系画清楚，再调整阶段顺序；阶段命名解决位置耦合，产物核对继续承担内容正确性的责任。</p>
+<p>如果交付物包含可执行文件、模板和配置三部分，不能只核对其中一个文件。可以为示例准备一份明确的允许清单，逐项说明生产者与最终路径，再检查缺少、额外和内容不符三类结果。一个文件来自新阶段、另一个仍来自旧阶段时，应用甚至可能正常启动，却在使用某个功能时才暴露不兼容。验证应覆盖整组必要文件，而不是用一次启动成功替代内容一致性。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.docker.com/build/building/multi-stage/" rel="noopener">Docker Multi-stage builds — Name your build stages</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--docker" href="/zh-CN/tags/docker/">Docker</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%A4%9A%E9%98%B6%E6%AE%B5%E6%9E%84%E5%BB%BA/">多阶段构建</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fdocker-multistage-named-source%2F&text=Dockerfile%20%E6%8F%92%E5%85%A5%E9%98%B6%E6%AE%B5%E5%90%8E%EF%BC%8CCOPY%20--from%3D0%20%E8%BF%98%E6%8C%87%E5%90%91%E5%8E%9F%E4%BA%A7%E7%89%A9%E5%90%97%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fdocker-multistage-named-source%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Dockerfile%20%E6%8F%92%E5%85%A5%E9%98%B6%E6%AE%B5%E5%90%8E%EF%BC%8CCOPY%20--from%3D0%20%E8%BF%98%E6%8C%87%E5%90%91%E5%8E%9F%E4%BA%A7%E7%89%A9%E5%90%97%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fdocker-multistage-named-source%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/29/html-inert-flat-tree-interaction/">
+              <span>上一篇</span>
+              <strong>HTML inert：盖上加载层，下面的表单还能操作吗？</strong>
+              <small>2026-10-29</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/29/css-scroll-margin-fragment-target/">
+              <span>下一篇</span>
+              <strong>CSS目录跳到标题，为什么标题藏在固定栏下面？</strong>
+              <small>2026-10-29</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#零是位置，不是“应用构建”的名字">零是位置，不是“应用构建”的名字</a>
+          
+            <a class="toc-link toc-link--h2" href="#用同路径标记看清来源变化">用同路径标记看清来源变化</a>
+          
+            <a class="toc-link toc-link--h2" href="#该固定数字，还是改成命名依赖？">该固定数字，还是改成命名依赖？</a>
+          
+            <a class="toc-link toc-link--h2" href="#命名之后，怎样验证运行镜像拿到了哪份内容？">命名之后，怎样验证运行镜像拿到了哪份内容？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>274</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>171</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>113</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>79</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/28/docker-bind-mount-obscured-files/">镜像里有配置，bind mount 后为什么不见了？</a></h3>
+          <p>2026-10-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/18/docker-build-cache-package-index/">Docker 缓存与包索引：同层安装之后，还要决定何时重跑</a></h3>
+          <p>2026-10-18</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/actions-step-outcome-conclusion/">GitHub Actions 步骤失败后，outcome 与 conclusion 应该读哪个？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

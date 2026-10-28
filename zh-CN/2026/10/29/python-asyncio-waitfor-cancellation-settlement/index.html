@@ -1,0 +1,416 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Python wait_for 一秒超时，为什么一秒后还没返回？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="区分 asyncio wait_for 的超时触发、取消完成和清理责任，用 finally 示例说明额外等待、清理异常及 shield 的所有权。">
+  
+  
+    <meta name="keywords" content="wait_for,TimeoutError,shield">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/29/python-asyncio-waitfor-cancellation-settlement/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Python wait_for 一秒超时，为什么一秒后还没返回？ | Midnight blog">
+    <meta property="og:description" content="区分 asyncio wait_for 的超时触发、取消完成和清理责任，用 finally 示例说明额外等待、清理异常及 shield 的所有权。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/","name":"Python wait_for 一秒超时，为什么一秒后还没返回？ | Midnight blog","description":"区分 asyncio wait_for 的超时触发、取消完成和清理责任，用 finally 示例说明额外等待、清理异常及 shield 的所有权。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/","headline":"Python wait_for 一秒超时，为什么一秒后还没返回？","description":"区分 asyncio wait_for 的超时触发、取消完成和清理责任，用 finally 示例说明额外等待、清理异常及 shield 的所有权。","inLanguage":"zh-CN","datePublished":"2026-10-28T19:35:06.000Z","dateModified":"2026-10-28T19:35:06.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.14/library/asyncio-task.html"],"keywords":"Development, Python, asyncio, 取消"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Python wait_for 一秒超时，为什么一秒后还没返回？","item":"https://www.zyweb.vip/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/" selected>zh-CN</option><option value="/en/2026/10/29/python-asyncio-waitfor-cancellation-settlement/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/" selected>zh-CN</option><option value="/en/2026/10/29/python-asyncio-waitfor-cancellation-settlement/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-28T19:35:06.000Z">2026-10-29</time>
+    </div>
+
+    <h1>Python wait_for 一秒超时，为什么一秒后还没返回？</h1>
+
+    
+      <p class="post-hero__summary">区分 asyncio wait_for 的超时触发、取消完成和清理责任，用 finally 示例说明额外等待、清理异常及 shield 的所有权。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-28T19:35:06.000Z">2026-10-29</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/29/python-asyncio-waitfor-cancellation-settlement/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>wait_for 超时后等待取消完成，耗时可能越过阈值。</li><li>清理异常与超时异常不能随意合并。</li><li>shield 改变取消范围，也需要明确后台任务负责人。</li></ul></section>
+      <div class="article-content">
+        <p><code>asyncio.wait_for(..., timeout=1)</code> 并不保证整个调用在一秒内返回。达到超时条件后，它会取消被等待的任务，并等待取消完成；任务退出时还有清理工作，就可能继续等待。设计请求预算时，要区分开始取消的时点与资源收尾完成的时点。</p>
+<h2 id="超时触发取消，不是终止进程"><a href="#超时触发取消，不是终止进程" class="headerlink" title="超时触发取消，不是终止进程"></a>超时触发取消，不是终止进程</h2><p><a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/asyncio-task.html#asyncio.wait_for">Python 协程与任务文档</a>说明，wait_for 在超时时取消等待对象，并等待实际取消，所以总等待时间可能超过 timeout；取消期间发生的异常会继续传播。本文于二〇二六年十月二十九日核对 Python 3.14.10 文档。等待取消完成的规则从三点七版开始，三点十一版起超时抛出内置 TimeoutError，旧版本代码不能只凭相同函数名混用说明。</p>
+<p>设想文件导出协程正在等待远程读取，超时后需要关闭连接、删除临时文件。调用方想尽快回答用户，资源持有者却不能在工作做了一半时凭空消失。如果把“一秒开始退出”写成“一秒所有工作结束”，需求会同时要求两个不同结果。更明确的合同应写出什么时候停止接收新结果、清理由谁负责、服务最多还愿意等待多久，以及清理失败如何被观察。</p>
+<p>取消是协作过程。任务需要到达能够响应取消的机会，finally 才能接手。若协程里执行长时间同步计算，事件循环无法及时运行超时逻辑，也不会因为加上 wait_for 就成为能被强制终止的工作。需要独立执行边界时，应按工作类型设计进程或其他控制方式，不能把一个参数当成通用抢占器。</p>
+<h2 id="用清理顺序解释额外的等待"><a href="#用清理顺序解释额外的等待" class="headerlink" title="用清理顺序解释额外的等待"></a>用清理顺序解释额外的等待</h2><p>下面是未执行的完整教学程序。延时只是构造可见阶段的假设，不是本文测得的性能数据；运行时的调度耗时也不保证精确等于两个延时相加。</p>
+<pre><code class="python">import asyncio
+
+async def export_report():
+    try:
+        await asyncio.sleep(60)
+        return &quot;report&quot;
+    finally:
+        print(&quot;cleanup started&quot;)
+        await asyncio.sleep(0.2)
+        print(&quot;cleanup finished&quot;)
+
+async def main():
+    try:
+        await asyncio.wait_for(export_report(), timeout=1)
+    except TimeoutError:
+        print(&quot;caller observed timeout&quot;)
+
+asyncio.run(main())
+</code></pre>
+<p>按文档语义推演，超时会使 export_report 进入 finally；wait_for 等待其取消完成后，调用方才走超时处理。这个示例的判断重点是清理开始、清理结束与调用方观察超时之间的关系，而不是宣称屏幕上某行日志恰好在第一秒出现。真实程序的清理函数可能自己失败、取消或阻塞，必须把这些状态加入设计。</p>
+<p>如果把 finally 改成抛出 RuntimeError，不能仍只预期 TimeoutError。官方说明取消过程中产生的异常会传播；调用方应保留能定位清理失败的错误，而不是一律换成“超时，请重试”。这也影响资源责任：用户界面可以把本次请求标成失败，但后台仍须记录哪份临时产物由谁处理。失败提示并不自动完成清理。</p>
+<p>捕获 CancelledError 后直接返回正常结果同样不是无害优化。它改变了任务对取消的响应，可能让外层得到与原本期望不同的结果。通常应在清理后继续传播取消；若业务有意允许任务在取消后完成，调用方也必须接受这份明确的协议，不能一边吞掉取消，一边宣传它提供硬截止时间。</p>
+<h2 id="包上-shield-以后，超时任务由谁结束？"><a href="#包上-shield-以后，超时任务由谁结束？" class="headerlink" title="包上 shield 以后，超时任务由谁结束？"></a>包上 shield 以后，超时任务由谁结束？</h2><p><a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/asyncio-task.html#asyncio.shield">同一份文档的 shield 章节</a>说明如何保护内部任务不被外层取消。它可以改变 wait_for 超时所取消的范围，但内部工作不会因此自动获得管理者。调用者应保留任务引用，并决定稍后等待、接收错误，还是在另一个时点明确取消。若只是把 shield 加上以便快速返回，导出工作可能在用户已经离开后继续占用资源。</p>
+<p>例如先创建 task，再对 shield(task) 设置等待预算，外层超时仅表示不再等待这次结果。之后仍需要一个可查的任务状态和收尾入口。把它当后台作业时，应给出作业身份、重试与结果保留规则；把它当请求内工作时，则应考虑是否真的允许超出请求生命周期。两种选择都可能合理，关键是不能让任务无主。</p>
+<p>这也是本题与<a href="/zh-CN/2026/10/26/python-asyncio-taskgroup-failure-scope/">TaskGroup 失败范围</a>的区别。后者决定一组任务如何共同失败和退出；这里即使只有一个任务，也必须区分等待预算、取消请求和取消完成。共享“取消”这个词，不代表它们提供相同的时间保证。</p>
+<h2 id="验证顺序比追求一秒误差更有用"><a href="#验证顺序比追求一秒误差更有用" class="headerlink" title="验证顺序比追求一秒误差更有用"></a>验证顺序比追求一秒误差更有用</h2><p>拟议测试可以用事件屏障替代真实网络：让任务确认已进入工作等待，触发超时，再让清理停在一个受控事件上。此时检查外层是否仍未完成，释放清理事件，再确认终态。这个用例验证等待结算，而不依赖某台机器恰好在一秒附近打印。另测清理抛错、内部吞取消、shield 后内部继续运行和外层本身被取消，分别核对任务最终由谁收回。</p>
+<p>如果要记录耗时，应采用适当的单调时钟并保留 Python 版本和运行环境；事件顺序与耗时分布是两类证据。一次本地延时实验不能证明生产请求存在相同上限，更不能证明已发送的远程写入被撤销。超时以后，远端是否提交仍应通过远端协议查询；重新发起之前，需要业务幂等或结果身份。</p>
+<p>若还要为清理设置第二层预算，预算耗尽后的状态也必须有名字。可以停止向请求等待者承诺同步清理完成，并把剩余资源登记给明确的恢复流程；不能只再套一层超时就宣称文件已删、连接已关。清理是否允许再次被取消、被中断后能否安全重试，都需要资源接口支持。这些选择改变任务合同，不能在通用装饰器里悄悄添加。验收应有一条清理迟迟未结束的路径，证明调用方既不会永久等待，也不会把未确认清理标成完成。</p>
+<p>本文没有执行异步程序或测量时间。审查一份“一秒超时”的需求时，应先把它拆成用户等待多久、何时请求取消、谁等清理和谁确认外部结果四项，再决定 wait_for 是否正好承担其中那一项。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/asyncio-task.html" rel="noopener">Coroutines and tasks — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+            <a class="tag tag--asyncio" href="/zh-CN/tags/asyncio/">asyncio</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%8F%96%E6%B6%88/">取消</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fpython-asyncio-waitfor-cancellation-settlement%2F&text=Python%20wait_for%20%E4%B8%80%E7%A7%92%E8%B6%85%E6%97%B6%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%80%E7%A7%92%E5%90%8E%E8%BF%98%E6%B2%A1%E8%BF%94%E5%9B%9E%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fpython-asyncio-waitfor-cancellation-settlement%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Python%20wait_for%20%E4%B8%80%E7%A7%92%E8%B6%85%E6%97%B6%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%80%E7%A7%92%E5%90%8E%E8%BF%98%E6%B2%A1%E8%BF%94%E5%9B%9E%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fpython-asyncio-waitfor-cancellation-settlement%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/29/python-hmac-compare-digest-representation/">
+              <span>上一篇</span>
+              <strong>签名用了 compare_digest，为什么仍然一直不匹配？</strong>
+              <small>2026-10-29</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/29/prometheus-for-alert-identity/">
+              <span>下一篇</span>
+              <strong>Prometheus 每轮都超标，for 为什么仍在重新计时？</strong>
+              <small>2026-10-29</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#超时触发取消，不是终止进程">超时触发取消，不是终止进程</a>
+          
+            <a class="toc-link toc-link--h2" href="#用清理顺序解释额外的等待">用清理顺序解释额外的等待</a>
+          
+            <a class="toc-link toc-link--h2" href="#包上-shield-以后，超时任务由谁结束？">包上 shield 以后，超时任务由谁结束？</a>
+          
+            <a class="toc-link toc-link--h2" href="#验证顺序比追求一秒误差更有用">验证顺序比追求一秒误差更有用</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>274</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>171</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>113</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>79</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/">Python 临时文件有路径，另一个读取者为什么打不开？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/28/python-timedelta-seconds-total-seconds/">超过一天的耗时，为什么 seconds 只剩几小时</a></h3>
+          <p>2026-10-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/css-scroll-margin-fragment-target/">CSS目录跳到标题，为什么标题藏在固定栏下面？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

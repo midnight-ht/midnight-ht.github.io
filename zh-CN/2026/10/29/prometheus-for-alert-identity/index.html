@@ -1,0 +1,409 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Prometheus 每轮都超标，for 为什么仍在重新计时？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="把实时值写进告警label会更换实例身份；用连续超限时间线、annotation迁移和通知层分组解释pending为什么不累积。">
+  
+  
+    <meta name="keywords" content="for,pending,动态标签">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/29/prometheus-for-alert-identity/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/29/prometheus-for-alert-identity/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/29/prometheus-for-alert-identity/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/29/prometheus-for-alert-identity/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Prometheus 每轮都超标，for 为什么仍在重新计时？ | Midnight blog">
+    <meta property="og:description" content="把实时值写进告警label会更换实例身份；用连续超限时间线、annotation迁移和通知层分组解释pending为什么不累积。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/29/prometheus-for-alert-identity/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/prometheus-for-alert-identity/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/29/prometheus-for-alert-identity/","name":"Prometheus 每轮都超标，for 为什么仍在重新计时？ | Midnight blog","description":"把实时值写进告警label会更换实例身份；用连续超限时间线、annotation迁移和通知层分组解释pending为什么不累积。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/prometheus-for-alert-identity/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/prometheus-for-alert-identity/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/prometheus-for-alert-identity/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/prometheus-for-alert-identity/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/29/prometheus-for-alert-identity/","headline":"Prometheus 每轮都超标，for 为什么仍在重新计时？","description":"把实时值写进告警label会更换实例身份；用连续超限时间线、annotation迁移和通知层分组解释pending为什么不累积。","inLanguage":"zh-CN","datePublished":"2026-10-28T19:35:06.000Z","dateModified":"2026-10-28T19:35:06.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/","https://raw.githubusercontent.com/prometheus/prometheus/main/rules/alerting.go","https://prometheus.io/docs/prometheus/latest/configuration/unit_testing_rules/"],"keywords":"Delivery, Prometheus, 告警身份"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/prometheus-for-alert-identity/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Prometheus 每轮都超标，for 为什么仍在重新计时？","item":"https://www.zyweb.vip/zh-CN/2026/10/29/prometheus-for-alert-identity/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/29/prometheus-for-alert-identity/" selected>zh-CN</option><option value="/en/2026/10/29/prometheus-for-alert-identity/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/29/prometheus-for-alert-identity/" selected>zh-CN</option><option value="/en/2026/10/29/prometheus-for-alert-identity/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-28T19:35:06.000Z">2026-10-29</time>
+    </div>
+
+    <h1>Prometheus 每轮都超标，for 为什么仍在重新计时？</h1>
+
+    
+      <p class="post-hero__summary">把实时值写进告警label会更换实例身份；用连续超限时间线、annotation迁移和通知层分组解释pending为什么不累积。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-28T19:35:06.000Z">2026-10-29</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/29/prometheus-for-alert-identity/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/29/prometheus-for-alert-identity/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>for跟踪同一个完整标签集的持续活动。</li><li>实时测量适合展示在annotation，是否作为身份需明确设计。</li><li>通知分组不合并规则计时，标签迁移也应观察新实例。</li></ul></section>
+      <div class="article-content">
+        <p>Prometheus 的 for 等待的是同一个告警标签集持续处于活动状态，不是图表上始终有某个数值超过阈值。如果把当前测量值放进告警 labels，每轮值变化都可能产生一个新实例，让 pending 不断重新开始。先核对身份，再考虑缩短等待时间。</p>
+<h2 id="连续的曲线不一定属于连续的告警实例"><a href="#连续的曲线不一定属于连续的告警实例" class="headerlink" title="连续的曲线不一定属于连续的告警实例"></a>连续的曲线不一定属于连续的告警实例</h2><p><a target="_blank" rel="noopener" href="https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/">Prometheus 告警规则文档</a>说明，表达式输出中的每个元素按标签集成为活动告警；for 要求相应元素在每次评估中持续活动，达到时长后才进入 firing。labels 用于附加或覆盖标签，annotations 用于说明文字，并可使用模板。本篇依据二〇二六年十月二十九日核对的在线文档讨论机制，没有运行 Prometheus 或规则测试。</p>
+<p>关键是完整标签集，而不只是 alertname。相同名字、服务和阈值，如果还有一个不断变化的 latency 标签，仍可能是不同告警。图表往往隐藏部分标签，只显示一条汇总线；它可以帮助发现症状，却不能证明某个完整身份已经持续存在五分钟。排查时应把表达式输出、规则附加标签以及运行时告警实例一起展开。</p>
+<p>“当前仍超过阈值”与“上次那个身份仍超过阈值”需要分别回答。前者是数值条件，后者才涉及持续计时。若两者被混为一谈，维护者可能反复降低 for，最终让瞬时波动也成为通知，而原先的身份问题仍然存在。</p>
+<h2 id="一个每分钟更换名字的假设时间线"><a href="#一个每分钟更换名字的假设时间线" class="headerlink" title="一个每分钟更换名字的假设时间线"></a>一个每分钟更换名字的假设时间线</h2><p>设想我们已有一个预先计算好的延迟指标 api_latency_seconds，按 service 区分。以下清单没有执行，指标名与数值都是教学输入，不是对某个真实服务的观测。</p>
+<pre><code class="yaml">groups:
+  - name: api-alerts
+    interval: 1m
+    rules:
+      - alert: ApiLatencyHigh
+        expr: api_latency_seconds &gt; 1
+        for: 5m
+        labels:
+          severity: warning
+          observed_latency: &#39;{{ $value }}&#39;
+        annotations:
+          summary: &#39;High latency for {{ $labels.service }}&#39;
+</code></pre>
+<p>假设同一 service 在连续三轮分别返回一点二、一点三和一点四秒。每个值都超过一秒，可是 observed_latency 分别变成不同字符串，最终标签集也随之改变。第一轮创建的实例不再出现在下一轮结果里，第二轮又是一个新身份。不能把三个实例各自的一分钟累加，宣称同一实例已经等待三分钟。</p>
+<p>一种修复是把 observed_latency 从 labels 移到 annotations，稳定标签只保留确实需要区分身份或路由的 service、severity 等字段。annotation 可以显示当前值，不必为展示一次新测量创造一个新对象。修复后仍需保证表达式输出的其他标签稳定；仅删掉这一个字段，不能自动修好上游新增的请求编号、版本时间戳或随机标签。</p>
+<p>这个例子没有暗示所有动态标签都错误。若不同版本确实应分别建立告警生命周期，版本标签可能有合理用途。代价是发布切换时出现新实例并重新计时，这应属于设计承诺，而非后来才发现的副作用。选择标准是字段是否真的定义一个独立调查对象，不是“这个值放进消息里很方便”。</p>
+<h2 id="身份没变，为什么仍会从头开始？"><a href="#身份没变，为什么仍会从头开始？" class="headerlink" title="身份没变，为什么仍会从头开始？"></a>身份没变，为什么仍会从头开始？</h2><p>另一条路径是表达式某轮没有返回这个元素。它可能低于阈值，也可能因为所依赖的数据缺失而没有输出。不要把图表的插值、时间范围平滑或最后可见值当作那一轮规则输出。先按规则真实评估时刻查询对应表达式，再检查原始序列和采集状态。</p>
+<p>因此验证最好拆成两个独立对照。第一组保持数值一直超限，只让一个告警 label 改变，观察身份与 pending。第二组保持标签不变，安排一次表达式不输出，再观察持续性中断。两个原因可能同时存在，但先分别证明，才知道修复的是哪一个。本文不把所有缺测都归为服务恢复，相关边界见<a href="/zh-CN/2026/10/14/prometheus-missing-data-signal/">指标消失与零流量</a>。</p>
+<p>keep_firing_for 处理已经进入 firing 后的保持，不应被拿来修复不断换身份的 pending。给一条永远没达到触发条件的实例增加恢复保持时间，并没有让它更早完成初次等待。本文与<a href="/zh-CN/2026/10/20/prometheus-keep-firing-resolution/">告警保持窗口</a>讨论的是时间线两端不同的故障，不需要把两个参数一起调大或一起调小。</p>
+<h2 id="Alertmanager-把消息分成同一组，能把-pending-时间接起来吗？"><a href="#Alertmanager-把消息分成同一组，能把-pending-时间接起来吗？" class="headerlink" title="Alertmanager 把消息分成同一组，能把 pending 时间接起来吗？"></a>Alertmanager 把消息分成同一组，能把 pending 时间接起来吗？</h2><p>不能把通知分组当作 Prometheus 规则实例的合并计时。Prometheus 负责计算活动状态，Alertmanager 在其后处理分组、静默与通知。消息里多个告警看起来属于同一服务，不会因此让规则引擎把它们视为一个完整标签身份。应分别检查规则状态和通知层等待，避免把“没有收到消息”直接解释成 for 尚未到期。</p>
+<p>一个实用排查顺序是先看 Prometheus 当前实例是否真的 firing，再查是否发送到 Alertmanager，最后检查分组等待、静默和接收器。如果第一步只有不断更新的 pending，先修规则；如果第一步已经 firing，继续缩短 for 可能完全触不到消息延迟的原因。每一层保留自己的时间戳，才能解释通知什么时候应该出现。</p>
+<p>拟议验证可用与实际规则评估间隔匹配的受控序列，分别覆盖稳定标签持续超限、动态标签持续超限、一次低于阈值、一次缺失，以及稳定 firing 后恢复。规则加载成功与测试通过也需要分别保存；仅有合法 YAML 不证明时间线符合预期。本文未执行 promtool，不给出命令成功回执。</p>
+<p>修改标签还会影响下游路由、抑制和看板筛选。把字段移到 annotation 前，应核对是否有接收规则依赖该标签；需要区分故障类别的稳定字段可以保留，实时测量则适合展示而非身份。最后验收不要只看通知终于来了，还要确认实例数量、持续时间和消息内容都与预期相符。</p>
+<p>迁移标签的那一轮也要单独观察。旧实例和新实例具有不同身份，不能要求修改前的pending时间无条件接到新实例上。先记录规则生效时刻与完整旧标签，再确认新标签的计时从哪里开始。若外部工单系统按旧指纹关联，还需决定如何合并调查记录；合并工单不是合并规则计时。这样可以避免修复动态标签后，又把一次预期的新身份误报成新的监控故障。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/" rel="noopener">Prometheus Alerting rules — for, labels and annotations</a></li><li><a target="_blank" href="https://raw.githubusercontent.com/prometheus/prometheus/main/rules/alerting.go" rel="noopener">Prometheus main rules/alerting.go — label fingerprints and ActiveAt state</a></li><li><a target="_blank" href="https://prometheus.io/docs/prometheus/latest/configuration/unit_testing_rules/" rel="noopener">Prometheus Unit testing for rules — alert rule test cases</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--prometheus" href="/zh-CN/tags/Prometheus/">Prometheus</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%91%8A%E8%AD%A6%E8%BA%AB%E4%BB%BD/">告警身份</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fprometheus-for-alert-identity%2F&text=Prometheus%20%E6%AF%8F%E8%BD%AE%E9%83%BD%E8%B6%85%E6%A0%87%EF%BC%8Cfor%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E5%9C%A8%E9%87%8D%E6%96%B0%E8%AE%A1%E6%97%B6%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fprometheus-for-alert-identity%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Prometheus%20%E6%AF%8F%E8%BD%AE%E9%83%BD%E8%B6%85%E6%A0%87%EF%BC%8Cfor%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E5%9C%A8%E9%87%8D%E6%96%B0%E8%AE%A1%E6%97%B6%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fprometheus-for-alert-identity%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/">
+              <span>上一篇</span>
+              <strong>Python wait_for 一秒超时，为什么一秒后还没返回？</strong>
+              <small>2026-10-29</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/29/postgres18-generated-column-kind/">
+              <span>下一篇</span>
+              <strong>PostgreSQL 18 新建生成列，省略 STORED 会怎样？</strong>
+              <small>2026-10-29</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#连续的曲线不一定属于连续的告警实例">连续的曲线不一定属于连续的告警实例</a>
+          
+            <a class="toc-link toc-link--h2" href="#一个每分钟更换名字的假设时间线">一个每分钟更换名字的假设时间线</a>
+          
+            <a class="toc-link toc-link--h2" href="#身份没变，为什么仍会从头开始？">身份没变，为什么仍会从头开始？</a>
+          
+            <a class="toc-link toc-link--h2" href="#Alertmanager-把消息分成同一组，能把-pending-时间接起来吗？">Alertmanager 把消息分成同一组，能把 pending 时间接起来吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>274</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>171</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>113</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>79</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/26/prometheus-rule-evaluation-limit/">规则超过 limit，为何整条结果都被丢弃？</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/24/promql-group-left-vector-matching/">PromQL group_left：保留左侧明细，先证明右侧唯一</a></h3>
+          <p>2026-10-24</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/18/prometheus-counter-increase-extrapolation/">整数计数器为什么算出了小数 increase</a></h3>
+          <p>2026-10-18</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

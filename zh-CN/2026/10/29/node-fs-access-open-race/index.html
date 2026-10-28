@@ -1,0 +1,431 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>access 已通过，Node.js open 为什么仍报 ENOENT？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="解释 Node.js access 与 open 之间的竞态，用直接读取和 wx 排他创建示例区分缺失、权限、覆盖与句柄清理。">
+  
+  
+    <meta name="keywords" content="fs.access,open wx,TOCTOU">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/29/node-fs-access-open-race/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/29/node-fs-access-open-race/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/29/node-fs-access-open-race/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/29/node-fs-access-open-race/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="access 已通过，Node.js open 为什么仍报 ENOENT？ | Midnight blog">
+    <meta property="og:description" content="解释 Node.js access 与 open 之间的竞态，用直接读取和 wx 排他创建示例区分缺失、权限、覆盖与句柄清理。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/29/node-fs-access-open-race/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/node-fs-access-open-race/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/29/node-fs-access-open-race/","name":"access 已通过，Node.js open 为什么仍报 ENOENT？ | Midnight blog","description":"解释 Node.js access 与 open 之间的竞态，用直接读取和 wx 排他创建示例区分缺失、权限、覆盖与句柄清理。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/node-fs-access-open-race/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/node-fs-access-open-race/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/node-fs-access-open-race/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/node-fs-access-open-race/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/29/node-fs-access-open-race/","headline":"access 已通过，Node.js open 为什么仍报 ENOENT？","description":"解释 Node.js access 与 open 之间的竞态，用直接读取和 wx 排他创建示例区分缺失、权限、覆盖与句柄清理。","inLanguage":"zh-CN","datePublished":"2026-10-28T19:35:06.000Z","dateModified":"2026-10-28T19:35:06.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://nodejs.org/docs/latest-v24.x/api/fs.html"],"keywords":"Development, Node.js, 文件系统, 并发"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/node-fs-access-open-race/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"access 已通过，Node.js open 为什么仍报 ENOENT？","item":"https://www.zyweb.vip/zh-CN/2026/10/29/node-fs-access-open-race/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/29/node-fs-access-open-race/" selected>zh-CN</option><option value="/en/2026/10/29/node-fs-access-open-race/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/29/node-fs-access-open-race/" selected>zh-CN</option><option value="/en/2026/10/29/node-fs-access-open-race/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-28T19:35:06.000Z">2026-10-29</time>
+    </div>
+
+    <h1>access 已通过，Node.js open 为什么仍报 ENOENT？</h1>
+
+    
+      <p class="post-hero__summary">解释 Node.js access 与 open 之间的竞态，用直接读取和 wx 排他创建示例区分缺失、权限、覆盖与句柄清理。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-28T19:35:06.000Z">2026-10-29</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/29/node-fs-access-open-race/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/29/node-fs-access-open-race/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>access 的观察结果不会锁住后续操作。</li><li>创建且不覆盖应在 open 中表达 wx 条件。</li><li>实际读写、关闭和文件交付仍有独立失败路径。</li></ul></section>
+      <div class="article-content">
+        <p><code>fs.access()</code> 通过之后，<code>open()</code> 仍可能失败，因为检查没有替后一次操作锁住路径。读取配置文件时，应直接打开并处理这次操作的错误；如果要求创建新文件且不覆盖已有文件，则把排他创建意图交给打开标志。先检查再使用，不能免掉实际使用时的错误处理。</p>
+<h2 id="检查结果属于上一次观察"><a href="#检查结果属于上一次观察" class="headerlink" title="检查结果属于上一次观察"></a>检查结果属于上一次观察</h2><p><a target="_blank" rel="noopener" href="https://nodejs.org/docs/latest-v24.x/api/fs.html#fspromisesaccesspath-mode">Node.js 文件系统文档</a>明确不推荐先用 access 检查可访问性再 open，因为其他进程可能在两次调用之间改变文件状态。本文于二〇二六年十月二十九日读取的文档头标为 Node.js v24.22.2，下面只讨论本地可信目录中的普通文件，不把路径校验和应用授权混入可访问性判断。</p>
+<p>假设服务先检查配置可读，再读取内容。检查返回时文件存在，另一个进程随后做轮换，把旧文件移走，新文件尚未出现，读取就会得到缺失错误。检查先失败也不代表稍后的读取必然失败，文件可能随后被创建。两种次序都说明观察有时点，不能把某一刻的状态升级成未来操作的保证。这是可构造的竞态，不是本文观察到的生产事故。</p>
+<p>多加一次检查不会消除窗口，只会把窗口向后挪。同步版本同样不能锁住其他进程：阻塞当前 JavaScript 执行，不等于冻结操作系统文件命名空间。锁属于另一份协议，必须由各参与者遵守。若需求只是“读得到就用，否则返回缺失”，直接让读取操作决定结果通常更清楚。</p>
+<h2 id="让错误紧挨真正要做的动作"><a href="#让错误紧挨真正要做的动作" class="headerlink" title="让错误紧挨真正要做的动作"></a>让错误紧挨真正要做的动作</h2><p>下面是未执行的完整示例。路径由应用提供，调用者已在其他地方完成目录选择和访问授权。缺失在这个假设接口中是允许的状态，其他错误继续交给调用方，而不是全部伪装成没有配置。</p>
+<pre><code class="js">import { open } from &#39;node:fs/promises&#39;;
+
+export async function readOptionalConfig(path) {
+  let file;
+  try {
+    file = await open(path, &#39;r&#39;);
+  } catch (error) {
+    if (error.code === &#39;ENOENT&#39;) return { status: &#39;missing&#39; };
+    throw error;
+  }
+  try {
+    const text = await file.readFile({ encoding: &#39;utf8&#39; });
+    return { status: &#39;loaded&#39;, text };
+  } finally {
+    await file.close();
+  }
+}
+</code></pre>
+<p>这里故意把打开和读取分开。只有 open 的缺失被解释成 missing；打开后的读错误不会被同一个宽泛捕获当成“没有配置”。finally 为已经拿到的句柄安排关闭。返回 loaded 表示取得了文本，不表示 JSON 合法、配置版本正确或业务已经采用它；这些判断应在各自步骤继续做，不能让文件可读性替配置验收签收。</p>
+<p>这个例子也没有承诺读取期间内容绝不会被其他写者修改。得到句柄缩小了“再次按路径找文件”的歧义，却没有替所有写者建立一致的更新协议。若需要一份完整配置快照，可以进一步约定写入临时文件、检查内容、再原子替换的方式，并验证目标文件系统语义。本站<a href="/zh-CN/2026/10/21/node-fs-rename-durability/">rename 与文件交付</a>讨论的持久化边界仍需要单独核对。</p>
+<h2 id="创建且不覆盖，要把条件放进-open"><a href="#创建且不覆盖，要把条件放进-open" class="headerlink" title="创建且不覆盖，要把条件放进 open"></a>创建且不覆盖，要把条件放进 open</h2><p>另一类错误是先检查文件不存在，再用普通写模式创建。两个进程都看到不存在，随后都写入，后者可能覆盖前者。Node 文档给出的方向是直接以 <code>wx</code> 打开，路径已存在时处理 EEXIST。以下函数同样未执行，只展示排他创建、写入与关闭，不声称已经实现断电安全或完整交付。</p>
+<pre><code class="js">export async function createNewText(path, text) {
+  let file;
+  try {
+    file = await open(path, &#39;wx&#39;);
+  } catch (error) {
+    if (error.code === &#39;EEXIST&#39;) return { status: &#39;exists&#39; };
+    throw error;
+  }
+  try {
+    await file.writeFile(text, { encoding: &#39;utf8&#39; });
+    return { status: &#39;written&#39; };
+  } finally {
+    await file.close();
+  }
+}
+</code></pre>
+<p>排他创建解决的是“这次创建时已经存在则失败”，不是“从此无人能修改文件”。写到一半失败时还可能留下当前进程创建的不完整文件，需要按任务身份决定保留诊断还是清理，不能随手删除可能已由其他流程接管的路径。Node 还说明排他标志可能不适用于网络文件系统，因此共享盘上的验收不能直接沿用本地文件实验结论。</p>
+<p>也不能把 wx 当成目录安全检查。用户输入若能改变目标目录，创建在错误位置依然是错误；目录权限、符号链接和应用允许写入的对象范围需要独立设计。本文不提供一个处理任意不可信路径的安全文件服务。它只把“先不存在才创建”从两次观察改为一次带条件的操作。</p>
+<h2 id="access-是否应该从项目里完全删除？"><a href="#access-是否应该从项目里完全删除？" class="headerlink" title="access 是否应该从项目里完全删除？"></a>access 是否应该从项目里完全删除？</h2><p>不必。如果目的只是向用户显示当前可访问状态，或者可访问性本身是另一个进程提供的信号，access 仍可能有用途。差别在于，这份状态不能让后续读取省略错误处理。界面显示“目前可读”，真正点击读取时仍可能失败，产品应显示对应失败并保留重试或重新选择入口。</p>
+<p>Windows 还有独立限制：文档指出 access 不检查目录 ACL 的全部限制，报告可访问也可能仍被访问控制拒绝。因此不能把 access 当作身份授权的真相来源。系统权限与业务权限分别由实际访问和应用规则处理；删除检查并不是放宽业务授权。</p>
+<p>拟议验证应使用受控交接而不是随机睡眠：让一个测试执行者检查成功后停在屏障，另一个移走文件，再放行 open，确认得到预先约定的缺失状态。再测无权限、打开后读失败和两个创建者竞争，分别确认异常保留、句柄关闭和一个 EEXIST 分支。Windows 与网络文件系统另设目标环境检查，不能从本机推断。</p>
+<p>还需要明确关闭失败的报告政策。这个最小函数让关闭异常自然传播；如果读取也失败，finally 抛出的关闭异常可能遮住原始读错误。真实服务若要求同时保留两项诊断，应显式收集并关联它们，而不是为了保持成功状态吞掉关闭错误。测试中分别注入读失败、关闭失败与两者同时失败，核对调用者拿到哪一项原因。这样的检查与先做 access 没有关联，属于句柄交付后的独立责任。</p>
+<p>本文没有运行文件操作或并发测试。审查时先找到那条“检查通过，所以后面不会失败”的假设，把需要保证的条件移到实际操作或明确的协调协议里，再为仍可能发生的错误留下可解释结果。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://nodejs.org/docs/latest-v24.x/api/fs.html" rel="noopener">File system | Node.js v24.22.2 Documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--node-js" href="/zh-CN/tags/Node.js/">Node.js</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">文件系统</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%B9%B6%E5%8F%91/">并发</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fnode-fs-access-open-race%2F&text=access%20%E5%B7%B2%E9%80%9A%E8%BF%87%EF%BC%8CNode.js%20open%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E6%8A%A5%20ENOENT%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fnode-fs-access-open-race%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=access%20%E5%B7%B2%E9%80%9A%E8%BF%87%EF%BC%8CNode.js%20open%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E6%8A%A5%20ENOENT%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fnode-fs-access-open-race%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/29/postgres18-generated-column-kind/">
+              <span>上一篇</span>
+              <strong>PostgreSQL 18 新建生成列，省略 STORED 会怎样？</strong>
+              <small>2026-10-29</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/">
+              <span>下一篇</span>
+              <strong>HPA 显示低利用率，为什么缩容幅度比直觉小？</strong>
+              <small>2026-10-29</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#检查结果属于上一次观察">检查结果属于上一次观察</a>
+          
+            <a class="toc-link toc-link--h2" href="#让错误紧挨真正要做的动作">让错误紧挨真正要做的动作</a>
+          
+            <a class="toc-link toc-link--h2" href="#创建且不覆盖，要把条件放进-open">创建且不覆盖，要把条件放进 open</a>
+          
+            <a class="toc-link toc-link--h2" href="#access-是否应该从项目里完全删除？">access 是否应该从项目里完全删除？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>274</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>171</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>113</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>79</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/28/node-fs-mkdir-recursive-created-path/">mkdir recursive 返回路径，为什么不是最深目录</a></h3>
+          <p>2026-10-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/28/node-path-resolve-absolute-segment/">path.resolve(base, input) 为什么会丢掉 base</a></h3>
+          <p>2026-10-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/27/node-buffer-slice-shared-memory/">Buffer.slice 后再改原数据，为什么切片也变了</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,395 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>HPA 显示低利用率，为什么缩容幅度比直觉小？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用四Pod的缺测重算解释显示平均值与缩容建议差异，区分方向保护、多指标错误与控制器观察时刻。">
+  
+  
+    <meta name="keywords" content="缺失指标,保守重算,平均利用率">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/29/kubernetes-hpa-missing-metrics/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="HPA 显示低利用率，为什么缩容幅度比直觉小？ | Midnight blog">
+    <meta property="og:description" content="用四Pod的缺测重算解释显示平均值与缩容建议差异，区分方向保护、多指标错误与控制器观察时刻。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/","name":"HPA 显示低利用率，为什么缩容幅度比直觉小？ | Midnight blog","description":"用四Pod的缺测重算解释显示平均值与缩容建议差异，区分方向保护、多指标错误与控制器观察时刻。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/","headline":"HPA 显示低利用率，为什么缩容幅度比直觉小？","description":"用四Pod的缺测重算解释显示平均值与缩容建议差异，区分方向保护、多指标错误与控制器观察时刻。","inLanguage":"zh-CN","datePublished":"2026-10-28T19:35:06.000Z","dateModified":"2026-10-28T19:35:06.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/"],"keywords":"Development, Kubernetes, HPA"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"HPA 显示低利用率，为什么缩容幅度比直觉小？","item":"https://www.zyweb.vip/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/" selected>zh-CN</option><option value="/en/2026/10/29/kubernetes-hpa-missing-metrics/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/" selected>zh-CN</option><option value="/en/2026/10/29/kubernetes-hpa-missing-metrics/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-28T19:35:06.000Z">2026-10-29</time>
+    </div>
+
+    <h1>HPA 显示低利用率，为什么缩容幅度比直觉小？</h1>
+
+    
+      <p class="post-hero__summary">用四Pod的缺测重算解释显示平均值与缩容建议差异，区分方向保护、多指标错误与控制器观察时刻。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-28T19:35:06.000Z">2026-10-29</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/29/kubernetes-hpa-missing-metrics/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>状态平均值不一定包含控制器为缺测补入的假设。</li><li>四Pod示例从直觉的两副本变成保守重算的三副本。</li><li>多指标获取错误、就绪条件和时间窗口需要分别排查。</li></ul></section>
+      <div class="article-content">
+        <p>HPA 状态里显示的平均利用率，不一定就是控制器最后用于缩容的比率。部分 Pod 缺少指标时，控制器会按缩放方向作保守重算，因此缩容幅度可能小于把显示值直接代入公式的结果。先确认哪些 Pod 提供了有效样本，再讨论目标利用率是否需要修改。</p>
+<h2 id="状态展示与决策输入并非同一份平均数"><a href="#状态展示与决策输入并非同一份平均数" class="headerlink" title="状态展示与决策输入并非同一份平均数"></a>状态展示与决策输入并非同一份平均数</h2><p><a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/#algorithm-details">Kubernetes HPA 算法说明</a>解释了缺失指标的处理：缩容时按这些 Pod 消耗目标值的百分之百作保守假设，扩容时则按目标值的百分之零处理，从而减弱伸缩幅度。文档同时说明，状态仍报告未纳入这些保守假设的原始平均利用率。本篇按二〇二六年十月二十九日核对的在线说明分析，没有连接集群。</p>
+<p>这不是把未知负载测量成了目标值。缺测仍然是缺测，控制器只是采用一个降低误动作风险的决策假设。调查时应分别保存观测值、缺失对象和算法补入的值；若把后者当作真实采集结果写进看板，就会让诊断更加混乱。展示与动作不一致未必意味着控制器读错数据，也可能只是两者承担不同任务。</p>
+<p>CPU 利用率还有分母条件。相对于资源请求的利用率，与容器实际消耗的绝对 CPU 不是同一种数字。请求配置、就绪状态、样本时间与目标指标类型，都可能影响哪些数据参与计算。先确定自己看的确实是同一轮、同一指标的平均值，避免把工作负载总览图直接当成 HPA 的输入。</p>
+<h2 id="四个-Pod-的缩容推演"><a href="#四个-Pod-的缩容推演" class="headerlink" title="四个 Pod 的缩容推演"></a>四个 Pod 的缩容推演</h2><p>设想有四个状态合格的 Pod，CPU 请求相同，目标利用率为百分之五十。只有两个 Pod 有有效指标，各为百分之二十，另外两个没有样本。为了只解释缺测重算，暂不考虑副本上下限、容忍区间和稳定窗口。以下全是未执行的假设算例，不是某个集群的实际容量。</p>
+<p>如果错误地把已观测到的百分之二十当成四个 Pod 的完整平均值，直觉公式会得到四乘二十除五十，再向上取整为二。保守重算则给两个缺测 Pod 分别放入目标值百分之五十：四个值为二十、二十、五十、五十，平均为百分之三十五。按同一比例得到四乘三十五除五十，向上取整为三。这里解释的是从直觉上的两个副本变成三个，不应把它写成必然完全不缩容。</p>
+<p>实际控制器还会检查容忍区间、方向变化和其他约束，因此这只是把一个因素隔离出来。算例最有用的地方，是让维护者列出两种平均数以及各自的分母。若线上显示百分之二十而建议保留三个，不必先改目标；应核对缺测的两个 Pod 是否确实被保守计入，以及其他控制条件是否改变了最终行动。</p>
+<p>如果希望构造不动作的对照，可以选择使重算后落入实际容忍区间的输入，但必须记录控制器版本和配置，不能把某个默认边界当成所有环境永久适用。配置变更、边界取值和评估时刻都可能影响观察。对文章里的数字作手算，只证明算例一致，不能替代控制器事件与状态证据。</p>
+<h2 id="扩容时为什么反而按零补入？"><a href="#扩容时为什么反而按零补入？" class="headerlink" title="扩容时为什么反而按零补入？"></a>扩容时为什么反而按零补入？</h2><p>扩容方向采用零假设，会把仅凭少数高负载样本得到的平均值向下拉。其目的仍是避免在信息不全时过度放大动作，并不是断言缺测 Pod 没有工作。尚未就绪的 Pod 在 CPU 算法中也有单独处理，不能把所有“没有出现在平均数里”的实例都算成同一种缺测。</p>
+<p>文档还规定，重新计算后的比率若反转了原本缩放方向，或落入容忍区间，就不进行伸缩。因而调查应从候选方向走到最终比率，而不是只做一遍比例运算。若样本缺失来自采集链故障，仅调低扩容目标可能掩盖证据问题；应同时修复指标可用性，并观察恢复后控制器是否恢复正常决策。</p>
+<p>选择处理方法要看缺失的原因。短暂启动期需要核对就绪与初始化窗口；采集接口失败需要调查指标链；Pod 的资源请求缺少则要检查工作负载规格。把所有情况都归为“扩缩容太保守”，然后统一缩短窗口，可能放大另一种不稳定。是否调整策略，应由实际故障证据支持。</p>
+<h2 id="多指标里有一项不可用，还能扩容吗？"><a href="#多指标里有一项不可用，还能扩容吗？" class="headerlink" title="多指标里有一项不可用，还能扩容吗？"></a>多指标里有一项不可用，还能扩容吗？</h2><p>在线文档说明，多指标会分别形成期望副本数，再选最大的建议。如果某个指标无法换算为期望副本数，而其他可用指标建议缩容，则跳过缩容；若可用指标给出高于当前副本数的建议，仍可能扩容。这里的指标获取错误，与某一指标内部部分 Pod 缺测，是不同层次，不能套同一段算式。</p>
+<p>假设 CPU 建议减到三个，但队列指标接口失败，就不能拿 CPU 的较低需求证明未知队列允许释放容量。反过来，如果 CPU 已经要求增加副本，另一指标获取失败也不必自动阻止这次扩容。这种方向上的不对称有明确保护意图，故障报告应记录每个指标自己的建议与错误，而不只写一个“指标异常”。</p>
+<p>拟议验收先固定副本、请求值、指标类型、目标和窗口，覆盖完整观测、部分缺测、就绪变化与全部取数失败。每轮保存原始指标时间戳、HPA 状态、事件及最终副本动作；只改变一个输入，才容易解释差异。验证尚未执行，不提供伸缩成功或资源节省结论。与<a href="/zh-CN/2026/10/14/prometheus-missing-data-signal/">缺失指标不等于零流量</a>相同，先把未知写成未知，再判断控制器在未知条件下采取的保护动作是否合适。</p>
+<p>保存证据时还要对齐观察时刻。手工查询到的最新样本，可能晚于控制器刚完成的那轮判断；把两个时刻拼在一起，就会制造看似无法解释的平均数。应记录采样时间、指标接口返回时间和HPA事件时间，允许合理的观察延迟。若不能取得当时输入，应将计算解释标为待证实，不要用后来已经补齐的样本反推控制器当时一定算错。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/" rel="noopener">Kubernetes Horizontal Pod Autoscaling — Algorithm details</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--kubernetes" href="/zh-CN/tags/Kubernetes/">Kubernetes</a>
+          
+            <a class="tag tag--hpa" href="/zh-CN/tags/HPA/">HPA</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fkubernetes-hpa-missing-metrics%2F&text=HPA%20%E6%98%BE%E7%A4%BA%E4%BD%8E%E5%88%A9%E7%94%A8%E7%8E%87%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E7%BC%A9%E5%AE%B9%E5%B9%85%E5%BA%A6%E6%AF%94%E7%9B%B4%E8%A7%89%E5%B0%8F%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fkubernetes-hpa-missing-metrics%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=HPA%20%E6%98%BE%E7%A4%BA%E4%BD%8E%E5%88%A9%E7%94%A8%E7%8E%87%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E7%BC%A9%E5%AE%B9%E5%B9%85%E5%BA%A6%E6%AF%94%E7%9B%B4%E8%A7%89%E5%B0%8F%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fkubernetes-hpa-missing-metrics%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/29/node-fs-access-open-race/">
+              <span>上一篇</span>
+              <strong>access 已通过，Node.js open 为什么仍报 ENOENT？</strong>
+              <small>2026-10-29</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/29/kubernetes-headless-client-selection/">
+              <span>下一篇</span>
+              <strong>Headless Service 返回多个地址，谁选择下一个 Pod？</strong>
+              <small>2026-10-29</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#状态展示与决策输入并非同一份平均数">状态展示与决策输入并非同一份平均数</a>
+          
+            <a class="toc-link toc-link--h2" href="#四个-Pod-的缩容推演">四个 Pod 的缩容推演</a>
+          
+            <a class="toc-link toc-link--h2" href="#扩容时为什么反而按零补入？">扩容时为什么反而按零补入？</a>
+          
+            <a class="toc-link toc-link--h2" href="#多指标里有一项不可用，还能扩容吗？">多指标里有一项不可用，还能扩容吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>274</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>171</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>113</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>79</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/kubernetes-headless-client-selection/">Headless Service 返回多个地址，谁选择下一个 Pod？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/css-scroll-margin-fragment-target/">CSS目录跳到标题，为什么标题藏在固定栏下面？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/html-inert-flat-tree-interaction/">HTML inert：盖上加载层，下面的表单还能操作吗？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

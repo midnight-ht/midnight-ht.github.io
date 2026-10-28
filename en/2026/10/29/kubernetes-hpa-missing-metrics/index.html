@@ -1,0 +1,395 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why missing Pod metrics can make HPA downscale less than expected | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Separate the displayed utilization from conservative decision inputs, calculate a four-Pod example, and check multi-metric failures and observation times.">
+  
+  
+    <meta name="keywords" content="missing metrics,conservative recomputation,utilization average">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/29/kubernetes-hpa-missing-metrics/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/29/kubernetes-hpa-missing-metrics/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why missing Pod metrics can make HPA downscale less than expected | Midnight blog">
+    <meta property="og:description" content="Separate the displayed utilization from conservative decision inputs, calculate a four-Pod example, and check multi-metric failures and observation times.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/29/kubernetes-hpa-missing-metrics/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/29/kubernetes-hpa-missing-metrics/#webpage","url":"https://www.zyweb.vip/en/2026/10/29/kubernetes-hpa-missing-metrics/","name":"Why missing Pod metrics can make HPA downscale less than expected | Midnight blog","description":"Separate the displayed utilization from conservative decision inputs, calculate a four-Pod example, and check multi-metric failures and observation times.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/29/kubernetes-hpa-missing-metrics/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/29/kubernetes-hpa-missing-metrics/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/29/kubernetes-hpa-missing-metrics/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/29/kubernetes-hpa-missing-metrics/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/29/kubernetes-hpa-missing-metrics/","headline":"Why missing Pod metrics can make HPA downscale less than expected","description":"Separate the displayed utilization from conservative decision inputs, calculate a four-Pod example, and check multi-metric failures and observation times.","inLanguage":"en","datePublished":"2026-10-28T19:35:06.000Z","dateModified":"2026-10-28T19:35:06.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/"],"keywords":"Development, Kubernetes, HPA"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/29/kubernetes-hpa-missing-metrics/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why missing Pod metrics can make HPA downscale less than expected","item":"https://www.zyweb.vip/en/2026/10/29/kubernetes-hpa-missing-metrics/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/">zh-CN</option><option value="/en/2026/10/29/kubernetes-hpa-missing-metrics/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/">zh-CN</option><option value="/en/2026/10/29/kubernetes-hpa-missing-metrics/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-28T19:35:06.000Z">2026-10-29</time>
+    </div>
+
+    <h1>Why missing Pod metrics can make HPA downscale less than expected</h1>
+
+    
+      <p class="post-hero__summary">Separate the displayed utilization from conservative decision inputs, calculate a four-Pod example, and check multi-metric failures and observation times.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-28T19:35:06.000Z">2026-10-29</time> · Estimated read 11 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/29/kubernetes-hpa-missing-metrics/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Displayed utilization can omit the assumptions used for missing Pods.</li><li>The isolated four-Pod example yields three replicas rather than the intuitive two.</li><li>Check metric-fetch errors, readiness and timestamps as separate inputs.</li></ul></section>
+      <div class="article-content">
+        <p>The average utilization shown in HPA status is not necessarily the final ratio used for a downscale decision. When some Pods lack metrics, the controller recomputes conservatively. The reduction can therefore be smaller than a direct calculation from the displayed average suggests. Identify the valid samples before changing the utilization target.</p>
+<h2 id="Displayed-observations-and-decision-assumptions"><a href="#Displayed-observations-and-decision-assumptions" class="headerlink" title="Displayed observations and decision assumptions"></a>Displayed observations and decision assumptions</h2><p>The <a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/#algorithm-details">Kubernetes HPA algorithm description</a> describes direction-dependent assumptions: missing Pods consume 100 percent of the target during downscaling and zero percent during upscaling. Both assumptions dampen the proposed change. Status continues to report the original average without those adjustments. The documentation was checked on October 29, 2026; no cluster was accessed.</p>
+<p>An assumption is not a measurement. Missing data remains missing even when the controller inserts a conservative decision value. Preserve observed values, missing objects and substituted assumptions separately. Otherwise a dashboard can accidentally report an algorithmic assumption as real CPU usage.</p>
+<p>CPU utilization relative to resource requests also differs from absolute CPU consumption. Requests, readiness, sample timing and metric type affect the eligible inputs. A workload overview is not automatically the same input set that HPA evaluated.</p>
+<h2 id="A-four-Pod-example"><a href="#A-four-Pod-example" class="headerlink" title="A four-Pod example"></a>A four-Pod example</h2><p>Assume four eligible Pods with equal CPU requests and a 50 percent utilization target. Two valid observations are 20 percent each; two Pods have no samples. Temporarily exclude bounds, tolerance and stabilization to isolate the missing-data calculation. This is an unexecuted example, not measured cluster capacity.</p>
+<p>Treating the observed 20 percent as a complete average yields four times twenty divided by fifty, rounded upward to two replicas. Conservative downscale recomputation instead uses twenty, twenty, fifty and fifty. Their average is 35 percent. Four times thirty-five divided by fifty rounds upward to three replicas. The example explains a smaller reduction, from the intuitive two to three; it does not demonstrate that downscaling must stop entirely.</p>
+<p>A real controller also applies tolerance, direction checks and other constraints. Listing both averages and their denominators is more useful than immediately lowering the target. If status shows twenty while the recommendation retains three, investigate the missing Pods and remaining controls.</p>
+<p>A no-action example requires adjusted inputs that enter the actual tolerance range. Record the controller version and configuration rather than treating a default boundary as a universal promise. Hand calculation checks the example&#39;s consistency; it is not evidence of a controller action.</p>
+<h2 id="Why-zero-during-scale-up"><a href="#Why-zero-during-scale-up" class="headerlink" title="Why zero during scale-up?"></a>Why zero during scale-up?</h2><p>Zero assumptions reduce an average derived from a few high observations. They limit expansion under incomplete information; they do not establish that missing Pods are idle. Not-yet-ready Pods also receive separate CPU treatment and should not all be classified as identical missing measurements.</p>
+<p>The documentation says that a recomputed ratio reversing the original direction, or entering tolerance, produces no scaling action. Follow the candidate direction through the final ratio. Lowering a target while the metric pipeline is broken can conceal the evidence problem.</p>
+<p>The remedy depends on the cause. Startup behavior calls for readiness and initialization checks. Metric API failures require pipeline diagnosis. Missing resource requests require workload-specification review. Shortening every window because the controller appears conservative can amplify instability elsewhere.</p>
+<h2 id="Can-one-failed-metric-prevent-every-action"><a href="#Can-one-failed-metric-prevent-every-action" class="headerlink" title="Can one failed metric prevent every action?"></a>Can one failed metric prevent every action?</h2><p>For multiple metrics, HPA calculates recommendations separately and selects the largest. If a metric cannot be converted into a desired replica count while the available metrics suggest downscaling, it skips that reduction. An available metric recommending more replicas can still permit expansion. A whole metric-fetch error differs from missing Pod samples within one metric.</p>
+<p>For example, CPU might recommend three replicas while the queue metric API fails. Low CPU alone does not establish that an unknown queue permits releasing capacity. If CPU instead requires expansion, the failed queue metric need not block it. Preserve each recommendation and error rather than recording only “metrics unhealthy.”</p>
+<p>Proposed validation fixes requests, target, metric type and windows, then varies complete observations, partial missing data, readiness changes and total retrieval failure. Save raw sample timestamps, HPA status, events and actual replica changes. These checks were not executed, and no resource savings are claimed. As with <a href="/en/2026/10/14/prometheus-missing-data-signal/">missing metrics versus zero traffic</a>, preserve unknown information before judging the controller&#39;s protective response.</p>
+<p>Correlate observation times. A manual query may return samples newer than the controller decision being investigated. Record sample timestamps, metric API response time and controller events; otherwise two different moments can create a false discrepancy. If the original inputs are unavailable, mark the explanation as unconfirmed rather than using later complete samples to declare the earlier decision wrong.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/" rel="noopener">Kubernetes Horizontal Pod Autoscaling — Algorithm details</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--kubernetes" href="/en/tags/Kubernetes/">Kubernetes</a>
+          
+            <a class="tag tag--hpa" href="/en/tags/HPA/">HPA</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F29%2Fkubernetes-hpa-missing-metrics%2F&text=Why%20missing%20Pod%20metrics%20can%20make%20HPA%20downscale%20less%20than%20expected" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F29%2Fkubernetes-hpa-missing-metrics%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20missing%20Pod%20metrics%20can%20make%20HPA%20downscale%20less%20than%20expected&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F29%2Fkubernetes-hpa-missing-metrics%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/29/node-fs-access-open-race/">
+              <span>Previous Post</span>
+              <strong>Why can Node.js open fail after access succeeds?</strong>
+              <small>2026-10-29</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/29/kubernetes-headless-client-selection/">
+              <span>Next Post</span>
+              <strong>Who selects the next Pod behind a Headless Service?</strong>
+              <small>2026-10-29</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Displayed-observations-and-decision-assumptions">Displayed observations and decision assumptions</a>
+          
+            <a class="toc-link toc-link--h2" href="#A-four-Pod-example">A four-Pod example</a>
+          
+            <a class="toc-link toc-link--h2" href="#Why-zero-during-scale-up">Why zero during scale-up?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Can-one-failed-metric-prevent-every-action">Can one failed metric prevent every action?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>274</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>171</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>114</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>79</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/29/kubernetes-headless-client-selection/">Who selects the next Pod behind a Headless Service?</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/29/css-scroll-margin-fragment-target/">CSS fragment links: why does the heading hide behind the header?</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/29/html-inert-flat-tree-interaction/">HTML inert: can users still operate a covered form?</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

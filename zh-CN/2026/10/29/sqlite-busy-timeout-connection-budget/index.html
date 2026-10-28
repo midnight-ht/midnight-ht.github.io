@@ -1,0 +1,412 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>SQLite 配了五秒 busy_timeout，为什么写入仍失败？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用未执行的双连接步骤解释 SQLite busy handler 的等待预算、潜在死锁例外、每连接覆盖规则与失败后事务入口。">
+  
+  
+    <meta name="keywords" content="busy_timeout,SQLITE_BUSY,busy handler">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/29/sqlite-busy-timeout-connection-budget/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/29/sqlite-busy-timeout-connection-budget/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/29/sqlite-busy-timeout-connection-budget/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/29/sqlite-busy-timeout-connection-budget/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="SQLite 配了五秒 busy_timeout，为什么写入仍失败？ | Midnight blog">
+    <meta property="og:description" content="用未执行的双连接步骤解释 SQLite busy handler 的等待预算、潜在死锁例外、每连接覆盖规则与失败后事务入口。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/29/sqlite-busy-timeout-connection-budget/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/sqlite-busy-timeout-connection-budget/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/29/sqlite-busy-timeout-connection-budget/","name":"SQLite 配了五秒 busy_timeout，为什么写入仍失败？ | Midnight blog","description":"用未执行的双连接步骤解释 SQLite busy handler 的等待预算、潜在死锁例外、每连接覆盖规则与失败后事务入口。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/sqlite-busy-timeout-connection-budget/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/sqlite-busy-timeout-connection-budget/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/sqlite-busy-timeout-connection-budget/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/sqlite-busy-timeout-connection-budget/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/29/sqlite-busy-timeout-connection-budget/","headline":"SQLite 配了五秒 busy_timeout，为什么写入仍失败？","description":"用未执行的双连接步骤解释 SQLite busy handler 的等待预算、潜在死锁例外、每连接覆盖规则与失败后事务入口。","inLanguage":"zh-CN","datePublished":"2026-10-28T19:35:06.000Z","dateModified":"2026-10-28T19:35:06.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.sqlite.org/c3ref/busy_timeout.html","https://www.sqlite.org/c3ref/busy_handler.html"],"keywords":"Development, SQLite, 锁竞争, 事务"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/sqlite-busy-timeout-connection-budget/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"SQLite 配了五秒 busy_timeout，为什么写入仍失败？","item":"https://www.zyweb.vip/zh-CN/2026/10/29/sqlite-busy-timeout-connection-budget/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/29/sqlite-busy-timeout-connection-budget/" selected>zh-CN</option><option value="/en/2026/10/29/sqlite-busy-timeout-connection-budget/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/29/sqlite-busy-timeout-connection-budget/" selected>zh-CN</option><option value="/en/2026/10/29/sqlite-busy-timeout-connection-budget/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-28T19:35:06.000Z">2026-10-29</time>
+    </div>
+
+    <h1>SQLite 配了五秒 busy_timeout，为什么写入仍失败？</h1>
+
+    
+      <p class="post-hero__summary">用未执行的双连接步骤解释 SQLite busy handler 的等待预算、潜在死锁例外、每连接覆盖规则与失败后事务入口。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-28T19:35:06.000Z">2026-10-29</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/29/sqlite-busy-timeout-connection-budget/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/29/sqlite-busy-timeout-connection-budget/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>超时配置是有限等待政策，不是写成功保证。</li><li>每连接只有一个 busy handler，新设置会替换旧设置。</li><li>报忙后须确认事务状态，再决定从哪里重新执行。</li></ul></section>
+      <div class="article-content">
+        <p>SQLite 设置 <code>busy_timeout=5000</code>，不表示每次写入都会等满五秒后成功。它为连接安装有限等待的 busy handler；等待仍可能以 SQLITE_BUSY 结束，而且为避免潜在死锁，SQLite 有时不会调用 handler。排查应先找到谁持有冲突的锁、哪条连接安装了什么处理器，再决定等待还是结束并重试事务。</p>
+<h2 id="预算是等待政策，不是成功预约"><a href="#预算是等待政策，不是成功预约" class="headerlink" title="预算是等待政策，不是成功预约"></a>预算是等待政策，不是成功预约</h2><p><a target="_blank" rel="noopener" href="https://www.sqlite.org/c3ref/busy_timeout.html">sqlite3_busy_timeout 官方参考</a>说明，该接口安装的处理器会分次睡眠，累计睡眠达到指定毫秒数后停止继续尝试，并让操作返回 SQLITE_BUSY；非正数关闭处理器。本文于二〇二六年十月二十九日核对 SQLite 的在线 C 接口文档，页面没有给出固定发布版本，因此实际项目仍需记录所用 SQLite 库版本。</p>
+<p>这里的累计睡眠与应用从发起请求到返回的总耗时不同。执行 SQL、调度、读取数据和其他工作也消耗时间，不能把五千毫秒当成精确墙钟上限或最低等待时间。更不能从返回得很快就断言配置没有生效；是否调用 handler 还取决于冲突的性质。应先保留具体错误与事务状态，再解释时间。</p>
+<p><a target="_blank" rel="noopener" href="https://www.sqlite.org/c3ref/busy_handler.html">busy_handler 文档</a>专门说明，如果调用处理器可能造成死锁，SQLite 可以直接返回 SQLITE_BUSY。例如两个连接各持有对方前进所需的锁，双方都继续等不会有进展。这个规则意味着延长超时并不是所有锁问题的解法，有时必须让一个事务退出，释放它已经持有的资源。</p>
+<h2 id="用两条连接说明持锁者和等待者"><a href="#用两条连接说明持锁者和等待者" class="headerlink" title="用两条连接说明持锁者和等待者"></a>用两条连接说明持锁者和等待者</h2><p>以下为未执行的双会话教学步骤，假定使用同一目录下的同一数据库文件、普通本地文件系统，没有额外后台写者。先在初始化连接执行建表，并在没有未完成事务时关闭它。</p>
+<pre><code class="sql">CREATE TABLE counters(id INTEGER PRIMARY KEY, value INTEGER NOT NULL);
+INSERT INTO counters VALUES (1, 0);
+</code></pre>
+<p>接着在连接甲执行下面两句，暂时不提交。甲已经进入写事务，等待乙完成观察之后才结束。</p>
+<pre><code class="sql">BEGIN IMMEDIATE;
+UPDATE counters SET value = value + 1 WHERE id = 1;
+</code></pre>
+<p>连接乙设置自己的等待策略，再尝试进入写事务。下面的每条失败都应由执行环境读回错误，不能在 BEGIN 失败后不检查状态就把后续 UPDATE 当作仍处于所想的事务里。</p>
+<pre><code class="sql">PRAGMA busy_timeout = 5000;
+BEGIN IMMEDIATE;
+-- 只有 BEGIN 成功才继续：
+UPDATE counters SET value = value + 1 WHERE id = 1;
+COMMIT;
+</code></pre>
+<p>如果甲持续持锁，乙可能在其等待政策允许的重试结束后报忙；如果甲及时提交，乙则可能继续。示例不提供实测耗时或固定输出。观察完之后在甲明确 COMMIT 或 ROLLBACK，再让乙从新的事务入口尝试。这样可以区分“等得太短”和“持锁者一直没退出”，而不是只把数值越调越大。</p>
+<p>这个简单例子没有构造锁升级死锁，不应拿它证明所有忙错误都经过完整睡眠预算。若真实应用先读再写，旧读事务与另一个写者之间的关系可能不同。应先复现目标事务次序，再查看相应错误码与日志；不能把 BEGIN IMMEDIATE 的一次实验概括为 SQLite 的全部并发行为。</p>
+<h2 id="两个库都设置-handler，会叠加吗？"><a href="#两个库都设置-handler，会叠加吗？" class="headerlink" title="两个库都设置 handler，会叠加吗？"></a>两个库都设置 handler，会叠加吗？</h2><p>不会。官方文档规定每条数据库连接只有一个 busy handler，设置新的会清除之前的处理器。调用 busy_timeout 或执行对应 PRAGMA 都会改变它。因此连接初始化代码装了自定义处理器，稍后某个库再设超时，不能假设两套策略会按先后依次运行。</p>
+<p>这个追问补充的是配置所有权。团队需要查清连接由谁创建、哪个适配器在何时初始化、借用连接后是否还有库改写策略。检查一条连接的 PRAGMA 值，不足以证明连接池里其他连接也采用相同设置；不同连接的政策必须分别可追溯。相关断言应放在实际创建或交接连接的位置，而不是仅写进部署文档。</p>
+<p>自定义 handler 也不适合在回调里通过同一连接执行补救 SQL。文档说明它不可重入，不能修改调用它的连接，也不能在其中关闭连接或语句。若需要结束事务或重新决策，应让失败回到应用的受控错误路径处理。把回调写成复杂业务恢复引擎，反而会让锁与所有权更难解释。</p>
+<h2 id="报忙以后，重做哪一段？"><a href="#报忙以后，重做哪一段？" class="headerlink" title="报忙以后，重做哪一段？"></a>报忙以后，重做哪一段？</h2><p>这取决于事务边界和已经发生的动作。若失败前根据数据库旧值作出了业务决定，仅重发最后一条 UPDATE 可能沿用过时判断；通常应先确认当前事务状态，按约定结束或恢复，再从正确的决策入口重新读取。若同一流程已经调用外部接口，数据库重试不会撤销或去重那个副作用，需要另外的业务身份与幂等规则。</p>
+<p>这里不能给所有 SQLite 错误套用同一套自动重试模板。锁冲突、约束失败、文件权限和磁盘故障的处置不同，SQLITE_BUSY 与其他状态也应区分。可以给允许重试的操作设置总预算、次数与退出状态，耗尽后返回可解释的暂时失败；不要无限等待到请求已经失去主人。</p>
+<p>本站<a href="/zh-CN/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/">WAL checkpoint 与读事务</a>讨论为什么读者影响回写。那不是把 busy_timeout 调大就能取代的分析：日志回写、写事务争用与应用重试分别有不同对象。先确认这次阻塞的是哪一项，再选择相应观察点。</p>
+<p>拟议验证记录每条连接的库版本、事务次序、超时设置、开始结束时间和错误码。分别让甲早提交、持续持锁、回滚，以及让其他初始化代码改写 handler；再设计目标应用真实存在的锁升级次序。用受控屏障决定甲何时释放，避免依赖随机睡眠碰巧重现。本文没有运行双连接实验，也没有提供生产吞吐比较。</p>
+<p>编排这份双会话实验时，还应避免客户端的“遇错继续”模式。乙的 BEGIN 若失败，测试驱动应立即记录并停止这一轮，不能让 UPDATE 在自动提交模式下另起一次未被标记的尝试，再把最终 COMMIT 报错当作原问题。每一轮都应从已确认没有未结束事务的状态开始，保存本轮身份和语句结果。这样观察的才是等待策略，而不是测试脚本意外创造的另一段写入。</p>
+<p>超时配置可以是一种合理的短期等锁策略，但验收应能指出持锁者、等待者和结束条件。只有数值，没有事务退出与失败后决策，不能构成一次可靠的写入合同。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.sqlite.org/c3ref/busy_timeout.html" rel="noopener">Set A Busy Timeout</a></li><li><a target="_blank" href="https://www.sqlite.org/c3ref/busy_handler.html" rel="noopener">Register A Callback To Handle SQLITE_BUSY Errors</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--sqlite" href="/zh-CN/tags/SQLite/">SQLite</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E9%94%81%E7%AB%9E%E4%BA%89/">锁竞争</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E4%BA%8B%E5%8A%A1/">事务</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fsqlite-busy-timeout-connection-budget%2F&text=SQLite%20%E9%85%8D%E4%BA%86%E4%BA%94%E7%A7%92%20busy_timeout%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%86%99%E5%85%A5%E4%BB%8D%E5%A4%B1%E8%B4%A5%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fsqlite-busy-timeout-connection-budget%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=SQLite%20%E9%85%8D%E4%BA%86%E4%BA%94%E7%A7%92%20busy_timeout%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%86%99%E5%85%A5%E4%BB%8D%E5%A4%B1%E8%B4%A5%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fsqlite-busy-timeout-connection-budget%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/29/sqlite-replace-delete-identity/">
+              <span>上一篇</span>
+              <strong>SQLite REPLACE 改了姓名，旧记录为什么算被删除？</strong>
+              <small>2026-10-29</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/">
+              <span>下一篇</span>
+              <strong>Python 临时文件有路径，另一个读取者为什么打不开？</strong>
+              <small>2026-10-29</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#预算是等待政策，不是成功预约">预算是等待政策，不是成功预约</a>
+          
+            <a class="toc-link toc-link--h2" href="#用两条连接说明持锁者和等待者">用两条连接说明持锁者和等待者</a>
+          
+            <a class="toc-link toc-link--h2" href="#两个库都设置-handler，会叠加吗？">两个库都设置 handler，会叠加吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#报忙以后，重做哪一段？">报忙以后，重做哪一段？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>274</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>171</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>113</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>79</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/sqlite-replace-delete-identity/">SQLite REPLACE 改了姓名，旧记录为什么算被删除？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/css-scroll-margin-fragment-target/">CSS目录跳到标题，为什么标题藏在固定栏下面？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/html-inert-flat-tree-interaction/">HTML inert：盖上加载层，下面的表单还能操作吗？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

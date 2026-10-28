@@ -1,0 +1,410 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>PostgreSQL 18 新建生成列，省略 STORED 会怎样？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="核对 PostgreSQL 18 新建表中生成列默认 VIRTUAL 的条件，对照 17 版，并用订单行金额区分派生、默认值与历史快照。">
+  
+  
+    <meta name="keywords" content="PostgreSQL 18,VIRTUAL,STORED">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/29/postgres18-generated-column-kind/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/29/postgres18-generated-column-kind/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/29/postgres18-generated-column-kind/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/29/postgres18-generated-column-kind/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="PostgreSQL 18 新建生成列，省略 STORED 会怎样？ | Midnight blog">
+    <meta property="og:description" content="核对 PostgreSQL 18 新建表中生成列默认 VIRTUAL 的条件，对照 17 版，并用订单行金额区分派生、默认值与历史快照。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/29/postgres18-generated-column-kind/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/postgres18-generated-column-kind/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/29/postgres18-generated-column-kind/","name":"PostgreSQL 18 新建生成列，省略 STORED 会怎样？ | Midnight blog","description":"核对 PostgreSQL 18 新建表中生成列默认 VIRTUAL 的条件，对照 17 版，并用订单行金额区分派生、默认值与历史快照。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/postgres18-generated-column-kind/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/postgres18-generated-column-kind/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/postgres18-generated-column-kind/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/29/postgres18-generated-column-kind/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/29/postgres18-generated-column-kind/","headline":"PostgreSQL 18 新建生成列，省略 STORED 会怎样？","description":"核对 PostgreSQL 18 新建表中生成列默认 VIRTUAL 的条件，对照 17 版，并用订单行金额区分派生、默认值与历史快照。","inLanguage":"zh-CN","datePublished":"2026-10-28T19:35:06.000Z","dateModified":"2026-10-28T19:35:06.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/ddl-generated-columns.html","https://www.postgresql.org/docs/17/ddl-generated-columns.html"],"keywords":"Development, PostgreSQL, 生成列, 数据库设计"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/29/postgres18-generated-column-kind/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"PostgreSQL 18 新建生成列，省略 STORED 会怎样？","item":"https://www.zyweb.vip/zh-CN/2026/10/29/postgres18-generated-column-kind/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/29/postgres18-generated-column-kind/" selected>zh-CN</option><option value="/en/2026/10/29/postgres18-generated-column-kind/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/29/postgres18-generated-column-kind/" selected>zh-CN</option><option value="/en/2026/10/29/postgres18-generated-column-kind/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-28T19:35:06.000Z">2026-10-29</time>
+    </div>
+
+    <h1>PostgreSQL 18 新建生成列，省略 STORED 会怎样？</h1>
+
+    
+      <p class="post-hero__summary">核对 PostgreSQL 18 新建表中生成列默认 VIRTUAL 的条件，对照 17 版，并用订单行金额区分派生、默认值与历史快照。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-28T19:35:06.000Z">2026-10-29</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/29/postgres18-generated-column-kind/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/29/postgres18-generated-column-kind/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>18 版新建声明省略类型时默认使用虚拟生成列。</li><li>已有存储生成列不会仅因升级自动变成虚拟列。</li><li>STORED 改变计算时机，不代替历史数据修改权限。</li></ul></section>
+      <div class="article-content">
+        <p>在 PostgreSQL 18 新建表或重建表的 DDL 中，生成列省略 <code>VIRTUAL</code>、<code>STORED</code> 时默认采用 VIRTUAL。需要写入时计算并存储的列，应把 STORED 明写出来。这是建表声明的解释规则，不表示数据库升级会把已有存储生成列自动改成虚拟列。</p>
+<h2 id="先看版本，再看省略了什么"><a href="#先看版本，再看省略了什么" class="headerlink" title="先看版本，再看省略了什么"></a>先看版本，再看省略了什么</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/ddl-generated-columns.html">PostgreSQL 18 生成列文档</a>区分两种类型：存储生成列在写入时计算并占用存储，虚拟生成列在读取时计算，默认选择后者。本文于二〇二六年十月二十九日核对固定版本文档。对照<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/17/ddl-generated-columns.html">十七版说明</a>，该版仅实现存储生成列，要求写 STORED；不能把新版省略规则倒灌成旧版有效语法。</p>
+<p>设想团队整理迁移文件，认为 STORED 只是冗余字样而删除。旧环境可能直接拒绝这份声明；十八版则可能成功创建虚拟生成列。构建成功并不能证明重建后的列仍沿用原来的计算时机。审查应比较部署版本、实际 DDL 和创建后的列属性，而不是只看迁移没有抛错。这里是假设的迁移风险，没有声称本站执行过升级。</p>
+<p>也不应把“生成列会自动更新”误解为它与普通 DEFAULT 相同。默认值通常在插入且没有提供该列值时采用；生成列由表达式派生，不能由调用方随意覆盖。两者都能减少应用重复计算，但表达的是不同的数据所有权：一个允许写入者选择具体值，一个要求值由数据库规则决定。</p>
+<h2 id="用一行内的确定派生说明两种选择"><a href="#用一行内的确定派生说明两种选择" class="headerlink" title="用一行内的确定派生说明两种选择"></a>用一行内的确定派生说明两种选择</h2><p>下面是未执行的完整教学 SQL，明确使用 STORED，使期望不依赖省略写法。数量与成交单价都存放在这一行，金额只表达它们的乘积，不涉及税率、折扣或跨表价格。</p>
+<pre><code class="sql">CREATE TABLE order_lines (
+  id bigint PRIMARY KEY,
+  quantity integer NOT NULL CHECK (quantity &gt; 0),
+  unit_price numeric(12,2) NOT NULL CHECK (unit_price &gt;= 0),
+  line_total numeric GENERATED ALWAYS AS
+    (quantity * unit_price) STORED
+);
+INSERT INTO order_lines(id, quantity, unit_price)
+VALUES (1, 2, 12.50);
+UPDATE order_lines SET quantity = 3 WHERE id = 1;
+SELECT quantity, unit_price, line_total FROM order_lines WHERE id = 1;
+</code></pre>
+<p>按定义推演，修改数量后金额随表达式改变；不能因为应用没在 UPDATE 中指定金额就认为金额保留旧值。若改为 VIRTUAL，同样是派生值，差别在读取时计算而非把计算结果作为普通存储字段保留。此例只说明语义，不提供读取速度、写入成本或节省空间的测量，也不能据此替真实负载选择更快的一种。</p>
+<p>另设一个负样本，尝试直接向 line_total 写入任意数值。官方文档说明生成列不能这样直接指定值，数据操作中可使用 DEFAULT 表达由生成规则处理。这里 DEFAULT 是语法允许的标记，不是给生成列另外安装一份普通默认值。若接口接受用户传入的总金额，服务端应先决定该字段是被忽略、核对还是拒绝，不能靠数据库报错临时决定 API 合同。</p>
+<h2 id="immutable-不是把任意函数标一下就行"><a href="#immutable-不是把任意函数标一下就行" class="headerlink" title="immutable 不是把任意函数标一下就行"></a>immutable 不是把任意函数标一下就行</h2><p>十八版要求生成表达式只使用 immutable 函数，不含子查询，也不能引用当前行之外的数据；还不能引用另一生成列。虚拟生成列额外不能使用用户定义类型或函数，包括通过运算符、类型转换间接引用的情况。存储与虚拟的选择因此不只影响计算时点，也影响表达式能否合法建立。</p>
+<p>例如让金额随当前汇率、另一张商品表最新价格或系统时钟变化，就不是这个行内乘法示例。同一行输入不变而结果应随外部状态变化，已经与固定派生规则的要求冲突。把用户函数草率标为 immutable，不会让真实依赖消失，只会把错误承诺藏进数据库定义。需要动态查询的值，可以考虑查询时计算或视图；需要业务时点快照，则保存当时确认的输入与结果，并明确更新权。</p>
+<p>这里的方案比较首先看数据含义。普通列适合独立记录事实，生成列适合由当前行确定的关系，视图适合查询表达；是否需要索引、复制或权限分离，还应读取对应版本章节并在项目里验证。本文不把这几种方案排列成通用性能名次。</p>
+<h2 id="订单金额是否应该总用生成列？"><a href="#订单金额是否应该总用生成列？" class="headerlink" title="订单金额是否应该总用生成列？"></a>订单金额是否应该总用生成列？</h2><p>不应因为能写乘法就把所有金额都生成。若 unit_price 保存的是下单时成交价，这份输入快照与数量相乘可以表达行金额；若它只是当前商品价的查询结果，后来价格变化是否应改历史订单就是另一个需求。税额、优惠分摊和人工调整还可能有独立的确认时点与舍入规则，不能把演示中的简单金额扩成结算承诺。</p>
+<p>这个追问要求同时审查输入的生命周期。即使 line_total 在写入时存储，后来更新 unit_price 仍会使它随规则变化；STORED 不等于永久冻结历史结果。若业务要求已确认订单不可修改，应通过独立的状态与权限规则约束输入列，不能借列类型代替业务锁定。</p>
+<p>本站<a href="/zh-CN/2026/10/18/postgres-default-explicit-null/">普通 DEFAULT 与显式 NULL</a>解释省略值的含义，本篇没有改变那条规则。生成列需要另一份合同：哪些输入属于当前行、何时允许改、由哪种计算时机派生，以及谁可以读取结果。把两种字段都称为“自动填值”，会掩盖这些差异。</p>
+<p>拟议验证应分别在目标十七版与十八版隔离数据库运行明确类型和省略类型的建表用例，记录成功或拒绝，不预先把两版结果混成相同。十八版再比较插入、修改输入、直接写派生列、用户函数和跨行依赖的情况。检查创建后实际列定义，性能判断则另用真实查询与写入负载测量。</p>
+<p>若剩下的选择确实只是计算时机，可以把同一份输入、同一表达式和同一查询集合用于对照，分别观察写入延迟、读取延迟、存储占用与变更频率。不要让虚拟方案顺带少查几列、存储方案又多一个索引，却把差异全归给列类型。先保证结果一致，再比较成本；是否值得交换读写成本取决于实际访问，而非示例中乘法看起来简单还是复杂。</p>
+<p>本文没有执行数据库迁移或性能实验。对一份准备投产的十八版建表脚本，先把生成列类型写明，再核对它是否表达了真正允许随输入变化的事实；已有列的状态要从实际结构读取，而不是从升级版本号猜测。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/ddl-generated-columns.html" rel="noopener">PostgreSQL: Documentation: 18: 5.4. Generated Columns</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/17/ddl-generated-columns.html" rel="noopener">PostgreSQL: Documentation: 17: 5.4. Generated Columns</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E7%94%9F%E6%88%90%E5%88%97/">生成列</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%95%B0%E6%8D%AE%E5%BA%93%E8%AE%BE%E8%AE%A1/">数据库设计</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fpostgres18-generated-column-kind%2F&text=PostgreSQL%2018%20%E6%96%B0%E5%BB%BA%E7%94%9F%E6%88%90%E5%88%97%EF%BC%8C%E7%9C%81%E7%95%A5%20STORED%20%E4%BC%9A%E6%80%8E%E6%A0%B7%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fpostgres18-generated-column-kind%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=PostgreSQL%2018%20%E6%96%B0%E5%BB%BA%E7%94%9F%E6%88%90%E5%88%97%EF%BC%8C%E7%9C%81%E7%95%A5%20STORED%20%E4%BC%9A%E6%80%8E%E6%A0%B7%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F29%2Fpostgres18-generated-column-kind%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/29/prometheus-for-alert-identity/">
+              <span>上一篇</span>
+              <strong>Prometheus 每轮都超标，for 为什么仍在重新计时？</strong>
+              <small>2026-10-29</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/29/node-fs-access-open-race/">
+              <span>下一篇</span>
+              <strong>access 已通过，Node.js open 为什么仍报 ENOENT？</strong>
+              <small>2026-10-29</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#先看版本，再看省略了什么">先看版本，再看省略了什么</a>
+          
+            <a class="toc-link toc-link--h2" href="#用一行内的确定派生说明两种选择">用一行内的确定派生说明两种选择</a>
+          
+            <a class="toc-link toc-link--h2" href="#immutable-不是把任意函数标一下就行">immutable 不是把任意函数标一下就行</a>
+          
+            <a class="toc-link toc-link--h2" href="#订单金额是否应该总用生成列？">订单金额是否应该总用生成列？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>274</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>171</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>113</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>79</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/28/postgres-array-containment-duplicates/">一个库存单位为什么能“包含”两个相同需求</a></h3>
+          <p>2026-10-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/28/postgres-exists-projection-evaluation/">EXISTS 里的 SELECT 为什么不适合放审计副作用</a></h3>
+          <p>2026-10-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/27/postgres-character-padding-contract/">char(4) 里的 AB：为什么相等却不能照猜 LIKE</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
