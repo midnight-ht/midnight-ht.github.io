@@ -1,0 +1,427 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>NetworkPolicy 新增 deny-all，为什么前端的新连接仍被允许？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用同一账本Pod的前端许可与空入口策略计算允许并集，解释为何deny-all不覆盖旧allow，再分别检查源出口、插件执行和新连接。">
+  
+  
+    <meta name="keywords" content="允许规则并集,Ingress Egress,默认隔离">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/30/kubernetes-networkpolicy-additive-allow/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/30/kubernetes-networkpolicy-additive-allow/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/30/kubernetes-networkpolicy-additive-allow/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/30/kubernetes-networkpolicy-additive-allow/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="NetworkPolicy 新增 deny-all，为什么前端的新连接仍被允许？ | Midnight blog">
+    <meta property="og:description" content="用同一账本Pod的前端许可与空入口策略计算允许并集，解释为何deny-all不覆盖旧allow，再分别检查源出口、插件执行和新连接。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/30/kubernetes-networkpolicy-additive-allow/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/30/kubernetes-networkpolicy-additive-allow/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/30/kubernetes-networkpolicy-additive-allow/","name":"NetworkPolicy 新增 deny-all，为什么前端的新连接仍被允许？ | Midnight blog","description":"用同一账本Pod的前端许可与空入口策略计算允许并集，解释为何deny-all不覆盖旧allow，再分别检查源出口、插件执行和新连接。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/30/kubernetes-networkpolicy-additive-allow/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/30/kubernetes-networkpolicy-additive-allow/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/30/kubernetes-networkpolicy-additive-allow/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/30/kubernetes-networkpolicy-additive-allow/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/30/kubernetes-networkpolicy-additive-allow/","headline":"NetworkPolicy 新增 deny-all，为什么前端的新连接仍被允许？","description":"用同一账本Pod的前端许可与空入口策略计算允许并集，解释为何deny-all不覆盖旧allow，再分别检查源出口、插件执行和新连接。","inLanguage":"zh-CN","datePublished":"2026-10-29T19:28:29.000Z","dateModified":"2026-10-29T19:28:29.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://kubernetes.io/docs/concepts/services-networking/network-policies/"],"keywords":"Quality, Kubernetes, NetworkPolicy"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/30/kubernetes-networkpolicy-additive-allow/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"NetworkPolicy 新增 deny-all，为什么前端的新连接仍被允许？","item":"https://www.zyweb.vip/zh-CN/2026/10/30/kubernetes-networkpolicy-additive-allow/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/30/kubernetes-networkpolicy-additive-allow/" selected>zh-CN</option><option value="/en/2026/10/30/kubernetes-networkpolicy-additive-allow/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/30/kubernetes-networkpolicy-additive-allow/" selected>zh-CN</option><option value="/en/2026/10/30/kubernetes-networkpolicy-additive-allow/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--quality">Quality</span>
+      <time datetime="2026-10-29T19:28:29.000Z">2026-10-30</time>
+    </div>
+
+    <h1>NetworkPolicy 新增 deny-all，为什么前端的新连接仍被允许？</h1>
+
+    
+      <p class="post-hero__summary">用同一账本Pod的前端许可与空入口策略计算允许并集，解释为何deny-all不覆盖旧allow，再分别检查源出口、插件执行和新连接。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-29T19:28:29.000Z">2026-10-30</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/30/kubernetes-networkpolicy-additive-allow/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/30/kubernetes-networkpolicy-additive-allow/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>同方向适用策略的允许项取并集，空入口规则不覆盖其他许可。</li><li>源出口和目标入口分别决定连接能否建立，策略存在不等于插件已执行。</li><li>用普通Pod的新连接及健康正对照验证，既有连接另查实现语义。</li></ul></section>
+      <div class="article-content">
+        <p>给同一个 Pod 新增一条没有 ingress 规则的 NetworkPolicy，不会覆盖另一条策略已有的允许项。标准 NetworkPolicy 按流量方向合并所有适用策略的允许集合；要收紧访问，应检查并修改产生许可的规则，而不是把 deny-all 放在最后创建。本文只讨论新建连接，既有连接受策略修改后的影响由实现决定。</p>
+<h2 id="先确认策略确实有人执行"><a href="#先确认策略确实有人执行" class="headerlink" title="先确认策略确实有人执行"></a>先确认策略确实有人执行</h2><p><a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/services-networking/network-policies/">Kubernetes 的网络策略文档</a>说明，集群需要支持 NetworkPolicy 的网络插件。只创建资源而没有执行它的实现，不会产生预期过滤。本篇于二〇二六年十月三十日重新核对官方原文，没有访问集群。本文没有运行验证或安全效果测量。</p>
+<p>策略对象被 API 接受，只证明声明存在。插件是否支持、控制器是否工作、配置是否已经被观察，是另外的证据。测试前应记录 Kubernetes 和网络插件版本，以及采用的是标准 API 还是供应商额外策略；后者可能有自己的优先级或拒绝语义，不能拿来解释标准 NetworkPolicy 的并集规则。</p>
+<p>策略选择器先决定目标 Pod，再由 policyTypes 指定入口、出口等方向。一个 Pod 的入口被隔离，不表示出口也同时隔离；源端与目的端分别有自己的控制面。这里的隔离是连接受到限制，不是承诺阻断所有网络路径。节点流量、主机网络等情况还有专门边界，因此下面固定使用普通 Pod 之间的新建 TCP 连接。</p>
+<h2 id="两条策略选中同一个账本服务"><a href="#两条策略选中同一个账本服务" class="headerlink" title="两条策略选中同一个账本服务"></a>两条策略选中同一个账本服务</h2><p>设想 test 命名空间已有一个 app=ledger 的普通 Pod，应用确实监听八〇八〇端口。同命名空间有 role=frontend 的调用方，以及标签不同的对照调用方；两者最初都未被出口策略隔离。以下两份完整策略清单仅用于推演，没有应用到集群，也没有准备对应工作负载。</p>
+<pre><code class="yaml">apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ledger-from-frontend
+  namespace: test
+spec:
+  podSelector:
+    matchLabels:
+      app: ledger
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              role: frontend
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ledger-empty-ingress
+  namespace: test
+spec:
+  podSelector:
+    matchLabels:
+      app: ledger
+  policyTypes: [Ingress]
+  ingress: []
+</code></pre>
+<p>第一条允许同命名空间满足来源标签的 Pod 连接目标八〇八〇端口。第二条同样选择账本 Pod，但没有贡献任何允许项。两条策略一起生效时，入口允许集合是前端许可与空集合的并集，前端许可仍在。空列表不是一条拥有更高优先级的拒绝动作，后创建也不会把此前许可减掉。</p>
+<p>对照调用方若没有被其他规则允许，就不能仅靠这两条策略取得同样许可。这个预期有明确前提：全部匹配策略只有这两条，来源出口未隔离，测试走的是普通 Pod 的新连接。若另有一条允许全部来源的策略，允许集合会扩大；若来源被单独限制出口，前端也可能连接失败。不要把孤立阅读两份 YAML 的推演当成真实集群的完整结论。</p>
+<p>单独留下空入口策略，且不存在其他适用许可时，才表达本例入口的默认拒绝。反过来，如果把两条策略都删掉，又没有其他入口策略选择该 Pod，它可能回到未被入口隔离的状态。删除策略不是总会更加严格，应先计算删除之后留下的集合与隔离条件。</p>
+<h2 id="应该收紧旧许可，还是扩大默认拒绝范围？"><a href="#应该收紧旧许可，还是扩大默认拒绝范围？" class="headerlink" title="应该收紧旧许可，还是扩大默认拒绝范围？"></a>应该收紧旧许可，还是扩大默认拒绝范围？</h2><p>若目标是不再允许前端访问，应修改或移除产生前端许可的那条规则，同时保留需要的隔离基线。若只是要缩小可访问端口，就收紧允许规则里的端口，而不是新增一个名字更严厉的策略。策略名称帮助人理解，但执行依据是选择器、方向和规则内容。</p>
+<p>若目标是为整个命名空间建立默认入口隔离，可以在独立方案中使用空目标选择器，再为必要服务添加允许规则。但这会影响更多工作负载，必须列清依赖和恢复办法；它也仍然不能覆盖其他适用策略的允许项。不能把作用范围更大误认为优先级更高，或在不核对依赖时把单服务排障升级为全命名空间变更。</p>
+<p>评审最好针对某一个目标和方向列出策略全集。逐项写出它选择谁、允许哪些来源和端口，再求并集；同时核对当前标签，而不是只看上周部署时的模板。标签变化可能使另一条宽泛规则突然匹配，连接变通并不一定意味着新策略失效。诊断应能指出究竟是哪一个允许项解释了结果。</p>
+<h2 id="入口已经允许，为什么新连接仍然失败？"><a href="#入口已经允许，为什么新连接仍然失败？" class="headerlink" title="入口已经允许，为什么新连接仍然失败？"></a>入口已经允许，为什么新连接仍然失败？</h2><p>官方文档明确，源 Pod 的出口与目标 Pod 的入口都必须允许该连接。假设前端后来被一条空出口策略选择，即使账本入口仍允许前端，源端也可能不允许发起该连接。应独立检查前端的出口策略集合，而不是继续放宽账本入口；否则只会扩大目标暴露面，未修复真正阻断位置。</p>
+<p>网络许可也不会让应用自动监听端口。若连接建立失败，应把策略允许、路径可达与进程监听分别取证；通过 Service 访问时还要核对实际目标，相关区别见<a href="/zh-CN/2026/10/17/kubernetes-service-targetport-name/">Service 入口与 targetPort</a>。直接使用目标 Pod 地址的对照可以减少服务发现与转发因素，但不因此成为生产访问方案，也不能跳过身份与应用响应核验。</p>
+<p>拟议验证在隔离环境中固定普通 Pod 身份、标签、协议和端口，分别观察仅有前端许可、再加入空入口策略、移除旧许可三个阶段。每阶段都从前端与对照 Pod 重新建立连接，保存全部匹配策略、来源出口状态和连接结果；再交换两条策略创建顺序，验证结果不依赖最后创建者。策略传播与实现就绪需要真实观察，不能把一次过早尝试当成稳定结论。</p>
+<p>受控对照还应先确认测试工具确实发起新连接，并在已知允许条件下取得预期应用响应。若服务本身没有监听，所有来源都会失败，不能用这种结果证明空入口策略生效。策略收紧后再次放回同一条必要许可，可帮助检查故障是否仍来自应用或路径；全过程固定应用版本与目标地址，不把重建Pod带来的其他变化混入判断。</p>
+<p>最后另设既有连接的用例，明确它与新连接验证分开。官方将策略变化是否作用于已有连接留给具体实现；保持一条旧连接还能通信，不能单独证明新连接也被允许。本文未执行上述任何检查。先找出真正贡献许可的规则，再验证新连接与应用结果，才能避免用更多 deny-all 名称掩盖同一份旧允许。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://kubernetes.io/docs/concepts/services-networking/network-policies/" rel="noopener">Kubernetes Network Policies — prerequisites, per-direction isolation, additive union and two-way allowance</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--quality" href="/zh-CN/tags/Quality/">Quality</a>
+          
+            <a class="tag tag--kubernetes" href="/zh-CN/tags/Kubernetes/">Kubernetes</a>
+          
+            <a class="tag tag--networkpolicy" href="/zh-CN/tags/NetworkPolicy/">NetworkPolicy</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--quality" href="/zh-CN/categories/Quality/">Quality</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F30%2Fkubernetes-networkpolicy-additive-allow%2F&text=NetworkPolicy%20%E6%96%B0%E5%A2%9E%20deny-all%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%89%8D%E7%AB%AF%E7%9A%84%E6%96%B0%E8%BF%9E%E6%8E%A5%E4%BB%8D%E8%A2%AB%E5%85%81%E8%AE%B8%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F30%2Fkubernetes-networkpolicy-additive-allow%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=NetworkPolicy%20%E6%96%B0%E5%A2%9E%20deny-all%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%89%8D%E7%AB%AF%E7%9A%84%E6%96%B0%E8%BF%9E%E6%8E%A5%E4%BB%8D%E8%A2%AB%E5%85%81%E8%AE%B8%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F30%2Fkubernetes-networkpolicy-additive-allow%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/29/actions-step-outcome-conclusion/">
+              <span>上一篇</span>
+              <strong>GitHub Actions 步骤失败后，outcome 与 conclusion 应该读哪个？</strong>
+              <small>2026-10-29</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/30/css-aspect-ratio-auto-intrinsic-image/">
+              <span>下一篇</span>
+              <strong>CSS写了16:9，图片为什么又变回4:3？</strong>
+              <small>2026-10-30</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#先确认策略确实有人执行">先确认策略确实有人执行</a>
+          
+            <a class="toc-link toc-link--h2" href="#两条策略选中同一个账本服务">两条策略选中同一个账本服务</a>
+          
+            <a class="toc-link toc-link--h2" href="#应该收紧旧许可，还是扩大默认拒绝范围？">应该收紧旧许可，还是扩大默认拒绝范围？</a>
+          
+            <a class="toc-link toc-link--h2" href="#入口已经允许，为什么新连接仍然失败？">入口已经允许，为什么新连接仍然失败？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>273</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>171</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>112</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>80</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/kubernetes-headless-client-selection/">Headless Service 返回多个地址，谁选择下一个 Pod？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/kubernetes-hpa-missing-metrics/">HPA 显示低利用率，为什么缩容幅度比直觉小？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/python-hmac-compare-digest-representation/">签名用了 compare_digest，为什么仍然一直不匹配？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
