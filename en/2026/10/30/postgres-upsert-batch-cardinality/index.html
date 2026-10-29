@@ -1,0 +1,417 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why do two valid upserts fail when combined into one PostgreSQL INSERT? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Explain PostgreSQL batch-upsert cardinality, then define duplicate input, version selection, rejection reports, and the transactional cost of splitting statements.">
+  
+  
+    <meta name="keywords" content="ON CONFLICT,cardinality violation,duplicate batch keys">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/30/postgres-upsert-batch-cardinality/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/30/postgres-upsert-batch-cardinality/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why do two valid upserts fail when combined into one PostgreSQL INSERT? | Midnight blog">
+    <meta property="og:description" content="Explain PostgreSQL batch-upsert cardinality, then define duplicate input, version selection, rejection reports, and the transactional cost of splitting statements.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/30/postgres-upsert-batch-cardinality/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/30/postgres-upsert-batch-cardinality/#webpage","url":"https://www.zyweb.vip/en/2026/10/30/postgres-upsert-batch-cardinality/","name":"Why do two valid upserts fail when combined into one PostgreSQL INSERT? | Midnight blog","description":"Explain PostgreSQL batch-upsert cardinality, then define duplicate input, version selection, rejection reports, and the transactional cost of splitting statements.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/30/postgres-upsert-batch-cardinality/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/30/postgres-upsert-batch-cardinality/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/30/postgres-upsert-batch-cardinality/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/30/postgres-upsert-batch-cardinality/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/30/postgres-upsert-batch-cardinality/","headline":"Why do two valid upserts fail when combined into one PostgreSQL INSERT?","description":"Explain PostgreSQL batch-upsert cardinality, then define duplicate input, version selection, rejection reports, and the transactional cost of splitting statements.","inLanguage":"en","datePublished":"2026-10-29T20:02:56.000Z","dateModified":"2026-10-29T20:02:56.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.postgresql.org/docs/18/sql-insert.html"],"keywords":"Development, PostgreSQL, Batch imports"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/30/postgres-upsert-batch-cardinality/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why do two valid upserts fail when combined into one PostgreSQL INSERT?","item":"https://www.zyweb.vip/en/2026/10/30/postgres-upsert-batch-cardinality/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/">zh-CN</option><option value="/en/2026/10/30/postgres-upsert-batch-cardinality/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/">zh-CN</option><option value="/en/2026/10/30/postgres-upsert-batch-cardinality/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-29T20:02:56.000Z">2026-10-30</time>
+    </div>
+
+    <h1>Why do two valid upserts fail when combined into one PostgreSQL INSERT?</h1>
+
+    
+      <p class="post-hero__summary">Explain PostgreSQL batch-upsert cardinality, then define duplicate input, version selection, rejection reports, and the transactional cost of splitting statements.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-29T20:02:56.000Z">2026-10-30</time> · Estimated read 12 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/30/postgres-upsert-batch-cardinality/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>One DO UPDATE statement cannot repeatedly affect the same target.</li><li>Batch reduction needs identity, version, and content-conflict policies.</li><li>Splitting statements can change atomicity and intermediate visibility.</li></ul></section>
+      <div class="article-content">
+        <p>Two inputs that each work as separate upserts need not work in one <code>INSERT … ON CONFLICT DO UPDATE</code>. PostgreSQL does not allow that statement to affect the same target row repeatedly. Duplicate conflict keys within the proposed batch can cause a cardinality violation. Define the batch&#39;s identity policy before retrying its write.</p>
+<h2 id="A-statement-has-its-own-cardinality-contract"><a href="#A-statement-has-its-own-cardinality-contract" class="headerlink" title="A statement has its own cardinality contract"></a>A statement has its own cardinality contract</h2><p>The <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-insert.html">PostgreSQL 18 INSERT reference</a>, checked on October 30, 2026, calls this form deterministic: one existing row cannot be affected more than once by the command. It explicitly says proposed rows should not duplicate one another on the arbiter key. No SQL or production import was executed here.</p>
+<p>The target can correctly contain only one row for an identifier while two proposed inputs both try to update it. A unique constraint establishes the target identity, not a rule that the last input wins, the highest version wins, or amounts should be added. Unstated file-order rules can make a change of batching alter business results.</p>
+<p>Distinguish identical replay, different versions for one identity, and conflicting content at the same version. Those may require ignoring, selecting, and rejecting respectively, but the project must approve that classification. The database exception does not supply it.</p>
+<h2 id="Two-proposals-for-one-existing-order"><a href="#Two-proposals-for-one-existing-order" class="headerlink" title="Two proposals for one existing order"></a>Two proposals for one existing order</h2><p>This complete unexecuted input belongs in an isolated database. The target already contains version one of order 42; the following statement proposes versions two and three together.</p>
+<pre><code class="sql">CREATE TABLE example_order_state (
+  order_id bigint PRIMARY KEY,
+  version integer NOT NULL,
+  state text NOT NULL
+);
+INSERT INTO example_order_state VALUES (42, 1, &#39;created&#39;);
+
+BEGIN;
+INSERT INTO example_order_state(order_id, version, state)
+VALUES (42, 2, &#39;packed&#39;), (42, 3, &#39;shipped&#39;)
+ON CONFLICT(order_id) DO UPDATE
+SET version = EXCLUDED.version, state = EXCLUDED.state;
+-- Inspect failure, then end this test transaction:
+ROLLBACK;
+</code></pre>
+<p>The documented expectation is a cardinality error, not an invented client log. Verify how the actual driver exposes it and how the transaction is recovered. A test driver must not continue with unrelated writes after failure and attribute their outputs to the original statement.</p>
+<p>Suppose the business has approved choosing the highest version, that maximum is unique, and its state transition is valid. A preceding stage can produce one approved candidate:</p>
+<pre><code class="sql">INSERT INTO example_order_state(order_id, version, state)
+VALUES (42, 3, &#39;shipped&#39;)
+ON CONFLICT(order_id) DO UPDATE
+SET version = EXCLUDED.version, state = EXCLUDED.state
+RETURNING order_id, version, state;
+</code></pre>
+<p>This statement shows the write after selection, not an algorithm that automatically authorizes that selection. A separate version condition can reject stale events if required. The site&#39;s <a href="/en/2026/10/20/postgres-onconflict-where-returning/">conditional upsert and empty RETURNING article</a> concerns a single proposed row. Here the earlier question is how many modifications one command proposes for the same target.</p>
+<h2 id="Produce-candidates-whose-meaning-can-be-explained"><a href="#Produce-candidates-whose-meaning-can-be-explained" class="headerlink" title="Produce candidates whose meaning can be explained"></a>Produce candidates whose meaning can be explained</h2><p>Staging should retain source-row identity, business key, version, and relevant provenance. Group by the actual conflict identity, including tenant dimensions where necessary. If an expression unique index arbitrates conflicts, check that application grouping represents the same identity.</p>
+<p>“Last input” needs an ordering contract: arrival order, file position, and business version are different. Highest-version selection still needs a tie policy. Do not take a maximum status string or combine unrelated columns merely to manufacture one candidate.</p>
+<p>Approved identical duplicates can collapse into one candidate, while the import report records which original rows map to it. A reduced row count is not sufficient evidence of loss or correctness. Conversely, distinct events with coincidentally equal fields should not be merged through unexamined whole-row DISTINCT.</p>
+<h2 id="Is-splitting-the-statement-a-repair"><a href="#Is-splitting-the-statement-a-repair" class="headerlink" title="Is splitting the statement a repair?"></a>Is splitting the statement a repair?</h2><p>Splitting may avoid the one-statement restriction while changing transaction behavior. Autocommitted statements expose intermediate versions and leave earlier writes after a later failure. Even within one transaction, sequential overwriting chooses an order that requires business approval. “No exception after splitting” does not validate that choice.</p>
+<p>Do not project the DO UPDATE rule onto all DO NOTHING behavior either. Selecting another conflict action changes the interface contract. Verify what is ignored, what is returned, and whether conflicting content is concealed.</p>
+<p>Proposed checks cover one candidate, identical duplicates, different versions, same-version conflicts, and batches mixing new with existing keys. Define creation, update, merge, and rejection expectations first. Reverse input order, split batches, and replay them to detect dependence on unapproved ordering.</p>
+<p>A cardinality exception is not a per-row import report. Associate duplicate groups with original rows before mutation, then decide whether the batch is rejected or an explicitly approved subset proceeds. Partial processing introduces commit and retry responsibilities; do not resubmit arbitrary remaining rows after catching the exception. Duplicate checking also does not replace field and state-transition validation.</p>
+<p>Retain database effects, business import decisions, and final commit evidence separately. No throughput or idempotency improvement is claimed. Give each written identity one explicit candidate before asking the database to apply that approved modification.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-insert.html" rel="noopener">PostgreSQL: Documentation: 18: INSERT</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/en/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--batch-imports" href="/en/tags/Batch-imports/">Batch imports</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F30%2Fpostgres-upsert-batch-cardinality%2F&text=Why%20do%20two%20valid%20upserts%20fail%20when%20combined%20into%20one%20PostgreSQL%20INSERT%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F30%2Fpostgres-upsert-batch-cardinality%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20do%20two%20valid%20upserts%20fail%20when%20combined%20into%20one%20PostgreSQL%20INSERT%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F30%2Fpostgres-upsert-batch-cardinality%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/30/python-sqlite-executescript-precommit/">
+              <span>Previous Post</span>
+              <strong>Why does an earlier Python SQLite write survive a failed script and rollback?</strong>
+              <small>2026-10-30</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/30/postgres-update-from-multiple-matches/">
+              <span>Next Post</span>
+              <strong>Which source row does PostgreSQL UPDATE FROM choose when two match?</strong>
+              <small>2026-10-30</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#A-statement-has-its-own-cardinality-contract">A statement has its own cardinality contract</a>
+          
+            <a class="toc-link toc-link--h2" href="#Two-proposals-for-one-existing-order">Two proposals for one existing order</a>
+          
+            <a class="toc-link toc-link--h2" href="#Produce-candidates-whose-meaning-can-be-explained">Produce candidates whose meaning can be explained</a>
+          
+            <a class="toc-link toc-link--h2" href="#Is-splitting-the-statement-a-repair">Is splitting the statement a repair?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>270</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>181</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>117</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>84</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/30/postgres-update-from-multiple-matches/">Which source row does PostgreSQL UPDATE FROM choose when two match?</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/29/postgres18-generated-column-kind/">What does omitting STORED mean in new PostgreSQL 18 DDL?</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/28/postgres-array-containment-duplicates/">Why Array Containment Can Match Two Demands With One Value</a></h3>
+          <p>2026-10-28</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

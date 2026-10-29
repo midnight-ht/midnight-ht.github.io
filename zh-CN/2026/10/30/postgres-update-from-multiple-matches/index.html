@@ -1,0 +1,415 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>UPDATE FROM 匹配两条来源，PostgreSQL 到底用哪条更新？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="区分目标主键与连接来源唯一性，用改价示例说明 UPDATE FROM 的多匹配选择、零来源差异、预检和并发边界。">
+  
+  
+    <meta name="keywords" content="UPDATE FROM,来源唯一性,标量子查询">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/30/postgres-update-from-multiple-matches/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/30/postgres-update-from-multiple-matches/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/30/postgres-update-from-multiple-matches/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/30/postgres-update-from-multiple-matches/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="UPDATE FROM 匹配两条来源，PostgreSQL 到底用哪条更新？ | Midnight blog">
+    <meta property="og:description" content="区分目标主键与连接来源唯一性，用改价示例说明 UPDATE FROM 的多匹配选择、零来源差异、预检和并发边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/30/postgres-update-from-multiple-matches/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/30/postgres-update-from-multiple-matches/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/30/postgres-update-from-multiple-matches/","name":"UPDATE FROM 匹配两条来源，PostgreSQL 到底用哪条更新？ | Midnight blog","description":"区分目标主键与连接来源唯一性，用改价示例说明 UPDATE FROM 的多匹配选择、零来源差异、预检和并发边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/30/postgres-update-from-multiple-matches/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/30/postgres-update-from-multiple-matches/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/30/postgres-update-from-multiple-matches/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/30/postgres-update-from-multiple-matches/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/30/postgres-update-from-multiple-matches/","headline":"UPDATE FROM 匹配两条来源，PostgreSQL 到底用哪条更新？","description":"区分目标主键与连接来源唯一性，用改价示例说明 UPDATE FROM 的多匹配选择、零来源差异、预检和并发边界。","inLanguage":"zh-CN","datePublished":"2026-10-29T20:02:56.000Z","dateModified":"2026-10-29T20:02:56.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/sql-update.html"],"keywords":"Development, PostgreSQL, 连接更新"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/30/postgres-update-from-multiple-matches/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"UPDATE FROM 匹配两条来源，PostgreSQL 到底用哪条更新？","item":"https://www.zyweb.vip/zh-CN/2026/10/30/postgres-update-from-multiple-matches/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/30/postgres-update-from-multiple-matches/" selected>zh-CN</option><option value="/en/2026/10/30/postgres-update-from-multiple-matches/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/30/postgres-update-from-multiple-matches/" selected>zh-CN</option><option value="/en/2026/10/30/postgres-update-from-multiple-matches/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-29T20:02:56.000Z">2026-10-30</time>
+    </div>
+
+    <h1>UPDATE FROM 匹配两条来源，PostgreSQL 到底用哪条更新？</h1>
+
+    
+      <p class="post-hero__summary">区分目标主键与连接来源唯一性，用改价示例说明 UPDATE FROM 的多匹配选择、零来源差异、预检和并发边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-29T20:02:56.000Z">2026-10-30</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/30/postgres-update-from-multiple-matches/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/30/postgres-update-from-multiple-matches/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>目标表有主键，不证明每个目标只匹配一条来源。</li><li>先拒绝或明确归并重复来源，再执行连接更新。</li><li>标量子查询与 FROM 在零来源时的行为不同。</li></ul></section>
+      <div class="article-content">
+        <p>PostgreSQL 的 <code>UPDATE … FROM</code> 若让同一目标行匹配到多条来源，只会采用其中一条连接结果，采用哪条并不容易预测。目标表有主键也不能消除这种歧义：主键约束目标身份，不约束每个目标连接到多少条报价。批量改价前，应先证明来源匹配唯一，再讨论价格是否获准采用。</p>
+<h2 id="没报错，不代表数据库选了最新报价"><a href="#没报错，不代表数据库选了最新报价" class="headerlink" title="没报错，不代表数据库选了最新报价"></a>没报错，不代表数据库选了最新报价</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-update.html">PostgreSQL 18 的 UPDATE 说明</a>要求使用 FROM 时确保每个待更新行至多产生一条连接输出。若产生多条，只有一条用于更新，但选择不可据此预测。本文依据二〇二六年十月三十日核对的固定版本文档；下面没有执行数据库查询，所有结果关系都是教学推演。</p>
+<p>假设商品甲当前价格十元，导入批次里同时有十二元和十五元两条报价。开发看到目标商品编号唯一，就直接按编号连接更新。这个唯一键只证明商品甲不是两条目标记录，不能证明候选报价只有一条。语句成功返回也没有替产品决定“最新”“已审核”或“取最低价”。这些词需要业务字段和规则，数据库不会从连接写法猜出来。</p>
+<p>给来源加排序，也不能把任意执行过程当成正式选择合同。若业务要求最近审核的一条，应先说明审核时间、版本、并列时的优先级和异常处置，再形成每个商品一条来源。若重复报价本来就是导入错误，拒绝这批候选通常比偷偷挑一条更能保留证据。确定性和业务正确性分别需要条件。</p>
+<h2 id="用唯一来源构成一个可以审查的更新"><a href="#用唯一来源构成一个可以审查的更新" class="headerlink" title="用唯一来源构成一个可以审查的更新"></a>用唯一来源构成一个可以审查的更新</h2><p>下面是未执行的完整示例，只适合隔离数据库。它演示已经通过业务确认的单批报价，不表示创建表就完成了审批。此处只有一个批次，来源表以商品编号唯一；多批系统还需把批次和租户等实际身份写进结构与连接条件。</p>
+<pre><code class="sql">CREATE TABLE example_products (
+  product_id bigint PRIMARY KEY,
+  unit_price numeric NOT NULL
+);
+CREATE TABLE example_approved_prices (
+  product_id bigint PRIMARY KEY,
+  unit_price numeric NOT NULL
+);
+INSERT INTO example_products VALUES (1, 10), (2, 20);
+INSERT INTO example_approved_prices VALUES (1, 12);
+
+BEGIN;
+UPDATE example_products AS p
+SET unit_price = s.unit_price
+FROM example_approved_prices AS s
+WHERE p.product_id = s.product_id
+RETURNING p.product_id, p.unit_price;
+SELECT product_id, unit_price FROM example_products ORDER BY product_id;
+ROLLBACK;
+</code></pre>
+<p>按定义推演，第一件商品有一条匹配报价，第二件没有匹配，因此第二件不会由这次连接更新。ROLLBACK 用于撤销这次教学改价，不应把 RETURNING 的内容解释成最终提交证据。来源主键限制了相同商品的第二条来源；它没有证明报价金额合法、审批未过期或当前操作者有权限。这些仍属于其他检查。</p>
+<p>作为负样本，可在重新初始化的隔离库中去掉来源唯一约束，插入同一商品的两种价格，再先执行相同条件的 SELECT 连接，观察候选行。不要把某次 UPDATE 恰好采用十二元写成规则；改变插入顺序或执行计划仍不能补出业务承诺。负样本的验收目标是发现多匹配并阻止它进入正式更新。</p>
+<h2 id="预检只能报告问题，不能自己锁住未来"><a href="#预检只能报告问题，不能自己锁住未来" class="headerlink" title="预检只能报告问题，不能自己锁住未来"></a>预检只能报告问题，不能自己锁住未来</h2><p>可以先按真实目标身份统计连接行数，找出大于一的对象，保留候选来源编号和冲突原因。检查应使用最终更新的同一份连接键与过滤条件；仅在原始文件里按商品编号分组，却在写入时额外跨租户连接，不能证明实际连接唯一。全表左右行数相等也无意义，关键是每个目标对应几条来源。</p>
+<p>一条预检 SELECT 不会自动阻止别的会话随后加入重复来源。若依靠预检保护写入，应让已确认批次在相关阶段保持不可变，或使用能够维护该唯一关系的约束及事务设计。这里的建议没有提供通用锁模板；需要按真实修改入口设计，不能把“先查了没有重复”升级为并发期间一直没有重复。</p>
+<p>如果输入允许多个合法版本，可以先在暂存区形成明确的选择结果，再加约束证明结果一目标一行。不要直接对金额求最大值就带上另一行的审批人，也不要随便 DISTINCT 隐藏不同报价。本站<a href="/zh-CN/2026/10/14/postgres-distinct-on-choice/">代表行的选择依据</a>讨论了为什么组内优先级必须先定义；本篇进一步要求这个选择成为写入前的前提。</p>
+<h2 id="换成标量子查询就完全等价吗？"><a href="#换成标量子查询就完全等价吗？" class="headerlink" title="换成标量子查询就完全等价吗？"></a>换成标量子查询就完全等价吗？</h2><p>不等价。官方 UPDATE 文档规定，用作赋值的子查询不能返回多于一行；没有行时会把相应目标列赋为 NULL。FROM 连接没有匹配时，目标行通常不会进入该连接更新。对于允许空价格的列，这可能把旧价格清空；本示例的非空约束则可能让该赋值失败。不能为抓住多行问题，就忽略零行时行为已经改变。</p>
+<p>因此选择子查询需要同时定义零条、一条、多条来源的合同。若要求没有报价就保持旧值，应明确表达该条件，并验证未匹配商品仍保留。若没有报价就是错误，则让接口报告缺失，而不是借 NULL 偶然触发后续失败。多行报错只是一个安全性质，不能代替全部结果分类。</p>
+<p>拟议验收从每个目标零条、一条、两条候选开始，先手写应保留、应更新或应拒绝的预期。加入同商品跨租户、审核并列、源批次被修改和目标在更新前已变化的情况，分别核对连接输入、实际修改与最终提交。若业务只允许覆盖特定旧版本，还需在更新条件中表达版本合同；唯一来源本身不会防止覆盖过时目标。</p>
+<p>预检若只寻找多来源，可以直接检查候选内连接并按目标分组；零来源则应从目标集合另外寻找未匹配对象。如果为了保留零来源而使用 LEFT JOIN，不能把占位行的 count(*) 当作来源数量，应明确数哪个非空来源身份。两种预检可以分别返回重复与缺失，不必把它们挤成同一个数字。报告还应保留目标和候选来源编号，让维护者能回到原始批次纠正，而不是只收到“有重复”的总数。</p>
+<p>本文没有运行这些 SQL，也不报告性能改善或生产故障。审查连接更新时，先要求说明每个目标的来源身份为何唯一，再检查选择理由、缺失处理和提交结果；“目标有主键”只能回答第一张表的身份问题。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-update.html" rel="noopener">PostgreSQL: Documentation: 18: UPDATE</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E8%BF%9E%E6%8E%A5%E6%9B%B4%E6%96%B0/">连接更新</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F30%2Fpostgres-update-from-multiple-matches%2F&text=UPDATE%20FROM%20%E5%8C%B9%E9%85%8D%E4%B8%A4%E6%9D%A1%E6%9D%A5%E6%BA%90%EF%BC%8CPostgreSQL%20%E5%88%B0%E5%BA%95%E7%94%A8%E5%93%AA%E6%9D%A1%E6%9B%B4%E6%96%B0%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F30%2Fpostgres-update-from-multiple-matches%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=UPDATE%20FROM%20%E5%8C%B9%E9%85%8D%E4%B8%A4%E6%9D%A1%E6%9D%A5%E6%BA%90%EF%BC%8CPostgreSQL%20%E5%88%B0%E5%BA%95%E7%94%A8%E5%93%AA%E6%9D%A1%E6%9B%B4%E6%96%B0%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F30%2Fpostgres-update-from-multiple-matches%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/">
+              <span>上一篇</span>
+              <strong>两条数据各自能 upsert，放进同一条 INSERT 为什么失败？</strong>
+              <small>2026-10-30</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/30/playwright-screenshot-disabled-animation-events/">
+              <span>下一篇</span>
+              <strong>Playwright截图禁用动画，为什么transitionend仍会触发？</strong>
+              <small>2026-10-30</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#没报错，不代表数据库选了最新报价">没报错，不代表数据库选了最新报价</a>
+          
+            <a class="toc-link toc-link--h2" href="#用唯一来源构成一个可以审查的更新">用唯一来源构成一个可以审查的更新</a>
+          
+            <a class="toc-link toc-link--h2" href="#预检只能报告问题，不能自己锁住未来">预检只能报告问题，不能自己锁住未来</a>
+          
+            <a class="toc-link toc-link--h2" href="#换成标量子查询就完全等价吗？">换成标量子查询就完全等价吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>270</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>181</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>116</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>84</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/">两条数据各自能 upsert，放进同一条 INSERT 为什么失败？</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/postgres18-generated-column-kind/">PostgreSQL 18 新建生成列，省略 STORED 会怎样？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/28/postgres-array-containment-duplicates/">一个库存单位为什么能“包含”两个相同需求</a></h3>
+          <p>2026-10-28</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

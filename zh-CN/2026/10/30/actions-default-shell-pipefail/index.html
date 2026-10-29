@@ -1,0 +1,403 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>GitHub Actions都在用bash，管道失败为什么有时没阻断？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="对照非Windows默认与显式Bash调用，追踪失败命令、tee和步骤状态，保留预期无匹配、报告失败与自定义模板的独立处理。">
+  
+  
+    <meta name="keywords" content="管道状态,运行器调用,诊断报告">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/30/actions-default-shell-pipefail/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/30/actions-default-shell-pipefail/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/30/actions-default-shell-pipefail/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/30/actions-default-shell-pipefail/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="GitHub Actions都在用bash，管道失败为什么有时没阻断？ | Midnight blog">
+    <meta property="og:description" content="对照非Windows默认与显式Bash调用，追踪失败命令、tee和步骤状态，保留预期无匹配、报告失败与自定义模板的独立处理。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/30/actions-default-shell-pipefail/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/30/actions-default-shell-pipefail/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/30/actions-default-shell-pipefail/","name":"GitHub Actions都在用bash，管道失败为什么有时没阻断？ | Midnight blog","description":"对照非Windows默认与显式Bash调用，追踪失败命令、tee和步骤状态，保留预期无匹配、报告失败与自定义模板的独立处理。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/30/actions-default-shell-pipefail/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/30/actions-default-shell-pipefail/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/30/actions-default-shell-pipefail/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/30/actions-default-shell-pipefail/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/30/actions-default-shell-pipefail/","headline":"GitHub Actions都在用bash，管道失败为什么有时没阻断？","description":"对照非Windows默认与显式Bash调用，追踪失败命令、tee和步骤状态，保留预期无匹配、报告失败与自定义模板的独立处理。","inLanguage":"zh-CN","datePublished":"2026-10-29T20:02:56.000Z","dateModified":"2026-10-29T20:02:56.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax"],"keywords":"Delivery, GitHub Actions, Shell"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/30/actions-default-shell-pipefail/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"GitHub Actions都在用bash，管道失败为什么有时没阻断？","item":"https://www.zyweb.vip/zh-CN/2026/10/30/actions-default-shell-pipefail/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/30/actions-default-shell-pipefail/" selected>zh-CN</option><option value="/en/2026/10/30/actions-default-shell-pipefail/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/30/actions-default-shell-pipefail/" selected>zh-CN</option><option value="/en/2026/10/30/actions-default-shell-pipefail/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-29T20:02:56.000Z">2026-10-30</time>
+    </div>
+
+    <h1>GitHub Actions都在用bash，管道失败为什么有时没阻断？</h1>
+
+    
+      <p class="post-hero__summary">对照非Windows默认与显式Bash调用，追踪失败命令、tee和步骤状态，保留预期无匹配、报告失败与自定义模板的独立处理。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-29T20:02:56.000Z">2026-10-30</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/30/actions-default-shell-pipefail/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/30/actions-default-shell-pipefail/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>非Windows未指定shell与显式Bash使用不同参数。</li><li>管道总状态不能解释每一段失败，报告存在也不能证明检查成功。</li><li>预期无匹配应局部处理，不应全局吞掉真正错误。</li></ul></section>
+      <div class="article-content">
+        <p>GitHub Actions 日志里前一个管道命令失败，步骤却成功，先核对实际 shell 调用参数。Linux 与 macOS 上，未指定 shell 和显式写 shell: bash 不是同一份命令；后者启用 pipefail。不能只看到两边都叫 bash，就假定失败传播完全相同。</p>
+<h2 id="默认名字没有说明全部选项"><a href="#默认名字没有说明全部选项" class="headerlink" title="默认名字没有说明全部选项"></a>默认名字没有说明全部选项</h2><p><a target="_blank" rel="noopener" href="https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsshell">GitHub Actions 的 shell 参数表</a>列出，非 Windows 平台未指定 shell 时通常调用 bash -e，找不到 bash 则按 sh 处理；显式 bash 调用包含 --noprofile、--norc、-e 和 -o pipefail。本文于二〇二六年十月三十日核对在线文档，没有运行托管任务，也不把这一平台条件套到 Windows 默认 PowerShell。</p>
+<p>管道整体状态不一定等于每一段都成功。前面的命令退出非零，后面的 tee 仍可能成功保存输出；若仅依据管道最后部分，就可能丢掉前面的失败。pipefail 改变这项状态传播，帮助步骤报告前段失败，而不是凭空检查报告内容是否正确。</p>
+<p>-e 也不能被称为所有脚本路径的统一质量保证。条件判断、显式错误处理、子进程包装和工具自身返回值，都影响实际合同。一个测试工具把断言失败打印出来却返回零，任何 shell 选项都无法从文字自动恢复应有失败。先确定原始命令怎样报告结果，再检查管道怎样传递它。</p>
+<h2 id="让日志继续输出，同时观察两种调用"><a href="#让日志继续输出，同时观察两种调用" class="headerlink" title="让日志继续输出，同时观察两种调用"></a>让日志继续输出，同时观察两种调用</h2><p>以下是未执行的完整教学工作流。false 用作明确失败命令，tee 只保存无敏感内容的示例输出。第一个步骤按默认 shell 运行，第二个显式声明 bash；它不检出项目、不发布，也不使用外部账号。</p>
+<pre><code class="yaml">name: inspect-pipeline-exit
+on: workflow_dispatch
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Unspecified shell control
+        run: false | tee default-report.txt
+      - name: Explicit Bash control
+        shell: bash
+        run: false | tee explicit-report.txt
+</code></pre>
+<p>按照文档给定调用与管道语义，第一条路径可能由末端 tee 的成功掩盖 false，显式 bash 则通过 pipefail 传播失败。这不是实际运行回执。执行位置、脚本改写和 runner 环境都应保存；自托管任务尤其不能因为配置写着 ubuntu 标签，就假定与托管环境相同。</p>
+<p>报告文件存在也不是成功证明。tee 创建文件只说明输出路径经过处理，文件可能为空，前段程序也可能根本没有产出有效报告。验收应分别记录命令退出、管道退出、步骤状态和文件内容身份。若希望失败后仍收集诊断，需要显式安排后续步骤条件，不能靠关闭全部失败传播来实现。</p>
+<h2 id="显式-bash-与自定义模板有什么区别？"><a href="#显式-bash-与自定义模板有什么区别？" class="headerlink" title="显式 bash 与自定义模板有什么区别？"></a>显式 bash 与自定义模板有什么区别？</h2><p>官方允许使用自定义 shell 模板，例如 bash {0}。它给使用者控制参数的能力，也可能绕开内置默认选项。评审时要看最终命令，不是只检查字符串里出现 bash。把标准内置关键字换成模板，应说明哪些初始化和退出选项需要自己维护。</p>
+<p>对于依赖 Bash 语义的脚本，显式声明有利于把条件固定下来；对于需要 sh 或 PowerShell 的脚本，应按该环境的规则实现和验证。不能把复制一行 shell: bash 当成跨平台兼容方案。命令依赖、路径、编码和退出约定仍需适合实际运行器。</p>
+<p>本例也不建议在所有失败后立即终止全部诊断。核心检查结果应保留，后续收集可以使用有边界的条件，但最终门禁仍要读取真实结果。本站<a href="/zh-CN/2026/10/29/actions-step-outcome-conclusion/">步骤 outcome 与 conclusion</a>讨论容错前后的状态；本题更早一步，先保证底层命令失败没有在管道里丢失。两层任意一层吞错，最终绿色都可能含义不足。</p>
+<h2 id="开启-pipefail-后，grep-没有匹配也必须阻断业务吗？"><a href="#开启-pipefail-后，grep-没有匹配也必须阻断业务吗？" class="headerlink" title="开启 pipefail 后，grep 没有匹配也必须阻断业务吗？"></a>开启 pipefail 后，grep 没有匹配也必须阻断业务吗？</h2><p>不能仅凭非零退出就替业务作决定。有些命令用非零表示预期分支，例如一次允许无匹配的查询。应在那个局部明确处理预期状态，并让真正的执行错误继续失败。不能为修复“没有匹配是正常情况”，在整份脚本末尾无条件返回零，或给每条命令都加统一忽略。</p>
+<p>这个选择需要了解工具的退出码合同。预期无匹配、无法读取文件和语法错误可能不是同一类状态；局部处理若把它们一起吞掉，就又失去诊断依据。具体分支应引用所用工具版本的说明，并在项目里验证，本文没有给所有 grep 版本或脚本环境颁发通用处理模板。</p>
+<p>拟议验收先用明确成功与明确失败的管道控制，比较未指定 shell、内置 bash 和自定义模板；再加入正常无匹配与真正工具错误。每组保存运行器平台、解析后的 shell 命令、各层退出状态和报告清单，不只看是否有日志。用失败路径证明门禁真的会停，比反复跑一次成功脚本更能说明配置发挥了什么作用。</p>
+<p>若报告收集本身失败，也应有独立可见结果，避免后来错误覆盖最初失败原因。本文没有触发工作流或测试 shell；先把每一层状态来源讲清楚，再决定哪些分支继续、哪些必须阻断，才能让显式 shell 配置成为可验证合同。</p>
+<p>本地终端的交互环境也不是run步骤的直接替身。开发者可能已经设置额外选项、加载个人配置或使用不同工具版本；同一行管道本地阻断，不证明远端未声明shell也采用了这些条件。复现应记录脚本实际如何被启动，把工具自身错误与启动参数分别留证，不靠命令文本长得一样来判定环境相同。</p>
+<p>另一个对照是前段成功而报告器失败，例如输出目录不可写。此时管道失败可能来自tee，不是测试断言；门禁仍应保留错误，但修复对象不同。若需要精确定位每段状态，应使用所选shell支持的明确记录方式，并在错误发生后及时取得，避免后续命令覆盖状态。不能从一个管道总退出值反推出所有段的具体原因。</p>
+<p>为了输出诊断而主动处理错误时，先保存原始结果，再执行报告步骤，最后按合同返回最终状态。把记录动作放在可能已经因-e退出之后的不可达行，并不能真的保存失败。受控用例应该故意触发这一条路径，确认最初错误仍能被看见，而不是只在正常运行时检查报告文件出现。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax" rel="noopener">GitHub Actions Workflow syntax — shell command table and exit-code defaults</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--github-actions" href="/zh-CN/tags/GitHub-Actions/">GitHub Actions</a>
+          
+            <a class="tag tag--shell" href="/zh-CN/tags/Shell/">Shell</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F30%2Factions-default-shell-pipefail%2F&text=GitHub%20Actions%E9%83%BD%E5%9C%A8%E7%94%A8bash%EF%BC%8C%E7%AE%A1%E9%81%93%E5%A4%B1%E8%B4%A5%E4%B8%BA%E4%BB%80%E4%B9%88%E6%9C%89%E6%97%B6%E6%B2%A1%E9%98%BB%E6%96%AD%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F30%2Factions-default-shell-pipefail%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=GitHub%20Actions%E9%83%BD%E5%9C%A8%E7%94%A8bash%EF%BC%8C%E7%AE%A1%E9%81%93%E5%A4%B1%E8%B4%A5%E4%B8%BA%E4%BB%80%E4%B9%88%E6%9C%89%E6%97%B6%E6%B2%A1%E9%98%BB%E6%96%AD%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F30%2Factions-default-shell-pipefail%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/30/actions-dispatch-boolean-input-context/">
+              <span>上一篇</span>
+              <strong>手动工作流里选了false，为什么条件分支仍会运行？</strong>
+              <small>2026-10-30</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#默认名字没有说明全部选项">默认名字没有说明全部选项</a>
+          
+            <a class="toc-link toc-link--h2" href="#让日志继续输出，同时观察两种调用">让日志继续输出，同时观察两种调用</a>
+          
+            <a class="toc-link toc-link--h2" href="#显式-bash-与自定义模板有什么区别？">显式 bash 与自定义模板有什么区别？</a>
+          
+            <a class="toc-link toc-link--h2" href="#开启-pipefail-后，grep-没有匹配也必须阻断业务吗？">开启 pipefail 后，grep 没有匹配也必须阻断业务吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>270</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>181</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>116</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>84</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/30/actions-dispatch-boolean-input-context/">手动工作流里选了false，为什么条件分支仍会运行？</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/actions-step-outcome-conclusion/">GitHub Actions 步骤失败后，outcome 与 conclusion 应该读哪个？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/10/actions-artifact-identity/">下载到了构建产物，怎样确认它就是本次批准的版本？</a></h3>
+          <p>2026-10-10</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

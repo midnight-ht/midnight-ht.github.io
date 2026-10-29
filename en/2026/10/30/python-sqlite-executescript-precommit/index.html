@@ -1,0 +1,424 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why does an earlier Python SQLite write survive a failed script and rollback? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Trace executescript pre-commit under Python sqlite3 legacy transaction control, separating earlier writes, script-owned work, rollback, and connection handoff.">
+  
+  
+    <meta name="keywords" content="executescript,LEGACY_TRANSACTION_CONTROL,implicit commit">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/30/python-sqlite-executescript-precommit/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/30/python-sqlite-executescript-precommit/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/30/python-sqlite-executescript-precommit/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/30/python-sqlite-executescript-precommit/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why does an earlier Python SQLite write survive a failed script and rollback? | Midnight blog">
+    <meta property="og:description" content="Trace executescript pre-commit under Python sqlite3 legacy transaction control, separating earlier writes, script-owned work, rollback, and connection handoff.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/30/python-sqlite-executescript-precommit/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/30/python-sqlite-executescript-precommit/#webpage","url":"https://www.zyweb.vip/en/2026/10/30/python-sqlite-executescript-precommit/","name":"Why does an earlier Python SQLite write survive a failed script and rollback? | Midnight blog","description":"Trace executescript pre-commit under Python sqlite3 legacy transaction control, separating earlier writes, script-owned work, rollback, and connection handoff.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/30/python-sqlite-executescript-precommit/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/30/python-sqlite-executescript-precommit/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/30/python-sqlite-executescript-precommit/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/30/python-sqlite-executescript-precommit/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/30/python-sqlite-executescript-precommit/","headline":"Why does an earlier Python SQLite write survive a failed script and rollback?","description":"Trace executescript pre-commit under Python sqlite3 legacy transaction control, separating earlier writes, script-owned work, rollback, and connection handoff.","inLanguage":"en","datePublished":"2026-10-29T20:02:56.000Z","dateModified":"2026-10-29T20:02:56.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://docs.python.org/3.14/library/sqlite3.html"],"keywords":"Development, Python, SQLite"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/30/python-sqlite-executescript-precommit/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why does an earlier Python SQLite write survive a failed script and rollback?","item":"https://www.zyweb.vip/en/2026/10/30/python-sqlite-executescript-precommit/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/30/python-sqlite-executescript-precommit/">zh-CN</option><option value="/en/2026/10/30/python-sqlite-executescript-precommit/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/30/python-sqlite-executescript-precommit/">zh-CN</option><option value="/en/2026/10/30/python-sqlite-executescript-precommit/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-29T20:02:56.000Z">2026-10-30</time>
+    </div>
+
+    <h1>Why does an earlier Python SQLite write survive a failed script and rollback?</h1>
+
+    
+      <p class="post-hero__summary">Trace executescript pre-commit under Python sqlite3 legacy transaction control, separating earlier writes, script-owned work, rollback, and connection handoff.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-29T20:02:56.000Z">2026-10-30</time> · Estimated read 12 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/30/python-sqlite-executescript-precommit/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/30/python-sqlite-executescript-precommit/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Legacy script entry can commit an existing pending transaction.</li><li>A later BEGIN cannot absorb work already committed.</li><li>Verify mode, pending state, and the actual execution connection.</li></ul></section>
+      <div class="article-content">
+        <p>With Python sqlite3 <code>LEGACY_TRANSACTION_CONTROL</code>, <code>executescript()</code> commits a pending transaction before executing its script. Rolling back after a later script failure cannot undo that earlier commit. Investigate the connection mode and commit timeline rather than assuming an outer context covers every operation.</p>
+<h2 id="Script-entry-can-be-a-commit-boundary"><a href="#Script-entry-can-be-a-commit-boundary" class="headerlink" title="Script entry can be a commit boundary"></a>Script entry can be a commit boundary</h2><p>The <a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/sqlite3.html#sqlite3.Cursor.executescript">Python sqlite3 executescript reference</a>, checked on October 30, 2026 in documentation headed Python 3.14.10, states the condition explicitly: legacy transaction control plus a pending transaction causes an initial COMMIT. Other transaction control required by the script must be written into it. This article does not generalize that rule to every autocommit setting.</p>
+<p>A migration may write an operation record first, then invoke a script for further changes. The caller expects any later failure to remove the record. But a BEGIN inside the script starts a subsequent transaction; it cannot absorb an earlier write already committed at script entry.</p>
+<p>Python introduced the autocommit control in 3.12. When it appears alongside older isolation_level settings, identify which mode governs the connection. SQLite&#39;s general transaction support and a string-valued option do not prove the whole Python function is atomic.</p>
+<h2 id="Observe-pre-script-and-in-script-writes-separately"><a href="#Observe-pre-script-and-in-script-writes-separately" class="headerlink" title="Observe pre-script and in-script writes separately"></a>Observe pre-script and in-script writes separately</h2><p>This complete teaching program has not been run. It requires a Python version supporting the autocommit argument and uses an isolated temporary database. A nonexistent table deliberately causes failure; no measured output is supplied.</p>
+<pre><code class="python">import sqlite3
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+with TemporaryDirectory() as directory:
+    path = Path(directory) / &quot;example.db&quot;
+    con = sqlite3.connect(
+        path, autocommit=sqlite3.LEGACY_TRANSACTION_CONTROL
+    )
+    try:
+        con.execute(&quot;CREATE TABLE events(id INTEGER PRIMARY KEY)&quot;)
+        con.commit()
+        con.executemany(&quot;INSERT INTO events VALUES (?)&quot;, [(1,)])
+        print(&quot;before script&quot;, con.in_transaction)
+        try:
+            con.executescript(&quot;&quot;&quot;
+                BEGIN;
+                INSERT INTO events VALUES (2);
+                INSERT INTO missing_table VALUES (3);
+                COMMIT;
+            &quot;&quot;&quot;)
+        except sqlite3.Error:
+            con.rollback()
+        print(&quot;after rollback&quot;, con.in_transaction)
+        print(list(con.execute(&quot;SELECT id FROM events ORDER BY id&quot;)))
+    finally:
+        con.close()
+</code></pre>
+<p>The documented expectation places row 1 in the initial committed transaction and row 2 in the explicitly started script transaction that rollback discards. The distinction is transaction membership, not a general slogan that the first row always survives every failure. Changing initialization, mode, or script control requires a new expectation.</p>
+<p>in_transaction helps observe current pending state. It does not reconstruct which business actions were committed earlier. Associate phase markers with row identities. A second connection can test visibility at a defined point, while its own read-transaction lifetime must also be controlled.</p>
+<h2 id="Choose-one-owner-for-atomicity"><a href="#Choose-one-owner-for-atomicity" class="headerlink" title="Choose one owner for atomicity"></a>Choose one owner for atomicity</h2><p>If all writes must succeed together, select one transaction-management approach and place the related statements inside it. Fixed SQL with parameterized values can use execute or executemany; several lines of Python do not require a script interface. Untrusted values should not become arbitrary SQL script text.</p>
+<p>A migration script can explicitly own BEGIN, COMMIT, and failure handling, but any prior write that must share its outcome must belong to that contract too. A precondition rejecting an unexpected pending transaction can be clearer than silently committing the caller&#39;s work.</p>
+<p>Putting BEGIN in a script does not guarantee a clean connection after every error. Handle the exception, establish current state, roll back unfinished work, and decide whether the connection can be reused. Closing in finally is resource cleanup, not evidence that the migration committed successfully.</p>
+<h2 id="Why-does-an-outer-connection-context-not-undo-the-earlier-write"><a href="#Why-does-an-outer-connection-context-not-undo-the-earlier-write" class="headerlink" title="Why does an outer connection context not undo the earlier write?"></a>Why does an outer connection context not undo the earlier write?</h2><p>Context exit handles relevant pending work; it cannot reverse a completed COMMIT. If script entry committed earlier operations, a later context rollback has a narrower scope. That does not make connection contexts useless. It means an intervening commit changed the boundary.</p>
+<p>Adding nested BEGIN statements without inspecting current state is not a general repair. Mode, pending state, and script-owned control can conflict. Draw the timeline and remove competing ownership rather than catching transaction-control errors and continuing.</p>
+<p>The legacy-control explanation also says the script&#39;s initial commit is independent of isolation_level. Setting that attribute to None does not erase a transaction explicitly begun elsewhere. Keep this conclusion within legacy control; design and test other autocommit modes from their own documentation.</p>
+<p>Proposed checks cover no pending work, pending writes, successful scripts, mid-script failures, and scripts without transaction statements. Start from equivalent databases and retain Python/SQLite versions, mode, stage states, observer reads, and final rows. Stop a failed round before unrelated writes obscure its boundary.</p>
+<p>With reused connections, inspect the mode on the actual execution connection, not merely an initialization default. An adapter may change attributes later. Record mode and transaction phases without private row data, and reject an unexpected unfinished transaction at handoff. Tests that always create fresh connections do not validate pooled reuse. Also check that failure does not pass pending work to the next borrower.</p>
+<p>The site&#39;s <a href="/en/2026/10/29/sqlite-busy-timeout-connection-budget/">SQLite lock-wait and retry article</a> covers another failure responsibility. No migration, rollback, or driver experiment was executed here. Acceptance should locate every jointly required write in its actual commit, not merely report that the function was “wrapped in a transaction.”</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/sqlite3.html" rel="noopener">sqlite3 — DB-API 2.0 interface for SQLite databases — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--python" href="/en/tags/Python/">Python</a>
+          
+            <a class="tag tag--sqlite" href="/en/tags/SQLite/">SQLite</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F30%2Fpython-sqlite-executescript-precommit%2F&text=Why%20does%20an%20earlier%20Python%20SQLite%20write%20survive%20a%20failed%20script%20and%20rollback%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F30%2Fpython-sqlite-executescript-precommit%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20does%20an%20earlier%20Python%20SQLite%20write%20survive%20a%20failed%20script%20and%20rollback%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F30%2Fpython-sqlite-executescript-precommit%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/30/python-subprocess-communicate-timeout-cleanup/">
+              <span>Previous Post</span>
+              <strong>Why is a Python child still running after communicate times out?</strong>
+              <small>2026-10-30</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/30/postgres-upsert-batch-cardinality/">
+              <span>Next Post</span>
+              <strong>Why do two valid upserts fail when combined into one PostgreSQL INSERT?</strong>
+              <small>2026-10-30</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Script-entry-can-be-a-commit-boundary">Script entry can be a commit boundary</a>
+          
+            <a class="toc-link toc-link--h2" href="#Observe-pre-script-and-in-script-writes-separately">Observe pre-script and in-script writes separately</a>
+          
+            <a class="toc-link toc-link--h2" href="#Choose-one-owner-for-atomicity">Choose one owner for atomicity</a>
+          
+            <a class="toc-link toc-link--h2" href="#Why-does-an-outer-connection-context-not-undo-the-earlier-write">Why does an outer connection context not undo the earlier write?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>270</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>181</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>117</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>84</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/30/python-subprocess-communicate-timeout-cleanup/">Why is a Python child still running after communicate times out?</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/29/python-asyncio-waitfor-cancellation-settlement/">Why can Python wait_for return after its one-second timeout?</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/29/python-namedtemporaryfile-reopen-cleanup/">Why can a named Python temporary file fail to reopen?</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,417 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>两条数据各自能 upsert，放进同一条 INSERT 为什么失败？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="解释同一条 PostgreSQL 冲突更新为何不能重复影响一个目标，区分批内重放、版本选择、冲突拒绝与拆分语句的代价。">
+  
+  
+    <meta name="keywords" content="ON CONFLICT,cardinality violation,批内重复键">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/30/postgres-upsert-batch-cardinality/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="两条数据各自能 upsert，放进同一条 INSERT 为什么失败？ | Midnight blog">
+    <meta property="og:description" content="解释同一条 PostgreSQL 冲突更新为何不能重复影响一个目标，区分批内重放、版本选择、冲突拒绝与拆分语句的代价。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/","name":"两条数据各自能 upsert，放进同一条 INSERT 为什么失败？ | Midnight blog","description":"解释同一条 PostgreSQL 冲突更新为何不能重复影响一个目标，区分批内重放、版本选择、冲突拒绝与拆分语句的代价。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/","headline":"两条数据各自能 upsert，放进同一条 INSERT 为什么失败？","description":"解释同一条 PostgreSQL 冲突更新为何不能重复影响一个目标，区分批内重放、版本选择、冲突拒绝与拆分语句的代价。","inLanguage":"zh-CN","datePublished":"2026-10-29T20:02:56.000Z","dateModified":"2026-10-29T20:02:56.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/sql-insert.html"],"keywords":"Development, PostgreSQL, 批量导入"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"两条数据各自能 upsert，放进同一条 INSERT 为什么失败？","item":"https://www.zyweb.vip/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/" selected>zh-CN</option><option value="/en/2026/10/30/postgres-upsert-batch-cardinality/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/" selected>zh-CN</option><option value="/en/2026/10/30/postgres-upsert-batch-cardinality/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-29T20:02:56.000Z">2026-10-30</time>
+    </div>
+
+    <h1>两条数据各自能 upsert，放进同一条 INSERT 为什么失败？</h1>
+
+    
+      <p class="post-hero__summary">解释同一条 PostgreSQL 冲突更新为何不能重复影响一个目标，区分批内重放、版本选择、冲突拒绝与拆分语句的代价。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-29T20:02:56.000Z">2026-10-30</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/30/postgres-upsert-batch-cardinality/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>单条 DO UPDATE 不能对同一目标行重复生效。</li><li>批内归并需要身份、版本和内容冲突政策。</li><li>拆分语句可能改变原子性与中间可见状态。</li></ul></section>
+      <div class="article-content">
+        <p>两条输入各自执行 upsert 可以成功，不表示把它们放进同一条 <code>INSERT … ON CONFLICT DO UPDATE</code> 仍会成功。PostgreSQL 不允许这条语句对同一目标行重复生效；本批候选若重复冲突键，可能触发基数错误。修复入口是确定批内同一身份的处理规则，而不是无限重试同一份输入。</p>
+<h2 id="一条语句有自己的基数合同"><a href="#一条语句有自己的基数合同" class="headerlink" title="一条语句有自己的基数合同"></a>一条语句有自己的基数合同</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-insert.html">PostgreSQL 18 的 INSERT 文档</a>把带 DO UPDATE 的冲突插入称为确定性语句：同一已有行不能在该命令中被影响多次，发生时抛出 cardinality violation，并要求拟插入行不要在冲突仲裁键上互相重复。本文于二〇二六年十月三十日核对固定版本说明；没有运行以下 SQL，也没有真实批量导入事故记录。</p>
+<p>这个限制与“表上只有一行同键记录”并不矛盾。目标唯一约束已经找到了那条记录，问题是同一句命令带来了两个都想修改它的候选。单条 SQL 没有被授权替业务决定最后一行赢、最高版本赢或把两笔金额相加。把业务归并规则藏在文件顺序里，会让换一种分批方式改变结果。</p>
+<p>先分清三种重复。相同身份、相同版本、相同内容也许是可忽略重放；相同身份、不同版本也许应选择较新状态；相同版本、不同内容可能是数据冲突。数据库基数错误不会替团队完成这三类分类。即使某个分支允许丢弃重复，也要保存它为什么可以忽略的依据。</p>
+<h2 id="用同一个已有订单作两条候选的对照"><a href="#用同一个已有订单作两条候选的对照" class="headerlink" title="用同一个已有订单作两条候选的对照"></a>用同一个已有订单作两条候选的对照</h2><p>以下是未执行的完整教学输入，只用于隔离库。目标表已有订单四十二的一版状态，随后一条语句同时提交它的两个新版本。两次候选都命中同一个冲突目标，不能把第二次更新当作自然的“继续推进”。</p>
+<pre><code class="sql">CREATE TABLE example_order_state (
+  order_id bigint PRIMARY KEY,
+  version integer NOT NULL,
+  state text NOT NULL
+);
+INSERT INTO example_order_state VALUES (42, 1, &#39;created&#39;);
+
+BEGIN;
+INSERT INTO example_order_state(order_id, version, state)
+VALUES (42, 2, &#39;packed&#39;), (42, 3, &#39;shipped&#39;)
+ON CONFLICT(order_id) DO UPDATE
+SET version = EXCLUDED.version, state = EXCLUDED.state;
+-- 观察语句失败后，结束本轮事务：
+ROLLBACK;
+</code></pre>
+<p>这里预期的是语句基数错误，不给出伪造的客户端错误日志。具体驱动怎样暴露异常、失败后事务能否继续使用以及如何回滚，应由隔离测试记录。测试驱动不能遇错继续执行其他写入，再把它们的结果混成原语句输出。尤其不要在不知道当前事务状态时自动发下一条业务 SQL。</p>
+<p>假设产品已经确认同一订单采用最高版本，且最高版本唯一、内容符合状态规则，那么可以在前置阶段形成只有三版的一条候选，再执行同样的 upsert。下面展示的是经过确认后的写入，不是从两条输入自动推导业务授权的算法。</p>
+<pre><code class="sql">INSERT INTO example_order_state(order_id, version, state)
+VALUES (42, 3, &#39;shipped&#39;)
+ON CONFLICT(order_id) DO UPDATE
+SET version = EXCLUDED.version, state = EXCLUDED.state
+RETURNING order_id, version, state;
+</code></pre>
+<p>正式实现若还要求不接受过期事件，可以额外加经过确认的版本条件，但那不会代替本篇的批内身份检查。本站<a href="/zh-CN/2026/10/20/postgres-onconflict-where-returning/">条件冲突更新与空 RETURNING</a>明确讨论单行输入的更新拒绝；本题则在该逻辑之前问：一个命令里到底提出了几次同一目标的修改。</p>
+<h2 id="先形成可解释候选，再进入目标表"><a href="#先形成可解释候选，再进入目标表" class="headerlink" title="先形成可解释候选，再进入目标表"></a>先形成可解释候选，再进入目标表</h2><p>批次暂存应保留原始行身份、业务键、版本和必要的来源信息。先按真正的冲突键分组，找出重复候选，再按业务合同合并、选择或拒绝。冲突键若包括租户，不能只按订单号归并；若采用表达式唯一索引，还要核对归并所用的身份是否与数据库仲裁方式一致。</p>
+<p>选择“最后一条”时必须说明顺序来自哪里。网络到达顺序、文件行号和业务版本可能不同；上游重试或并行读取也会改变到达顺序。最高版本也不是完整答案：最高版本并列且内容不同，需要拒绝、人工处理或另一个正式规则。不能为了生成一条候选就对状态取最大文本值，制造从未被任何输入提出的组合。</p>
+<p>完全相同的重复可以按已确认政策压成一条，但导入报告仍应解释哪些原始行归并到了哪个候选。归并后的行数减少不是丢数据的唯一判断，必须看业务要求是不是把它们视为同一事件。反过来，不同事件即使字段偶然相等，也不应仅凭全行 DISTINCT 当作同一身份。</p>
+<h2 id="拆成多条语句就算修复了吗？"><a href="#拆成多条语句就算修复了吗？" class="headerlink" title="拆成多条语句就算修复了吗？"></a>拆成多条语句就算修复了吗？</h2><p>拆开可能避开单条语句的重复目标限制，却改变了观察与事务条件。若每条都自动提交，其他读者可能看到中间版本；后面失败时，前面已写入的状态仍在。即使放在同一个事务里，依次覆盖的顺序仍是一份业务选择，需要产品确认，不能把“拆后不报错”当作选择规则正确。</p>
+<p>同理，不要把 DO UPDATE 的说明机械推广成 DO NOTHING 的全部行为。二者对冲突采取不同动作；若需求只是忽略已存在身份，需要独立验证忽略范围、返回结果和是否隐藏同键不同内容。改用另一分支是接口语义改变，不是消除错误消息的小补丁。</p>
+<p>拟议验收先固定已有目标，分别提交一个候选、两个相同候选、两个不同版本和同版本不同内容；再测试新目标与已有目标混合的一批。对每组先写下应新建、应更新、应归并还是应拒绝，再核对异常、返回行与最终落库。把输入顺序反转、批次拆分和重放加入控制，确认业务结果不依赖未经声明的排列。</p>
+<p>数据库抛出的基数异常也不是一份逐条业务报告。若接口允许告诉用户哪些行需要修正，应在写入前把重复组与原始行关联，并明确整批拒绝还是只处理已确认子集。选择部分处理会增加提交与重试责任，不能在捕获异常后把剩下行随意再发一遍。预检发现重复不等于发现全部非法输入，字段校验和状态转换仍须执行；导入结果应分别表达身份冲突、输入错误和实际写入。</p>
+<p>数据库事实与导入报告也应分开保存。语句成功和返回行说明这次 SQL 的效果，整批接受、拒绝与归并说明业务处理；最终提交另有证据。本文不提供吞吐或幂等效果数字。先让每个被写入的身份只有一个明确候选，再让数据库执行那次已获确认的修改。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-insert.html" rel="noopener">PostgreSQL: Documentation: 18: INSERT</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%89%B9%E9%87%8F%E5%AF%BC%E5%85%A5/">批量导入</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F30%2Fpostgres-upsert-batch-cardinality%2F&text=%E4%B8%A4%E6%9D%A1%E6%95%B0%E6%8D%AE%E5%90%84%E8%87%AA%E8%83%BD%20upsert%EF%BC%8C%E6%94%BE%E8%BF%9B%E5%90%8C%E4%B8%80%E6%9D%A1%20INSERT%20%E4%B8%BA%E4%BB%80%E4%B9%88%E5%A4%B1%E8%B4%A5%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F30%2Fpostgres-upsert-batch-cardinality%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E4%B8%A4%E6%9D%A1%E6%95%B0%E6%8D%AE%E5%90%84%E8%87%AA%E8%83%BD%20upsert%EF%BC%8C%E6%94%BE%E8%BF%9B%E5%90%8C%E4%B8%80%E6%9D%A1%20INSERT%20%E4%B8%BA%E4%BB%80%E4%B9%88%E5%A4%B1%E8%B4%A5%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F30%2Fpostgres-upsert-batch-cardinality%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/30/python-sqlite-executescript-precommit/">
+              <span>上一篇</span>
+              <strong>SQLite 脚本报错后回滚，前一笔 Python 写入为什么还在？</strong>
+              <small>2026-10-30</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/30/postgres-update-from-multiple-matches/">
+              <span>下一篇</span>
+              <strong>UPDATE FROM 匹配两条来源，PostgreSQL 到底用哪条更新？</strong>
+              <small>2026-10-30</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#一条语句有自己的基数合同">一条语句有自己的基数合同</a>
+          
+            <a class="toc-link toc-link--h2" href="#用同一个已有订单作两条候选的对照">用同一个已有订单作两条候选的对照</a>
+          
+            <a class="toc-link toc-link--h2" href="#先形成可解释候选，再进入目标表">先形成可解释候选，再进入目标表</a>
+          
+            <a class="toc-link toc-link--h2" href="#拆成多条语句就算修复了吗？">拆成多条语句就算修复了吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>270</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>181</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>116</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>84</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/30/postgres-update-from-multiple-matches/">UPDATE FROM 匹配两条来源，PostgreSQL 到底用哪条更新？</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/postgres18-generated-column-kind/">PostgreSQL 18 新建生成列，省略 STORED 会怎样？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/28/postgres-array-containment-duplicates/">一个库存单位为什么能“包含”两个相同需求</a></h3>
+          <p>2026-10-28</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

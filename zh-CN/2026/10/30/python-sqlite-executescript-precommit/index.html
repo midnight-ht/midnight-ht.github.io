@@ -1,0 +1,424 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>SQLite 脚本报错后回滚，前一笔 Python 写入为什么还在？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="限定 sqlite3 的遗留事务控制模式，拆解 executescript 入口提交、脚本内事务与外层回滚范围，用独立数据库示例安排验证。">
+  
+  
+    <meta name="keywords" content="executescript,LEGACY_TRANSACTION_CONTROL,隐式提交">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/30/python-sqlite-executescript-precommit/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/30/python-sqlite-executescript-precommit/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/30/python-sqlite-executescript-precommit/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/30/python-sqlite-executescript-precommit/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="SQLite 脚本报错后回滚，前一笔 Python 写入为什么还在？ | Midnight blog">
+    <meta property="og:description" content="限定 sqlite3 的遗留事务控制模式，拆解 executescript 入口提交、脚本内事务与外层回滚范围，用独立数据库示例安排验证。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/30/python-sqlite-executescript-precommit/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/30/python-sqlite-executescript-precommit/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/30/python-sqlite-executescript-precommit/","name":"SQLite 脚本报错后回滚，前一笔 Python 写入为什么还在？ | Midnight blog","description":"限定 sqlite3 的遗留事务控制模式，拆解 executescript 入口提交、脚本内事务与外层回滚范围，用独立数据库示例安排验证。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/30/python-sqlite-executescript-precommit/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/30/python-sqlite-executescript-precommit/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/30/python-sqlite-executescript-precommit/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/30/python-sqlite-executescript-precommit/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/30/python-sqlite-executescript-precommit/","headline":"SQLite 脚本报错后回滚，前一笔 Python 写入为什么还在？","description":"限定 sqlite3 的遗留事务控制模式，拆解 executescript 入口提交、脚本内事务与外层回滚范围，用独立数据库示例安排验证。","inLanguage":"zh-CN","datePublished":"2026-10-29T20:02:56.000Z","dateModified":"2026-10-29T20:02:56.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.14/library/sqlite3.html"],"keywords":"Development, Python, SQLite"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/30/python-sqlite-executescript-precommit/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"SQLite 脚本报错后回滚，前一笔 Python 写入为什么还在？","item":"https://www.zyweb.vip/zh-CN/2026/10/30/python-sqlite-executescript-precommit/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/30/python-sqlite-executescript-precommit/" selected>zh-CN</option><option value="/en/2026/10/30/python-sqlite-executescript-precommit/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/30/python-sqlite-executescript-precommit/" selected>zh-CN</option><option value="/en/2026/10/30/python-sqlite-executescript-precommit/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-29T20:02:56.000Z">2026-10-30</time>
+    </div>
+
+    <h1>SQLite 脚本报错后回滚，前一笔 Python 写入为什么还在？</h1>
+
+    
+      <p class="post-hero__summary">限定 sqlite3 的遗留事务控制模式，拆解 executescript 入口提交、脚本内事务与外层回滚范围，用独立数据库示例安排验证。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-29T20:02:56.000Z">2026-10-30</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/30/python-sqlite-executescript-precommit/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/30/python-sqlite-executescript-precommit/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>遗留模式下，脚本入口可能先提交已有事务。</li><li>脚本内 BEGIN 无法撤销此前已经完成的提交。</li><li>事务模式、未提交状态与连接交接需要实际核对。</li></ul></section>
+      <div class="article-content">
+        <p>在 Python sqlite3 的 <code>LEGACY_TRANSACTION_CONTROL</code> 模式下，<code>executescript()</code> 遇到已有未提交事务，会先隐式提交它，再执行脚本。脚本随后失败，回滚也不能撤销入口处已经提交的那部分。排查“回滚后为什么还留着数据”，应先标出连接模式和每个提交时点，而不是只数源码里出现了几个 with。</p>
+<h2 id="脚本入口也可能是提交边界"><a href="#脚本入口也可能是提交边界" class="headerlink" title="脚本入口也可能是提交边界"></a>脚本入口也可能是提交边界</h2><p><a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/sqlite3.html#sqlite3.Cursor.executescript">Python 3.14 sqlite3 参考</a>明确限定：autocommit 为 LEGACY_TRANSACTION_CONTROL 且存在待提交事务时，执行脚本前先 COMMIT；脚本内部没有其他自动事务控制，需要的事务语句应写进脚本。本文于二〇二六年十月三十日核对的页面标为 Python 3.14.10，不把遗留模式的规则直接套到所有 autocommit 设置。</p>
+<p>设想迁移函数先写入一条操作记录，再用 executescript 创建或填充其他内容。调用者以为后面任何一步报错都会让前面的操作记录消失；实际上，脚本入口可能已把它提交。脚本里即使再有 BEGIN，也只能开启后续事务，无法把此前提交的写入重新放回去。这是接口时序，不是 SQLite 随机漏掉回滚。</p>
+<p>从三点十二版起，Python 提供 autocommit 属性作为事务控制入口。旧 isolation_level 与新属性共同出现时，必须先说明当前处于哪种模式。仅看到 isolation_level 的字符串，或者看到 SQLite 支持事务，不能推断整段 Python 操作属于同一个原子单元。版本和实际连接配置应进入诊断记录。</p>
+<h2 id="把脚本前与脚本内的两行分开观察"><a href="#把脚本前与脚本内的两行分开观察" class="headerlink" title="把脚本前与脚本内的两行分开观察"></a>把脚本前与脚本内的两行分开观察</h2><p>下面是未执行的完整教学程序，要求支持 autocommit 参数的 Python。它使用独立临时数据库，不连接真实业务库。失败由缺失表故意触发；输出的意义应按实际运行记录核对，本文没有提供任何实测输出。</p>
+<pre><code class="python">import sqlite3
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+with TemporaryDirectory() as directory:
+    path = Path(directory) / &quot;example.db&quot;
+    con = sqlite3.connect(
+        path, autocommit=sqlite3.LEGACY_TRANSACTION_CONTROL
+    )
+    try:
+        con.execute(&quot;CREATE TABLE events(id INTEGER PRIMARY KEY)&quot;)
+        con.commit()
+        con.executemany(&quot;INSERT INTO events VALUES (?)&quot;, [(1,)])
+        print(&quot;before script&quot;, con.in_transaction)
+        try:
+            con.executescript(&quot;&quot;&quot;
+                BEGIN;
+                INSERT INTO events VALUES (2);
+                INSERT INTO missing_table VALUES (3);
+                COMMIT;
+            &quot;&quot;&quot;)
+        except sqlite3.Error:
+            con.rollback()
+        print(&quot;after rollback&quot;, con.in_transaction)
+        print(list(con.execute(&quot;SELECT id FROM events ORDER BY id&quot;)))
+    finally:
+        con.close()
+</code></pre>
+<p>按文档推演，脚本前的一号行在入口隐式提交，二号行位于脚本显式开启的事务内，后者失败后由 rollback 撤销。重点是两行分属不同事务，而不是给出一条“所有错误后都保留第一行”的通用口诀。若把初始化、连接模式或脚本内容改了，就应重新确定预期。</p>
+<p>in_transaction 能帮助观察底层当前是否有未提交事务，但一个时点的布尔值不会告诉你过去提交过哪些业务动作。需要把阶段标记和具体行身份关联起来。如果要证明其他连接已经看见一号行，可另开观察连接，在明确的提交时点读取；不要让观察器自己持有长读事务后，再误解它的可见性。</p>
+<h2 id="谁应该拥有这次原子操作？"><a href="#谁应该拥有这次原子操作？" class="headerlink" title="谁应该拥有这次原子操作？"></a>谁应该拥有这次原子操作？</h2><p>若所有写入必须共同成功，较简单的方向是选定一种事务管理方式，让所有相关语句落入同一个受控范围。固定语句和数据值可以使用 execute 或 executemany 配合参数绑定，不必为“多行 Python 代码”自动换成 executescript。数据值与任意 SQL 脚本文本也不应互相替代。</p>
+<p>若确实需要迁移脚本，可以让脚本明确拥有 BEGIN、COMMIT 和失败恢复，并确保必须一起提交的前置写入也在这个合同中。不要先在调用方留下待提交工作，再假定脚本会悄悄加入它。脚本运行前是否允许已有事务，可以成为受控前置条件；发现状态不符时报告配置错误，而不是擅自提交调用者并不想提交的内容。</p>
+<p>脚本中放 BEGIN 并不意味着遇错会自动恢复到干净状态。调用者仍须处理异常、确认当前事务、回滚相关未完成工作，再决定连接能否继续借给下一个任务。连接关闭与事务成功也不是一回事，必须明确自己在保存什么、放弃什么。上面的 finally 关闭只是资源清理，不是成功提交的替代。</p>
+<h2 id="外层-with-connection-为什么保不住之前的写入？"><a href="#外层-with-connection-为什么保不住之前的写入？" class="headerlink" title="外层 with connection 为什么保不住之前的写入？"></a>外层 with connection 为什么保不住之前的写入？</h2><p>连接上下文在退出时处理相关的未完成事务，不能倒转已经完成的 COMMIT。如果在 with 内调用 executescript 并触发入口提交，随后异常导致的回滚仍只能作用于当时尚未提交的部分。因此问题不是“with 没有用”，而是它的保护范围被中间的提交改变了。</p>
+<p>反过来，也不能为解决这个问题机械嵌套更多 BEGIN。当前连接是否已有事务、autocommit 由谁控制、脚本是否含事务语句，都可能使嵌套尝试不成立。应先画出一条时间线，再删掉互相争抢控制权的层次；不要靠捕获“已经在事务中”异常后继续执行来维持表面成功。</p>
+<p>legacy 模式说明还提醒，executescript 的入口提交不由 isolation_level 的取值直接取消。把它改成 None，并不能在存在明确开启事务的情况下自动获得想象中的回滚范围。这个结论仍限定遗留控制；使用其他 autocommit 模式时，应按对应章节独立设计并验证，不通过修改一个选项宣称所有模式等价。</p>
+<p>拟议验证覆盖没有前置事务、有前置写入、脚本成功、脚本中途失败和脚本自身不含事务控制。每轮使用新库或恢复相同初始状态，记录 Python 与 SQLite 版本、连接配置、每阶段 in_transaction、观察连接读取和最终行集。失败之后停止本轮业务推进，避免后续自动提交的查询或写入掩盖真正边界。</p>
+<p>连接被复用时，还要确认脚本实际拿到的就是已检查模式的那条连接。初始化函数里的默认设置、适配器后来改写的属性和任务执行时的状态可能不同。可以在受控入口记录不含业务数据的模式与事务阶段，并在借出连接前拒绝未结束的上一任务状态。测试每次新建连接只能证明那条新连接，不能替连接池交接验收。失败路径也应核对没有把待提交工作带给下一位调用者。</p>
+<p>本站<a href="/zh-CN/2026/10/29/sqlite-busy-timeout-connection-budget/">SQLite 等锁与事务重试</a>讨论失败后的另一种责任。本篇没有运行迁移、回滚或驱动测试，也不证明某份生产脚本具有原子性。验收应能说清每条必须共同成败的写入在哪次提交里，而不是仅用“外面包了事务”作为完成结论。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/sqlite3.html" rel="noopener">sqlite3 — DB-API 2.0 interface for SQLite databases — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+            <a class="tag tag--sqlite" href="/zh-CN/tags/SQLite/">SQLite</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F30%2Fpython-sqlite-executescript-precommit%2F&text=SQLite%20%E8%84%9A%E6%9C%AC%E6%8A%A5%E9%94%99%E5%90%8E%E5%9B%9E%E6%BB%9A%EF%BC%8C%E5%89%8D%E4%B8%80%E7%AC%94%20Python%20%E5%86%99%E5%85%A5%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E5%9C%A8%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F30%2Fpython-sqlite-executescript-precommit%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=SQLite%20%E8%84%9A%E6%9C%AC%E6%8A%A5%E9%94%99%E5%90%8E%E5%9B%9E%E6%BB%9A%EF%BC%8C%E5%89%8D%E4%B8%80%E7%AC%94%20Python%20%E5%86%99%E5%85%A5%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E5%9C%A8%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F30%2Fpython-sqlite-executescript-precommit%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/30/python-subprocess-communicate-timeout-cleanup/">
+              <span>上一篇</span>
+              <strong>communicate 超时了，Python 子进程为什么还在运行？</strong>
+              <small>2026-10-30</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/30/postgres-upsert-batch-cardinality/">
+              <span>下一篇</span>
+              <strong>两条数据各自能 upsert，放进同一条 INSERT 为什么失败？</strong>
+              <small>2026-10-30</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#脚本入口也可能是提交边界">脚本入口也可能是提交边界</a>
+          
+            <a class="toc-link toc-link--h2" href="#把脚本前与脚本内的两行分开观察">把脚本前与脚本内的两行分开观察</a>
+          
+            <a class="toc-link toc-link--h2" href="#谁应该拥有这次原子操作？">谁应该拥有这次原子操作？</a>
+          
+            <a class="toc-link toc-link--h2" href="#外层-with-connection-为什么保不住之前的写入？">外层 with connection 为什么保不住之前的写入？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>270</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>181</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>116</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>84</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/30/python-subprocess-communicate-timeout-cleanup/">communicate 超时了，Python 子进程为什么还在运行？</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/">Python wait_for 一秒超时，为什么一秒后还没返回？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/">Python 临时文件有路径，另一个读取者为什么打不开？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
