@@ -1,0 +1,418 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>AT TIME ZONE UTC 后，结果为什么反而没了时区？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="按输入类型解释 AT TIME ZONE 的两个方向，以完整 SQL 和类型检查区分本地时钟解释、瞬时展示及连续转换。">
+  
+  
+    <meta name="keywords" content="AT TIME ZONE,pg_typeof,时区转换方向">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/31/postgres-at-time-zone-type-direction/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="AT TIME ZONE UTC 后，结果为什么反而没了时区？ | Midnight blog">
+    <meta property="og:description" content="按输入类型解释 AT TIME ZONE 的两个方向，以完整 SQL 和类型检查区分本地时钟解释、瞬时展示及连续转换。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/","name":"AT TIME ZONE UTC 后，结果为什么反而没了时区？ | Midnight blog","description":"按输入类型解释 AT TIME ZONE 的两个方向，以完整 SQL 和类型检查区分本地时钟解释、瞬时展示及连续转换。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/","headline":"AT TIME ZONE UTC 后，结果为什么反而没了时区？","description":"按输入类型解释 AT TIME ZONE 的两个方向，以完整 SQL 和类型检查区分本地时钟解释、瞬时展示及连续转换。","inLanguage":"zh-CN","datePublished":"2026-10-30T19:24:57.000Z","dateModified":"2026-10-30T19:24:57.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/functions-datetime.html"],"keywords":"Development, PostgreSQL, 时间类型"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"AT TIME ZONE UTC 后，结果为什么反而没了时区？","item":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/" selected>zh-CN</option><option value="/en/2026/10/31/postgres-at-time-zone-type-direction/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/" selected>zh-CN</option><option value="/en/2026/10/31/postgres-at-time-zone-type-direction/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-30T19:24:57.000Z">2026-10-31</time>
+    </div>
+
+    <h1>AT TIME ZONE UTC 后，结果为什么反而没了时区？</h1>
+
+    
+      <p class="post-hero__summary">按输入类型解释 AT TIME ZONE 的两个方向，以完整 SQL 和类型检查区分本地时钟解释、瞬时展示及连续转换。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-30T19:24:57.000Z">2026-10-31</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/31/postgres-at-time-zone-type-direction/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>无时区输入经 AT TIME ZONE 解释为带时区瞬时。</li><li>带时区输入经同一运算符返回目标地区无时区钟面。</li><li>连续转换应逐步核对类型与来源，不能只比较输出小时。</li></ul></section>
+      <div class="article-content">
+        <p>同样写 <code>AT TIME ZONE &#39;UTC&#39;</code>，输入类型不同，转换方向就不同。输入为无时区 timestamp 时，它把本地钟面值解释成一个瞬时，结果是 timestamptz；输入为 timestamptz 时，它把已有瞬时投影到指定地区的钟面，结果反而没有时区。排查时应先查输入和输出类型，再看打印出来的小时数。</p>
+<h2 id="一个运算符为什么有两个方向？"><a href="#一个运算符为什么有两个方向？" class="headerlink" title="一个运算符为什么有两个方向？"></a>一个运算符为什么有两个方向？</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-datetime.html#FUNCTIONS-DATETIME-ZONECONVERT">PostgreSQL 18 日期时间函数的 AT TIME ZONE 表格</a>列出这两个重载。本文于二〇二六年十月三十一日核对十八版说明，讨论 SQL 表达式类型与转换，不把未运行的查询当成迁移或时区兼容性测试。</p>
+<p>无时区 timestamp 只有日期和时间字段，没有独立说明它代表全球时间线上的哪一点。加上指定地区，是为这些字段提供解释条件。相反，timestamptz 已经表示一个瞬时，把它转换到某个地区，是询问那一刻当地钟面显示什么。两次操作分别补上解释与取出当地表示，所以输出类型相反，并不矛盾。</p>
+<p>错误往往发生在函数名被理解成“统一把时区换成某个值”。调用方只看结果文字少了偏移，就在外面再加一次转换；如果没有检查当前类型，第二次可能又把刚得到的钟面值解释成另一个瞬时。这不是简单的格式化链，而是连续改变数据语义。</p>
+<p>会话 TimeZone 还影响 timestamptz 的文本展示。因此，结果带着什么偏移与运算符接受哪个命名地区，应分别解释。指定上海用于理解输入，不要求最终打印文本必须带上海偏移；最终会话可能按 UTC 展示同一瞬时。只比较两张截图里的小时值，可能把显示差异误判成数据改变。</p>
+<h2 id="用-pg-typeof-检查两种输入"><a href="#用-pg-typeof-检查两种输入" class="headerlink" title="用 pg_typeof 检查两种输入"></a>用 pg_typeof 检查两种输入</h2><p>下面是未执行的完整 SQL 示例，不依赖已有表。为便于对照，先在本会话固定输出环境，再显式声明两个输入，避免未知类型的字符串让重载选择隐藏起来：</p>
+<pre><code class="sql">SET TIME ZONE &#39;UTC&#39;;
+WITH sample AS (
+  SELECT timestamp &#39;2026-01-15 09:00:00&#39; AS local_clock,
+         timestamptz &#39;2026-01-15 09:00:00+00&#39; AS instant
+)
+SELECT
+  pg_typeof(local_clock) AS input_a,
+  local_clock AT TIME ZONE &#39;Asia/Shanghai&#39; AS interpreted,
+  pg_typeof(local_clock AT TIME ZONE &#39;Asia/Shanghai&#39;) AS output_a,
+  pg_typeof(instant) AS input_b,
+  instant AT TIME ZONE &#39;Asia/Shanghai&#39; AS shown_local,
+  pg_typeof(instant AT TIME ZONE &#39;Asia/Shanghai&#39;) AS output_b
+FROM sample;
+</code></pre>
+<p>第一路的意思是“上海当地一月十五日上午九点”，在 UTC 会话里对应凌晨一点的瞬时。第二路的输入已经是 UTC 上午九点，投影到上海钟面对应下午五点。这些是固定示例值的语义推演，没有真实执行输出；示例不涉及夏令时切换，也不据此推广所有地区所有日期的边界行为。</p>
+<p>关键检查不止是算出了几个小时，还包括 output_a 是带时区类型、output_b 是无时区类型。如果应用驱动自动把两者都转成相似的字符串或语言日期对象，应记录数据库返回类型与驱动映射。否则 SQL 已经区分的两个结果，到接口层可能又被合并。</p>
+<h2 id="连用两次时，哪一步才是换地区？"><a href="#连用两次时，哪一步才是换地区？" class="headerlink" title="连用两次时，哪一步才是换地区？"></a>连用两次时，哪一步才是换地区？</h2><p>假设原始列明确存储东京当地钟面，目标是取得芝加哥当地钟面，可以先把无时区值按东京解释成瞬时，再把那个瞬时投影到芝加哥。中间的带时区结果是语义桥梁。不能因为 SQL 只有一行，就跳过对原始列含义的确认。</p>
+<pre><code class="sql">SELECT
+  timestamp &#39;2026-01-15 09:00:00&#39;
+    AT TIME ZONE &#39;Asia/Tokyo&#39;
+    AT TIME ZONE &#39;America/Chicago&#39; AS chicago_clock;
+</code></pre>
+<p>这段查询同样未执行。选择一月份只是为了教学输入具体，不是已验证地区规则的声明。若业务跨季节安排，应使用实际部署的时区数据与目标日期验证；若要保存原始命名地区，字段模型应显式保留它，不能期待输出文字倒推出来源意图。</p>
+<p>一个反例是原列其实已经约定保存 UTC 钟面，却按上海当地时间做第一步解释。查询会给出合法的 timestamptz，但解释条件错了，瞬时也就被改了。本站<a href="/zh-CN/2026/10/14/postgres-timestamp-without-zone/">无时区列怎样处理偏移输入</a>讨论这种历史来源问题。本篇的新增判断是：即使来源已知，也应按每一步类型检查重载方向，而非只看运算符名字。</p>
+<h2 id="改了会话时区，怎样判断瞬时有没有变？"><a href="#改了会话时区，怎样判断瞬时有没有变？" class="headerlink" title="改了会话时区，怎样判断瞬时有没有变？"></a>改了会话时区，怎样判断瞬时有没有变？</h2><p>先保留一份明确的 timestamptz，再改变会话展示环境，比较数据库内的瞬时相等关系与文字输出，不能只比较字符串。对带时区输入投影到显式命名地区所得到的无时区值，也应与该目标钟面核对；若混用有时区与无时区值进行比较，会话配置可能再次参与解释。</p>
+<p>测试至少包含两种输入类型、显式偏移、缺少偏移、不同会话 TimeZone 和驱动返回值。把 SQL、驱动与接口序列化分段记录，才能知道在哪一层丢了类型。没有执行记录时，不应把一条 pg_typeof 查询预期写成“迁移已通过”。</p>
+<h2 id="这个转换能定义每天九点的提醒吗？"><a href="#这个转换能定义每天九点的提醒吗？" class="headerlink" title="这个转换能定义每天九点的提醒吗？"></a>这个转换能定义每天九点的提醒吗？</h2><p>不能单凭一次转换定义重复安排。把某天的本地钟面变成瞬时，与保存“每个工作日上午九点”的日历意图不同；后者还需要地区、重复规则和异常日期策略。可以沿用本站<a href="/zh-CN/2026/10/10/timestamps-recurring-intent/">时间戳与重复安排</a>的模型讨论，但不要把本篇类型重载的例子包装成完整调度器。</p>
+<p>一种容易暴露错误的验收表，应把每个表达式同时列出原始文本、声明类型、命名地区、输出类型和业务含义。两个结果即使显示相同的九点，只要一个是瞬时、另一个是无时区钟面，就不能在接口里合并为同一种字段。对照样本还应包含日期跨界，避免只测中午几个小时的变化，漏掉实际日期已经改变。</p>
+<p>如果项目用查询生成器包装了表达式，应检查最终 SQL 的显式类型，而不是只看应用层的 Date 类名。常量、参数、列类型和驱动转换都可能影响实际输入。验证时可以先用常量查询建立语义基线，再用真实绑定参数重复同一组条件；二者不一致时先定位绑定类型，不要通过手工加减小时来让截图暂时一致。</p>
+<p>选择接口字段时也应说清返回的是瞬时还是供人阅读的当地钟面。若接口去掉偏移后仍叫 occurred_at，下游可能把它按自己的环境再解释；明确命名与类型契约可以减少这种交接错误。最终审查应逐步回答：输入缺少什么语境，本次操作是在解释还是在展示，输出类型是什么，下一位消费者会怎样读它。四项能对齐，才有依据判断那八小时究竟来自哪里。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-datetime.html" rel="noopener">PostgreSQL: Documentation: 18: 9.9. Date/Time Functions and Operators</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%97%B6%E9%97%B4%E7%B1%BB%E5%9E%8B/">时间类型</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fpostgres-at-time-zone-type-direction%2F&text=AT%20TIME%20ZONE%20UTC%20%E5%90%8E%EF%BC%8C%E7%BB%93%E6%9E%9C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%8F%8D%E8%80%8C%E6%B2%A1%E4%BA%86%E6%97%B6%E5%8C%BA%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fpostgres-at-time-zone-type-direction%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=AT%20TIME%20ZONE%20UTC%20%E5%90%8E%EF%BC%8C%E7%BB%93%E6%9E%9C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%8F%8D%E8%80%8C%E6%B2%A1%E4%BA%86%E6%97%B6%E5%8C%BA%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fpostgres-at-time-zone-type-direction%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/31/postgres-copy-server-client-path/">
+              <span>上一篇</span>
+              <strong>CSV 在本机，COPY FROM 为什么找不到文件？</strong>
+              <small>2026-10-31</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/31/playwright-topass-repeated-side-effects/">
+              <span>下一篇</span>
+              <strong>Playwright toPass重复点击，为什么可能创建多条记录？</strong>
+              <small>2026-10-31</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#一个运算符为什么有两个方向？">一个运算符为什么有两个方向？</a>
+          
+            <a class="toc-link toc-link--h2" href="#用-pg-typeof-检查两种输入">用 pg_typeof 检查两种输入</a>
+          
+            <a class="toc-link toc-link--h2" href="#连用两次时，哪一步才是换地区？">连用两次时，哪一步才是换地区？</a>
+          
+            <a class="toc-link toc-link--h2" href="#改了会话时区，怎样判断瞬时有没有变？">改了会话时区，怎样判断瞬时有没有变？</a>
+          
+            <a class="toc-link toc-link--h2" href="#这个转换能定义每天九点的提醒吗？">这个转换能定义每天九点的提醒吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>267</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>192</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>120</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/postgres-copy-server-client-path/">CSV 在本机，COPY FROM 为什么找不到文件？</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/">WITH HOLD 结束了长事务，却没有取消导出的资源账单</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/postgres-notify-commit-wakeup/">NOTIFY 可以唤醒工作者，不能替它保存未完成任务</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

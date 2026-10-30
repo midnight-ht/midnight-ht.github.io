@@ -1,0 +1,418 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why does AT TIME ZONE UTC remove the time zone? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Inspect both AT TIME ZONE overloads with explicit inputs and pg_typeof, distinguishing local-time interpretation from instant projection.">
+  
+  
+    <meta name="keywords" content="AT TIME ZONE,pg_typeof,timezone conversion types">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/31/postgres-at-time-zone-type-direction/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/31/postgres-at-time-zone-type-direction/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why does AT TIME ZONE UTC remove the time zone? | Midnight blog">
+    <meta property="og:description" content="Inspect both AT TIME ZONE overloads with explicit inputs and pg_typeof, distinguishing local-time interpretation from instant projection.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/31/postgres-at-time-zone-type-direction/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/31/postgres-at-time-zone-type-direction/#webpage","url":"https://www.zyweb.vip/en/2026/10/31/postgres-at-time-zone-type-direction/","name":"Why does AT TIME ZONE UTC remove the time zone? | Midnight blog","description":"Inspect both AT TIME ZONE overloads with explicit inputs and pg_typeof, distinguishing local-time interpretation from instant projection.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/31/postgres-at-time-zone-type-direction/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/31/postgres-at-time-zone-type-direction/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/31/postgres-at-time-zone-type-direction/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/31/postgres-at-time-zone-type-direction/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/31/postgres-at-time-zone-type-direction/","headline":"Why does AT TIME ZONE UTC remove the time zone?","description":"Inspect both AT TIME ZONE overloads with explicit inputs and pg_typeof, distinguishing local-time interpretation from instant projection.","inLanguage":"en","datePublished":"2026-10-30T19:24:57.000Z","dateModified":"2026-10-30T19:24:57.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.postgresql.org/docs/18/functions-datetime.html"],"keywords":"Development, PostgreSQL, Timestamp types"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/31/postgres-at-time-zone-type-direction/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why does AT TIME ZONE UTC remove the time zone?","item":"https://www.zyweb.vip/en/2026/10/31/postgres-at-time-zone-type-direction/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/">zh-CN</option><option value="/en/2026/10/31/postgres-at-time-zone-type-direction/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/">zh-CN</option><option value="/en/2026/10/31/postgres-at-time-zone-type-direction/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-30T19:24:57.000Z">2026-10-31</time>
+    </div>
+
+    <h1>Why does AT TIME ZONE UTC remove the time zone?</h1>
+
+    
+      <p class="post-hero__summary">Inspect both AT TIME ZONE overloads with explicit inputs and pg_typeof, distinguishing local-time interpretation from instant projection.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-30T19:24:57.000Z">2026-10-31</time> · Estimated read 14 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/31/postgres-at-time-zone-type-direction/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>A timezone-free timestamp is interpreted as an instant in the named zone.</li><li>A timestamptz is projected to a timezone-free local clock reading.</li><li>Inspect provenance and intermediate types when chaining conversions.</li></ul></section>
+      <div class="article-content">
+        <p><code>AT TIME ZONE &#39;UTC&#39;</code> has different directions depending on its input type. Applied to a timestamp without a time zone, it interprets a local clock reading as an instant and returns timestamptz. Applied to timestamptz, it projects an existing instant onto a region&#39;s clock and returns a timestamp without a time zone. Check input and output types before diagnosing the printed hour.</p>
+<h2 id="Why-does-one-operator-work-in-two-directions"><a href="#Why-does-one-operator-work-in-two-directions" class="headerlink" title="Why does one operator work in two directions?"></a>Why does one operator work in two directions?</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-datetime.html#FUNCTIONS-DATETIME-ZONECONVERT">PostgreSQL 18&#39;s AT TIME ZONE table</a> specifies these overloads. This article checked the version 18 documentation on October 31, 2026. It addresses SQL expression types, not a completed migration or timezone compatibility test.</p>
+<p>A timestamp without a time zone contains date and clock fields without independently establishing a point on the global timeline. Naming a zone supplies an interpretation for those fields. A timestamptz already represents an instant; applying a zone asks what the clock in that region would show. One operation supplies an interpretation and the other extracts a local representation, so their result types differ.</p>
+<p>A common mistake is reading the operator as a generic “set this timezone” function. A caller notices that the output has no offset and adds another conversion. Without checking the intermediate type, the second operation can reinterpret the newly produced clock reading as a different instant. The chain changes meaning rather than merely formatting a value twice.</p>
+<p>Session TimeZone also influences the text representation of a timestamptz. Distinguish the region used to interpret input from the offset used to display the result. Interpreting a Shanghai local time does not require the final text to show a Shanghai offset: a UTC session can display the same instant in UTC. Comparing hours in screenshots can mistake display differences for changed data.</p>
+<h2 id="Inspect-both-inputs-with-pg-typeof"><a href="#Inspect-both-inputs-with-pg-typeof" class="headerlink" title="Inspect both inputs with pg_typeof"></a>Inspect both inputs with pg_typeof</h2><p>This complete, unexecuted SQL example has no table dependencies. It fixes the session display environment and declares both input types explicitly:</p>
+<pre><code class="sql">SET TIME ZONE &#39;UTC&#39;;
+WITH sample AS (
+  SELECT timestamp &#39;2026-01-15 09:00:00&#39; AS local_clock,
+         timestamptz &#39;2026-01-15 09:00:00+00&#39; AS instant
+)
+SELECT
+  pg_typeof(local_clock) AS input_a,
+  local_clock AT TIME ZONE &#39;Asia/Shanghai&#39; AS interpreted,
+  pg_typeof(local_clock AT TIME ZONE &#39;Asia/Shanghai&#39;) AS output_a,
+  pg_typeof(instant) AS input_b,
+  instant AT TIME ZONE &#39;Asia/Shanghai&#39; AS shown_local,
+  pg_typeof(instant AT TIME ZONE &#39;Asia/Shanghai&#39;) AS output_b
+FROM sample;
+</code></pre>
+<p>The first branch means nine in the morning in Shanghai on January 15, corresponding to an instant displayed as one in the morning in the UTC session. The second starts with nine in the morning UTC and asks for the Shanghai clock reading, corresponding to five in the afternoon. These are semantic expectations for the fixed example, not captured output. The example does not test a daylight-saving transition or establish all regional edge cases.</p>
+<p>Check output_a&#39;s timezone-aware type and output_b&#39;s timezone-free type as well as their values. If a driver turns both into similar strings or language date objects, record the database return types and driver mappings. Otherwise, the API layer may erase the distinction the SQL expression correctly made.</p>
+<h2 id="What-happens-when-two-conversions-are-chained"><a href="#What-happens-when-two-conversions-are-chained" class="headerlink" title="What happens when two conversions are chained?"></a>What happens when two conversions are chained?</h2><p>If a source column is explicitly defined as Tokyo local clock time, obtaining Chicago local clock time involves two steps: interpret the source in Tokyo, then project the resulting instant onto Chicago&#39;s clock. The intermediate timestamptz carries the semantic bridge. A one-line expression does not eliminate the need to establish the source meaning.</p>
+<pre><code class="sql">SELECT
+  timestamp &#39;2026-01-15 09:00:00&#39;
+    AT TIME ZONE &#39;Asia/Tokyo&#39;
+    AT TIME ZONE &#39;America/Chicago&#39; AS chicago_clock;
+</code></pre>
+<p>This query was not executed either. The January date makes the input concrete, not regionally validated. Cross-season scheduling needs checks against the deployed timezone data and actual target dates. Preserve a source region explicitly when the application needs it; output text cannot reconstruct the original intent.</p>
+<p>A counterexample starts with a column already defined as UTC clock readings and interprets it as Shanghai local time. The expression can produce a valid timestamptz with an incorrect instant. The existing article on <a href="/en/2026/10/14/postgres-timestamp-without-zone/">offset input and timezone-free columns</a> covers historical provenance. The additional decision here is to inspect every intermediate type even when the source meaning is known.</p>
+<h2 id="How-do-you-check-whether-changing-session-TimeZone-changed-the-instant"><a href="#How-do-you-check-whether-changing-session-TimeZone-changed-the-instant" class="headerlink" title="How do you check whether changing session TimeZone changed the instant?"></a>How do you check whether changing session TimeZone changed the instant?</h2><p>Keep an explicitly typed timestamptz, change the display environment, and compare database instant equality separately from text output. A projection into an explicitly named region should be checked against that region&#39;s clock reading. Comparisons that mix timezone-aware and timezone-free values may introduce the session&#39;s interpretation again.</p>
+<p>A proposed matrix includes both input types, explicit and missing offsets, different session settings and driver output. Record SQL, driver mapping and API serialization separately to locate any loss of type information. An expected pg_typeof result is not evidence that a migration passed; none of these checks was run here.</p>
+<h2 id="Does-this-define-a-daily-nine-o-39-clock-reminder"><a href="#Does-this-define-a-daily-nine-o-39-clock-reminder" class="headerlink" title="Does this define a daily nine-o&#39;clock reminder?"></a>Does this define a daily nine-o&#39;clock reminder?</h2><p>A single conversion does not define a recurring schedule. Interpreting one day&#39;s local clock value differs from preserving the intent to run at nine every working day. The latter needs a region, recurrence rules and policies for exceptional dates. The existing discussion of <a href="/en/2026/10/10/timestamps-recurring-intent/">timestamps and recurring schedules</a> supplies that modeling context; this operator example is not a complete scheduler.</p>
+<p>An acceptance table should retain the original text, declared type, named region, output type and business meaning for every expression. Identical printed clock times do not make an instant and a timezone-free clock value interchangeable. Include a date-boundary case rather than checking only a few hours around midday.</p>
+<p>When a query builder wraps the expression, inspect its final SQL and explicit parameter types rather than relying on an application Date class. Constants, parameters, columns and driver mappings can yield different inputs. Establish a baseline with typed constants, then repeat with actual bound parameters. Investigate a mismatch at the binding boundary rather than adding hours to make screenshots agree.</p>
+<p>API fields should also distinguish instants from local clock values intended for display. Removing the offset while continuing to call a field occurred_at can invite a downstream service to interpret it in its own environment. Review four questions: what context the input lacks, whether the operation interprets or displays, which type it returns, and how its next consumer will read it. Those answers make the apparent eight-hour change explainable.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-datetime.html" rel="noopener">PostgreSQL: Documentation: 18: 9.9. Date/Time Functions and Operators</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/en/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--timestamp-types" href="/en/tags/Timestamp-types/">Timestamp types</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F31%2Fpostgres-at-time-zone-type-direction%2F&text=Why%20does%20AT%20TIME%20ZONE%20UTC%20remove%20the%20time%20zone%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F31%2Fpostgres-at-time-zone-type-direction%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20does%20AT%20TIME%20ZONE%20UTC%20remove%20the%20time%20zone%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F31%2Fpostgres-at-time-zone-type-direction%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/31/postgres-copy-server-client-path/">
+              <span>Previous Post</span>
+              <strong>The CSV is on my laptop. Why can COPY not find it?</strong>
+              <small>2026-10-31</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/31/playwright-topass-repeated-side-effects/">
+              <span>Next Post</span>
+              <strong>Can repeated clicks inside Playwright toPass create multiple records?</strong>
+              <small>2026-10-31</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Why-does-one-operator-work-in-two-directions">Why does one operator work in two directions?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Inspect-both-inputs-with-pg-typeof">Inspect both inputs with pg_typeof</a>
+          
+            <a class="toc-link toc-link--h2" href="#What-happens-when-two-conversions-are-chained">What happens when two conversions are chained?</a>
+          
+            <a class="toc-link toc-link--h2" href="#How-do-you-check-whether-changing-session-TimeZone-changed-the-instant">How do you check whether changing session TimeZone changed the instant?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Does-this-define-a-daily-nine-o-39-clock-reminder">Does this define a daily nine-o&amp;#39;clock reminder?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>267</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>192</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>121</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/31/postgres-copy-server-client-path/">The CSV is on my laptop. Why can COPY not find it?</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/31/postgres-hold-cursor-commit-storage/">WITH HOLD ends one transaction, not the export resource bill</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/31/postgres-notify-commit-wakeup/">NOTIFY can wake a worker without storing its unfinished work</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

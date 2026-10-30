@@ -1,0 +1,433 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>用了 Decimal，0.1 为什么仍变成一长串小数？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="通过标准库完整程序区分十进制文本、已有 float、上下文算术精度和 FloatOperation 陷阱，避免把类型选择当成来源恢复。">
+  
+  
+    <meta name="keywords" content="Decimal float 构造,FloatOperation,上下文精度">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/31/python-decimal-string-input-trap/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/31/python-decimal-string-input-trap/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/31/python-decimal-string-input-trap/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/31/python-decimal-string-input-trap/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="用了 Decimal，0.1 为什么仍变成一长串小数？ | Midnight blog">
+    <meta property="og:description" content="通过标准库完整程序区分十进制文本、已有 float、上下文算术精度和 FloatOperation 陷阱，避免把类型选择当成来源恢复。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/31/python-decimal-string-input-trap/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/python-decimal-string-input-trap/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/31/python-decimal-string-input-trap/","name":"用了 Decimal，0.1 为什么仍变成一长串小数？ | Midnight blog","description":"通过标准库完整程序区分十进制文本、已有 float、上下文算术精度和 FloatOperation 陷阱，避免把类型选择当成来源恢复。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/python-decimal-string-input-trap/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/python-decimal-string-input-trap/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/python-decimal-string-input-trap/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/python-decimal-string-input-trap/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/31/python-decimal-string-input-trap/","headline":"用了 Decimal，0.1 为什么仍变成一长串小数？","description":"通过标准库完整程序区分十进制文本、已有 float、上下文算术精度和 FloatOperation 陷阱，避免把类型选择当成来源恢复。","inLanguage":"zh-CN","datePublished":"2026-10-30T19:24:57.000Z","dateModified":"2026-10-30T19:24:57.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.14/library/decimal.html"],"keywords":"Development, Python, Decimal"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/python-decimal-string-input-trap/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"用了 Decimal，0.1 为什么仍变成一长串小数？","item":"https://www.zyweb.vip/zh-CN/2026/10/31/python-decimal-string-input-trap/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/31/python-decimal-string-input-trap/" selected>zh-CN</option><option value="/en/2026/10/31/python-decimal-string-input-trap/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/31/python-decimal-string-input-trap/" selected>zh-CN</option><option value="/en/2026/10/31/python-decimal-string-input-trap/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-30T19:24:57.000Z">2026-10-31</time>
+    </div>
+
+    <h1>用了 Decimal，0.1 为什么仍变成一长串小数？</h1>
+
+    
+      <p class="post-hero__summary">通过标准库完整程序区分十进制文本、已有 float、上下文算术精度和 FloatOperation 陷阱，避免把类型选择当成来源恢复。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-30T19:24:57.000Z">2026-10-31</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/31/python-decimal-string-input-trap/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/31/python-decimal-string-input-trap/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>由 float 构造 Decimal 精确保留的是已有浮点值。</li><li>上下文精度不等于对任意构造输入截短。</li><li>浮点陷阱有明确例外，入口合同仍需独立验证。</li></ul></section>
+      <div class="article-content">
+        <p><code>Decimal(0.1)</code> 接收的是已经形成的二进制浮点数，随后准确保存那个值；它不会恢复调用方原本想输入的十进制文本。若接口要求十进制输入语义，应从入口保留字符串或使用不会先变成 float 的解析方式。调小 Decimal 上下文精度，也不能把构造步骤当成自动修复浮点输入的舍入器。</p>
+<h2 id="精确保存，为什么仍有很长的小数？"><a href="#精确保存，为什么仍有很长的小数？" class="headerlink" title="精确保存，为什么仍有很长的小数？"></a>精确保存，为什么仍有很长的小数？</h2><p><a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/decimal.html">Python 3.14 decimal 参考</a>说明，由 float 构造的 Decimal 会准确转换那个浮点值。本文于二〇二六年十月三十一日核对的页面标为 Python 3.14.10；没有执行下列程序，也不以示例决定任何金额、税费或结算规则。</p>
+<p>字面量 <code>0.1</code> 先由 Python 创建为 float，再交给 Decimal。二进制浮点不能准确表示这个十进制分数；Decimal 把已获得的二进制近似值准确展开，所以结果看起来比输入长得多。问题发生在交接之前，不能要求后一个类型猜出前一个类型丢掉的意图。</p>
+<p><code>Decimal(&#39;0.1&#39;)</code> 则从十进制文本构造。两者的区别不是 Decimal 有时精确、有时失效，而是接收到的数据不同。来自外部测量的 float 可能就是应当保留的值；来自用户十进制输入的 float 可能已经偏离接口约定。选择依据应是来源合同，不是打印结果是否够短。</p>
+<p>显式的 <code>Decimal.from_float</code> 可以表达“我有意保留这个浮点数”的选择。把所有 float 都先转字符串再交给 Decimal，则是采用该 float 当前字符串表示对应的十进制数，不能恢复之前的原始文本、尾随零或输入格式。因此，不宜把它宣传为适用于所有历史数据的精度恢复公式。</p>
+<h2 id="上下文-precision-在哪个阶段生效？"><a href="#上下文-precision-在哪个阶段生效？" class="headerlink" title="上下文 precision 在哪个阶段生效？"></a>上下文 precision 在哪个阶段生效？</h2><p>官方文档区分构造与算术：新 Decimal 保留的数字由输入决定；上下文的精度和舍入在算术运算等相应操作中起作用。把 precision 设为三，不表示任意字符串构造后都只剩三位有效数字，更不表示自动变成三位小数。有效数字与小数位是不同约束。</p>
+<p>下面是未执行的完整教学程序。它不读写文件，不连接服务，所有输入都直接给出。输出值应由实际运行记录；程序重点是验证关系，而不是复制一段看似真实的终端日志。</p>
+<pre><code class="python">from decimal import Decimal, FloatOperation, localcontext
+
+
+def main():
+    from_text = Decimal(&#39;0.1&#39;)
+    from_binary = Decimal(0.1)
+    explicit_binary = Decimal.from_float(0.1)
+    print(&#39;text:&#39;, from_text)
+    print(&#39;float:&#39;, from_binary)
+    assert from_binary == explicit_binary
+    assert from_text != from_binary
+
+    with localcontext() as ctx:
+        ctx.prec = 3
+        exact_input = Decimal(&#39;1.23456&#39;)
+        rounded_sum = exact_input + Decimal(&#39;0&#39;)
+        print(&#39;construction:&#39;, exact_input)
+        print(&#39;arithmetic:&#39;, rounded_sum)
+        assert exact_input == Decimal(&#39;1.23456&#39;)
+        assert rounded_sum == Decimal(&#39;1.23&#39;)
+
+    with localcontext() as ctx:
+        ctx.traps[FloatOperation] = True
+        try:
+            Decimal(0.1)
+        except FloatOperation:
+            print(&#39;implicit float input rejected&#39;)
+        else:
+            raise RuntimeError(&#39;expected FloatOperation&#39;)
+        intentional = Decimal.from_float(0.1)
+        print(&#39;explicit conversion:&#39;, intentional)
+
+
+if __name__ == &#39;__main__&#39;:
+    main()
+</code></pre>
+<p>第一组比较明确区分文本与浮点来源。第二组先保留输入，再做一次加零运算，让算术精度作用的位置可见。加零看似不改变数学值，却经过了上下文运算；若团队在不同阶段重复计算或舍入，结果策略需要单独约定。示例中的三位只用于说明机制，不是业务精度推荐。</p>
+<p>第三组把 FloatOperation 设为陷阱，帮助发现不小心的浮点构造。使用 localcontext 让示例的配置限于本范围，避免改变后面不相关代码所依赖的上下文。程序中的断言用于教学关系，不能替代生产入口的显式拒绝逻辑；生产校验不应依赖可被解释器优化关闭的 assert。</p>
+<h2 id="FloatOperation-能阻止所有浮点混入吗？"><a href="#FloatOperation-能阻止所有浮点混入吗？" class="headerlink" title="FloatOperation 能阻止所有浮点混入吗？"></a>FloatOperation 能阻止所有浮点混入吗？</h2><p>不能把它理解成通用污点追踪。文档对混合操作有具体规定：设置陷阱后，部分构造与大小比较会报错，但相等比较以及显式转换存在例外。示例有意调用 from_float，即使陷阱开启也表达允许的显式转换。审查者仍要沿序列化、解析、计算与持久化追踪类型，不应看到一个配置就宣布整条链没有 float。</p>
+<p>如果接口只接受十进制字符串，可在边界先检查输入类型，再按明确语法解析，随后检查有限值与业务范围。Decimal 可以表示非有限值，不代表业务字段允许 NaN 或 Infinity。非常长的输入也需要资源预算；这些条件应由真实字段规则决定，本篇没有替项目制定最大长度或合法格式。</p>
+<p>如果上游必须发 JSON 数字，应核对具体解析器是否先构造 float，以及能否按协议直接生成十进制类型。不要在已经变成 float 的下游才补一个 Decimal，然后宣称原始十进制无损。接口也应说明输出是字符串、整数最小单位还是其他明确表示，避免发送时再次丢掉类型选择。</p>
+<h2 id="Decimal-str-value-能恢复用户输入吗？"><a href="#Decimal-str-value-能恢复用户输入吗？" class="headerlink" title="Decimal(str(value)) 能恢复用户输入吗？"></a>Decimal(str(value)) 能恢复用户输入吗？</h2><p>不能据此恢复来源。它只能依据当前 value 的字符串表示创建十进制值。用户可能提交过更多小数、指数形式或末尾零，这些信息在早先转换时可能已经丢失。若审计必须知道原始表示，应在允许的范围内保留它，或从可信原始记录重建；不能从一个较短结果伪造曾经收到的文本。</p>
+<p>已有的<a href="/zh-CN/2026/10/15/postgres-numeric-rounding/">PostgreSQL numeric 与输入舍入</a>解释存储列比例为什么不等于输入拒绝规则。这里是更早的 Python 构造边界：数据库尚未接触数据，应用可能就已选择了另一种数值。两层都要核对，不能把最终数据库类型正确当成前面没有损失的证据。</p>
+<p>入口测试还应区分数值相等与表示相同。假设协议允许字符串零点一和零点一零，业务数值可能相同，但若用户指定的小数位参与后续展示或计量语义，就需要保留这一差异。是否合并必须由字段合同决定；既不能只靠数值比较证明原文没变，也不能反过来把所有末尾零差异都判为错误。</p>
+<p>另一组反例应从真实请求字节开始：把同一字段分别以字符串和 JSON 数字发送，记录解码后类型、进入计算前的表示、算术结果与数据库参数。若测试直接在函数里构造 Decimal 字符串，会跳过最容易引入 float 的解析层。测试成功最多覆盖明确的那条输入路线，不能替另一种客户端序列化方式背书。</p>
+<p>拟议验证覆盖字符串构造、float 构造、显式转换、小精度算术、陷阱与例外、非有限值，以及请求解析到数据库参数的实际类型。测试预期应来自输入合同，并与被测实现分开保存。本篇未运行这些测试。决定使用 Decimal 后，还要回答它接到的究竟是哪一种值；类型名称不能代替这一段来源说明。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/decimal.html" rel="noopener">decimal — Decimal fixed-point and floating-point arithmetic — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+            <a class="tag tag--decimal" href="/zh-CN/tags/Decimal/">Decimal</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fpython-decimal-string-input-trap%2F&text=%E7%94%A8%E4%BA%86%20Decimal%EF%BC%8C0.1%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E5%8F%98%E6%88%90%E4%B8%80%E9%95%BF%E4%B8%B2%E5%B0%8F%E6%95%B0%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fpython-decimal-string-input-trap%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E7%94%A8%E4%BA%86%20Decimal%EF%BC%8C0.1%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E5%8F%98%E6%88%90%E4%B8%80%E9%95%BF%E4%B8%B2%E5%B0%8F%E6%95%B0%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fpython-decimal-string-input-trap%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/31/terraform-sensitive-state-storage/">
+              <span>上一篇</span>
+              <strong>Terraform的sensitive遮住终端，为什么没挡住state落盘？</strong>
+              <small>2026-10-31</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/31/python-csv-newline-record-boundary/">
+              <span>下一篇</span>
+              <strong>CSV 只有两条记录，为什么 splitlines 数出三行？</strong>
+              <small>2026-10-31</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#精确保存，为什么仍有很长的小数？">精确保存，为什么仍有很长的小数？</a>
+          
+            <a class="toc-link toc-link--h2" href="#上下文-precision-在哪个阶段生效？">上下文 precision 在哪个阶段生效？</a>
+          
+            <a class="toc-link toc-link--h2" href="#FloatOperation-能阻止所有浮点混入吗？">FloatOperation 能阻止所有浮点混入吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#Decimal-str-value-能恢复用户输入吗？">Decimal(str(value)) 能恢复用户输入吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>267</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>192</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>120</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/python-aclosing-generator-cleanup/">用 aclosing 把异步生成器的关闭留在当前任务内</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/python-csv-newline-record-boundary/">CSV 只有两条记录，为什么 splitlines 数出三行？</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/30/python-sqlite-executescript-precommit/">SQLite 脚本报错后回滚，前一笔 Python 写入为什么还在？</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

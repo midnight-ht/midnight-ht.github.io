@@ -1,0 +1,427 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>清单没写CPU请求，Pod为什么自己多出requests？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="比较提交清单与准入后Pod，使用完整命名空间示例解释默认注入、请求限制冲突与政策更新不回写存量的边界。">
+  
+  
+    <meta name="keywords" content="LimitRange,默认请求,准入对象">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/31/kubernetes-limitrange-default-admission/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/31/kubernetes-limitrange-default-admission/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/31/kubernetes-limitrange-default-admission/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/31/kubernetes-limitrange-default-admission/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="清单没写CPU请求，Pod为什么自己多出requests？ | Midnight blog">
+    <meta property="og:description" content="比较提交清单与准入后Pod，使用完整命名空间示例解释默认注入、请求限制冲突与政策更新不回写存量的边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/31/kubernetes-limitrange-default-admission/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/kubernetes-limitrange-default-admission/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/31/kubernetes-limitrange-default-admission/","name":"清单没写CPU请求，Pod为什么自己多出requests？ | Midnight blog","description":"比较提交清单与准入后Pod，使用完整命名空间示例解释默认注入、请求限制冲突与政策更新不回写存量的边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/kubernetes-limitrange-default-admission/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/kubernetes-limitrange-default-admission/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/kubernetes-limitrange-default-admission/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/kubernetes-limitrange-default-admission/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/31/kubernetes-limitrange-default-admission/","headline":"清单没写CPU请求，Pod为什么自己多出requests？","description":"比较提交清单与准入后Pod，使用完整命名空间示例解释默认注入、请求限制冲突与政策更新不回写存量的边界。","inLanguage":"zh-CN","datePublished":"2026-10-30T19:24:57.000Z","dateModified":"2026-10-30T19:24:57.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://kubernetes.io/docs/concepts/policy/limit-range/"],"keywords":"Delivery, Operations, Kubernetes"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/kubernetes-limitrange-default-admission/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"清单没写CPU请求，Pod为什么自己多出requests？","item":"https://www.zyweb.vip/zh-CN/2026/10/31/kubernetes-limitrange-default-admission/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/31/kubernetes-limitrange-default-admission/" selected>zh-CN</option><option value="/en/2026/10/31/kubernetes-limitrange-default-admission/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/31/kubernetes-limitrange-default-admission/" selected>zh-CN</option><option value="/en/2026/10/31/kubernetes-limitrange-default-admission/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-30T19:24:57.000Z">2026-10-31</time>
+    </div>
+
+    <h1>清单没写CPU请求，Pod为什么自己多出requests？</h1>
+
+    
+      <p class="post-hero__summary">比较提交清单与准入后Pod，使用完整命名空间示例解释默认注入、请求限制冲突与政策更新不回写存量的边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-30T19:24:57.000Z">2026-10-31</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/31/kubernetes-limitrange-default-admission/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/31/kubernetes-limitrange-default-admission/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>模板缺字段，不证明最终Pod没有资源请求。</li><li>默认限制与显式请求组合后仍须有效。</li><li>政策更新不回写旧Pod，新对象需重新核对。</li></ul></section>
+      <div class="article-content">
+        <p>提交清单没有写 requests，准入后的 Pod 却可能有 CPU 请求，因为命名空间的 LimitRange 可以注入默认请求和限制。排障时先比较原始清单、命名空间策略和实际 Pod 对象，不要只从仓库文件推断调度输入，也不要看到资源问题就先提高配额。</p>
+<h2 id="字段来源要沿准入过程核对"><a href="#字段来源要沿准入过程核对" class="headerlink" title="字段来源要沿准入过程核对"></a>字段来源要沿准入过程核对</h2><p><a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/policy/limit-range/">Kubernetes 的 Limit Ranges 文档</a>说明，LimitRange 准入可以补默认资源值，并检查对象的最小值、最大值及比例等约束。本文于二〇二六年十月三十一日核对当前页面；网站导航展示一点三十七，不等于该网址固定到这一发布版。实际集群应继续核对自己的版本和启用的准入设置。</p>
+<p>这里有三份相关材料：开发者提交的模板、控制面处理后的对象、调度过程使用的资源声明。它们有关联，却不能假定逐字相同。控制器产生 Pod 时仍会经过准入；因此模板里没写某个字段，不足以说明最终对象也没有这个值。审查部署输入，应把默认来源作为可追踪配置一起保存。</p>
+<p>这与命名空间总量限制不同。<a href="/zh-CN/2026/10/28/kubernetes-resourcequota-admission-usage/">ResourceQuota 的请求账目</a>回答累计还能申请多少；本题先问某个 Pod 的请求值从何而来。默认注入可能影响后续账目，但把两种政策都叫“配额”会丢掉真正需要修复的配置位置。</p>
+<h2 id="用一个完整的纸面配置看默认值"><a href="#用一个完整的纸面配置看默认值" class="headerlink" title="用一个完整的纸面配置看默认值"></a>用一个完整的纸面配置看默认值</h2><p>以下是未经执行的教学材料。它包含独立命名空间、一个容器级 LimitRange 和一个没有显式 resources 的 Pod；假定相应准入功能已启用，且没有其他策略改变这些值。示例镜像只用于展示对象结构，没有运行或验证镜像可拉取性。</p>
+<pre><code class="yaml">apiVersion: v1
+kind: Namespace
+metadata:
+  name: limitrange-demo
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: cpu-defaults
+  namespace: limitrange-demo
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 100m
+      default:
+        cpu: 500m
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: defaulted
+  namespace: limitrange-demo
+spec:
+  containers:
+    - name: demo
+      image: registry.k8s.io/pause:3.10
+</code></pre>
+<p>在隔离集群中验证时，应先让命名空间与策略实际存在，再申请 Pod，并读取控制面保存的 Pod 资源字段。纸面预期是 CPU 请求得到默认值、限制得到默认值；不能将这段 YAML 当成已经创建成功的回执。若环境还有其他准入变更，应保存最终结果并调查来源，而不是强迫观察符合简例。</p>
+<p>默认请求一百毫核不是推荐的容量配置。这组数只用于说明来源与请求、限制是不同字段，不能用于真实应用的容量评估。是否足够要靠工作负载证据；把默认值设置得很小可能让对象更容易放行，却不自动减少真实消耗。</p>
+<h2 id="显式请求与默认限制可能冲突"><a href="#显式请求与默认限制可能冲突" class="headerlink" title="显式请求与默认限制可能冲突"></a>显式请求与默认限制可能冲突</h2><p>再考虑在同一例子里把 Pod 的 CPU 请求显式写为七百毫核，而不写限制。默认限制仍可能补入五百毫核，组合后的请求超过限制，形成无效的有效配置。此时应检查实际 API 响应、控制器事件和对象是否存在，先确定停在准入或校验阶段，不能预先断言一定会产生一个 Pending Pod。</p>
+<p>官方页面用一组请求大于默认限制的配置说明这种不一致。这里据此解释字段组合，而没有运行 API 请求，也不承诺所有版本都返回相同错误文本或状态码。若对象根本没有被接受，等待调度不会修复问题；若已经存在而未被放置，又应继续读对应调度原因。</p>
+<p>修复可以是为该工作负载明确声明合理的请求与限制，也可以是重新评审命名空间默认政策。选择取决于谁拥有默认、谁承诺应用资源，以及同一策略影响哪些消费者。不要只为当前 Pod 调低请求，再把放行当成容量正确；也不要随手调高共享默认而忽略其他应用。</p>
+<h2 id="模板没变，替换后的副本怎样对照？"><a href="#模板没变，替换后的副本怎样对照？" class="headerlink" title="模板没变，替换后的副本怎样对照？"></a>模板没变，替换后的副本怎样对照？</h2><p>可以设想先创建旧Pod，再调整默认请求，最后由同一份未改模板创建新Pod的对照。记录至少包括模板身份、命名空间策略内容、两个对象的创建时间与实际保存的资源字段。旧对象仍用旧值、新对象得到新值，是政策在创建阶段生效的预期方向；不是已经运行的进程自己修改了资源。</p>
+<p>若观察与预期不同，先排除新Pod来自另一份模板、策略尚未存在或还有其他变更者。名字相近的两个Pod不一定属于同一次交付，截图里缺少创建时间也不能证明先后关系。对照应沿控制器归属与对象身份核对，而不是凭列表顺序判断哪个是旧副本。</p>
+<p>这个记录还能指导选择迁移方式。若现有副本必须保持原有资源承诺，应先评估新默认对替换的影响；若要求统一到新值，应明确由谁安排工作负载更新并检查结果。单改默认政策既不能完成存量迁移，也不能保证之后每次重建都采用原来的资源。将默认政策当成有版本的发布输入，才更容易解释差异。</p>
+<h2 id="改了-LimitRange，旧-Pod-会一起变吗？"><a href="#改了-LimitRange，旧-Pod-会一起变吗？" class="headerlink" title="改了 LimitRange，旧 Pod 会一起变吗？"></a>改了 LimitRange，旧 Pod 会一起变吗？</h2><p>不会因为默认政策修改就自动回写已经存在的 Pod。文档明确限定检查发生在 Pod 准入阶段，存量 Pod 继续保留原配置。应按创建时间区分新旧对象，比较实际资源字段，而不是看到 LimitRange 已更新就宣称迁移完成。</p>
+<p>控制器模板不变时，替换 Pod 仍可能遇到新的默认政策。因此一组副本在滚动替换过程中，可能同时包含按不同政策创建的对象。这个现象要通过对象与创建记录核对，不能仅看一份 Deployment 模板截图。需要资源一致性时，应把默认变更与工作负载更新作为有责任人的变更安排。</p>
+<p>多个 LimitRange 也可能带来不确定默认。官方文档说明，同一命名空间有两个或更多这样的对象时，默认值选择不确定。不要依赖对象名字排序或最近修改来推断赢家；应整理政策来源，减少互相竞争的默认，并用新对象检查预期。</p>
+<p>拟议验收覆盖无显式值、显式值、默认组合冲突，以及政策更新前后的新旧 Pod。每个用例记录提交内容、当时策略、实际响应、最终对象和后续事件。本文没有连接集群或执行这些用例，不报告成功创建、调度或服务就绪。先把新增字段的来源解释清楚，再处理它造成的预算和调度影响，排障才不会一直修改错误的一层。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://kubernetes.io/docs/concepts/policy/limit-range/" rel="noopener">Limit Ranges</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--operations" href="/zh-CN/tags/Operations/">Operations</a>
+          
+            <a class="tag tag--kubernetes" href="/zh-CN/tags/Kubernetes/">Kubernetes</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fkubernetes-limitrange-default-admission%2F&text=%E6%B8%85%E5%8D%95%E6%B2%A1%E5%86%99CPU%E8%AF%B7%E6%B1%82%EF%BC%8CPod%E4%B8%BA%E4%BB%80%E4%B9%88%E8%87%AA%E5%B7%B1%E5%A4%9A%E5%87%BArequests%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fkubernetes-limitrange-default-admission%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E6%B8%85%E5%8D%95%E6%B2%A1%E5%86%99CPU%E8%AF%B7%E6%B1%82%EF%BC%8CPod%E4%B8%BA%E4%BB%80%E4%B9%88%E8%87%AA%E5%B7%B1%E5%A4%9A%E5%87%BArequests%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fkubernetes-limitrange-default-admission%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/31/password-reset-enumeration-timing/">
+              <span>上一篇</span>
+              <strong>找回密码同一句提示，为什么仍可能泄露账号存在？</strong>
+              <small>2026-10-31</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/31/import-map-scopes-module-resolution/">
+              <span>下一篇</span>
+              <strong>Import map：同一个import为何加载不同模块？</strong>
+              <small>2026-10-31</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#字段来源要沿准入过程核对">字段来源要沿准入过程核对</a>
+          
+            <a class="toc-link toc-link--h2" href="#用一个完整的纸面配置看默认值">用一个完整的纸面配置看默认值</a>
+          
+            <a class="toc-link toc-link--h2" href="#显式请求与默认限制可能冲突">显式请求与默认限制可能冲突</a>
+          
+            <a class="toc-link toc-link--h2" href="#模板没变，替换后的副本怎样对照？">模板没变，替换后的副本怎样对照？</a>
+          
+            <a class="toc-link toc-link--h2" href="#改了-LimitRange，旧-Pod-会一起变吗？">改了 LimitRange，旧 Pod 会一起变吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>267</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>192</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>120</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/alertmanager-silence-evaluation-boundary/">Alertmanager静默后，Prometheus告警为什么仍在firing？</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/28/kubernetes-optional-secret-missing-key/">Secret 对象存在，Pod 为什么还起不来？</a></h3>
+          <p>2026-10-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/28/kubernetes-resourcequota-admission-usage/">节点 CPU 很空闲，新 Pod 为什么仍被命名空间配额拒绝？</a></h3>
+          <p>2026-10-28</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

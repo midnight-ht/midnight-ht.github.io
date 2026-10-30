@@ -1,0 +1,417 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>CSV 在本机，COPY FROM 为什么找不到文件？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="先区分服务器文件 COPY 与客户端文件读取，再用完整 CSV、建表和 psql 命令核对数据路径、权限、字段与提交。">
+  
+  
+    <meta name="keywords" content="COPY 文件路径,psql copy,客户端导入">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/31/postgres-copy-server-client-path/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/31/postgres-copy-server-client-path/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/31/postgres-copy-server-client-path/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/31/postgres-copy-server-client-path/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="CSV 在本机，COPY FROM 为什么找不到文件？ | Midnight blog">
+    <meta property="og:description" content="先区分服务器文件 COPY 与客户端文件读取，再用完整 CSV、建表和 psql 命令核对数据路径、权限、字段与提交。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/31/postgres-copy-server-client-path/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-copy-server-client-path/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-copy-server-client-path/","name":"CSV 在本机，COPY FROM 为什么找不到文件？ | Midnight blog","description":"先区分服务器文件 COPY 与客户端文件读取，再用完整 CSV、建表和 psql 命令核对数据路径、权限、字段与提交。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-copy-server-client-path/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-copy-server-client-path/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-copy-server-client-path/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-copy-server-client-path/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-copy-server-client-path/","headline":"CSV 在本机，COPY FROM 为什么找不到文件？","description":"先区分服务器文件 COPY 与客户端文件读取，再用完整 CSV、建表和 psql 命令核对数据路径、权限、字段与提交。","inLanguage":"zh-CN","datePublished":"2026-10-30T19:24:57.000Z","dateModified":"2026-10-30T19:24:57.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/sql-copy.html","https://www.postgresql.org/docs/18/app-psql.html"],"keywords":"Development, PostgreSQL, CSV"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-copy-server-client-path/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"CSV 在本机，COPY FROM 为什么找不到文件？","item":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-copy-server-client-path/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/31/postgres-copy-server-client-path/" selected>zh-CN</option><option value="/en/2026/10/31/postgres-copy-server-client-path/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/31/postgres-copy-server-client-path/" selected>zh-CN</option><option value="/en/2026/10/31/postgres-copy-server-client-path/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-30T19:24:57.000Z">2026-10-31</time>
+    </div>
+
+    <h1>CSV 在本机，COPY FROM 为什么找不到文件？</h1>
+
+    
+      <p class="post-hero__summary">先区分服务器文件 COPY 与客户端文件读取，再用完整 CSV、建表和 psql 命令核对数据路径、权限、字段与提交。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-30T19:24:57.000Z">2026-10-31</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/31/postgres-copy-server-client-path/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/31/postgres-copy-server-client-path/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>COPY 文件名按数据库服务器的文件环境解释。</li><li>psql 反斜杠 copy 是客户端元命令，驱动应使用自己的 COPY 接口。</li><li>读取成功、复制行数和业务提交需要分别核对。</li></ul></section>
+      <div class="article-content">
+        <p>CSV 在自己的电脑上，不代表远程 PostgreSQL 的 <code>COPY FROM &#39;路径&#39;</code> 能读取它。带文件名的 COPY 由数据库服务器打开文件，路径与操作系统权限都按服务器所在环境解释。本机文件要经过客户端传入，可以选择 psql 的 <code>\copy</code>，或由应用驱动使用 COPY STDIN 协议；先确定文件由谁打开，再检查权限。</p>
+<h2 id="同一个绝对路径，属于哪台机器？"><a href="#同一个绝对路径，属于哪台机器？" class="headerlink" title="同一个绝对路径，属于哪台机器？"></a>同一个绝对路径，属于哪台机器？</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-copy.html">PostgreSQL 18 的 COPY 参考</a>区分文件名与 STDIN：前者让服务器直接读写文件，后者让数据经过客户端与数据库的连接。本文于二〇二六年十月三十一日核对十八版文档，没有执行导入，也没有检查任何真实主机上的文件权限。</p>
+<p>假设运维人员在笔记本保存了 <code>/tmp/customers.csv</code>，使用 psql 连接云数据库，再执行 COPY 指向这个路径。SQL 语句穿过网络，文件内容并没有随路径一起穿过去。服务器会找自己能看到的文件；即使两台机器恰好都有同名路径，也不说明内容相同。给数据库角色增加权限，不能让另一台机器自动获得本机文件。</p>
+<p>容器也增加一层路径解释。宿主机的目录存在，不意味着数据库容器挂载了它；容器内同名目录又可能是另一份内容。诊断应写出客户端进程、数据库进程、文件所在位置与挂载关系，再决定哪一端应该拥有读取能力。不要为了消除报错，把所有目录改成任意用户可读。</p>
+<p>服务器文件 COPY 仍有合理用途，例如受控的批处理节点已经把数据放到数据库可访问的位置。它需要符合部署环境的权限与数据管理规则。选择客户端入口也不意味着不需要权限：操作者仍须有目标表所需的数据库权限，并对输入内容、允许列与业务范围负责。</p>
+<h2 id="在本机读取-CSV，用什么最小流程？"><a href="#在本机读取-CSV，用什么最小流程？" class="headerlink" title="在本机读取 CSV，用什么最小流程？"></a>在本机读取 CSV，用什么最小流程？</h2><p>下面是未执行的教学示例，要求本机安装 psql，并事先通过受控方式设置好测试数据库连接。不要在示例里写密码或令牌。先在本机新建目录，将以下文本保存成 UTF-8 的 <code>customers.csv</code>：</p>
+<pre><code class="csv">external_id,display_name
+101,&quot;Lin, Mei&quot;
+102,&quot;He said &quot;&quot;hello&quot;&quot;&quot;
+</code></pre>
+<p>启动 psql 并连接独立测试库，在该会话中建表。类型与列数只为说明数据路径，不代表真实客户模型：</p>
+<pre><code class="sql">CREATE TABLE demo_customer_import (
+  external_id integer PRIMARY KEY,
+  display_name text NOT NULL
+);
+</code></pre>
+<p>在 psql 里执行下面这一行元命令，把绝对路径改成刚刚创建的本机文件。整个命令保持一行，避免把 psql 的元命令语法误当成普通 SQL 的多行规则：</p>
+<pre><code class="text">\copy demo_customer_import(external_id, display_name) FROM &#39;/absolute/path/customers.csv&#39; WITH (FORMAT csv, HEADER true, ENCODING &#39;UTF8&#39;)
+</code></pre>
+<p>随后核对实际列值，而不是只看复制了几行：</p>
+<pre><code class="sql">SELECT external_id, display_name
+FROM demo_customer_import
+ORDER BY external_id;
+</code></pre>
+<p>按文件与 CSV 引号语法推演，第一条姓名应保留逗号，第二条应保留引号。这里没有运行结果，读者执行后应记录 psql 版本、连接的数据库、文件摘要和查询输出。若期望两条而只核对总行数，列错位或内容误解仍可能漏过；需要逐项比较标识与字段。</p>
+<p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/app-psql.html">psql 的 <code>\copy</code> 说明</a>将文件访问放在客户端。这不是把文件复制到数据库服务器的某个永久目录，而是通过连接传输数据。服务端仍执行表写入与约束检查，客户端可读不等于每条记录都能被接受。</p>
+<h2 id="通过应用驱动调用时，能发送反斜杠命令吗？"><a href="#通过应用驱动调用时，能发送反斜杠命令吗？" class="headerlink" title="通过应用驱动调用时，能发送反斜杠命令吗？"></a>通过应用驱动调用时，能发送反斜杠命令吗？</h2><p>不能把 psql 的 <code>\copy</code> 当作服务器 SQL 发出去。反斜杠命令由 psql 自己解析；HTTP 后端或其他数据库驱动应使用该驱动支持的 COPY 输入接口，把字节流写进 COPY FROM STDIN 操作，或在数据量合适时采用参数化 INSERT。具体方法名、取消方式与事务集成必须查所用驱动版本，这里不虚构一段通用 API。</p>
+<p>这项选择也涉及连接的占用时间。持续上传的 COPY 会使用连接，失败或取消后应依照驱动合同结束该操作与事务，再归还连接。不能只因为浏览器已经关闭上传页面，就认为数据库端已经退出。若输入需要先核验或允许部分接受，可以考虑暂存与显式校验，但这属于导入合同，不是路径修复自动附带的能力。</p>
+<h2 id="哪些失败应该分开处理？"><a href="#哪些失败应该分开处理？" class="headerlink" title="哪些失败应该分开处理？"></a>哪些失败应该分开处理？</h2><p>本机文件不存在，应查客户端路径、当前目录和文件保留时段；服务器报文件不存在，应先确认是否误用了服务器文件 COPY。权限失败要区分本机操作系统读取、服务器操作系统读取和数据库表权限。格式失败则核对编码、分隔符、引号、列顺序与类型。把这些都显示成“请提升权限”，会把无关配置一起改掉。</p>
+<p><code>HEADER true</code> 也不应成为列映射的想当然保证。这里用显式列清单固定导入顺序；表后来增加字段时，应重新审查 CSV 与列清单，不能只因第一行看起来像列名就宣布映射安全。若其他字段依赖默认值，还要核对被省略字段的真实默认与约束，而非复制另一张表的假设。</p>
+<p>失败之后是否可以保留已经导入的部分，须由事务边界与产品规则共同决定。本站<a href="/zh-CN/2026/10/11/postgres-savepoint-partial-import/">保存点与部分导入说明</a>讨论接受与拒绝结果如何解释；不能因为修好了路径，就把原来要求整体成功的导入偷偷改成部分成功。</p>
+<h2 id="COPY-返回成功，就是业务导入已经完成吗？"><a href="#COPY-返回成功，就是业务导入已经完成吗？" class="headerlink" title="COPY 返回成功，就是业务导入已经完成吗？"></a>COPY 返回成功，就是业务导入已经完成吗？</h2><p>还要确认事务提交、预期记录集合以及后续读取。若 COPY 处于显式事务内，随后回滚就不能把那次复制当成持久成功；如果后端还要执行关联检查，也需要等检查结果。行数只能回答数量，不证明姓名、外部标识和归属关系完全正确。</p>
+<p>导入前还可以建立一份只描述文件的清单：文件摘要、编码、列顺序、预期记录标识与创建来源。摘要相同帮助核对两端讨论的是同一份字节，不能证明内容可信；来源授权与业务校验仍须独立完成。若操作者临时重新保存了 CSV，应生成新的清单，而不是继续沿用旧文件的行数预期。</p>
+<p>对于需要整体成功的演练，可以在明确的测试事务中完成复制与核对，再选择提交或回滚，并从另一条只读连接验证可见结果。错误出现后应先处理当前事务状态，再进行下一组实验。测试库里观察到两条记录，只能覆盖该文件与该执行路径；不能外推为大文件传输、驱动断线恢复或生产数据映射已经通过。</p>
+<p>拟议验证包括本机可读而服务器不存在、客户端无读取权限、重复主键、字段引号与换行、编码不匹配和中途取消，分别核对最终表与连接状态。本篇未执行这些测试。修复记录应能明确说出：哪一个进程读取了哪一份文件，哪些列经过哪次提交进入了目标表，而不只是命令终于不报错。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-copy.html" rel="noopener">PostgreSQL: Documentation: 18: COPY</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/app-psql.html" rel="noopener">PostgreSQL: Documentation: 18: psql</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--csv" href="/zh-CN/tags/CSV/">CSV</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fpostgres-copy-server-client-path%2F&text=CSV%20%E5%9C%A8%E6%9C%AC%E6%9C%BA%EF%BC%8CCOPY%20FROM%20%E4%B8%BA%E4%BB%80%E4%B9%88%E6%89%BE%E4%B8%8D%E5%88%B0%E6%96%87%E4%BB%B6%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fpostgres-copy-server-client-path%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=CSV%20%E5%9C%A8%E6%9C%AC%E6%9C%BA%EF%BC%8CCOPY%20FROM%20%E4%B8%BA%E4%BB%80%E4%B9%88%E6%89%BE%E4%B8%8D%E5%88%B0%E6%96%87%E4%BB%B6%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fpostgres-copy-server-client-path%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/">
+              <span>上一篇</span>
+              <strong>WITH HOLD 结束了长事务，却没有取消导出的资源账单</strong>
+              <small>2026-10-31</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/">
+              <span>下一篇</span>
+              <strong>AT TIME ZONE UTC 后，结果为什么反而没了时区？</strong>
+              <small>2026-10-31</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#同一个绝对路径，属于哪台机器？">同一个绝对路径，属于哪台机器？</a>
+          
+            <a class="toc-link toc-link--h2" href="#在本机读取-CSV，用什么最小流程？">在本机读取 CSV，用什么最小流程？</a>
+          
+            <a class="toc-link toc-link--h2" href="#通过应用驱动调用时，能发送反斜杠命令吗？">通过应用驱动调用时，能发送反斜杠命令吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#哪些失败应该分开处理？">哪些失败应该分开处理？</a>
+          
+            <a class="toc-link toc-link--h2" href="#COPY-返回成功，就是业务导入已经完成吗？">COPY 返回成功，就是业务导入已经完成吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>267</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>192</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>120</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/">AT TIME ZONE UTC 后，结果为什么反而没了时区？</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/">WITH HOLD 结束了长事务，却没有取消导出的资源账单</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/postgres-notify-commit-wakeup/">NOTIFY 可以唤醒工作者，不能替它保存未完成任务</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

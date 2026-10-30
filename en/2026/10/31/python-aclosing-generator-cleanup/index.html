@@ -1,0 +1,448 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Keep async generator cleanup inside the consuming task | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Check aclosing with early break and consumer failure, keeping ownership, asynchronous cleanup and cancellation deadlines distinct.">
+  
+  
+    <meta name="keywords" content="aclosing,async generator closure,early iteration exit">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/10/31/python-aclosing-generator-cleanup/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/31/python-aclosing-generator-cleanup/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/31/python-aclosing-generator-cleanup/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/31/python-aclosing-generator-cleanup/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Keep async generator cleanup inside the consuming task | Midnight blog">
+    <meta property="og:description" content="Check aclosing with early break and consumer failure, keeping ownership, asynchronous cleanup and cancellation deadlines distinct.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/10/31/python-aclosing-generator-cleanup/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/10/31/python-aclosing-generator-cleanup/#webpage","url":"https://www.zyweb.vip/en/2026/10/31/python-aclosing-generator-cleanup/","name":"Keep async generator cleanup inside the consuming task | Midnight blog","description":"Check aclosing with early break and consumer failure, keeping ownership, asynchronous cleanup and cancellation deadlines distinct.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/10/31/python-aclosing-generator-cleanup/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/10/31/python-aclosing-generator-cleanup/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/10/31/python-aclosing-generator-cleanup/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/10/31/python-aclosing-generator-cleanup/#webpage"},"url":"https://www.zyweb.vip/en/2026/10/31/python-aclosing-generator-cleanup/","headline":"Keep async generator cleanup inside the consuming task","description":"Check aclosing with early break and consumer failure, keeping ownership, asynchronous cleanup and cancellation deadlines distinct.","inLanguage":"en","datePublished":"2026-10-30T19:24:57.000Z","dateModified":"2026-10-30T19:24:57.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://docs.python.org/3.14/library/contextlib.html"],"keywords":"Development, Python, asyncio"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/10/31/python-aclosing-generator-cleanup/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Keep async generator cleanup inside the consuming task","item":"https://www.zyweb.vip/en/2026/10/31/python-aclosing-generator-cleanup/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/31/python-aclosing-generator-cleanup/">zh-CN</option><option value="/en/2026/10/31/python-aclosing-generator-cleanup/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/10/31/python-aclosing-generator-cleanup/">zh-CN</option><option value="/en/2026/10/31/python-aclosing-generator-cleanup/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-30T19:24:57.000Z">2026-10-31</time>
+    </div>
+
+    <h1>Keep async generator cleanup inside the consuming task</h1>
+
+    
+      <p class="post-hero__summary">Check aclosing with early break and consumer failure, keeping ownership, asynchronous cleanup and cancellation deadlines distinct.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-30T19:24:57.000Z">2026-10-31</time> · Estimated read 15 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/10/31/python-aclosing-generator-cleanup/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/10/31/python-aclosing-generator-cleanup/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Ending async iteration does not establish completed generator closure.</li><li>aclosing awaits aclose as the owning scope exits.</li><li>Borrowing rights and cleanup duration require separate contracts.</li></ul></section>
+      <div class="article-content">
+        <p>An owner that stops consuming an async generator early should explicitly await its closure. A break is not evidence that cleanup has completed. <code>contextlib.aclosing</code> awaits the object&#39;s aclose when its async with block exits, keeping asynchronous generator cleanup in the context used for iteration. It assigns closure responsibility without promising remote rollback or a hard cleanup deadline.</p>
+<h2 id="Ending-consumption-does-not-close-the-producer"><a href="#Ending-consumption-does-not-close-the-producer" class="headerlink" title="Ending consumption does not close the producer"></a>Ending consumption does not close the producer</h2><p>The <a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/contextlib.html#contextlib.aclosing">contextlib documentation for aclosing</a> specifically addresses deterministic async-generator cleanup after break or exceptions. It also explains that exit code executes in the iteration context. aclosing was added in Python 3.10; the page checked on October 31, 2026 was Python 3.14.10. No asynchronous program was run.</p>
+<p>An async generator can yield repeatedly and suspend between items. Its finally block may need to await resource release. A consumer that leaves after one item has stopped requesting values; that alone does not establish that the suspended producer finished its exit logic. A resource-owning scope must express that lifetime.</p>
+<p>This does not mean every break leaks forever. Reference retention, garbage collection and event-loop shutdown influence eventual cleanup. The relevant contract is whether cleanup completes before the current scope ends. A finalizer that depends on request context or task-owned resources should not be left until those dependencies have expired.</p>
+<p>Conversely, fully consumed generators can reach their own normal exit, and a borrower must not close a shared source managed elsewhere. Use aclosing where the current scope actually owns closure, not mechanically wherever async for appears.</p>
+<h2 id="Await-closure-within-the-owning-scope"><a href="#Await-closure-within-the-owning-scope" class="headerlink" title="Await closure within the owning scope"></a>Await closure within the owning scope</h2><p>This complete, unexecuted standard-library example records control flow in lists. It uses no real database or network. The sleep in finally makes cleanup asynchronous; it is not a measurement of resource-return time.</p>
+<pre><code class="python">import asyncio
+from contextlib import aclosing
+
+
+async def values(events):
+    try:
+        yield 1
+        yield 2
+    finally:
+        await asyncio.sleep(0)
+        events.append(&#39;closed&#39;)
+
+
+async def consume_one():
+    events = []
+    async with aclosing(values(events)) as source:
+        async for item in source:
+            events.append(f&#39;read:{item}&#39;)
+            break
+        events.append(&#39;loop ended&#39;)
+    if events != [&#39;read:1&#39;, &#39;loop ended&#39;, &#39;closed&#39;]:
+        raise RuntimeError(f&#39;unexpected cleanup order: {events!r}&#39;)
+    print(events)
+
+
+async def consume_with_error():
+    events = []
+    try:
+        async with aclosing(values(events)) as source:
+            async for item in source:
+                events.append(f&#39;read:{item}&#39;)
+                raise ValueError(&#39;consumer rejected item&#39;)
+    except ValueError:
+        if events != [&#39;read:1&#39;, &#39;closed&#39;]:
+            raise RuntimeError(f&#39;cleanup missing: {events!r}&#39;)
+        print(&#39;consumer error preserved&#39;, events)
+    else:
+        raise RuntimeError(&#39;consumer error disappeared&#39;)
+
+
+async def main():
+    await consume_one()
+    await consume_with_error()
+
+
+if __name__ == &#39;__main__&#39;:
+    asyncio.run(main())
+</code></pre>
+<p>The first case records loop ended before leaving async with; closure is awaited on scope exit. The check outside the scope verifies closure before returning, rather than merely noticing that finally printed something eventually. The second case expects cleanup while preserving the consumer&#39;s ValueError instead of turning it into success.</p>
+<p>These are expectations derived from code and documentation, not captured logs. Replacing the teaching generator with a real resource requires checking that resource&#39;s aclose contract. It may release a local handle without proving that a remote operation was reversed. The list marker tests control flow, not real connection return.</p>
+<h2 id="What-should-a-comparison-without-aclosing-observe"><a href="#What-should-a-comparison-without-aclosing-observe" class="headerlink" title="What should a comparison without aclosing observe?"></a>What should a comparison without aclosing observe?</h2><p>Remove the owning context, retain the generator reference, break early, inspect events immediately, then explicitly await source.aclose and inspect again. Retaining the reference keeps the comparison focused on closure rather than incidental garbage collection. Do not claim that every platform must produce an identical delayed output sequence.</p>
+<p>Resource acquisition, completed closure and consumer error propagation are separate assertions. A finally reached on normal completion does not prove failure cleanup. Catching ValueError does not establish resource release either. The example checks both on one path; a real test should also inject a failing closer and inspect the resulting exception chain and diagnostics.</p>
+<p>The existing article on <a href="/en/2026/10/26/python-contextmanager-single-yield-cleanup/">the single-yield contextmanager protocol</a> concerns synchronous entry and exit for one resource loan. This async data generator can produce several values. aclosing ends it when its owner leaves; the contextmanager&#39;s single-yield requirement does not apply to the data producer.</p>
+<h2 id="Should-a-borrowed-async-iterator-always-be-closed"><a href="#Should-a-borrowed-async-iterator-always-be-closed" class="headerlink" title="Should a borrowed async iterator always be closed?"></a>Should a borrowed async iterator always be closed?</h2><p>Check that it provides aclose and establish who owns it. Async iteration does not guarantee a uniform closing API. An internal helper must not terminate a shared subscription or a generator the caller intends to reuse. An interface should state whether it takes ownership and closes, or only borrows.</p>
+<p>Suppose a parser examines two items and passes the iterator to the next stage. Wrapping that helper in aclosing could hand the next stage an already closed source. Closing is suitable if the remainder is deliberately discarded; continued consumption requires moving ownership to the scope spanning both stages. Earlier cleanup is not automatically more correct.</p>
+<p>For request-owned resources, an entry point can create the source, consume it, await closure and pass ordinary extracted data to helpers. Long-running background consumption instead needs an explicit task identity and lifecycle. Returning a generator does not create its future owner. That is an application design choice, not task management supplied by aclosing.</p>
+<h2 id="Does-aclosing-make-cleanup-immediate"><a href="#Does-aclosing-make-cleanup-immediate" class="headerlink" title="Does aclosing make cleanup immediate?"></a>Does aclosing make cleanup immediate?</h2><p>It awaits closure without bounding the closer&#39;s duration. A blocked, failing or interrupted cleanup still needs an observable outcome. The article on <a href="/en/2026/10/29/python-asyncio-waitfor-cancellation-settlement/">wait_for and cancellation settlement</a> distinguishes a waiting budget from completed cleanup. Adding another timeout around aclose does not prove that the resource was released.</p>
+<p>A borrowing test can let a helper consume one item and have its outer owner continue with the next. Continued use should remain possible under a borrowing contract; a take-and-discard contract should not promise it. This tests the interface rather than merely counting aclose calls. Correct call counts at the wrong ownership boundary can still break the next stage.</p>
+<p>Separate cleanup start from completion as well. Hold finally on a test event, check that the owning scope has not exited, then release the event and observe completion. This establishes waiting without a fragile millisecond expectation. If closure raises, verify that the caller sees failure rather than taking a started-cleanup marker as success.</p>
+<p>Proposed tests include full consumption, early break, consumer failure, closer failure, cancellation and shared borrowing. Inspect completion markers, errors, resource counts and intended subsequent use. None was executed. Find the actual owner first, then have it await closure within its valid scope. If ownership must outlive that scope, explicitly hand off the remaining responsibility rather than relying on event-loop shutdown.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/contextlib.html" rel="noopener">contextlib — Utilities for with-statement contexts — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--python" href="/en/tags/Python/">Python</a>
+          
+            <a class="tag tag--asyncio" href="/en/tags/asyncio/">asyncio</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F31%2Fpython-aclosing-generator-cleanup%2F&text=Keep%20async%20generator%20cleanup%20inside%20the%20consuming%20task" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F31%2Fpython-aclosing-generator-cleanup%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Keep%20async%20generator%20cleanup%20inside%20the%20consuming%20task&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F10%2F31%2Fpython-aclosing-generator-cleanup%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/10/31/python-csv-newline-record-boundary/">
+              <span>Previous Post</span>
+              <strong>Two CSV records, three text lines: which count is wrong?</strong>
+              <small>2026-10-31</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/10/31/postgres-notify-commit-wakeup/">
+              <span>Next Post</span>
+              <strong>NOTIFY can wake a worker without storing its unfinished work</strong>
+              <small>2026-10-31</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Ending-consumption-does-not-close-the-producer">Ending consumption does not close the producer</a>
+          
+            <a class="toc-link toc-link--h2" href="#Await-closure-within-the-owning-scope">Await closure within the owning scope</a>
+          
+            <a class="toc-link toc-link--h2" href="#What-should-a-comparison-without-aclosing-observe">What should a comparison without aclosing observe?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Should-a-borrowed-async-iterator-always-be-closed">Should a borrowed async iterator always be closed?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Does-aclosing-make-cleanup-immediate">Does aclosing make cleanup immediate?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>267</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>192</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>121</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/29/python-asyncio-waitfor-cancellation-settlement/">Why can Python wait_for return after its one-second timeout?</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/31/python-csv-newline-record-boundary/">Two CSV records, three text lines: which count is wrong?</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/31/python-decimal-string-input-trap/">Why does Decimal(0.1) still contain a long fraction?</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

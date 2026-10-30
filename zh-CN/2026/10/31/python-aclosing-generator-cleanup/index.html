@@ -1,0 +1,448 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>用 aclosing 把异步生成器的关闭留在当前任务内 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用提前 break 和消费者异常两条完整路径检查 aclosing 的关闭时点，说明借用所有权、异步清理与取消时限的区别。">
+  
+  
+    <meta name="keywords" content="aclosing,异步生成器关闭,提前退出">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/31/python-aclosing-generator-cleanup/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/31/python-aclosing-generator-cleanup/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/31/python-aclosing-generator-cleanup/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/31/python-aclosing-generator-cleanup/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="用 aclosing 把异步生成器的关闭留在当前任务内 | Midnight blog">
+    <meta property="og:description" content="用提前 break 和消费者异常两条完整路径检查 aclosing 的关闭时点，说明借用所有权、异步清理与取消时限的区别。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/31/python-aclosing-generator-cleanup/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/python-aclosing-generator-cleanup/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/31/python-aclosing-generator-cleanup/","name":"用 aclosing 把异步生成器的关闭留在当前任务内 | Midnight blog","description":"用提前 break 和消费者异常两条完整路径检查 aclosing 的关闭时点，说明借用所有权、异步清理与取消时限的区别。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/python-aclosing-generator-cleanup/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/python-aclosing-generator-cleanup/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/python-aclosing-generator-cleanup/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/python-aclosing-generator-cleanup/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/31/python-aclosing-generator-cleanup/","headline":"用 aclosing 把异步生成器的关闭留在当前任务内","description":"用提前 break 和消费者异常两条完整路径检查 aclosing 的关闭时点，说明借用所有权、异步清理与取消时限的区别。","inLanguage":"zh-CN","datePublished":"2026-10-30T19:24:57.000Z","dateModified":"2026-10-30T19:24:57.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.14/library/contextlib.html"],"keywords":"Development, Python, asyncio"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/python-aclosing-generator-cleanup/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"用 aclosing 把异步生成器的关闭留在当前任务内","item":"https://www.zyweb.vip/zh-CN/2026/10/31/python-aclosing-generator-cleanup/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/31/python-aclosing-generator-cleanup/" selected>zh-CN</option><option value="/en/2026/10/31/python-aclosing-generator-cleanup/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/31/python-aclosing-generator-cleanup/" selected>zh-CN</option><option value="/en/2026/10/31/python-aclosing-generator-cleanup/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-30T19:24:57.000Z">2026-10-31</time>
+    </div>
+
+    <h1>用 aclosing 把异步生成器的关闭留在当前任务内</h1>
+
+    
+      <p class="post-hero__summary">用提前 break 和消费者异常两条完整路径检查 aclosing 的关闭时点，说明借用所有权、异步清理与取消时限的区别。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-30T19:24:57.000Z">2026-10-31</time> · 预计阅读 8 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/31/python-aclosing-generator-cleanup/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/31/python-aclosing-generator-cleanup/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>结束 async for 消费不能直接声称生成器已关闭。</li><li>aclosing 在拥有者范围退出时 await aclose。</li><li>借用对象的关闭权与清理耗时需要独立约定。</li></ul></section>
+      <div class="article-content">
+        <p>拥有异步生成器的调用方，提前结束 <code>async for</code> 时，应明确等待它关闭，而不能只把 break 当作清理已完成。<code>contextlib.aclosing</code> 在 async with 退出时 await 对象的 aclose，让生成器的异步退出代码留在迭代时的上下文中。它安排的是关闭责任，不提供远程回滚或硬性清理时限。</p>
+<h2 id="停止消费，不等于关闭生产者"><a href="#停止消费，不等于关闭生产者" class="headerlink" title="停止消费，不等于关闭生产者"></a>停止消费，不等于关闭生产者</h2><p><a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/contextlib.html#contextlib.aclosing">Python contextlib 的 aclosing 说明</a>专门覆盖异步生成器因 break 或异常而提前退出的确定性清理，并说明退出逻辑在与迭代相同的上下文中执行。该工具从 Python 三点十提供；本篇于二〇二六年十月三十一日核对 Python 3.14.10 文档，没有运行异步程序。</p>
+<p>异步生成器可以多次 yield，把数据逐步交给消费者。暂停时，它自己的 finally 还可能需要 await，例如归还一个异步资源。消费者只取到第一条就离开循环，说明“不再取下一条”，不能据此声称那个暂停的生产者已经完成退出逻辑。生命周期需要由持有资源的范围明确表达。</p>
+<p>不能把这种不确定性描述成“所有 break 都永久泄漏”。垃圾回收、引用保留与事件循环收尾会影响实际观察到的时点。问题是调用方能否承诺在当前范围结束前清理完成，而不是某个解释器最终有没有做善后。若关闭依赖请求上下文或同任务资源，拖到外围收尾可能已经离开这些依赖的有效期。</p>
+<p>相反，完全消费且正常完成的生成器，可以自然走到自身退出；由更高层统一管理的共享来源，也不能由每个借用者擅自关闭。因此，使用 aclosing 的前提应是这里确实拥有这次对象的关闭责任，而非只因出现 async for 就机械加包装。</p>
+<h2 id="在当前范围内等待关闭"><a href="#在当前范围内等待关闭" class="headerlink" title="在当前范围内等待关闭"></a>在当前范围内等待关闭</h2><p>下面是未执行的完整标准库示例，使用列表记录控制流，不连接真实数据库或网络。finally 里的 sleep 只创建一个需要 await 的清理步骤，不代表测量了任何资源归还耗时。</p>
+<pre><code class="python">import asyncio
+from contextlib import aclosing
+
+
+async def values(events):
+    try:
+        yield 1
+        yield 2
+    finally:
+        await asyncio.sleep(0)
+        events.append(&#39;closed&#39;)
+
+
+async def consume_one():
+    events = []
+    async with aclosing(values(events)) as source:
+        async for item in source:
+            events.append(f&#39;read:{item}&#39;)
+            break
+        events.append(&#39;loop ended&#39;)
+    if events != [&#39;read:1&#39;, &#39;loop ended&#39;, &#39;closed&#39;]:
+        raise RuntimeError(f&#39;unexpected cleanup order: {events!r}&#39;)
+    print(events)
+
+
+async def consume_with_error():
+    events = []
+    try:
+        async with aclosing(values(events)) as source:
+            async for item in source:
+                events.append(f&#39;read:{item}&#39;)
+                raise ValueError(&#39;consumer rejected item&#39;)
+    except ValueError:
+        if events != [&#39;read:1&#39;, &#39;closed&#39;]:
+            raise RuntimeError(f&#39;cleanup missing: {events!r}&#39;)
+        print(&#39;consumer error preserved&#39;, events)
+    else:
+        raise RuntimeError(&#39;consumer error disappeared&#39;)
+
+
+async def main():
+    await consume_one()
+    await consume_with_error()
+
+
+if __name__ == &#39;__main__&#39;:
+    asyncio.run(main())
+</code></pre>
+<p>第一段在循环退出后先登记 loop ended，离开 async with 时才等待生成器关闭，随后检查 closed 已存在。检查放在范围之外，验证的是对外返回之前的关闭责任，而不是只观察 finally 曾经打印过一行。第二段让消费者抛错，预期关闭仍发生，并且原消费者错误没有被伪装成正常成功。</p>
+<p>这些顺序是依照代码与文档的预期，不是本次运行日志。若换成实际客户端资源，应验证该资源的 aclose 合同：它可能只释放本地句柄，也可能需要等待远程协议结束；同名方法不能自动扩张成“服务端已经撤销所有动作”。示例列表标记只能验证控制流，不能证明真实连接归还。</p>
+<h2 id="没有-aclosing-的对照应该观察什么？"><a href="#没有-aclosing-的对照应该观察什么？" class="headerlink" title="没有 aclosing 的对照应该观察什么？"></a>没有 aclosing 的对照应该观察什么？</h2><p>对照可以去掉外层 async with，保留生成器引用，提前 break 后立即观察 events，再由测试明确 await source.aclose，比较前后状态。保留引用是为了让实验问题集中在关闭时点，避免垃圾回收时机掩盖它。不要编造所有平台都会打印完全相同的延迟顺序。</p>
+<p>资源借出次数、关闭完成与消费者异常，是三份不同断言。只有正常路径经过 finally，还不能证明消费失败时同样清理；只有捕获到了 ValueError，也不能证明清理没有漏掉。示例把二者放在同一条异常路径检查，实际项目还应注入关闭函数自身抛错，核对异常链和日志保留原始原因。</p>
+<p>本站<a href="/zh-CN/2026/10/26/python-contextmanager-single-yield-cleanup/">同步 contextmanager 的单次 yield 协议</a>讨论的是一次借用的进入与退出。本题的异步生成器却可以产生多条数据，aclosing 只负责在拥有者退出时结束它；不要因为都用了生成器，就把单次 yield 限制套到这里。</p>
+<h2 id="借来的异步迭代器，也应该一律关闭吗？"><a href="#借来的异步迭代器，也应该一律关闭吗？" class="headerlink" title="借来的异步迭代器，也应该一律关闭吗？"></a>借来的异步迭代器，也应该一律关闭吗？</h2><p>先核对对象是否提供 aclose，以及关闭权归谁。异步迭代能力不等于所有对象都带同样的关闭方法；共享的订阅或由调用方继续使用的生成器，也不能由内部辅助函数随意终止。函数接口可以明确约定“接管并关闭”或“只借用，不负责关闭”，让调用者知道返回后是否还能继续消费。</p>
+<p>假设一个解析函数只需查看前两项，然后把迭代器交给下一阶段。如果它包上 aclosing，下一阶段可能接到已经关闭的来源。若预期本来就是放弃余下内容，则关闭合理；若要继续，应该把关闭放到真正拥有整段流程的外层。清理越早不必然越正确，正确时点取决于谁还需要使用资源。</p>
+<p>对于请求级资源，可以由入口统一创建来源、完成消费与关闭，再把已经取出的纯数据传给其他函数。需要长时后台消费则应建立任务身份和独立生命周期，不能通过返回一个生成器就默认后台拥有者已经存在。这是所有权设计建议，不是 aclosing 自动提供的任务管理功能。</p>
+<h2 id="aclosing-会让清理立刻结束吗？"><a href="#aclosing-会让清理立刻结束吗？" class="headerlink" title="aclosing 会让清理立刻结束吗？"></a>aclosing 会让清理立刻结束吗？</h2><p>它会 await 关闭，不承诺关闭函数的耗时。清理如果阻塞、抛错或在取消中再次被中断，调用方仍须有明确的可观察结果。本站<a href="/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/">wait_for 超时与取消结算</a>说明等待预算与清理完成不能混为同一时点；在 aclose 外再加一个超时，也不等于资源已经释放。</p>
+<p>测试拥有权时，可以让辅助函数只消费一条，然后由外层继续读取下一条。若合同是借用，第二次读取应该仍可按约定工作；若合同是接管并放弃余项，外层就不应再依赖继续读取。这个对照测试的是接口承诺，而不是单纯统计 aclose 被调用了几次。关闭次数正确，放错位置仍可能破坏后续阶段。</p>
+<p>同样应区分清理启动与清理完成。让 finally 在一个测试事件上等待，确认外层范围仍未退出，再释放事件，检查外层随后结束。这样不必规定某台机器几毫秒内打印日志，就能证明调用方真的等待了关闭。若关闭抛错，则需要检查调用方观察到失败，而非只留下 closed started 标记便进入成功流程。</p>
+<p>拟议验证应覆盖完全消费、首项后 break、消费者异常、关闭异常、调用方取消与共享借用。分别检查最终标记、错误传播、资源计数和后续使用是否符合合同。本文没有执行这些检查。评审时先在代码里找出真正的拥有者，然后让它在离开自身有效范围前等待关闭；若无法等待，就应明确交接剩余责任，而不是依赖事件循环最后替所有人收拾。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/contextlib.html" rel="noopener">contextlib — Utilities for with-statement contexts — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+            <a class="tag tag--asyncio" href="/zh-CN/tags/asyncio/">asyncio</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fpython-aclosing-generator-cleanup%2F&text=%E7%94%A8%20aclosing%20%E6%8A%8A%E5%BC%82%E6%AD%A5%E7%94%9F%E6%88%90%E5%99%A8%E7%9A%84%E5%85%B3%E9%97%AD%E7%95%99%E5%9C%A8%E5%BD%93%E5%89%8D%E4%BB%BB%E5%8A%A1%E5%86%85" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fpython-aclosing-generator-cleanup%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E7%94%A8%20aclosing%20%E6%8A%8A%E5%BC%82%E6%AD%A5%E7%94%9F%E6%88%90%E5%99%A8%E7%9A%84%E5%85%B3%E9%97%AD%E7%95%99%E5%9C%A8%E5%BD%93%E5%89%8D%E4%BB%BB%E5%8A%A1%E5%86%85&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fpython-aclosing-generator-cleanup%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/31/python-csv-newline-record-boundary/">
+              <span>上一篇</span>
+              <strong>CSV 只有两条记录，为什么 splitlines 数出三行？</strong>
+              <small>2026-10-31</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/31/postgres-notify-commit-wakeup/">
+              <span>下一篇</span>
+              <strong>NOTIFY 可以唤醒工作者，不能替它保存未完成任务</strong>
+              <small>2026-10-31</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#停止消费，不等于关闭生产者">停止消费，不等于关闭生产者</a>
+          
+            <a class="toc-link toc-link--h2" href="#在当前范围内等待关闭">在当前范围内等待关闭</a>
+          
+            <a class="toc-link toc-link--h2" href="#没有-aclosing-的对照应该观察什么？">没有 aclosing 的对照应该观察什么？</a>
+          
+            <a class="toc-link toc-link--h2" href="#借来的异步迭代器，也应该一律关闭吗？">借来的异步迭代器，也应该一律关闭吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#aclosing-会让清理立刻结束吗？">aclosing 会让清理立刻结束吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>267</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>192</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>120</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/">Python wait_for 一秒超时，为什么一秒后还没返回？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/python-csv-newline-record-boundary/">CSV 只有两条记录，为什么 splitlines 数出三行？</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/python-decimal-string-input-trap/">用了 Decimal，0.1 为什么仍变成一长串小数？</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

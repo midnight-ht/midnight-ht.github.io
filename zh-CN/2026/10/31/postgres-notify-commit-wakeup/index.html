@@ -1,0 +1,416 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>NOTIFY 可以唤醒工作者，不能替它保存未完成任务 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="区分 NOTIFY 发送与接收两侧事务、同事务折叠和重连恢复，用两会话示例说明唤醒提示不能代替任务清单。">
+  
+  
+    <meta name="keywords" content="NOTIFY 提交时点,LISTEN 竞态,持久工作记录">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/31/postgres-notify-commit-wakeup/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/31/postgres-notify-commit-wakeup/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/31/postgres-notify-commit-wakeup/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/31/postgres-notify-commit-wakeup/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="NOTIFY 可以唤醒工作者，不能替它保存未完成任务 | Midnight blog">
+    <meta property="og:description" content="区分 NOTIFY 发送与接收两侧事务、同事务折叠和重连恢复，用两会话示例说明唤醒提示不能代替任务清单。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/31/postgres-notify-commit-wakeup/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-notify-commit-wakeup/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-notify-commit-wakeup/","name":"NOTIFY 可以唤醒工作者，不能替它保存未完成任务 | Midnight blog","description":"区分 NOTIFY 发送与接收两侧事务、同事务折叠和重连恢复，用两会话示例说明唤醒提示不能代替任务清单。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-notify-commit-wakeup/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-notify-commit-wakeup/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-notify-commit-wakeup/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-notify-commit-wakeup/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-notify-commit-wakeup/","headline":"NOTIFY 可以唤醒工作者，不能替它保存未完成任务","description":"区分 NOTIFY 发送与接收两侧事务、同事务折叠和重连恢复，用两会话示例说明唤醒提示不能代替任务清单。","inLanguage":"zh-CN","datePublished":"2026-10-30T19:24:57.000Z","dateModified":"2026-10-30T19:24:57.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/sql-notify.html","https://www.postgresql.org/docs/18/sql-listen.html"],"keywords":"Development, PostgreSQL, Architecture"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-notify-commit-wakeup/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"NOTIFY 可以唤醒工作者，不能替它保存未完成任务","item":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-notify-commit-wakeup/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/31/postgres-notify-commit-wakeup/" selected>zh-CN</option><option value="/en/2026/10/31/postgres-notify-commit-wakeup/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/31/postgres-notify-commit-wakeup/" selected>zh-CN</option><option value="/en/2026/10/31/postgres-notify-commit-wakeup/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-30T19:24:57.000Z">2026-10-31</time>
+    </div>
+
+    <h1>NOTIFY 可以唤醒工作者，不能替它保存未完成任务</h1>
+
+    
+      <p class="post-hero__summary">区分 NOTIFY 发送与接收两侧事务、同事务折叠和重连恢复，用两会话示例说明唤醒提示不能代替任务清单。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-30T19:24:57.000Z">2026-10-31</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/31/postgres-notify-commit-wakeup/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/31/postgres-notify-commit-wakeup/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>NOTIFY 在发送事务成功提交后生效，监听者事务也能延后接收。</li><li>重复提示和初始重复读取不能直接变成重复副作用。</li><li>重连恢复应读取持久工作状态，提示只负责唤醒。</li></ul></section>
+      <div class="article-content">
+        <p><code>NOTIFY</code> 适合告诉工作者“有变化，去查一下”，不能单独承担断线后仍可恢复的任务清单。发送事务提交之前不会投递通知；监听连接自己的长事务也会延后客户端收到通知的时点。需要保证工作者重连后补处理，应把未完成工作保存下来，把通知作为唤醒提示。</p>
+<h2 id="为什么语句成功，通知还没有到？"><a href="#为什么语句成功，通知还没有到？" class="headerlink" title="为什么语句成功，通知还没有到？"></a>为什么语句成功，通知还没有到？</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-notify.html">PostgreSQL 18 的 NOTIFY 命令说明</a>把两侧事务都列为投递条件：发送者事务成功提交后通知才生效；监听会话处于事务中时，要等它结束后才把通知交给客户端。本文于二〇二六年十月三十一日核对这份十八版文档，讨论数据库内通知，没有运行数据库或通知驱动。</p>
+<p>这意味着应画两条时间线。发送端已经执行 INSERT 和 NOTIFY，但还没 COMMIT，另一端暂时收不到是符合语义的；发送者回滚，本次通知就不应出现。另一种情况是发送者早已提交，监听者却打开事务后一直做其他工作。只查发送端日志，会把接收端的事务等待误认成网络问题。</p>
+<p>把通知与业务修改放在同一事务，可以让回滚的修改不发出这次提示，但这没有建立消费确认。通知交给了某条连接，不能说明工作者已处理表中的记录，更不能说明邮件或第三方调用已经完成。接收状态、认领状态、业务结果应保留各自的依据。</p>
+<h2 id="两条会话怎样把时点分开？"><a href="#两条会话怎样把时点分开？" class="headerlink" title="两条会话怎样把时点分开？"></a>两条会话怎样把时点分开？</h2><p>下面是未执行的教学步骤，使用 psql 连接同一个隔离数据库。两条终端分别保持各自会话；名称和数据为假设，不要直接粘贴进真实业务库。先在会话甲建立最小工作表并提交监听：</p>
+<pre><code class="sql">CREATE TABLE demo_work (
+  id integer PRIMARY KEY,
+  state text NOT NULL DEFAULT &#39;pending&#39;
+);
+BEGIN;
+LISTEN demo_work_changed;
+COMMIT;
+</code></pre>
+<p>会话乙执行以下内容，但先停在提交之前：</p>
+<pre><code class="sql">BEGIN;
+INSERT INTO demo_work(id) VALUES (1);
+NOTIFY demo_work_changed, &#39;1&#39;;
+-- 先检查另一条会话，再单独执行下一行
+COMMIT;
+</code></pre>
+<p>会话甲随后执行一条普通查询，让 psql 有机会读取并展示异步通知，同时核对表状态：</p>
+<pre><code class="sql">SELECT id, state FROM demo_work ORDER BY id;
+</code></pre>
+<p>预期关系来自文档推演：提交之前不能把通知当作已交付；提交后，甲应能够查询到已提交记录。终端什么时候打印异步通知，还受客户端读取连接的时机影响，不应把某行输出恰好出现的秒数写成数据库延迟测量。另开一轮用 id 为二并把乙的 COMMIT 改为 ROLLBACK，核对行与通知都没有成为这次已提交变化。</p>
+<p>再让甲先 BEGIN，保持事务不结束；乙提交一条新记录后，甲在 COMMIT 前后分别观察通知交付。这个对照用来验证接收端事务边界，不能靠给乙重复执行 NOTIFY 来“修复”。测试结束后，在甲执行 <code>UNLISTEN demo_work_changed;</code>，再删除教学表；删除前确认它确实由本次实验创建。</p>
+<h2 id="为什么不能按通知条数核对任务条数？"><a href="#为什么不能按通知条数核对任务条数？" class="headerlink" title="为什么不能按通知条数核对任务条数？"></a>为什么不能按通知条数核对任务条数？</h2><p>同一事务中，对同一频道发送相同 payload，重复通知可能折叠。假设一次事务更改三条记录，三次都发送固定文本 <code>changed</code>，不能预期收到三次才算成功。改成不同 payload 能避免这一种折叠，却没有解决工作者离线时如何恢复，也没有引入消费者的完成确认。</p>
+<p>因此，工作表需要保留任务身份与未完成状态；收到提示后按表中实际待处理记录工作，而不是根据提示次数加减计数。多个工作者还需要自己的认领、重试与幂等约定。通知机制没有替它们选择锁，也没有把外部副作用并入数据库事务。本站<a href="/zh-CN/2026/10/09/postgres-transaction-outbox/">事务发件箱的交接边界</a>讨论持久意图与外部交付；这里增加的是数据库唤醒信号本身的可见时点。</p>
+<p>允许错过的在线界面刷新可以只依赖通知，前提是产品允许错过提示，并有再次查询或刷新取得当前状态的路径。不应为了一个可丢失提示先引入复杂队列；同样，不应因为提示够快，就拿它承担需要逐项追踪的履约工作。</p>
+<h2 id="监听应该先注册，还是先读取待处理记录？"><a href="#监听应该先注册，还是先读取待处理记录？" class="headerlink" title="监听应该先注册，还是先读取待处理记录？"></a>监听应该先注册，还是先读取待处理记录？</h2><p>先提交监听注册，再读取初始状态，然后依据通知继续回查。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-listen.html">LISTEN 命令的 Notes</a>特别说明首次注册的竞态：注册生效的时点与查询所观察的状态并不完全重合。先查表再监听，会留下查询结束到监听生效之间的变化窗口。</p>
+<p>按推荐顺序仍可能初期收到已经在初始查询中见过的变化，所以工作身份与状态判断要允许重复发现。发现同一记录两次不是允许执行两次副作用；认领或幂等需要在真正处理的位置落实。重连时重新走建立监听、补读持久状态的过程，不把旧连接的内存标记当作恢复依据。</p>
+<h2 id="payload-放完整用户数据，可以少查一次表吗？"><a href="#payload-放完整用户数据，可以少查一次表吗？" class="headerlink" title="payload 放完整用户数据，可以少查一次表吗？"></a>payload 放完整用户数据，可以少查一次表吗？</h2><p>不宜把广播提示当成私密载荷。NOTIFY 文档说明通知对数据库用户可见，默认 payload 长度还受到字节上限约束。更容易审查的选择是发送受控标识，再由工作者按自己的查询权限读取必要内容；标识本身也要评估是否泄露信息，不能只去掉姓名就宣布已经脱敏。</p>
+<p>还可以做一个不靠计时的恢复测试：暂停工作者的读取，让发送事务先提交，再主动断开监听连接。重连以后仅凭工作表中的 pending 记录重新发现任务，检查同一任务的最终状态与外部效果次数。这个实验验证的是恢复设计，不要求某个通知恰好在几毫秒内到达；如果实际客户端尚未接收提示，也不应阻止它通过持久状态补查。</p>
+<p>若同一个工作者在处理记录后、写回完成之前退出，后继工作者可能再次发现它。测试应明确这次是重复发现还是重复执行，并保留同一业务身份，不能通过生成新任务编号掩盖恢复窗口。需要外部效果只发生一次时，还必须由接收方幂等、结果查询或明确补偿安排支持；收到一次通知并不能作为这项保证。</p>
+<p>验证时分别记录发送提交、监听事务结束、客户端接收、工作认领和最终结果，并测试断开后重连、重复提示以及没有提示时的补查。没有运行这些步骤，本篇不报告交付成功率。评审可以先问一句：工作者完全没收到提示时，重启后靠什么知道还有哪一条没做？如果答案只有内存里的通知列表，恢复合同还没有成立。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-notify.html" rel="noopener">PostgreSQL: Documentation: 18: NOTIFY</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-listen.html" rel="noopener">PostgreSQL: Documentation: 18: LISTEN</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--architecture" href="/zh-CN/tags/Architecture/">Architecture</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fpostgres-notify-commit-wakeup%2F&text=NOTIFY%20%E5%8F%AF%E4%BB%A5%E5%94%A4%E9%86%92%E5%B7%A5%E4%BD%9C%E8%80%85%EF%BC%8C%E4%B8%8D%E8%83%BD%E6%9B%BF%E5%AE%83%E4%BF%9D%E5%AD%98%E6%9C%AA%E5%AE%8C%E6%88%90%E4%BB%BB%E5%8A%A1" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fpostgres-notify-commit-wakeup%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=NOTIFY%20%E5%8F%AF%E4%BB%A5%E5%94%A4%E9%86%92%E5%B7%A5%E4%BD%9C%E8%80%85%EF%BC%8C%E4%B8%8D%E8%83%BD%E6%9B%BF%E5%AE%83%E4%BF%9D%E5%AD%98%E6%9C%AA%E5%AE%8C%E6%88%90%E4%BB%BB%E5%8A%A1&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fpostgres-notify-commit-wakeup%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/31/python-aclosing-generator-cleanup/">
+              <span>上一篇</span>
+              <strong>用 aclosing 把异步生成器的关闭留在当前任务内</strong>
+              <small>2026-10-31</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/">
+              <span>下一篇</span>
+              <strong>WITH HOLD 结束了长事务，却没有取消导出的资源账单</strong>
+              <small>2026-10-31</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#为什么语句成功，通知还没有到？">为什么语句成功，通知还没有到？</a>
+          
+            <a class="toc-link toc-link--h2" href="#两条会话怎样把时点分开？">两条会话怎样把时点分开？</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么不能按通知条数核对任务条数？">为什么不能按通知条数核对任务条数？</a>
+          
+            <a class="toc-link toc-link--h2" href="#监听应该先注册，还是先读取待处理记录？">监听应该先注册，还是先读取待处理记录？</a>
+          
+            <a class="toc-link toc-link--h2" href="#payload-放完整用户数据，可以少查一次表吗？">payload 放完整用户数据，可以少查一次表吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>267</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>192</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>120</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/">WITH HOLD 结束了长事务，却没有取消导出的资源账单</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/import-map-scopes-module-resolution/">Import map：同一个import为何加载不同模块？</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/">AT TIME ZONE UTC 后，结果为什么反而没了时区？</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

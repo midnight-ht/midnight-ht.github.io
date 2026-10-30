@@ -1,0 +1,411 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>WITH HOLD 结束了长事务，却没有取消导出的资源账单 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用 SQL 取数序列区分事务、会话与 held cursor 结果保留，对照连接池、keyset 分页和独立导出产物的恢复责任。">
+  
+  
+    <meta name="keywords" content="WITH HOLD,会话游标,导出结果物化">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/10/31/postgres-hold-cursor-commit-storage/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="WITH HOLD 结束了长事务，却没有取消导出的资源账单 | Midnight blog">
+    <meta property="og:description" content="用 SQL 取数序列区分事务、会话与 held cursor 结果保留，对照连接池、keyset 分页和独立导出产物的恢复责任。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/","name":"WITH HOLD 结束了长事务，却没有取消导出的资源账单 | Midnight blog","description":"用 SQL 取数序列区分事务、会话与 held cursor 结果保留，对照连接池、keyset 分页和独立导出产物的恢复责任。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/","headline":"WITH HOLD 结束了长事务，却没有取消导出的资源账单","description":"用 SQL 取数序列区分事务、会话与 held cursor 结果保留，对照连接池、keyset 分页和独立导出产物的恢复责任。","inLanguage":"zh-CN","datePublished":"2026-10-30T19:24:57.000Z","dateModified":"2026-10-30T19:24:57.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/sql-declare.html"],"keywords":"Development, PostgreSQL, Architecture"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"WITH HOLD 结束了长事务，却没有取消导出的资源账单","item":"https://www.zyweb.vip/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/" selected>zh-CN</option><option value="/en/2026/10/31/postgres-hold-cursor-commit-storage/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/" selected>zh-CN</option><option value="/en/2026/10/31/postgres-hold-cursor-commit-storage/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-30T19:24:57.000Z">2026-10-31</time>
+    </div>
+
+    <h1>WITH HOLD 结束了长事务，却没有取消导出的资源账单</h1>
+
+    
+      <p class="post-hero__summary">用 SQL 取数序列区分事务、会话与 held cursor 结果保留，对照连接池、keyset 分页和独立导出产物的恢复责任。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-30T19:24:57.000Z">2026-10-31</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/10/31/postgres-hold-cursor-commit-storage/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/10/31/postgres-hold-cursor-commit-storage/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>WITH HOLD 跨成功提交继续使用，但仍限原数据库会话。</li><li>小批 FETCH 不表示剩余结果没有服务端存储成本。</li><li>需要跨进程恢复时，应评估独立导出身份与产物。</li></ul></section>
+      <div class="article-content">
+        <p><code>WITH HOLD</code> 让 PostgreSQL 游标在创建事务成功提交后继续取数，但没有取消导出的资源责任。游标仍属于原会话，当前实现还会把结果保存到临时文件或内存区域。它可以避免让消费全过程一直停留在原事务里，却不能同时承诺跨任意连接续读、无限结果和没有服务端存储成本。</p>
+<h2 id="提交之后留下的是什么？"><a href="#提交之后留下的是什么？" class="headerlink" title="提交之后留下的是什么？"></a>提交之后留下的是什么？</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-declare.html">PostgreSQL 18 的 DECLARE 参考</a>区分普通游标与 held cursor：默认 WITHOUT HOLD 只在创建它的事务内可用；WITH HOLD 在成功提交后可以由同一会话的后续事务访问。本文于二〇二六年十月三十一日核对该文档，范围是 SQL 命令级游标，不将 PL/pgSQL 内部游标或任意驱动的同名对象混为一谈。</p>
+<p>先分开三个寿命：事务的寿命、连接所代表会话的寿命，以及结果被保留的寿命。事务结束并不推出会话结束，游标跨提交可用也不推出它变成持久对象。按文档，held cursor 在显式 CLOSE 或会话结束时关闭；创建它的事务若回滚，游标会被移除。</p>
+<p>假设后台生成一份报表，浏览器每次只下载几百行。普通游标可以在事务中逐批读取，但慢客户端会延长这段事务的存在时间。WITH HOLD 改变了事务边界，剩余结果却仍要由数据库保留。不能从“每次 FETCH 很小”倒推出服务端只保存了这一小批；客户端批次与服务端保留量是不同问题。</p>
+<p>文档说明，当前实现会把 held cursor 代表的行复制到临时文件或内存，以供后续事务读取。这是机制依据，不是某个数据规模下的内存或磁盘数字。本篇没有测量物化时间、临时文件大小，也不提供调大某个参数就能无限导出的建议。</p>
+<h2 id="一个会话内怎样验证提交边界？"><a href="#一个会话内怎样验证提交边界？" class="headerlink" title="一个会话内怎样验证提交边界？"></a>一个会话内怎样验证提交边界？</h2><p>下面是未执行的完整 SQL 教学序列，可以在隔离数据库的同一条 psql 会话中运行。它使用生成数据，不依赖已有业务表，数字只用于看清取数位置：</p>
+<pre><code class="sql">BEGIN;
+DECLARE demo_report NO SCROLL CURSOR WITH HOLD FOR
+  SELECT n, &#39;item-&#39; || n::text AS label
+  FROM generate_series(1, 5) AS t(n)
+  ORDER BY n;
+FETCH FORWARD 2 FROM demo_report;
+COMMIT;
+FETCH FORWARD 2 FROM demo_report;
+FETCH FORWARD 2 FROM demo_report;
+CLOSE demo_report;
+</code></pre>
+<p>预期第一批为一与二，提交之后下一批接续三与四，最后一批只剩五。这里的顺序由明确的 ORDER BY 保证；结果来自文档与查询推演，没有实际输出。应核对每批内容、提交是否成功、最后一批行数与关闭后的行为，不能只看第一批拿到了两条。</p>
+<p>要做对照，换一个名字声明 WITHOUT HOLD，并在提交后再 FETCH，观察它不能越过原事务边界。回滚对照则在 WITH HOLD 声明后执行 ROLLBACK，再尝试读取。每个预期错误都应单独结束当前测试阶段，不把失败后的事务状态继续带入下一组。最后确认同一会话中没有实验留下的游标。</p>
+<p>另一个有价值的对照是关闭原连接，再用新连接尝试同名 FETCH。新会话不能因为游标名字相同就继续旧结果；若驱动复用了后端，单看应用连接对象的新旧还不够，需要确认实际会话身份。这里没有运行连接池，不能宣称任何具体池模式已经兼容。</p>
+<h2 id="连接池为什么改变导出方案？"><a href="#连接池为什么改变导出方案？" class="headerlink" title="连接池为什么改变导出方案？"></a>连接池为什么改变导出方案？</h2><p>持有游标的导出需要在其有效期内回到同一数据库会话。普通请求池可能让相邻调用落到不同连接；事务池还会在事务结束后重新分配后端。应用把游标名存进下载令牌，并不能让任意后端找到那份会话结果。选择 WITH HOLD 前，要查池的实际模式与驱动对会话固定的支持。</p>
+<p>如果为了导出专占一条连接，就需要决定最大同时导出数、闲置取消、关闭失败与用户离开后的处理。这里不规定通用阈值，应根据连接预算与数据规模验证。仅给 HTTP 请求设超时，若资源持有者没有接收退出指令，游标可能仍由后端会话保留；反过来直接断开会话虽然结束游标，也让后续接续失去依据。</p>
+<p>小而有界、在单会话内完成的查询，可以接受这种资源安排。需要长时间暂停、跨进程恢复或允许用户隔天下载的任务，更适合评估独立导出产物与可查询任务身份。那会增加产物存储与清理工作，但把保留策略从一个隐含的数据库会话，变成可登记和可恢复的对象。</p>
+<h2 id="与接口里的游标分页是同一回事吗？"><a href="#与接口里的游标分页是同一回事吗？" class="headerlink" title="与接口里的游标分页是同一回事吗？"></a>与接口里的游标分页是同一回事吗？</h2><p>不是同一份状态。接口里的 keyset 游标通常记录排序边界，每次发起新的查询；SQL DECLARE 则创建属于会话的游标对象。本站<a href="/zh-CN/2026/10/10/postgres-pagination-order/">分页顺序与跨页一致性</a>讨论排序值、数据变化和快照承诺，不应把其中一个可编码的边界值直接当成数据库会话句柄。</p>
+<p>keyset 方案不必长期保存 SQL 游标，但排序字段发生变化时仍可能影响跨页结果；held cursor 保留查询结果，也要承担存储和会话责任。比较时应先问需要浏览最新数据还是导出固定集合，再列出中断恢复、快照要求与资源保留。两种方案都不因为名字里有游标就自动满足另一种合同。</p>
+<h2 id="WITH-HOLD-可以边读边锁住待修改记录吗？"><a href="#WITH-HOLD-可以边读边锁住待修改记录吗？" class="headerlink" title="WITH HOLD 可以边读边锁住待修改记录吗？"></a>WITH HOLD 可以边读边锁住待修改记录吗？</h2><p>不能将它与查询中的 FOR UPDATE 或 FOR SHARE 同用。需要编辑的界面应另行安排授权、版本比较和事务，而不是把一份可能长时间保留的报表游标当作编辑锁。这条限制也帮助划清报表结果与当前业务状态：用户看到的旧结果，不应无条件批准对现在记录的写入。</p>
+<p>结果的新鲜程度也应进入交付说明。假设导出开始后，另一条连接把商品名称改了；保留的结果不能被当作用户稍后打开页面时的最新业务状态。报表可以注明它对应的查询范围与生成任务，而编辑操作应重新读取当前版本。这样保留旧结果是有意选择，不会被误报成数据库没有更新。</p>
+<p>验证资源清理时，不只测试显式 CLOSE 的成功分支。可以让客户端下载半份后离开，检查拥有者是否收到取消、是否尝试关闭、是否登记失败，以及专用连接何时归还。没有可观察关闭证据时，状态应保留为待收尾。给任务写一个完成时间，只改变应用记录，不会凭空释放数据库会话里的结果。</p>
+<p>拟议验收包括成功提交后续读、创建事务回滚、显式关闭、断开会话、连接池切换以及较大结果的资源观察。资源数字需在目标环境测量，本文未执行这些测试。方案评审至少应能说清：谁持有会话，结果保留在哪里，什么条件下关闭，以及断线后是重建导出还是允许恢复。只有“已经避免长事务”，还没有回答剩下三项责任。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-declare.html" rel="noopener">PostgreSQL: Documentation: 18: DECLARE</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--architecture" href="/zh-CN/tags/Architecture/">Architecture</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fpostgres-hold-cursor-commit-storage%2F&text=WITH%20HOLD%20%E7%BB%93%E6%9D%9F%E4%BA%86%E9%95%BF%E4%BA%8B%E5%8A%A1%EF%BC%8C%E5%8D%B4%E6%B2%A1%E6%9C%89%E5%8F%96%E6%B6%88%E5%AF%BC%E5%87%BA%E7%9A%84%E8%B5%84%E6%BA%90%E8%B4%A6%E5%8D%95" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fpostgres-hold-cursor-commit-storage%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=WITH%20HOLD%20%E7%BB%93%E6%9D%9F%E4%BA%86%E9%95%BF%E4%BA%8B%E5%8A%A1%EF%BC%8C%E5%8D%B4%E6%B2%A1%E6%9C%89%E5%8F%96%E6%B6%88%E5%AF%BC%E5%87%BA%E7%9A%84%E8%B5%84%E6%BA%90%E8%B4%A6%E5%8D%95&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F31%2Fpostgres-hold-cursor-commit-storage%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/10/31/postgres-notify-commit-wakeup/">
+              <span>上一篇</span>
+              <strong>NOTIFY 可以唤醒工作者，不能替它保存未完成任务</strong>
+              <small>2026-10-31</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/31/postgres-copy-server-client-path/">
+              <span>下一篇</span>
+              <strong>CSV 在本机，COPY FROM 为什么找不到文件？</strong>
+              <small>2026-10-31</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#提交之后留下的是什么？">提交之后留下的是什么？</a>
+          
+            <a class="toc-link toc-link--h2" href="#一个会话内怎样验证提交边界？">一个会话内怎样验证提交边界？</a>
+          
+            <a class="toc-link toc-link--h2" href="#连接池为什么改变导出方案？">连接池为什么改变导出方案？</a>
+          
+            <a class="toc-link toc-link--h2" href="#与接口里的游标分页是同一回事吗？">与接口里的游标分页是同一回事吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#WITH-HOLD-可以边读边锁住待修改记录吗？">WITH HOLD 可以边读边锁住待修改记录吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>267</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>192</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>120</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/postgres-notify-commit-wakeup/">NOTIFY 可以唤醒工作者，不能替它保存未完成任务</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/import-map-scopes-module-resolution/">Import map：同一个import为何加载不同模块？</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/">AT TIME ZONE UTC 后，结果为什么反而没了时区？</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
