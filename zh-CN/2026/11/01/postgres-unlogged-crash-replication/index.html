@@ -1,0 +1,432 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>PostgreSQL UNLOGGED 不是“更快但其余相同”的普通表 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="区分 UNLOGGED 的当前提交可见、崩溃截断与备用库内容限制，用完整配置样本说明可重建来源和恢复验收。">
+  
+  
+    <meta name="keywords" content="UNLOGGED,崩溃保留,备用库内容">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/01/postgres-unlogged-crash-replication/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/01/postgres-unlogged-crash-replication/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/01/postgres-unlogged-crash-replication/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/01/postgres-unlogged-crash-replication/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="PostgreSQL UNLOGGED 不是“更快但其余相同”的普通表 | Midnight blog">
+    <meta property="og:description" content="区分 UNLOGGED 的当前提交可见、崩溃截断与备用库内容限制，用完整配置样本说明可重建来源和恢复验收。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/01/postgres-unlogged-crash-replication/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/postgres-unlogged-crash-replication/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/01/postgres-unlogged-crash-replication/","name":"PostgreSQL UNLOGGED 不是“更快但其余相同”的普通表 | Midnight blog","description":"区分 UNLOGGED 的当前提交可见、崩溃截断与备用库内容限制，用完整配置样本说明可重建来源和恢复验收。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/postgres-unlogged-crash-replication/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/postgres-unlogged-crash-replication/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/postgres-unlogged-crash-replication/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/postgres-unlogged-crash-replication/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/01/postgres-unlogged-crash-replication/","headline":"PostgreSQL UNLOGGED 不是“更快但其余相同”的普通表","description":"区分 UNLOGGED 的当前提交可见、崩溃截断与备用库内容限制，用完整配置样本说明可重建来源和恢复验收。","inLanguage":"zh-CN","datePublished":"2026-10-31T19:32:05.000Z","dateModified":"2026-10-31T19:32:05.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/sql-createtable.html","https://www.postgresql.org/docs/18/catalog-pg-class.html","https://www.postgresql.org/docs/18/sql-set.html"],"keywords":"Development, PostgreSQL, Storage"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/postgres-unlogged-crash-replication/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"PostgreSQL UNLOGGED 不是“更快但其余相同”的普通表","item":"https://www.zyweb.vip/zh-CN/2026/11/01/postgres-unlogged-crash-replication/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/postgres-unlogged-crash-replication/" selected>zh-CN</option><option value="/en/2026/11/01/postgres-unlogged-crash-replication/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/postgres-unlogged-crash-replication/" selected>zh-CN</option><option value="/en/2026/11/01/postgres-unlogged-crash-replication/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time>
+    </div>
+
+    <h1>PostgreSQL UNLOGGED 不是“更快但其余相同”的普通表</h1>
+
+    
+      <p class="post-hero__summary">区分 UNLOGGED 的当前提交可见、崩溃截断与备用库内容限制，用完整配置样本说明可重建来源和恢复验收。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/01/postgres-unlogged-crash-replication/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/01/postgres-unlogged-crash-replication/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>UNLOGGED 改变恢复与复制保证，不只是性能选项。</li><li>当前查询有行不证明崩溃保留或备用库拥有内容。</li><li>重建需要可信来源、稳定身份与调用方缺失状态。</li></ul></section>
+      <div class="article-content">
+        <p>PostgreSQL 的 <code>UNLOGGED</code> 不是只改变速度的普通表选项。它改变了数据写入日志、崩溃后保留以及备用库内容的合同：当前提交后能查到行，不代表不干净关闭后还在，也不代表备用服务器拥有这些行。只有来源可重建、丢失可以被业务接受时，才应评估这种存储安排。</p>
+<h2 id="提交成功与崩溃保留不同"><a href="#提交成功与崩溃保留不同" class="headerlink" title="提交成功与崩溃保留不同"></a>提交成功与崩溃保留不同</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-createtable.html#SQL-CREATETABLE-UNLOGGED">PostgreSQL 18 CREATE TABLE 的 UNLOGGED 说明</a>指出，这类表的数据不写入预写日志，崩溃或不干净关闭后会自动截断，内容也不复制到备用服务器。本文于二〇二六年十一月一日核对十八版文档，没有执行崩溃、复制或性能测试。</p>
+<p>“已提交”回答一次事务的结果，不能抹去表本身选择的恢复限制。假设批量导入把唯一一份人工修订结果写进未记录日志的暂存表，界面随后显示保存完成。正常查询可能看起来没有问题，但若恢复后需要重新取得那份修订，来源已经不存在，就不能再把它称为随时可重建的中间数据。</p>
+<p>应把数据分成可以从可信来源重算的阶段产物，以及只在此处形成的新事实。原文件仍在，不代表所有处理中产生的审核决定、人工修改与外部回执都能重算。如果后者只保存在这张表里，所谓缓存可能已经成为唯一业务记录，选型依据需要重新评估。</p>
+<p>官方文档讨论了速度方面的特点，但没有给本项目的收益数字。实际是否值得，应在代表性负载上测量，并同时计入重建、清理和故障恢复的成本。仅把建表关键字加上，就宣称写入快了多少或总成本更低，都没有本篇证据支持。</p>
+<h2 id="先核对当前配置，不把它当成崩溃演练"><a href="#先核对当前配置，不把它当成崩溃演练" class="headerlink" title="先核对当前配置，不把它当成崩溃演练"></a>先核对当前配置，不把它当成崩溃演练</h2><p>下面是未执行的教学 SQL，要求独立测试数据库和全新的练习 schema。两张表拥有相同字段与具体输入，只比较存储声明和当前查询。若 schema 已存在，应停止确认归属，不接管未知对象。</p>
+<pre><code class="sql">BEGIN;
+CREATE SCHEMA demo_unlogged_boundary;
+SET LOCAL search_path = demo_unlogged_boundary, pg_catalog;
+CREATE TABLE durable_stage (
+  id integer PRIMARY KEY,
+  value text NOT NULL
+);
+CREATE UNLOGGED TABLE rebuildable_stage (
+  id integer PRIMARY KEY,
+  value text NOT NULL
+);
+
+INSERT INTO durable_stage VALUES (1, &#39;source-A&#39;);
+INSERT INTO rebuildable_stage VALUES (1, &#39;source-A&#39;);
+COMMIT;
+
+SELECT &#39;durable&#39; AS kind, id, value
+FROM demo_unlogged_boundary.durable_stage
+UNION ALL
+SELECT &#39;rebuildable&#39; AS kind, id, value
+FROM demo_unlogged_boundary.rebuildable_stage
+ORDER BY kind, id;
+
+SELECT c.relname, c.relpersistence
+FROM pg_class AS c
+JOIN pg_namespace AS n ON n.oid = c.relnamespace
+WHERE n.nspname = &#39;demo_unlogged_boundary&#39;
+  AND c.relkind = &#39;r&#39;
+ORDER BY c.relname;
+</code></pre>
+<p>创建和写入位于同一事务；SET LOCAL 将未限定名称限制在本次新建的受控 schema，提交后的查询仍明确限定 schema。当前两张表都可以有已提交行，目录查询用于核对普通与未记录日志的声明。它不模拟故障，也没有证明行经过崩溃仍可恢复。要验证恢复，必须另外准备可丢弃实例与明确故障条件，不能把这段普通 SELECT 的预期当成恢复回执。</p>
+<p>练习结束时，在确认所有对象都由本次练习创建且无人继续使用后，才可执行 <code>DROP SCHEMA demo_unlogged_boundary CASCADE;</code> 清理。本篇没有对任何现存集群发出强制停止命令；破坏性故障演练应有独立环境、权限与操作记录，不能夹在一个看似普通的查询教程里。</p>
+<p>目录标志只说明关系的配置，还要核对应用实际读写的是这两张表中的哪一张。连接到错误数据库、未限定名称或读取了别的 schema，都可能让测试观察与业务目标错位。保存实例身份、数据库名和限定表名，比只截一张有数据的控制台图片更容易复核。</p>
+<h2 id="与临时表能直接互换吗？"><a href="#与临时表能直接互换吗？" class="headerlink" title="与临时表能直接互换吗？"></a>与临时表能直接互换吗？</h2><p>临时表主要按会话可见性与结束策略管理；未记录日志的表则在这里改变日志与恢复保证，不自动因为一次请求或会话结束就删除。本站<a href="/zh-CN/2026/10/27/postgres-temp-table-commit-lifetime/">临时表与连接池生命周期</a>解释前一项区别。两者都可用于某些阶段数据，不意味着生命周期合同相同。</p>
+<p>如果任务需要跨会话共享一个可重建批次，单凭临时表私有于会话未必满足需求；如果只想让请求结束后清理状态，选择 UNLOGGED 也不会自动提供这项行为。应分别写出可见范围、保留时间、崩溃损失与清理拥有者，而不是寻找一个笼统的“临时”开关。</p>
+<p>索引也需要与表的配置一起审查。官方说明这类表上的索引同样未记录日志；不能把某个索引当成独立耐久副本。应用若依赖唯一约束拒绝重复输入，正常工作期间的约束与故障后数据保留仍是不同问题，不应互相替代。</p>
+<h2 id="为什么在备用库上看不到这些业务行？"><a href="#为什么在备用库上看不到这些业务行？" class="headerlink" title="为什么在备用库上看不到这些业务行？"></a>为什么在备用库上看不到这些业务行？</h2><p>UNLOGGED 内容不复制到 standby 是选型限制，不应先归因于复制延迟。若服务把查询路由到备用库，必须知道该查询依赖的数据是否在它的合同范围内。增加等待时间不能把本来不复制的数据变成最终必达；重试策略应基于真实内容来源。</p>
+<p>不过，一次查不到也不能只凭状态就断言表为 UNLOGGED。还要核对目标关系、实例角色、查询权限与事务可见性。配置限制解释一种可能的原因，实际故障仍需证据定位。本文没有运行备用库，所以不提供某个部署的复制正常或异常结论。</p>
+<p>需要在多个实例读取的阶段结果，可以考虑使用满足复制要求的普通表，或把可重建任务安排在明确拥有来源的节点。选择必须同时回答丢失后谁重建、重建需要多久，以及重建期间调用者看到什么。把空表直接解释成没有业务记录，会将恢复中的暂缺误报成真实空结果。</p>
+<h2 id="改回-LOGGED，能补回已经丢失的内容吗？"><a href="#改回-LOGGED，能补回已经丢失的内容吗？" class="headerlink" title="改回 LOGGED，能补回已经丢失的内容吗？"></a>改回 LOGGED，能补回已经丢失的内容吗？</h2><p>改变存储声明不可能凭空还原旧行。应从可信来源恢复或重新计算，并保留来源版本与本次重建身份。是否转换表、如何安排锁与发布窗口，需要目标环境的运维计划；本篇不提供一个假装可直接上线的转换脚本。</p>
+<p>重建输入也需要完整性检查。假设原批次含一百条记录，来源文件仍有一百行，但其中一条已经被更新成别的版本；行数相同不证明恢复了原先那一批。应核对稳定标识、来源摘要与所需版本，再按业务合同比较结果，而不是仅用表非空作为恢复完成条件。</p>
+<p>故障演练计划应分开干净重启、不干净关闭、主库恢复和备用库读取。正常重启后保留数据，不能替不干净关闭提供证据；主库查询通过，也不能替备用库内容检查。每项只报告实际操作、环境和观察，不把一条绿色检查扩张成所有恢复条件都已满足。</p>
+<p>若业务接受暂时丢失阶段数据，还要有明确的失败出口。可以显示批次正在重建、拒绝依赖该批次的操作，或转到独立可靠来源；具体选择由产品决定。不能在数据尚未恢复时沿用旧的完成标记，让下游把缺失理解为已核对的零结果。</p>
+<p>本文没有执行以上 SQL 或故障场景。使用 UNLOGGED 前，先确认保存的是否真能重建、调用者是否允许暂缺，以及备用库是否需要读取。三项中任何一项回答不清，都不应仅为一个未经测量的性能印象，继承普通持久表的承诺。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-createtable.html" rel="noopener">PostgreSQL: Documentation: 18: CREATE TABLE</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/catalog-pg-class.html" rel="noopener">PostgreSQL: Documentation: 18: 52.11. pg_class</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-set.html" rel="noopener">PostgreSQL: Documentation: 18: SET</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--storage" href="/zh-CN/tags/Storage/">Storage</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fpostgres-unlogged-crash-replication%2F&text=PostgreSQL%20UNLOGGED%20%E4%B8%8D%E6%98%AF%E2%80%9C%E6%9B%B4%E5%BF%AB%E4%BD%86%E5%85%B6%E4%BD%99%E7%9B%B8%E5%90%8C%E2%80%9D%E7%9A%84%E6%99%AE%E9%80%9A%E8%A1%A8" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fpostgres-unlogged-crash-replication%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=PostgreSQL%20UNLOGGED%20%E4%B8%8D%E6%98%AF%E2%80%9C%E6%9B%B4%E5%BF%AB%E4%BD%86%E5%85%B6%E4%BD%99%E7%9B%B8%E5%90%8C%E2%80%9D%E7%9A%84%E6%99%AE%E9%80%9A%E8%A1%A8&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fpostgres-unlogged-crash-replication%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/">
+              <span>上一篇</span>
+              <strong>Prometheus丢弃全部抓取样本后，up为什么还在？</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/01/postgres-enum-add-value-commit-use/">
+              <span>下一篇</span>
+              <strong>PostgreSQL ADD VALUE 成功，新枚举为什么仍不能 INSERT？</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#提交成功与崩溃保留不同">提交成功与崩溃保留不同</a>
+          
+            <a class="toc-link toc-link--h2" href="#先核对当前配置，不把它当成崩溃演练">先核对当前配置，不把它当成崩溃演练</a>
+          
+            <a class="toc-link toc-link--h2" href="#与临时表能直接互换吗？">与临时表能直接互换吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么在备用库上看不到这些业务行？">为什么在备用库上看不到这些业务行？</a>
+          
+            <a class="toc-link toc-link--h2" href="#改回-LOGGED，能补回已经丢失的内容吗？">改回 LOGGED，能补回已经丢失的内容吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>264</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>203</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>89</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/postgres-enum-add-value-commit-use/">PostgreSQL ADD VALUE 成功，新枚举为什么仍不能 INSERT？</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/postgres-at-time-zone-type-direction/">AT TIME ZONE UTC 后，结果为什么反而没了时区？</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/postgres-copy-server-client-path/">CSV 在本机，COPY FROM 为什么找不到文件？</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

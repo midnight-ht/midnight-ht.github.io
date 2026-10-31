@@ -1,0 +1,442 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Python itertools.groupby 保存的组，遍历后为什么变空？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用完整标准库对照解释 groupby 组迭代器为何随外层前进失效，比较即时消费、物化、连续键与后续交接。">
+  
+  
+    <meta name="keywords" content="itertools.groupby,共享迭代器,连续分组">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/01/python-itertools-groupby-shared-iterator/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Python itertools.groupby 保存的组，遍历后为什么变空？ | Midnight blog">
+    <meta property="og:description" content="用完整标准库对照解释 groupby 组迭代器为何随外层前进失效，比较即时消费、物化、连续键与后续交接。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/","name":"Python itertools.groupby 保存的组，遍历后为什么变空？ | Midnight blog","description":"用完整标准库对照解释 groupby 组迭代器为何随外层前进失效，比较即时消费、物化、连续键与后续交接。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/","headline":"Python itertools.groupby 保存的组，遍历后为什么变空？","description":"用完整标准库对照解释 groupby 组迭代器为何随外层前进失效，比较即时消费、物化、连续键与后续交接。","inLanguage":"zh-CN","datePublished":"2026-10-31T19:32:05.000Z","dateModified":"2026-10-31T19:32:05.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.14/library/itertools.html"],"keywords":"Development, Python, Iterators"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Python itertools.groupby 保存的组，遍历后为什么变空？","item":"https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/" selected>zh-CN</option><option value="/en/2026/11/01/python-itertools-groupby-shared-iterator/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/" selected>zh-CN</option><option value="/en/2026/11/01/python-itertools-groupby-shared-iterator/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time>
+    </div>
+
+    <h1>Python itertools.groupby 保存的组，遍历后为什么变空？</h1>
+
+    
+      <p class="post-hero__summary">用完整标准库对照解释 groupby 组迭代器为何随外层前进失效，比较即时消费、物化、连续键与后续交接。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/01/python-itertools-groupby-shared-iterator/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>旧组与外层共享输入，保存对象不代表保存组数据。</li><li>当场物化与当场汇总承担不同保留责任。</li><li>排序可整理键，不能延长旧组迭代器的寿命。</li></ul></section>
+      <div class="article-content">
+        <p><code>itertools.groupby</code> 返回的组不是独立保存的数据集合，而是与外层共享输入的迭代器。把组对象存进列表，再继续推进外层，可能已经越过那些组的数据。稍后还需要组内容时，应在当前组有效期间消费并保存所需数据；如果只需当场汇总，则不必为每组都创建长期副本。</p>
+<h2 id="保存了对象，为什么没有保存内容？"><a href="#保存了对象，为什么没有保存内容？" class="headerlink" title="保存了对象，为什么没有保存内容？"></a>保存了对象，为什么没有保存内容？</h2><p><a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/itertools.html#itertools.groupby">Python itertools 的 groupby 说明</a>指出，返回的组与外层共享底层输入，外层前进后先前组不再可见。本文于二〇二六年十一月一日核对 Python 3.14.10 文档，没有执行下列程序，也没有读取真实导入文件。</p>
+<p>可以把外层想成识别当前连续片段的入口，内层负责消费这段片段。两者并没有各自读取一份来源。外层为了找到下一组，必须走过当前片段；旧组留在列表里，只说明还有一个迭代器对象，不说明它拥有独立保存的行。对象仍可访问与数据仍可消费，是两种性质。</p>
+<p>假设订单流按客户排列，处理器先收集所有客户组，准备稍后逐组发送报告。看起来它只保存了几个轻量对象，实际上外层收集过程已把输入推进到末尾。之后取出这些对象，不会重新打开文件，也不会自动回到每位客户的第一条订单。错误发生在生命周期安排，不是源数据突然被删除。</p>
+<p>不要把所有惰性对象都理解成可重放的查询。某个迭代器可能只保留当前读取位置，来源还可能是不能重读的队列或网络输入。函数名含有分组，并不承诺数据库查询式的独立结果集。评审应先确定谁推进来源、什么时候需要数据，以及来源能否重新取得。</p>
+<h2 id="用独立输入对照两种保留方式"><a href="#用独立输入对照两种保留方式" class="headerlink" title="用独立输入对照两种保留方式"></a>用独立输入对照两种保留方式</h2><p>下面是未执行的完整标准库程序。每个对照都用新建的具体行列表，不把同一条已耗尽输入拿去验证修复。示例只是内存记录，不发送报告，也没有数据库写入。</p>
+<pre><code class="python">from itertools import groupby
+
+
+def rows():
+    return [(&#39;A&#39;, 10), (&#39;A&#39;, 20), (&#39;B&#39;, 30)]
+
+
+def customer(row):
+    return row[0]
+
+
+def main():
+    delayed = list(groupby(rows(), key=customer))
+    lost = [(key, list(group)) for key, group in delayed]
+    print(&#39;delayed group iterators:&#39;, lost)
+    if any(values for _, values in lost):
+        raise RuntimeError(&#39;Unexpected retained group data&#39;)
+
+    retained = [
+        (key, list(group))
+        for key, group in groupby(rows(), key=customer)
+    ]
+    expected = [(&#39;A&#39;, [(&#39;A&#39;, 10), (&#39;A&#39;, 20)]), (&#39;B&#39;, [(&#39;B&#39;, 30)])]
+    if retained != expected:
+        raise RuntimeError(&#39;Retained groups differ from expected rows&#39;)
+    print(&#39;materialized groups:&#39;, retained)
+
+    totals = [
+        (key, sum(amount for _, amount in group))
+        for key, group in groupby(rows(), key=customer)
+    ]
+    if totals != [(&#39;A&#39;, 30), (&#39;B&#39;, 30)]:
+        raise RuntimeError(&#39;Immediate aggregation changed totals&#39;)
+    print(&#39;immediate totals:&#39;, totals)
+
+
+if __name__ == &#39;__main__&#39;:
+    main()
+</code></pre>
+<p>第一种方式先耗尽外层，再消费旧组，预期已经没有之前的行。第二种在外层进入下一组之前把当前组变成列表，明确承担保存这些行的责任。第三种当场求和，只保存客户与总额，适合后续只需要汇总的合同。这些是程序与文档推演的预期，不是捕获的输出。</p>
+<p>差别不在是否用了列表推导式。第二种在推导式内部消费组，第一种只收集组对象；相似外观背后，真正读取的位置不同。把代码换成普通循环，也必须把当前组的消费放在推进下一组之前。只更换语法，不能解决输入共享问题。</p>
+<p>还应检查汇总会丢掉哪些信息。保存总额以后，原始每笔金额不会自动保留供后续审计；如果业务稍后要生成逐条报告，就不能只留一个总数。反过来，只要合同确实仅需要汇总，长期保存所有行又可能增加不必要的内存与敏感数据保留。保留范围应由后续操作决定。</p>
+<h2 id="连续相同键，才是这里的一组"><a href="#连续相同键，才是这里的一组" class="headerlink" title="连续相同键，才是这里的一组"></a>连续相同键，才是这里的一组</h2><p>另一个容易混淆的规则是连续性。输入键依次为甲、乙、甲，groupby 会形成三个连续片段，而不是把两段甲合成一个全局客户组。保存每组列表并不会改变这个规则；它修复的是组内容寿命，不是按键合并方式。</p>
+<p>若业务要求同一客户所有订单放在一起，可以先按相同键排序，再分组；排序会改变原输入顺序，也需要能够获得相应数据。对于一次性无界流，先完整排序不是没有代价的一行修复。若顺序本身有业务含义，例如连续会话片段，排序还可能抹掉真正想保留的时间结构。</p>
+<p>也可以按业务选择字典累积等方式形成全局分组，但那同样保存了尚未结束的分组状态。不要因为不再使用 groupby，就宣布内存问题已经解决。需要无限时间范围的客户归集时，应另定窗口、外部存储或结束条件，语言工具不会替产品决定什么时候一个客户的数据已经齐全。</p>
+<p>这项区别应进入接口名称。接收相邻片段的函数，可以说明按连续键处理；接收完整客户集合的函数，则应要求已经完成相应整理。两个接口都叫 groups，却对完整性有不同假设，会让下游把一个片段误当成某客户的全部历史。</p>
+<h2 id="先排序能让旧分组可长期使用吗？"><a href="#先排序能让旧分组可长期使用吗？" class="headerlink" title="先排序能让旧分组可长期使用吗？"></a>先排序能让旧分组可长期使用吗？</h2><p>不能。排序只帮助相同键相邻，并没有让返回的组迭代器获得独立输入。即使来源是排序后的普通列表，外层推进仍会让旧组失去当前片段。要交给稍后执行的任务，应当场物化必要字段，或者传递能够独立重新读取的受控身份，而非把当前组迭代器塞进后台队列。</p>
+<p>如果后续任务只需要一个客户编号，也不应顺手把整份客户记录复制到任务载荷。保存编号与保存当时快照承担不同责任；前者稍后可能读到新状态，后者需要明确数据版本与保留期限。这里提出的是交接选择，不是 groupby 自动提供的一致性机制。</p>
+<p>本站<a href="/zh-CN/2026/10/31/python-aclosing-generator-cleanup/">异步生成器的提前关闭</a>讨论消费结束时资源由谁收尾。当前问题则发生在仍在消费外层时，旧分组已被推进；二者不能混用。即使文件关闭安排正确，保存组对象的错误仍可能让报告拿不到行。</p>
+<h2 id="每组都转列表，就没有资源问题了吗？"><a href="#每组都转列表，就没有资源问题了吗？" class="headerlink" title="每组都转列表，就没有资源问题了吗？"></a>每组都转列表，就没有资源问题了吗？</h2><p>列表把保存责任变明确，却不会消除数据大小。一个客户拥有大量记录，单组物化就可能很大；若把全部组都保留，总保留量又接近全部输入。应分别估计最大单组和同时保留组数，而不是只看示例里每组两三行。</p>
+<p>如果只需逐组发送有限摘要，可以消费当前组、生成摘要、结束交接，再推进下一组。若发送本身产生外部副作用，则要安排失败记录与重试身份，不能把分组消费成功视为发送成功。来源已经推进后，重试能否重新取得当前组，也必须由保存或重放合同支持。</p>
+<p>拟议验证至少包含排序输入、相同键分散出现、保存迭代器后延迟消费、当场物化与只取部分组内容。分别检查组数、每组身份与数据是否仍可读取，不能仅检查总金额恰好相等。两个错误分组也可能碰巧得到正确总和，掩盖客户归属已经改变。</p>
+<p>还可以让来源在读取时记录每一条身份，验证哪一个调用实际推进了它。这能帮助定位是外层寻找下一组、内层消费，还是另一个辅助函数提前耗尽了输入。测试记录应注明来源是否可重放，避免用列表测试通过替一次性流背书。</p>
+<p>本文没有执行这些检查。安排分组流程时，先回答当前片段什么时候失效、后续需要保留什么，再选择立即消费、物化或独立重读。把迭代器存起来，只保存了一个对象；需要保存数据时，必须另有明确动作。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/itertools.html" rel="noopener">itertools — Functions creating iterators for efficient looping — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+            <a class="tag tag--iterators" href="/zh-CN/tags/Iterators/">Iterators</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fpython-itertools-groupby-shared-iterator%2F&text=Python%20itertools.groupby%20%E4%BF%9D%E5%AD%98%E7%9A%84%E7%BB%84%EF%BC%8C%E9%81%8D%E5%8E%86%E5%90%8E%E4%B8%BA%E4%BB%80%E4%B9%88%E5%8F%98%E7%A9%BA%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fpython-itertools-groupby-shared-iterator%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Python%20itertools.groupby%20%E4%BF%9D%E5%AD%98%E7%9A%84%E7%BB%84%EF%BC%8C%E9%81%8D%E5%8E%86%E5%90%8E%E4%B8%BA%E4%BB%80%E4%B9%88%E5%8F%98%E7%A9%BA%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fpython-itertools-groupby-shared-iterator%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/01/python-itertools-tee-lag-buffer/">
+              <span>上一篇</span>
+              <strong>Python itertools.tee 分出慢消费者，为什么内存可能上涨？</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/">
+              <span>下一篇</span>
+              <strong>asyncio.Queue.join 返回，不等于每条业务都成功了</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#保存了对象，为什么没有保存内容？">保存了对象，为什么没有保存内容？</a>
+          
+            <a class="toc-link toc-link--h2" href="#用独立输入对照两种保留方式">用独立输入对照两种保留方式</a>
+          
+            <a class="toc-link toc-link--h2" href="#连续相同键，才是这里的一组">连续相同键，才是这里的一组</a>
+          
+            <a class="toc-link toc-link--h2" href="#先排序能让旧分组可长期使用吗？">先排序能让旧分组可长期使用吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#每组都转列表，就没有资源问题了吗？">每组都转列表，就没有资源问题了吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>264</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>203</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>89</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/python-itertools-tee-lag-buffer/">Python itertools.tee 分出慢消费者，为什么内存可能上涨？</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/">asyncio.Queue.join 返回，不等于每条业务都成功了</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/python-sqlite-executemany-returning-discard/">Python sqlite3 executemany 执行了 RETURNING，为什么 fetchall 为空？</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

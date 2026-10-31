@@ -1,0 +1,432 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Kubernetes preemptionPolicy Never，为什么仍排在低优先级Pod前？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="拆开队列优先、主动抢占与被抢占，用完整PriorityClass和Pod清单说明等待、退避、容量及中断政策边界。">
+  
+  
+    <meta name="keywords" content="preemptionPolicy Never,非抢占优先级,调度退避">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-nonpreempting-priority-queue/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-nonpreempting-priority-queue/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-nonpreempting-priority-queue/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/01/kubernetes-nonpreempting-priority-queue/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Kubernetes preemptionPolicy Never，为什么仍排在低优先级Pod前？ | Midnight blog">
+    <meta property="og:description" content="拆开队列优先、主动抢占与被抢占，用完整PriorityClass和Pod清单说明等待、退避、容量及中断政策边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-nonpreempting-priority-queue/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-nonpreempting-priority-queue/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-nonpreempting-priority-queue/","name":"Kubernetes preemptionPolicy Never，为什么仍排在低优先级Pod前？ | Midnight blog","description":"拆开队列优先、主动抢占与被抢占，用完整PriorityClass和Pod清单说明等待、退避、容量及中断政策边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-nonpreempting-priority-queue/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-nonpreempting-priority-queue/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-nonpreempting-priority-queue/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-nonpreempting-priority-queue/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-nonpreempting-priority-queue/","headline":"Kubernetes preemptionPolicy Never，为什么仍排在低优先级Pod前？","description":"拆开队列优先、主动抢占与被抢占，用完整PriorityClass和Pod清单说明等待、退避、容量及中断政策边界。","inLanguage":"zh-CN","datePublished":"2026-10-31T19:32:05.000Z","dateModified":"2026-10-31T19:32:05.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/"],"keywords":"Delivery, Kubernetes, Scheduling"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-nonpreempting-priority-queue/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Kubernetes preemptionPolicy Never，为什么仍排在低优先级Pod前？","item":"https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-nonpreempting-priority-queue/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/kubernetes-nonpreempting-priority-queue/" selected>zh-CN</option><option value="/en/2026/11/01/kubernetes-nonpreempting-priority-queue/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/kubernetes-nonpreempting-priority-queue/" selected>zh-CN</option><option value="/en/2026/11/01/kubernetes-nonpreempting-priority-queue/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time>
+    </div>
+
+    <h1>Kubernetes preemptionPolicy Never，为什么仍排在低优先级Pod前？</h1>
+
+    
+      <p class="post-hero__summary">拆开队列优先、主动抢占与被抢占，用完整PriorityClass和Pod清单说明等待、退避、容量及中断政策边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/01/kubernetes-nonpreempting-priority-queue/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/01/kubernetes-nonpreempting-priority-queue/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>Never禁止主动抢占，不取消队列优先级。</li><li>优先级不提供容量，也不免除放置约束。</li><li>非抢占Pod仍可能被更高优先级Pod抢占。</li></ul></section>
+      <div class="article-content">
+        <p>Kubernetes 的 preemptionPolicy: Never 禁止 Pod 主动抢占其他 Pod，不会取消 PriorityClass 带来的调度队列优先级。高优先级任务仍可以排在较低优先级任务前，但要等合适资源释放，也受放置条件与退避影响。Never 不是立即启动、永远排第一或免受抢占的保证。</p>
+<h2 id="排队顺序与赶走运行者是两种能力"><a href="#排队顺序与赶走运行者是两种能力" class="headerlink" title="排队顺序与赶走运行者是两种能力"></a>排队顺序与赶走运行者是两种能力</h2><p><a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/">Kubernetes 的 Pod Priority and Preemption 文档</a>明确描述非抢占 Pod：它保留较高队列优先级，不能抢占别人，仍可被更高优先级 Pod 抢占，并受到调度退避。本文于二〇二六年十一月一日核对当前页面；实际集群应按自己的版本与调度配置确认，没有连接集群或制造抢占事件。</p>
+<p>优先排序决定先考虑谁，主动抢占则涉及能否为了安置等待者而移除运行中的低优先级对象。关闭第二项并不要求把第一项也关掉。一个批处理团队可以希望新任务优先获得自然释放的资源，同时不愿丢弃别人已经完成一半的工作，这正是需要分别表达的意图。</p>
+<p>被考虑得早也不代表满足放置条件。请求资源、节点约束以及当时可用容量仍决定能否安排。如果一个高优先级 Pod 没有合适节点，继续等待可能是正确结果，不能仅因它级别更高就认定调度器应无条件放行。把优先级当成容量凭证，会让排障一直改错字段。</p>
+<h2 id="用完整对象表达非抢占意图"><a href="#用完整对象表达非抢占意图" class="headerlink" title="用完整对象表达非抢占意图"></a>用完整对象表达非抢占意图</h2><p>下面是未经执行的教学清单，包含一个命名空间、一项集群级 PriorityClass 和引用它的 Pod。数值与请求量只用于解释结构，不是生产推荐；示例假定有权创建该类，且镜像、准入与节点条件允许。PriorityClass 不属于命名空间，应另行管理它的归属与后续清理。</p>
+<pre><code class="yaml">apiVersion: v1
+kind: Namespace
+metadata:
+  name: queue-demo
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: training-nonpreempting
+value: 1000
+globalDefault: false
+preemptionPolicy: Never
+description: &quot;Training example: queue preference without preempting others&quot;
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: important-waiter
+  namespace: queue-demo
+spec:
+  priorityClassName: training-nonpreempting
+  restartPolicy: Never
+  containers:
+    - name: demo
+      image: registry.k8s.io/pause:3.10
+      resources:
+        requests:
+          cpu: 100m
+          memory: 16Mi
+        limits:
+          cpu: 100m
+          memory: 16Mi
+</code></pre>
+<p>字段明确表达队列偏好而不主动抢占。没有将该类设成全局默认，是为了不让教学意图悄悄影响其他未指定类的工作负载。创建成功只说明相关对象被接受；是否排入队列、能否调度和是否实际运行，需要继续读取对应对象与事件，不能从清单直接填入成功状态。</p>
+<p>类名拼错或根本不存在，是引用与准入问题，不是资源等待。资源不足则需要核对实际请求和节点条件，不能靠不断提高数字解决。先确认最终 Pod 使用了预期类和值，再分析队列与放置；模板里写了类名不代替最终对象证据。</p>
+<h2 id="一条不依赖抢占的纸面队列"><a href="#一条不依赖抢占的纸面队列" class="headerlink" title="一条不依赖抢占的纸面队列"></a>一条不依赖抢占的纸面队列</h2><p>设想一个受控场景：已有低优先级任务占用能够运行目标的资源，随后提交上面的高优先级等待者，再提交另一个较低优先级等待者。假定其他约束一致，高优先级等待者可以具有较早被考虑的顺序，但不会为自己移除已经运行的低优先级任务。资源自然释放后，再按当时的条件安排。</p>
+<p>这只是机制推演，不是对某台集群的启动顺序承诺。真实调度还存在多节点、不同资源形状、亲和条件和退避；某个低优先级小任务可能适合一处资源，而高优先级大任务仍无处可放。不能只从最终谁先 Running，反推优先级是否生效，必须保留各自请求与当时的放置原因。</p>
+<p>退避也使“永远挡在队首”不是准确描述。不可调度对象会受到调度器退避行为影响，较低优先级对象仍可能获得机会。若业务需要可预测等待，应另外设计容量与任务接纳，而不是把一个整数当成严格的全局先入先出或独占队列协议。</p>
+<h2 id="哪些相邻控制不能互相替代？"><a href="#哪些相邻控制不能互相替代？" class="headerlink" title="哪些相邻控制不能互相替代？"></a>哪些相邻控制不能互相替代？</h2><p><a href="/zh-CN/2026/10/28/kubernetes-resourcequota-admission-usage/">命名空间配额</a>决定相关申请能否在总量预算内被接受，不会因优先级更高就自动提供额外预算。通过配额也不保证节点有合适资源。准入、排队与放置是不同阶段，应在记录里分别指出失败发生在哪里。</p>
+<p><a href="/zh-CN/2026/10/13/kubernetes-pdb-disruption-scope/">PodDisruptionBudget 的中断范围</a>又是另一项政策。不要把非抢占类或中断预算写成所有运行对象都不会消失的保证；节点故障、工作负载更新与其他中断路径各自有规则。选择 Never 的原因应是“不为了此等待者主动赶走别人”，而不是“为此对象提供永续保护”。</p>
+<p>如果目标确实要求通过抢占获得更快安排，应按实际影响评审另一种政策，说明谁可以承受被移除、任务如何恢复以及资源是否真能满足。非抢占适合保护正在进行的工作，却可能让高优先级等待者等得更久。两种选择都有成本，没有一种只靠名称就天然更可靠。</p>
+<h2 id="Never能防止这个Pod被别人抢占吗？"><a href="#Never能防止这个Pod被别人抢占吗？" class="headerlink" title="Never能防止这个Pod被别人抢占吗？"></a>Never能防止这个Pod被别人抢占吗？</h2><p>不能。它约束这个 Pod 是否主动抢占别人，不提供免疫；更高优先级对象仍可能依据调度政策抢占它。因此长任务仍需检查点、重试与幂等设计，需要保留的状态不能因为类名里写着 nonpreempting 就只保存在进程内。</p>
+<p>当团队同时维护多个优先级类别时，应记录每项类别的使用资格与影响对象，避免所有服务都不断提高自己的数字。若全部请求都声称最高，排序策略也不替容量规划。这里提出的是治理建议，没有替任何组织制定具体等级或阈值。</p>
+<p>拟议验收在授权测试环境记录类对象、最终 Pod 优先级、请求、队列相关事件和资源释放时刻，分别观察不主动移除运行者、自然释放后的安排与更高优先级到来时的边界。需要抢占故障对照时，必须使用可丢弃工作，不在真实长任务上制造丢失。本文未执行这些用例，不报告等待时间改善或抢占防护通过。</p>
+<p>交付时能说明三件事就足够明确：谁被优先考虑，谁有资格主动抢占，以及谁仍可能被抢占。把它们拆开，Never 与较高队列优先级就不再矛盾，运维也能知道该修容量、引用政策还是任务恢复，而不是只修改一个看起来更高的数字。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/" rel="noopener">Pod Priority and Preemption | Kubernetes</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--kubernetes" href="/zh-CN/tags/Kubernetes/">Kubernetes</a>
+          
+            <a class="tag tag--scheduling" href="/zh-CN/tags/Scheduling/">Scheduling</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fkubernetes-nonpreempting-priority-queue%2F&text=Kubernetes%20preemptionPolicy%20Never%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E6%8E%92%E5%9C%A8%E4%BD%8E%E4%BC%98%E5%85%88%E7%BA%A7Pod%E5%89%8D%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fkubernetes-nonpreempting-priority-queue%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Kubernetes%20preemptionPolicy%20Never%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E6%8E%92%E5%9C%A8%E4%BD%8E%E4%BC%98%E5%85%88%E7%BA%A7Pod%E5%89%8D%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fkubernetes-nonpreempting-priority-queue%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/01/kubernetes-readonly-root-volume-boundary/">
+              <span>上一篇</span>
+              <strong>Kubernetes根文件系统只读，挂载目录为什么仍可写？</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/01/intersectionobserver-ratio-not-visibility/">
+              <span>下一篇</span>
+              <strong>IntersectionObserver比例为1，就能证明用户看见了吗？</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#排队顺序与赶走运行者是两种能力">排队顺序与赶走运行者是两种能力</a>
+          
+            <a class="toc-link toc-link--h2" href="#用完整对象表达非抢占意图">用完整对象表达非抢占意图</a>
+          
+            <a class="toc-link toc-link--h2" href="#一条不依赖抢占的纸面队列">一条不依赖抢占的纸面队列</a>
+          
+            <a class="toc-link toc-link--h2" href="#哪些相邻控制不能互相替代？">哪些相邻控制不能互相替代？</a>
+          
+            <a class="toc-link toc-link--h2" href="#Never能防止这个Pod被别人抢占吗？">Never能防止这个Pod被别人抢占吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>264</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>203</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>89</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/kubernetes-limitrange-default-admission/">清单没写CPU请求，Pod为什么自己多出requests？</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/28/kubernetes-optional-secret-missing-key/">Secret 对象存在，Pod 为什么还起不来？</a></h3>
+          <p>2026-10-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/28/kubernetes-resourcequota-admission-usage/">节点 CPU 很空闲，新 Pod 为什么仍被命名空间配额拒绝？</a></h3>
+          <p>2026-10-28</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

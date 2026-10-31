@@ -1,0 +1,435 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why does Prometheus retain up after metric relabeling drops scraped samples? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Use complete self-scrape configurations to distinguish sample and target filtering, explain the up exception, and inspect history and downstream inputs.">
+  
+  
+    <meta name="keywords" content="metric_relabel_configs,generated up series,target filtering">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/01/prometheus-metric-relabel-up-boundary/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/01/prometheus-metric-relabel-up-boundary/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why does Prometheus retain up after metric relabeling drops scraped samples? | Midnight blog">
+    <meta property="og:description" content="Use complete self-scrape configurations to distinguish sample and target filtering, explain the up exception, and inspect history and downstream inputs.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/01/prometheus-metric-relabel-up-boundary/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/01/prometheus-metric-relabel-up-boundary/#webpage","url":"https://www.zyweb.vip/en/2026/11/01/prometheus-metric-relabel-up-boundary/","name":"Why does Prometheus retain up after metric relabeling drops scraped samples? | Midnight blog","description":"Use complete self-scrape configurations to distinguish sample and target filtering, explain the up exception, and inspect history and downstream inputs.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/01/prometheus-metric-relabel-up-boundary/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/01/prometheus-metric-relabel-up-boundary/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/01/prometheus-metric-relabel-up-boundary/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/01/prometheus-metric-relabel-up-boundary/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/01/prometheus-metric-relabel-up-boundary/","headline":"Why does Prometheus retain up after metric relabeling drops scraped samples?","description":"Use complete self-scrape configurations to distinguish sample and target filtering, explain the up exception, and inspect history and downstream inputs.","inLanguage":"en","datePublished":"2026-10-31T19:32:05.000Z","dateModified":"2026-10-31T19:32:05.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://prometheus.io/docs/prometheus/latest/configuration/configuration/","https://prometheus.io/docs/prometheus/latest/command-line/prometheus/"],"keywords":"Delivery, Prometheus, Observability"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/01/prometheus-metric-relabel-up-boundary/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why does Prometheus retain up after metric relabeling drops scraped samples?","item":"https://www.zyweb.vip/en/2026/11/01/prometheus-metric-relabel-up-boundary/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/">zh-CN</option><option value="/en/2026/11/01/prometheus-metric-relabel-up-boundary/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/">zh-CN</option><option value="/en/2026/11/01/prometheus-metric-relabel-up-boundary/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time>
+    </div>
+
+    <h1>Why does Prometheus retain up after metric relabeling drops scraped samples?</h1>
+
+    
+      <p class="post-hero__summary">Use complete self-scrape configurations to distinguish sample and target filtering, explain the up exception, and inspect history and downstream inputs.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time> · Estimated read 14 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/01/prometheus-metric-relabel-up-boundary/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Metric relabeling excludes generated series such as up.</li><li>Target removal and scraped-sample removal act at different stages.</li><li>Existing history does not establish continued collection.</li></ul></section>
+      <div class="article-content">
+        <p>Prometheus can retain up even when metric_relabel_configs drops every scraped sample. Metric relabeling excludes automatically generated series such as up. Decide whether the requirement is to discard samples or to avoid scraping a target before selecting the stage. A queryable up does not by itself show that the sample filter failed.</p>
+<h2 id="Target-filtering-and-sample-filtering-act-at-different-stages"><a href="#Target-filtering-and-sample-filtering-act-at-different-stages" class="headerlink" title="Target filtering and sample filtering act at different stages"></a>Target filtering and sample filtering act at different stages</h2><p>The <a target="_blank" rel="noopener" href="https://prometheus.io/docs/prometheus/latest/configuration/configuration/">Prometheus configuration reference</a> places metric relabeling immediately before ingestion and excludes generated series such as up. Target relabeling operates before scraping. This article checked the current reference on November 1, 2026; match it to the deployed version. No Prometheus instance or real metrics were queried.</p>
+<p>Follow the pipeline: discovery supplies candidates; target relabeling chooses targets; scraping obtains exposed samples; metric relabeling filters scraped samples before storage. Both stages can use drop actions, but the affected objects differ. Shared action syntax does not establish shared scope.</p>
+<p>up is not simply an application counter emitted by the endpoint. Prometheus generates it as part of scraping. Its presence cannot establish retention of a particular business metric, and a missing business metric cannot establish that no request was made. Inspect target state and required stored series separately.</p>
+<h2 id="A-complete-self-scrape-comparison"><a href="#A-complete-self-scrape-comparison" class="headerlink" title="A complete self-scrape comparison"></a>A complete self-scrape comparison</h2><p>This unexecuted configuration is intended for an isolated local Prometheus listening on its default port without a conflict. It scrapes its own monitoring endpoint under a unique job name and uses no business credentials. Save it as sample-filter.yml and load it with a compatible version; configuration loading and resulting series remain separate checks.</p>
+<pre><code class="yaml">global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: sample-filter-demo
+    static_configs:
+      - targets: [&#39;127.0.0.1:9090&#39;]
+        labels:
+          demo_scope: sample-filter-demo
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: &#39;.*&#39;
+        action: drop
+</code></pre>
+<p>Install a matching prometheus executable and launch the first configuration from the exercise directory. It runs in the foreground; query it from another terminal or browser. Use only a new exercise-owned storage directory. These commands are unexecuted; the <a target="_blank" rel="noopener" href="https://prometheus.io/docs/prometheus/latest/command-line/prometheus/">Prometheus command-line reference</a> documents the configuration and storage flags.</p>
+<pre><code class="sh">sample_data=&quot;$(mktemp -d)&quot;
+prometheus --config.file=sample-filter.yml --storage.tsdb.path=&quot;$sample_data&quot;
+</code></pre>
+<p>Inspect target status, up, and a metric actually exposed by the monitoring endpoint. Restrict queries to the demonstration job so another default self-scrape does not contaminate the comparison:</p>
+<pre><code class="promql">up{job=&quot;sample-filter-demo&quot;}
+prometheus_build_info{job=&quot;sample-filter-demo&quot;}
+</code></pre>
+<p>The paper expectation is continued scraping with matching scraped samples discarded; the metric rule does not delete up. First establish that the chosen comparison metric exists at the endpoint, the configuration loaded, and a scrape occurred. Without that baseline, an empty result could reflect a name or version mismatch rather than filtering.</p>
+<p>The rule is deliberately broad to isolate the mechanism. Dropping all scraped samples in a real system removes diagnostic evidence. Define cost goals and necessary retained metrics first. A lone up without explanatory measurements can make a later incident harder to diagnose.</p>
+<h2 id="Which-stage-avoids-the-target-request"><a href="#Which-stage-avoids-the-target-request" class="headerlink" title="Which stage avoids the target request?"></a>Which stage avoids the target request?</h2><p>Use target relabeling to select discovery candidates rather than expecting a sample rule to stop requests. This second complete configuration is intended for an independent test instance with separate storage, avoiding old-sample interference. Its job name also distinguishes it from the first experiment.</p>
+<pre><code class="yaml">global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: target-filter-demo
+    static_configs:
+      - targets: [&#39;127.0.0.1:9090&#39;]
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: &#39;.+&#39;
+        action: drop
+</code></pre>
+<p>Save the second configuration as target-filter.yml. Stop the first foreground process with Ctrl-C and confirm that it exited and released the port. Do not start two instances on the same port. Then launch the second with a different new storage directory:</p>
+<pre><code class="sh">target_data=&quot;$(mktemp -d)&quot;
+prometheus --config.file=target-filter.yml --storage.tsdb.path=&quot;$target_data&quot;
+</code></pre>
+<p>A bind conflict while the first process remains alive is not a target-filtering result. Record which process loaded each file and query the instance actually running.</p>
+<p>The action addresses the discovered target before scraping. Inspect discovery and dropped-target state and whether a new scrape is created, not only an empty query. One configuration retains the target and filters samples; the other filters the target itself.</p>
+<p>With dynamic discovery, preserve the metadata labels used by the rule and the resulting identities. One static address does not imply that a production rule matches only one object. Test both intended exclusions and neighboring targets that must remain.</p>
+<h2 id="Why-can-historical-curves-remain-after-filtering"><a href="#Why-can-historical-curves-remain-after-filtering" class="headerlink" title="Why can historical curves remain after filtering?"></a>Why can historical curves remain after filtering?</h2><p>A filtering change controls subsequent processing; it does not delete stored history. Range queries can include pre-change samples, and instant queries have their own sample-selection semantics. Record the activation point, query window, and identity before interpreting an old curve as continued collection.</p>
+<p>Independent storage reduces that interference in this fixture, but a real change must account for its existing history. Retain the baseline, loaded configuration, subsequent scrape records, and queries over an explicit new window. Leave uncovered intervals unknown rather than deleting data to manufacture a clean-looking test.</p>
+<p><a href="/en/2026/10/14/prometheus-missing-data-signal/">Missing metrics and real zero values</a> describes another consequence: an absent result is not measured zero activity. Filtering is one possible cause alongside endpoint changes, scrape failure, and query conditions. The generated-series exception does not make ordinary scraped metrics immune to metric relabeling.</p>
+<h2 id="How-do-you-protect-dependent-alerts"><a href="#How-do-you-protect-dependent-alerts" class="headerlink" title="How do you protect dependent alerts?"></a>How do you protect dependent alerts?</h2><p>Inventory alerts, recording rules, dashboards, and diagnostic queries that depend on the affected metrics and labels. Define the removed set and verify that required inputs remain. Parsing proves syntax, while an up value describes the corresponding scrape state; neither verifies every downstream contract.</p>
+<p>A proposed comparison establishes the endpoint baseline without filtering, checks continued scraping with sample removal, then checks candidate exclusion with target filtering. Query explicit windows and retain the actual loaded configuration and version rather than an editor buffer. These tests were not run, and no storage savings or alerting success is claimed.</p>
+<p>Before choosing the stage, finish the requirement: do not request which target, or do not retain which samples after requesting it? Once that distinction is explicit, a remaining up is an explainable boundary rather than a contradiction.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://prometheus.io/docs/prometheus/latest/configuration/configuration/" rel="noopener">Configuration | Prometheus — metric_relabel_configs</a></li><li><a target="_blank" href="https://prometheus.io/docs/prometheus/latest/command-line/prometheus/" rel="noopener">prometheus | Prometheus — monitoring server command-line flags</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--delivery" href="/en/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--prometheus" href="/en/tags/Prometheus/">Prometheus</a>
+          
+            <a class="tag tag--observability" href="/en/tags/Observability/">Observability</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--delivery" href="/en/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F01%2Fprometheus-metric-relabel-up-boundary%2F&text=Why%20does%20Prometheus%20retain%20up%20after%20metric%20relabeling%20drops%20scraped%20samples%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F01%2Fprometheus-metric-relabel-up-boundary%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20does%20Prometheus%20retain%20up%20after%20metric%20relabeling%20drops%20scraped%20samples%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F01%2Fprometheus-metric-relabel-up-boundary%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/01/python-asyncio-queue-join-accounting/">
+              <span>Previous Post</span>
+              <strong>A returning asyncio.Queue.join does not certify every business result</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/01/postgres-unlogged-crash-replication/">
+              <span>Next Post</span>
+              <strong>PostgreSQL UNLOGGED is not an ordinary table with only a speed switch</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Target-filtering-and-sample-filtering-act-at-different-stages">Target filtering and sample filtering act at different stages</a>
+          
+            <a class="toc-link toc-link--h2" href="#A-complete-self-scrape-comparison">A complete self-scrape comparison</a>
+          
+            <a class="toc-link toc-link--h2" href="#Which-stage-avoids-the-target-request">Which stage avoids the target request?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Why-can-historical-curves-remain-after-filtering">Why can historical curves remain after filtering?</a>
+          
+            <a class="toc-link toc-link--h2" href="#How-do-you-protect-dependent-alerts">How do you protect dependent alerts?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>264</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>203</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>89</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/26/prometheus-rule-evaluation-limit/">Why does exceeding a Prometheus rule limit discard every result?</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/24/promql-group-left-vector-matching/">PromQL group_left: keep left-hand detail, prove right-hand uniqueness</a></h3>
+          <p>2026-10-24</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/18/prometheus-counter-increase-extrapolation/">Why Prometheus increase can be fractional for integer counters</a></h3>
+          <p>2026-10-18</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

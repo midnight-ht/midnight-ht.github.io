@@ -1,0 +1,456 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Python sqlite3 executemany 执行了 RETURNING，为什么 fetchall 为空？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用完整内存数据库程序对照 executemany 丢弃结果与 execute 逐项收集身份，保留源键映射、提交与失败恢复的区别。">
+  
+  
+    <meta name="keywords" content="executemany RETURNING,lastrowid,批次身份映射">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/01/python-sqlite-executemany-returning-discard/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/01/python-sqlite-executemany-returning-discard/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/01/python-sqlite-executemany-returning-discard/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/01/python-sqlite-executemany-returning-discard/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Python sqlite3 executemany 执行了 RETURNING，为什么 fetchall 为空？ | Midnight blog">
+    <meta property="og:description" content="用完整内存数据库程序对照 executemany 丢弃结果与 execute 逐项收集身份，保留源键映射、提交与失败恢复的区别。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/01/python-sqlite-executemany-returning-discard/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-sqlite-executemany-returning-discard/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/01/python-sqlite-executemany-returning-discard/","name":"Python sqlite3 executemany 执行了 RETURNING，为什么 fetchall 为空？ | Midnight blog","description":"用完整内存数据库程序对照 executemany 丢弃结果与 execute 逐项收集身份，保留源键映射、提交与失败恢复的区别。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-sqlite-executemany-returning-discard/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-sqlite-executemany-returning-discard/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-sqlite-executemany-returning-discard/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-sqlite-executemany-returning-discard/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/01/python-sqlite-executemany-returning-discard/","headline":"Python sqlite3 executemany 执行了 RETURNING，为什么 fetchall 为空？","description":"用完整内存数据库程序对照 executemany 丢弃结果与 execute 逐项收集身份，保留源键映射、提交与失败恢复的区别。","inLanguage":"zh-CN","datePublished":"2026-10-31T19:32:05.000Z","dateModified":"2026-10-31T19:32:05.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.14/library/sqlite3.html","https://www.sqlite.org/lang_returning.html"],"keywords":"Development, Python, SQLite"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-sqlite-executemany-returning-discard/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Python sqlite3 executemany 执行了 RETURNING，为什么 fetchall 为空？","item":"https://www.zyweb.vip/zh-CN/2026/11/01/python-sqlite-executemany-returning-discard/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/python-sqlite-executemany-returning-discard/" selected>zh-CN</option><option value="/en/2026/11/01/python-sqlite-executemany-returning-discard/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/python-sqlite-executemany-returning-discard/" selected>zh-CN</option><option value="/en/2026/11/01/python-sqlite-executemany-returning-discard/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time>
+    </div>
+
+    <h1>Python sqlite3 executemany 执行了 RETURNING，为什么 fetchall 为空？</h1>
+
+    
+      <p class="post-hero__summary">用完整内存数据库程序对照 executemany 丢弃结果与 execute 逐项收集身份，保留源键映射、提交与失败恢复的区别。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time> · 预计阅读 8 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/01/python-sqlite-executemany-returning-discard/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/01/python-sqlite-executemany-returning-discard/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>executemany 丢弃 RETURNING 行，不表示插入未发生。</li><li>需要逐项身份时保存源键与实际返回值，避免猜连续编号。</li><li>返回身份、提交和批次恢复须分别确认。</li></ul></section>
+      <div class="article-content">
+        <p>Python sqlite3 的 <code>executemany</code> 会丢弃产生的结果行，包括 <code>INSERT ... RETURNING</code> 的输出。因此，随后 fetchall 为空，不能直接推断没有插入。若批次必须返回每条新身份，应选择能收集结果的执行方式，并把稳定源键、返回身份与事务提交分开核对；不要用一个 lastrowid 猜整批编号。</p>
+<h2 id="SQL-能返回，不代表当前驱动接口保留了它"><a href="#SQL-能返回，不代表当前驱动接口保留了它" class="headerlink" title="SQL 能返回，不代表当前驱动接口保留了它"></a>SQL 能返回，不代表当前驱动接口保留了它</h2><p><a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/sqlite3.html#sqlite3.Cursor.executemany">Python sqlite3 的 executemany 参考</a>明确说明结果行会被丢弃。本文于二〇二六年十一月一日核对的页面为 Python 3.14.10；示例需要底层 SQLite 支持 RETURNING。程序会记录实际版本并拒绝明显不满足的版本，没有在本篇执行，也不报告任何数据库写入成功。</p>
+<p>这里有三层能力：SQLite 是否接受这条 SQL，Python 调用了哪个执行接口，以及应用是否从该接口取得结果。数据库支持 RETURNING，不能推出 executemany 返回所有行；同样，驱动丢弃结果，也不表示 SQL 没有发生副作用。诊断应同时保留实际语句、调用方式与提交状态。</p>
+<p>假设导入两条目录项，服务想把旧系统键映射到新生成编号。开发者在批量语句后读取结果，发现空列表，便准备重试整个文件。如果第一次写入已经提交，第二次可能重复创建；如果源键有唯一约束，则可能得到冲突。两种后果都不能由“没有返回 ID”独自判定。</p>
+<p>反过来，只需要把确定数据写入而不需要逐项输出，executemany 仍可能是合适接口。是否改成逐条 execute 应由返回结果、失败语义和实际性能需求决定。本文不提供吞吐比较，也不把一个取回 ID 的教学方案称为所有大批量写入的最佳选择。</p>
+<h2 id="用两个独立表对照写入与结果"><a href="#用两个独立表对照写入与结果" class="headerlink" title="用两个独立表对照写入与结果"></a>用两个独立表对照写入与结果</h2><p>以下是未执行的完整标准库程序。它使用独立内存数据库、具体两行输入和两张教学表，避免先前写入干扰对照。源键带有稳定业务含义，新 ID 仅在各自表内识别对象，不预设两个表生成的数字必须相同。</p>
+<pre><code class="python">import sqlite3
+import sys
+
+
+def main():
+    print(&#39;Python:&#39;, sys.version)
+    print(&#39;SQLite:&#39;, sqlite3.sqlite_version)
+    if sqlite3.sqlite_version_info &lt; (3, 35, 0):
+        raise RuntimeError(&#39;This demonstration requires SQLite RETURNING support&#39;)
+    source_rows = [(&#39;catalog-a:7&#39;, &#39;Alpha&#39;), (&#39;catalog-b:7&#39;, &#39;Beta&#39;)]
+    con = sqlite3.connect(&#39;:memory:&#39;)
+    execute = con.execute
+    try:
+        for table in [&#39;batch_demo&#39;, &#39;mapped_demo&#39;]:
+            execute(f&#39;&#39;&#39;CREATE TABLE {table} (
+                id INTEGER PRIMARY KEY,
+                source_key TEXT NOT NULL UNIQUE,
+                label TEXT NOT NULL
+            )&#39;&#39;&#39;)
+        con.commit()
+
+        with con:
+            cur = con.executemany(
+                &#39;INSERT INTO batch_demo(source_key, label) VALUES (?, ?) RETURNING id&#39;,
+                source_rows,
+            )
+            returned = cur.fetchall()
+        stored = execute(
+            &#39;SELECT source_key, label FROM batch_demo ORDER BY source_key&#39;
+        ).fetchall()
+        if returned != [] or stored != source_rows:
+            raise RuntimeError(&#39;Unexpected batch result or stored rows&#39;)
+
+        mapping = {}
+        with con:
+            for source_key, label in source_rows:
+                row = execute(
+                    &#39;INSERT INTO mapped_demo(source_key, label) VALUES (?, ?) RETURNING id&#39;,
+                    (source_key, label),
+                ).fetchone()
+                if row is None:
+                    raise RuntimeError(&#39;Missing generated identity&#39;)
+                mapping[source_key] = row[0]
+        restored = execute(
+            &#39;SELECT source_key, id FROM mapped_demo ORDER BY source_key&#39;
+        ).fetchall()
+        if dict(restored) != mapping:
+            raise RuntimeError(&#39;Identity mapping mismatch&#39;)
+        print(&#39;discarded rows:&#39;, returned)
+        print(&#39;committed mapping:&#39;, mapping)
+    finally:
+        con.close()
+
+
+if __name__ == &#39;__main__&#39;:
+    main()
+</code></pre>
+<p>表名来自程序中写死的两个值，不接受外部输入；数据值仍使用参数绑定。这一限制要随示例一起理解，不能把其中的字符串格式化复制成允许用户任意选择表名的通用接口。创建、写入、查询和关闭均给出，代码没有依赖一个未实现的数据库客户端。</p>
+<p>第一张表用于把“返回为空”和“数据存在”放到同一观察中。第二张表在明确的连接事务上下文内逐项 execute，每次把实际返回的身份与该条源键一起保存。两组查询都比较内容，而不是只看受影响行数；实际结果仍需运行后记录，不能把代码中的预期当作回执。</p>
+<p>这里依赖示例连接的默认事务控制方式，以及上下文管理器正常退出时的提交行为。真实项目若显式选择其他 autocommit 模式，应重新核对边界，不能只因写了 with 就宣布原子性。本站<a href="/zh-CN/2026/10/30/python-sqlite-executescript-precommit/">executescript 的入口提交</a>讨论另一种接口边界，本篇不把它的行为套给 executemany。</p>
+<h2 id="为什么不拿-lastrowid-再往前倒推？"><a href="#为什么不拿-lastrowid-再往前倒推？" class="headerlink" title="为什么不拿 lastrowid 再往前倒推？"></a>为什么不拿 lastrowid 再往前倒推？</h2><p>同一份 Python 文档限定 lastrowid 的更新条件：它由符合条件的 execute 插入或替换更新，不能当成 executemany 的整批身份列表。即使某次样本里编号看起来连续，也不能从这个外观推出输入顺序与所有新行一一对应。</p>
+<p>批次可能有拒绝、冲突处理、触发器或其他并发写入；这些条件需要按真实语句分析。本例使用逐项实际返回值，所以不依赖一段连续编号公式。稳定源键也包含目录范围，两个来源的局部编号都为七时，不会在映射字典里互相覆盖。</p>
+<p>同样，不应把所有批量 RETURNING 都按数组下标与输入配对。驱动接口、SQL 形状和返回顺序的合同应明确；当输入本身有可验证的源身份时，直接保留身份比依赖偶然行序更容易审查。若业务源键不允许暴露给客户端，可以在服务端完成映射，再返回适当范围的结果。</p>
+<h2 id="fetchall-为空，可以立即再插一次吗？"><a href="#fetchall-为空，可以立即再插一次吗？" class="headerlink" title="fetchall 为空，可以立即再插一次吗？"></a>fetchall 为空，可以立即再插一次吗？</h2><p>先确认写入与提交状态，再决定恢复动作。若第一次已经提交，丢弃结果不抹去行；若事务回滚，内存里暂存的新 ID 也不应继续作为已创建对象交给后续步骤。需要支持结果未知后的重试，应有源键唯一性、查询和明确的幂等协议，而不是重复发送后碰运气。</p>
+<p>示例把 mapping 留到正常提交后才打印，但这不是跨系统事务。若后面还要发消息或写其他服务，应另行设计交付；不能在事务内取得 ID 后立即调用外部系统，再假设数据库回滚会撤销它。返回身份与业务完成始终是不同证据。</p>
+<h2 id="某条输入失败时，映射如何收尾？"><a href="#某条输入失败时，映射如何收尾？" class="headerlink" title="某条输入失败时，映射如何收尾？"></a>某条输入失败时，映射如何收尾？</h2><p>如果合同是整批成功，应让错误阻止该批提交，并丢弃未提交映射。可以用一个重复源键作为故障样本，先写明预期目标表没有本批新增，再在独立连接或提交后的查询中核对。不要让失败后残留的 Python 字典成为“部分成功”事实，除非产品明确允许并有逐条提交证据。</p>
+<p>如果允许部分成功，则需要每条源键对应的接受、拒绝或未知状态，以及可以准确重试的范围。那是另一种批次合同，不是改成 execute 循环就自动完成。对于大文件，还要评估内存保存映射的大小，必要时用受控持久结果表承接；本例两条数据不能证明容量可用。</p>
+<p>拟议验证覆盖无结果但已写入、逐条取回身份、重复源键、事务中途失败、结果查询和连接关闭。应保存 Python 与 SQLite 版本、真实执行方式及最终行集合。本文没有运行这些检查。修复应能够回答哪一个接口丢弃了结果、每个源对象究竟对应谁、哪次提交使它们生效，而不是只把空列表变成一个看起来合理的编号范围。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/sqlite3.html" rel="noopener">sqlite3 — DB-API 2.0 interface for SQLite databases — Python 3.14.10 documentation</a></li><li><a target="_blank" href="https://www.sqlite.org/lang_returning.html" rel="noopener">RETURNING</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+            <a class="tag tag--sqlite" href="/zh-CN/tags/SQLite/">SQLite</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fpython-sqlite-executemany-returning-discard%2F&text=Python%20sqlite3%20executemany%20%E6%89%A7%E8%A1%8C%E4%BA%86%20RETURNING%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%20fetchall%20%E4%B8%BA%E7%A9%BA%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fpython-sqlite-executemany-returning-discard%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Python%20sqlite3%20executemany%20%E6%89%A7%E8%A1%8C%E4%BA%86%20RETURNING%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%20fetchall%20%E4%B8%BA%E7%A9%BA%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fpython-sqlite-executemany-returning-discard%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/01/wcag-page-titled-route-identity/">
+              <span>上一篇</span>
+              <strong>WCAG页面标题：h1已更新，标签页为何还叫旧页面？</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/01/python-itertools-tee-lag-buffer/">
+              <span>下一篇</span>
+              <strong>Python itertools.tee 分出慢消费者，为什么内存可能上涨？</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#SQL-能返回，不代表当前驱动接口保留了它">SQL 能返回，不代表当前驱动接口保留了它</a>
+          
+            <a class="toc-link toc-link--h2" href="#用两个独立表对照写入与结果">用两个独立表对照写入与结果</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么不拿-lastrowid-再往前倒推？">为什么不拿 lastrowid 再往前倒推？</a>
+          
+            <a class="toc-link toc-link--h2" href="#fetchall-为空，可以立即再插一次吗？">fetchall 为空，可以立即再插一次吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#某条输入失败时，映射如何收尾？">某条输入失败时，映射如何收尾？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>264</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>203</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>89</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/30/python-sqlite-executescript-precommit/">SQLite 脚本报错后回滚，前一笔 Python 写入为什么还在？</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/">asyncio.Queue.join 返回，不等于每条业务都成功了</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/">Python itertools.groupby 保存的组，遍历后为什么变空？</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

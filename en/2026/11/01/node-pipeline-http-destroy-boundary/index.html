@@ -1,0 +1,450 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why can res.end no longer send an error after Node.js pipeline fails? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Use a complete local file service to separate early rejection from pipeline-owned interruption, covering socket lifetime, handles and response-phase evidence.">
+  
+  
+    <meta name="keywords" content="pipeline error exits,HTTP response destruction,file handles">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/01/node-pipeline-http-destroy-boundary/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/01/node-pipeline-http-destroy-boundary/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why can res.end no longer send an error after Node.js pipeline fails? | Midnight blog">
+    <meta property="og:description" content="Use a complete local file service to separate early rejection from pipeline-owned interruption, covering socket lifetime, handles and response-phase evidence.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/01/node-pipeline-http-destroy-boundary/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/01/node-pipeline-http-destroy-boundary/#webpage","url":"https://www.zyweb.vip/en/2026/11/01/node-pipeline-http-destroy-boundary/","name":"Why can res.end no longer send an error after Node.js pipeline fails? | Midnight blog","description":"Use a complete local file service to separate early rejection from pipeline-owned interruption, covering socket lifetime, handles and response-phase evidence.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/01/node-pipeline-http-destroy-boundary/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/01/node-pipeline-http-destroy-boundary/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/01/node-pipeline-http-destroy-boundary/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/01/node-pipeline-http-destroy-boundary/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/01/node-pipeline-http-destroy-boundary/","headline":"Why can res.end no longer send an error after Node.js pipeline fails?","description":"Use a complete local file service to separate early rejection from pipeline-owned interruption, covering socket lifetime, handles and response-phase evidence.","inLanguage":"en","datePublished":"2026-10-31T19:32:05.000Z","dateModified":"2026-10-31T19:32:05.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://nodejs.org/docs/latest-v24.x/api/stream.html","https://nodejs.org/docs/latest-v24.x/api/fs.html"],"keywords":"Development, Node.js, Streams"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/01/node-pipeline-http-destroy-boundary/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why can res.end no longer send an error after Node.js pipeline fails?","item":"https://www.zyweb.vip/en/2026/11/01/node-pipeline-http-destroy-boundary/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/">zh-CN</option><option value="/en/2026/11/01/node-pipeline-http-destroy-boundary/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/">zh-CN</option><option value="/en/2026/11/01/node-pipeline-http-destroy-boundary/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time>
+    </div>
+
+    <h1>Why can res.end no longer send an error after Node.js pipeline fails?</h1>
+
+    
+      <p class="post-hero__summary">Use a complete local file service to separate early rejection from pipeline-owned interruption, covering socket lifetime, handles and response-phase evidence.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time> · Estimated read 16 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/01/node-pipeline-http-destroy-boundary/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Catching a pipeline error does not restore its response channel.</li><li>Acquire the actual read handle rather than relying on an existence precheck.</li><li>Early rejection, interrupted transfer and receiver acceptance need different evidence.</li></ul></section>
+      <div class="article-content">
+        <p>A failed Node.js <code>pipeline</code> can clean up its streams and destroy the connection used by an HTTP response. Receiving the error in a callback or catch does not mean <code>res.end</code> can send replacement JSON. Design separate exits for failures before handing the response to the pipeline and interruptions after streaming begins. The latter cannot promise to replace an already started or destroyed response.</p>
+<h2 id="Why-does-catching-an-error-not-restore-the-channel"><a href="#Why-does-catching-an-error-not-restore-the-channel" class="headerlink" title="Why does catching an error not restore the channel?"></a>Why does catching an error not restore the channel?</h2><p>The <a target="_blank" rel="noopener" href="https://nodejs.org/docs/latest-v24.x/api/stream.html#streampipelinesource-transforms-destination-callback">Node.js version 24 Stream reference</a> documents destruction rules and an HTTP file example where the expected error message can no longer be sent. The page checked on November 1, 2026 was v24.22.2. Neither the service below nor any real network scenario was executed.</p>
+<p>The pipeline propagates errors and manages stream termination as well as connecting data flow. If a source fails, leaving its destination waiting forever would be inappropriate. Automatic cleanup is useful; the conflict arises when application code simultaneously assumes it still owns a writable response after that cleanup.</p>
+<p>Draw three phases: before handoff, while the pipeline owns delivery, and after completion or destruction. An early error can take an ordinary HTTP rejection path. A later failure must be interpreted at its actual delivery phase. Writing a message after destruction cannot reverse connection lifetime. The presence of an exception alone does not choose the exit.</p>
+<p>Do not turn this into the claim that every error destroys every object without exception. The reference specifies exceptions for certain already-ended streams. The defensible conclusion is that observing an error does not guarantee recovery of the writing channel, rather than an invented universal sequence for custom streams.</p>
+<h2 id="Open-the-handle-that-will-actually-be-read"><a href="#Open-the-handle-that-will-actually-be-read" class="headerlink" title="Open the handle that will actually be read"></a>Open the handle that will actually be read</h2><p>This complete, unexecuted ESM teaching service targets Node version 24. Save it as <code>download-demo.mjs</code>. It creates a private temporary directory and fixed input, listens locally and accepts no arbitrary file path. Ctrl+C initiates cleanup of its directory. It demonstrates response phases, not production authorization or a business download service.</p>
+<pre><code class="js">import http from &#39;node:http&#39;;
+import { mkdtemp, writeFile, open, rm } from &#39;node:fs/promises&#39;;
+import { tmpdir } from &#39;node:os&#39;;
+import { join } from &#39;node:path&#39;;
+import { pipeline } from &#39;node:stream/promises&#39;;
+
+const directory = await mkdtemp(join(tmpdir(), &#39;pipeline-demo-&#39;));
+const report = join(directory, &#39;report.txt&#39;);
+await writeFile(report, &#39;teaching report\n&#39;, &#39;utf8&#39;);
+
+function reject(response, status, message) {
+  response.writeHead(status, { &#39;Content-Type&#39;: &#39;text/plain; charset=utf-8&#39; });
+  response.end(message);
+}
+
+const server = http.createServer(async (request, response) =&gt; {
+  if (![&#39;/report&#39;, &#39;/missing&#39;].includes(request.url)) {
+    reject(response, 404, &#39;unknown teaching route&#39;);
+    return;
+  }
+  let handle;
+  try {
+    const target = request.url === &#39;/report&#39; ? report : join(directory, &#39;missing.txt&#39;);
+    handle = await open(target, &#39;r&#39;);
+  } catch (error) {
+    reject(response, error.code === &#39;ENOENT&#39; ? 404 : 500, &#39;cannot open report&#39;);
+    return;
+  }
+  const source = handle.createReadStream({ autoClose: true });
+  response.setHeader(&#39;Content-Type&#39;, &#39;text/plain; charset=utf-8&#39;);
+  try {
+    await pipeline(source, response);
+  } catch (error) {
+    console.error(&#39;transfer interrupted&#39;, error.code ?? error.message);
+    // The response has been handed to pipeline. Do not promise another body.
+  }
+});
+
+server.listen(8766, &#39;localhost&#39;);
+process.once(&#39;SIGINT&#39;, () =&gt; {
+  server.close(async () =&gt; {
+    await rm(directory, { recursive: true, force: true });
+  });
+});
+</code></pre>
+<p>Run the service in one terminal and issue these requests from another:</p>
+<pre><code class="sh">node download-demo.mjs
+# Keep the service in its own terminal; issue these from a second terminal.
+curl -i http://localhost:8766/report
+curl -i http://localhost:8766/missing
+</code></pre>
+<p>The foreground service does not return control for the following commands in its own terminal. The successful route streams from the handle already opened; the missing-file route rejects before pipeline handoff. The status and wording are teaching choices. A real service needs its own object authorization and error-disclosure contract.</p>
+<p>Opening the handle does not guarantee later reads. Storage failure, a custom stream, client disconnection or process termination can still interrupt delivery. This arrangement moves an open failure to a phase where a response can be selected; it does not certify a completed transfer or receiver persistence.</p>
+<p>The example leaves file-stream closure to its automatic-close setting and pipeline lifetime. It does not lend the handle to another concurrent reader. Sharing it would require another ownership review so that one failing branch cannot close another&#39;s resource. Temporary-directory cleanup covers controlled shutdown, not guaranteed cleanup after forced termination.</p>
+<h2 id="Why-not-precheck-with-access-or-stat"><a href="#Why-not-precheck-with-access-or-stat" class="headerlink" title="Why not precheck with access or stat?"></a>Why not precheck with access or stat?</h2><p>Checking a path and subsequently reopening it are distinct operations. The file can change between them. The existing article on <a href="/en/2026/10/29/node-fs-access-open-race/">access/open races</a> explains that boundary. Here the service acquires the actual handle rather than treating a precheck as permission to assume a later file state.</p>
+<p>A readable handle is not business authorization either. Fixed paths constrain this example, but real downloads still need permission checks for the requested artifact. Do not turn request text into arbitrary filesystem paths. Complete authorization before delivery where possible: a later catch cannot retrieve sensitive bytes already sent.</p>
+<p>Reading the whole file into memory merely to retain an error-body option introduces a separate capacity decision. Buffering can suit a bounded small object. Large or uncontrolled inputs require a deliberate comparison of size, cancellation and receiving protocol rather than a universal replacement of streaming.</p>
+<h2 id="Does-headersSent-being-false-guarantee-replacement-JSON"><a href="#Does-headersSent-being-false-guarantee-replacement-JSON" class="headerlink" title="Does headersSent being false guarantee replacement JSON?"></a>Does headersSent being false guarantee replacement JSON?</h2><p>No single flag provides that guarantee. It describes header sending, not continued peer connectivity or the validity of a destroyed response. Once pipeline owns the response, its error handling may end the channel even before headers were delivered. Observe actual lifetime rather than promising a replacement based on that flag alone.</p>
+<p>Logging and recovery also differ. A transfer-error record explains what the server observed. Resumption requires an artifact identity, retention policy or protocol with suitable retry support. An error log does not create those capabilities or determine how many bytes the client received.</p>
+<h2 id="Validate-the-two-error-exits-separately"><a href="#Validate-the-two-error-exits-separately" class="headerlink" title="Validate the two error exits separately"></a>Validate the two error exits separately</h2><p>First use a missing fixed file and inspect the agreed early rejection. Next, in an isolated sample, introduce a source error after delivery starts and check that clients observe interruption rather than a fictional complete JSON error. Finally disconnect a client partway through and observe the source and handle reaching their expected end state.</p>
+<p>Record whether status was already determined, whether a complete body reached the client and whether resources finished cleanup. Server-side pipeline success is not business-level receiver confirmation. End-to-end file acceptance may need length, digest or application acknowledgement. None of these tests was run, and no fault-injection receipt is supplied.</p>
+<p>A useful repair identifies the handoff point and who can still decide a response when an error occurs. Reject before handoff, recognize interruption during delivery and stop pretending to write after termination. Those boundaries make catch describe the actual state instead of constructing an answer for an invalid channel.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://nodejs.org/docs/latest-v24.x/api/stream.html" rel="noopener">Stream | Node.js v24.22.2 Documentation</a></li><li><a target="_blank" href="https://nodejs.org/docs/latest-v24.x/api/fs.html" rel="noopener">File system | Node.js v24.22.2 Documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--node-js" href="/en/tags/Node.js/">Node.js</a>
+          
+            <a class="tag tag--streams" href="/en/tags/Streams/">Streams</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F01%2Fnode-pipeline-http-destroy-boundary%2F&text=Why%20can%20res.end%20no%20longer%20send%20an%20error%20after%20Node.js%20pipeline%20fails%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F01%2Fnode-pipeline-http-destroy-boundary%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20can%20res.end%20no%20longer%20send%20an%20error%20after%20Node.js%20pipeline%20fails%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F01%2Fnode-pipeline-http-destroy-boundary%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/01/playwright-test-step-boxed-error-location/">
+              <span>Previous Post</span>
+              <strong>Playwright test.step: why does box point an error at the call site?</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/01/kubernetes-readonly-root-volume-boundary/">
+              <span>Next Post</span>
+              <strong>Why can a Kubernetes volume remain writable with a read-only root filesystem?</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Why-does-catching-an-error-not-restore-the-channel">Why does catching an error not restore the channel?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Open-the-handle-that-will-actually-be-read">Open the handle that will actually be read</a>
+          
+            <a class="toc-link toc-link--h2" href="#Why-not-precheck-with-access-or-stat">Why not precheck with access or stat?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Does-headersSent-being-false-guarantee-replacement-JSON">Does headersSent being false guarantee replacement JSON?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Validate-the-two-error-exits-separately">Validate the two error exits separately</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>264</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>203</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>89</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/30/node-dns-lookup-resolve-scope/">Why can Node.js resolve miss a name available through hosts?</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/30/node-process-exit-stdout-truncation/">Why can a Node.js CLI truncate JSON after printing and calling exit?</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/29/node-fs-access-open-race/">Why can Node.js open fail after access succeeds?</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,432 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>PostgreSQL UNLOGGED is not an ordinary table with only a speed switch | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Separate current visibility, crash truncation and standby content for UNLOGGED, using a complete configuration example and explicit rebuild requirements.">
+  
+  
+    <meta name="keywords" content="UNLOGGED,crash retention,standby content">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/01/postgres-unlogged-crash-replication/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/01/postgres-unlogged-crash-replication/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/01/postgres-unlogged-crash-replication/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/01/postgres-unlogged-crash-replication/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="PostgreSQL UNLOGGED is not an ordinary table with only a speed switch | Midnight blog">
+    <meta property="og:description" content="Separate current visibility, crash truncation and standby content for UNLOGGED, using a complete configuration example and explicit rebuild requirements.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/01/postgres-unlogged-crash-replication/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/01/postgres-unlogged-crash-replication/#webpage","url":"https://www.zyweb.vip/en/2026/11/01/postgres-unlogged-crash-replication/","name":"PostgreSQL UNLOGGED is not an ordinary table with only a speed switch | Midnight blog","description":"Separate current visibility, crash truncation and standby content for UNLOGGED, using a complete configuration example and explicit rebuild requirements.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/01/postgres-unlogged-crash-replication/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/01/postgres-unlogged-crash-replication/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/01/postgres-unlogged-crash-replication/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/01/postgres-unlogged-crash-replication/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/01/postgres-unlogged-crash-replication/","headline":"PostgreSQL UNLOGGED is not an ordinary table with only a speed switch","description":"Separate current visibility, crash truncation and standby content for UNLOGGED, using a complete configuration example and explicit rebuild requirements.","inLanguage":"en","datePublished":"2026-10-31T19:32:05.000Z","dateModified":"2026-10-31T19:32:05.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.postgresql.org/docs/18/sql-createtable.html","https://www.postgresql.org/docs/18/catalog-pg-class.html","https://www.postgresql.org/docs/18/sql-set.html"],"keywords":"Development, PostgreSQL, Storage"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/01/postgres-unlogged-crash-replication/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"PostgreSQL UNLOGGED is not an ordinary table with only a speed switch","item":"https://www.zyweb.vip/en/2026/11/01/postgres-unlogged-crash-replication/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/01/postgres-unlogged-crash-replication/">zh-CN</option><option value="/en/2026/11/01/postgres-unlogged-crash-replication/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/01/postgres-unlogged-crash-replication/">zh-CN</option><option value="/en/2026/11/01/postgres-unlogged-crash-replication/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time>
+    </div>
+
+    <h1>PostgreSQL UNLOGGED is not an ordinary table with only a speed switch</h1>
+
+    
+      <p class="post-hero__summary">Separate current visibility, crash truncation and standby content for UNLOGGED, using a complete configuration example and explicit rebuild requirements.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time> · Estimated read 14 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/01/postgres-unlogged-crash-replication/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/01/postgres-unlogged-crash-replication/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>UNLOGGED changes recovery and replication guarantees, not merely speed.</li><li>Visible committed rows do not certify crash survival or standby content.</li><li>Rebuilding needs a trusted source, stable identity and explicit absence handling.</li></ul></section>
+      <div class="article-content">
+        <p>PostgreSQL <code>UNLOGGED</code> is not an ordinary table with only a speed setting changed. It changes logging, crash retention and standby-content guarantees. Rows visible after commit are not evidence that they survive an unclean shutdown or exist on a standby. Evaluate this storage choice only with a credible rebuild source and an accepted loss policy.</p>
+<h2 id="Commit-and-crash-retention-answer-different-questions"><a href="#Commit-and-crash-retention-answer-different-questions" class="headerlink" title="Commit and crash retention answer different questions"></a>Commit and crash retention answer different questions</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-createtable.html#SQL-CREATETABLE-UNLOGGED">PostgreSQL 18&#39;s CREATE TABLE reference</a> states that these data writes are not recorded in WAL, the table is truncated after a crash or unclean shutdown, and its contents are not replicated to standbys. This article checked version 18 documentation on November 1, 2026. No crash, replication or performance test was run.</p>
+<p>A commit result does not erase the table&#39;s chosen recovery limitations. An import might put the only copy of human corrections in supposedly disposable staging. Ordinary queries can look fine, but if those corrections cannot be reconstructed, the table is not merely a rebuildable cache.</p>
+<p>Distinguish derivable stage output from new facts created there. Keeping the original file does not necessarily retain review decisions, edits or external receipts. If their sole record is in staging, reevaluate the assumption that loss is harmless.</p>
+<p>The reference describes performance characteristics but provides no measurements for this application. Measure representative workloads and include reconstruction, cleanup and recovery costs. Changing one keyword does not support an invented improvement percentage.</p>
+<h2 id="Inspect-configuration-without-pretending-to-test-a-crash"><a href="#Inspect-configuration-without-pretending-to-test-a-crash" class="headerlink" title="Inspect configuration without pretending to test a crash"></a>Inspect configuration without pretending to test a crash</h2><p>This unexecuted SQL requires an isolated database and a fresh teaching schema. Matching structures and supplied rows compare declarations and current visibility only. Stop on an existing schema rather than adopting unknown objects.</p>
+<pre><code class="sql">BEGIN;
+CREATE SCHEMA demo_unlogged_boundary;
+SET LOCAL search_path = demo_unlogged_boundary, pg_catalog;
+CREATE TABLE durable_stage (
+  id integer PRIMARY KEY,
+  value text NOT NULL
+);
+CREATE UNLOGGED TABLE rebuildable_stage (
+  id integer PRIMARY KEY,
+  value text NOT NULL
+);
+
+INSERT INTO durable_stage VALUES (1, &#39;source-A&#39;);
+INSERT INTO rebuildable_stage VALUES (1, &#39;source-A&#39;);
+COMMIT;
+
+SELECT &#39;durable&#39; AS kind, id, value
+FROM demo_unlogged_boundary.durable_stage
+UNION ALL
+SELECT &#39;rebuildable&#39; AS kind, id, value
+FROM demo_unlogged_boundary.rebuildable_stage
+ORDER BY kind, id;
+
+SELECT c.relname, c.relpersistence
+FROM pg_class AS c
+JOIN pg_namespace AS n ON n.oid = c.relnamespace
+WHERE n.nspname = &#39;demo_unlogged_boundary&#39;
+  AND c.relkind = &#39;r&#39;
+ORDER BY c.relname;
+</code></pre>
+<p>Creation and writes share one transaction. SET LOCAL selects the newly owned schema for unqualified setup names; post-commit queries remain qualified. Both tables can currently hold committed rows. The catalog query checks their declarations; it does not simulate failure or establish crash survival. Recovery testing needs a separate disposable instance and explicit fault conditions. An expected SELECT result is not that receipt.</p>
+<p>Clean up with <code>DROP SCHEMA demo_unlogged_boundary CASCADE;</code> only after confirming this exercise owns every object and nobody continues using it. No forced-stop command is issued here. Destructive fault exercises need their own environment, authority and operational record rather than being hidden in a query tutorial.</p>
+<p>Catalog configuration must also match the relation the application actually uses. Wrong databases, unqualified names and other schemas can make a correct observation irrelevant. Preserve instance, database and qualified relation identity rather than only a screenshot showing rows.</p>
+<h2 id="Is-UNLOGGED-interchangeable-with-TEMP"><a href="#Is-UNLOGGED-interchangeable-with-TEMP" class="headerlink" title="Is UNLOGGED interchangeable with TEMP?"></a>Is UNLOGGED interchangeable with TEMP?</h2><p>Temporary tables address session scope and lifetime policies; UNLOGGED changes logging and recovery without automatically deleting the table at request or session end. The existing article on <a href="/en/2026/10/27/postgres-temp-table-commit-lifetime/">temporary tables and pool lifetime</a> covers the former. Both can support some staging tasks without sharing a lifecycle contract.</p>
+<p>A batch shared across sessions may not fit a session-private temporary table. Conversely, UNLOGGED does not provide automatic request-end cleanup. Specify visibility, retention, crash loss and cleanup ownership separately.</p>
+<p>The reference also makes indexes on an unlogged table unlogged. An index is not an independent durable backup. Normal-operation uniqueness enforcement and crash retention remain separate properties.</p>
+<h2 id="Why-are-the-rows-absent-from-a-standby"><a href="#Why-are-the-rows-absent-from-a-standby" class="headerlink" title="Why are the rows absent from a standby?"></a>Why are the rows absent from a standby?</h2><p>Not replicating this content is a documented limitation, not necessarily replication lag. A read-router must know whether the selected standby can contain its dependencies. Additional waiting does not turn intentionally unreplicated content into eventual delivery.</p>
+<p>One empty query still does not diagnose UNLOGGED by itself. Check relation identity, instance role, permissions and visibility. A documented limitation supports one hypothesis; actual deployment evidence identifies its cause. No standby was run here.</p>
+<p>A workflow requiring stage data across instances can evaluate ordinary replicated storage or place rebuilding on an explicitly source-owning node. Identify who rebuilds, its accepted duration and what callers see meanwhile. An empty table during reconstruction must not silently become a claim that no business records exist.</p>
+<h2 id="Can-converting-back-to-LOGGED-restore-lost-rows"><a href="#Can-converting-back-to-LOGGED-restore-lost-rows" class="headerlink" title="Can converting back to LOGGED restore lost rows?"></a>Can converting back to LOGGED restore lost rows?</h2><p>A declaration change cannot reconstruct missing content. Restore or recompute from a trusted source with a version and reconstruction identity. The conversion itself needs a target-environment plan for locks and rollout; no production-ready conversion script is supplied.</p>
+<p>Check reconstruction completeness beyond counts. A source may still contain one hundred rows while one has changed version. Matching quantity does not restore the original batch. Compare stable identifiers, source digests and required versions instead of accepting a nonempty table.</p>
+<p>Separate clean restart, unclean shutdown, primary recovery and standby reads in an exercise. Retention after an orderly restart does not establish crash retention; a primary query does not certify a standby. Report only the performed operation and observed environment.</p>
+<p>If temporary loss is acceptable, provide an explicit caller exit: rebuilding status, refusal of dependent operations or another reliable source. Do not retain an old completed marker while data remains missing, letting downstream readers interpret absence as a verified zero result.</p>
+<p>No SQL or fault exercise was executed. Before choosing UNLOGGED, establish reconstructability, accepted absence and standby requirements. An unresolved answer should not inherit ordinary durable-table promises in exchange for an unmeasured performance impression.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-createtable.html" rel="noopener">PostgreSQL: Documentation: 18: CREATE TABLE</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/catalog-pg-class.html" rel="noopener">PostgreSQL: Documentation: 18: 52.11. pg_class</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-set.html" rel="noopener">PostgreSQL: Documentation: 18: SET</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/en/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--storage" href="/en/tags/Storage/">Storage</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F01%2Fpostgres-unlogged-crash-replication%2F&text=PostgreSQL%20UNLOGGED%20is%20not%20an%20ordinary%20table%20with%20only%20a%20speed%20switch" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F01%2Fpostgres-unlogged-crash-replication%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=PostgreSQL%20UNLOGGED%20is%20not%20an%20ordinary%20table%20with%20only%20a%20speed%20switch&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F01%2Fpostgres-unlogged-crash-replication%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/01/prometheus-metric-relabel-up-boundary/">
+              <span>Previous Post</span>
+              <strong>Why does Prometheus retain up after metric relabeling drops scraped samples?</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/01/postgres-enum-add-value-commit-use/">
+              <span>Next Post</span>
+              <strong>Why can PostgreSQL INSERT not use an enum value just added?</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Commit-and-crash-retention-answer-different-questions">Commit and crash retention answer different questions</a>
+          
+            <a class="toc-link toc-link--h2" href="#Inspect-configuration-without-pretending-to-test-a-crash">Inspect configuration without pretending to test a crash</a>
+          
+            <a class="toc-link toc-link--h2" href="#Is-UNLOGGED-interchangeable-with-TEMP">Is UNLOGGED interchangeable with TEMP?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Why-are-the-rows-absent-from-a-standby">Why are the rows absent from a standby?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Can-converting-back-to-LOGGED-restore-lost-rows">Can converting back to LOGGED restore lost rows?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>264</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>203</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>89</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/01/postgres-enum-add-value-commit-use/">Why can PostgreSQL INSERT not use an enum value just added?</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/31/postgres-at-time-zone-type-direction/">Why does AT TIME ZONE UTC remove the time zone?</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/31/postgres-copy-server-client-path/">The CSV is on my laptop. Why can COPY not find it?</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,423 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Docker secret值换了，为什么认证步骤仍命中缓存？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用无效训练secret与独立修订参数比较三次构建，区分缓存复用、凭据重验及依赖更新，保留权限与输出保护边界。">
+  
+  
+    <meta name="keywords" content="secret缓存,非秘密修订,凭据轮换验证">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/01/docker-secret-value-cache-invalidation/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Docker secret值换了，为什么认证步骤仍命中缓存？ | Midnight blog">
+    <meta property="og:description" content="用无效训练secret与独立修订参数比较三次构建，区分缓存复用、凭据重验及依赖更新，保留权限与输出保护边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/","name":"Docker secret值换了，为什么认证步骤仍命中缓存？ | Midnight blog","description":"用无效训练secret与独立修订参数比较三次构建，区分缓存复用、凭据重验及依赖更新，保留权限与输出保护边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/","headline":"Docker secret值换了，为什么认证步骤仍命中缓存？","description":"用无效训练secret与独立修订参数比较三次构建，区分缓存复用、凭据重验及依赖更新，保留权限与输出保护边界。","inLanguage":"zh-CN","datePublished":"2026-10-31T19:32:05.000Z","dateModified":"2026-10-31T19:32:05.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.docker.com/build/cache/invalidation/"],"keywords":"Delivery, Docker, BuildKit"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Docker secret值换了，为什么认证步骤仍命中缓存？","item":"https://www.zyweb.vip/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/" selected>zh-CN</option><option value="/en/2026/11/01/docker-secret-value-cache-invalidation/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/" selected>zh-CN</option><option value="/en/2026/11/01/docker-secret-value-cache-invalidation/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time>
+    </div>
+
+    <h1>Docker secret值换了，为什么认证步骤仍命中缓存？</h1>
+
+    
+      <p class="post-hero__summary">用无效训练secret与独立修订参数比较三次构建，区分缓存复用、凭据重验及依赖更新，保留权限与输出保护边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/01/docker-secret-value-cache-invalidation/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>secret值变化不自动使构建缓存失效。</li><li>重跑意图可由独立非秘密修订表达。</li><li>缓存命中不验证新凭据权限或旧凭据撤销。</li></ul></section>
+      <div class="article-content">
+        <p>Docker 构建只换了 secret 的值，读取它的步骤仍可能命中缓存。secret 内容不属于构建缓存的比较输入，所以绿色重建未必重新使用过新凭据。轮换后若需要重验访问，应明确让相应步骤重新执行，再检查结果，不能把缓存复用当成认证成功。</p>
+<h2 id="哪一种变化会让这一步重跑？"><a href="#哪一种变化会让这一步重跑？" class="headerlink" title="哪一种变化会让这一步重跑？"></a>哪一种变化会让这一步重跑？</h2><p><a target="_blank" rel="noopener" href="https://docs.docker.com/build/cache/invalidation/">Docker 的 Build cache invalidation 文档</a>区分秘密内容与其他输入：值变化不导致缓存失效，秘密标识和挂载属性参与缓存检查；需要随值变化重跑时，可以使用另外改变的构建参数。本文于二〇二六年十一月一日核对在线说明，没有执行构建、轮换凭据或连接私有依赖服务。</p>
+<p>这不是缓存知道新凭据能否工作。缓存只是认定已有结果可以复用，于是本次没有重新运行那条下载或认证命令。旧凭据以前能取得依赖，并不证明新凭据具有相同权限、目标范围或有效期。如果当前目标正是验证轮换，跳过动作意味着缺少这项证据。</p>
+<p>也不能反过来认为换 secret 就应该让每次构建完全重做。有的交付需要复用已经批准的依赖结果，有的交付需要重新访问远端。两者都可以有理由，关键是把本次目标写清楚。凭据更新、依赖版本更新和镜像重建是相关动作，却没有自动相同的完成条件。</p>
+<h2 id="用不含真实凭据的最小构建作对照"><a href="#用不含真实凭据的最小构建作对照" class="headerlink" title="用不含真实凭据的最小构建作对照"></a>用不含真实凭据的最小构建作对照</h2><p>以下教学示例未经执行。在同一终端先运行下面的目录准备，再把Dockerfile保存到新建的context子目录。秘密假值文件只放在这份新建自有父目录，不使用任意工程的上一级。示例采用支持 BuildKit 秘密挂载的构建器，busybox 标签需自行确认可用，不把标签当作固定摘要或生产基础镜像选择。</p>
+<pre><code class="sh">lab_root=&quot;$(mktemp -d)&quot;
+mkdir &quot;$lab_root/context&quot;
+secret_file=&quot;$lab_root/training-secret&quot;
+</code></pre>
+<p>把下列内容保存为新目录中的 context/Dockerfile：</p>
+<pre><code class="dockerfile"># syntax=docker/dockerfile:1
+FROM busybox:1.37
+ARG SECRET_REV=first
+RUN --mount=type=secret,id=training \
+    test -s /run/secrets/training \
+    &amp;&amp; printf &#39;executed revision %s\n&#39; &quot;$SECRET_REV&quot; &gt; /run-proof
+CMD [&quot;cat&quot;, &quot;/run-proof&quot;]
+</code></pre>
+<p>仍在同一终端，运行下面的完整函数和三轮对照。函数始终使用刚创建的上下文与假值文件，后两轮只改变所述输入。这里没有真实凭据，不能把练习扩展为生产认证测试。</p>
+<pre><code class="sh">run_build() {
+  docker buildx build --load --progress=plain \
+    --secret &quot;id=training,src=$secret_file&quot; \
+    --build-arg &quot;SECRET_REV=$1&quot; \
+    -t secret-cache-demo &quot;$lab_root/context&quot;
+}
+printf &#39;training-only-a\n&#39; &gt; &quot;$secret_file&quot;
+run_build first
+printf &#39;training-only-b\n&#39; &gt; &quot;$secret_file&quot;
+run_build first
+run_build second
+</code></pre>
+<p>第一轮为后续比较提供已有结果；第二轮只换秘密内容；第三轮再改独立的非秘密版本信号。按文档机制，第二轮不能因为值变化就要求自动失效，第三轮消费的构建参数变化可用于触发重新执行。应看真实日志中目标步骤的复用与执行状态，而不是只看三次命令都返回了一个镜像名。</p>
+<p>run-proof 仅写入公开的版本标记，没有复制训练 secret。它能帮助解释哪一轮执行结果进入镜像，但仍需结合构建日志核对；文件出现不证明私有依赖认证成功，因为示例根本没有访问认证接口。这份小例子只隔离缓存机制，不伪装成轮换验收。</p>
+<h2 id="刷新信号为什么要与秘密分开？"><a href="#刷新信号为什么要与秘密分开？" class="headerlink" title="刷新信号为什么要与秘密分开？"></a>刷新信号为什么要与秘密分开？</h2><p>可以用凭据配置的公开修订编号或另一枚非敏感版本标识，表示“本轮要求重跑”。这个标识需要由实际轮换流程维护，不能长期不变却仍声称每次都重新认证。它也不应影响依赖版本语义：凭据修订变了，只说明重跑意图，不说明下载内容应自动更新到最新。</p>
+<p>不要把密码明文送进普通构建参数来获得缓存失效。参数的传递、记录和产物边界与秘密挂载不同。即使把密码变成摘要，也不能不经评估就当作公开标识；可猜测原值或跨系统关联的风险仍需要分析。独立非秘密信号能更直接表达操作意图，而不把秘密衍生材料传播出去。</p>
+<p>若只想刷新具名依赖阶段，可以按构建器支持的参数选择失效范围；若选择更广禁用缓存，则应说明成本和受影响步骤。更换秘密标识或挂载路径可能改变缓存检查，但不适合作为让名称不断漂移的隐式轮换制度。消费者与挂载定义应该保持可解释，不为触发动作随意改变接口。</p>
+<h2 id="怎样确认真正检查了新凭据？"><a href="#怎样确认真正检查了新凭据？" class="headerlink" title="怎样确认真正检查了新凭据？"></a>怎样确认真正检查了新凭据？</h2><p>在获准测试环境中，固定目标资源、依赖请求与所需权限，确保这次目标步骤实际执行，再观察新身份是否取得预期结果。若要验证旧权限失效，应另有明确的拒绝用例，不能因为新构建成功就宣称旧凭据已撤销。读取许可、撤销结果与最终依赖内容是三项不同证据。</p>
+<p>失败也要保留语义。若新凭据被拒，而流水线继续使用旧缓存产物，这是回退选择，不是新凭据验证通过。可以根据发布政策保留已批准旧产物，但必须标明沿用了什么、为什么获准，以及轮换验证仍有什么未完成。不能为了获得绿色状态吞掉认证错误。</p>
+<p>来源与输出面还需单独审查。<a href="/zh-CN/2026/10/10/docker-secret-output/">Docker秘密挂载与最终产物</a>解释为什么安全提供输入不保证程序没有复制秘密；本题则解释提供新输入不保证命令重新执行。两项控制相互补足，不能用缓存失效标记代替日志、产物与权限保护。</p>
+<h2 id="能把secret摘要直接当CACHEBUST吗？"><a href="#能把secret摘要直接当CACHEBUST吗？" class="headerlink" title="能把secret摘要直接当CACHEBUST吗？"></a>能把secret摘要直接当CACHEBUST吗？</h2><p>不应把它作为默认方案。先判断摘要是否泄露可猜测信息、形成长期关联或进入构建记录；能用独立修订号表达重跑时，就不必让秘密内容决定公开参数。本文不提供一个适用于所有凭据的安全摘要算法，也没有分析真实秘密的熵或泄露范围。</p>
+<p>拟议记录应列出秘密对象的非敏感身份、公开修订、构建输入、目标步骤执行状态与实际授权结果，敏感值本身不进入报告。再核对最终镜像是否使用了预期依赖，并确认部署是否采用该产物。示例未执行，本文没有镜像摘要、认证回执或轮换完成记录；缓存命中回答的是结果复用，轮换验收需要新的访问证据。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.docker.com/build/cache/invalidation/" rel="noopener">Build cache invalidation | Docker Docs</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--docker" href="/zh-CN/tags/docker/">Docker</a>
+          
+            <a class="tag tag--buildkit" href="/zh-CN/tags/BuildKit/">BuildKit</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fdocker-secret-value-cache-invalidation%2F&text=Docker%20secret%E5%80%BC%E6%8D%A2%E4%BA%86%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%AE%A4%E8%AF%81%E6%AD%A5%E9%AA%A4%E4%BB%8D%E5%91%BD%E4%B8%AD%E7%BC%93%E5%AD%98%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fdocker-secret-value-cache-invalidation%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Docker%20secret%E5%80%BC%E6%8D%A2%E4%BA%86%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%AE%A4%E8%AF%81%E6%AD%A5%E9%AA%A4%E4%BB%8D%E5%91%BD%E4%B8%AD%E7%BC%93%E5%AD%98%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fdocker-secret-value-cache-invalidation%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/01/dom-mutationobserver-delivery-batching/">
+              <span>上一篇</span>
+              <strong>MutationObserver：DOM已修改，回调为何还没执行？</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/01/css-subgrid-shared-track-sizing/">
+              <span>下一篇</span>
+              <strong>CSS subgrid：卡片都写同样Grid，内部行为何仍对不齐？</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#哪一种变化会让这一步重跑？">哪一种变化会让这一步重跑？</a>
+          
+            <a class="toc-link toc-link--h2" href="#用不含真实凭据的最小构建作对照">用不含真实凭据的最小构建作对照</a>
+          
+            <a class="toc-link toc-link--h2" href="#刷新信号为什么要与秘密分开？">刷新信号为什么要与秘密分开？</a>
+          
+            <a class="toc-link toc-link--h2" href="#怎样确认真正检查了新凭据？">怎样确认真正检查了新凭据？</a>
+          
+            <a class="toc-link toc-link--h2" href="#能把secret摘要直接当CACHEBUST吗？">能把secret摘要直接当CACHEBUST吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>264</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>203</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>89</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/docker-run-network-fetch-scope/">RUN断网，远程ADD为什么仍可能下载？</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/30/docker-healthcheck-start-period-early-success/">start-period还没过，Docker为什么已经把容器判成unhealthy？</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/docker-multistage-named-source/">Dockerfile 插入阶段后，COPY --from=0 还指向原产物吗？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

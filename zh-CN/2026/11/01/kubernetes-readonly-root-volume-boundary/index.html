@@ -1,0 +1,437 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Kubernetes根文件系统只读，挂载目录为什么仍可写？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用完整Pod对照根路径与emptyDir写入，分开根层只读、卷挂载和运行身份，再检查共享写者与数据生命周期。">
+  
+  
+    <meta name="keywords" content="readOnlyRootFilesystem,卷挂载只读,可写路径清单">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-readonly-root-volume-boundary/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-readonly-root-volume-boundary/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-readonly-root-volume-boundary/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/01/kubernetes-readonly-root-volume-boundary/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Kubernetes根文件系统只读，挂载目录为什么仍可写？ | Midnight blog">
+    <meta property="og:description" content="用完整Pod对照根路径与emptyDir写入，分开根层只读、卷挂载和运行身份，再检查共享写者与数据生命周期。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-readonly-root-volume-boundary/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-readonly-root-volume-boundary/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-readonly-root-volume-boundary/","name":"Kubernetes根文件系统只读，挂载目录为什么仍可写？ | Midnight blog","description":"用完整Pod对照根路径与emptyDir写入，分开根层只读、卷挂载和运行身份，再检查共享写者与数据生命周期。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-readonly-root-volume-boundary/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-readonly-root-volume-boundary/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-readonly-root-volume-boundary/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-readonly-root-volume-boundary/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-readonly-root-volume-boundary/","headline":"Kubernetes根文件系统只读，挂载目录为什么仍可写？","description":"用完整Pod对照根路径与emptyDir写入，分开根层只读、卷挂载和运行身份，再检查共享写者与数据生命周期。","inLanguage":"zh-CN","datePublished":"2026-10-31T19:32:05.000Z","dateModified":"2026-10-31T19:32:05.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://kubernetes.io/docs/tasks/configure-pod-container/security-context/","https://kubernetes.io/docs/concepts/storage/volumes/"],"keywords":"Quality, Kubernetes, Filesystem"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-readonly-root-volume-boundary/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Kubernetes根文件系统只读，挂载目录为什么仍可写？","item":"https://www.zyweb.vip/zh-CN/2026/11/01/kubernetes-readonly-root-volume-boundary/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/kubernetes-readonly-root-volume-boundary/" selected>zh-CN</option><option value="/en/2026/11/01/kubernetes-readonly-root-volume-boundary/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/kubernetes-readonly-root-volume-boundary/" selected>zh-CN</option><option value="/en/2026/11/01/kubernetes-readonly-root-volume-boundary/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--quality">Quality</span>
+      <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time>
+    </div>
+
+    <h1>Kubernetes根文件系统只读，挂载目录为什么仍可写？</h1>
+
+    
+      <p class="post-hero__summary">用完整Pod对照根路径与emptyDir写入，分开根层只读、卷挂载和运行身份，再检查共享写者与数据生命周期。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/01/kubernetes-readonly-root-volume-boundary/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/01/kubernetes-readonly-root-volume-boundary/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>只读根不自动使独立挂载卷只读。</li><li>属主权限、挂载模式与内容完整性分别判断。</li><li>单个消费者只读不表示同卷不存在其他写者。</li></ul></section>
+      <div class="article-content">
+        <p>Kubernetes 的 readOnlyRootFilesystem 让容器根文件系统只读，不会自动把独立挂载卷都变成只读。根路径写入失败、挂载目录写入成功可以同时成立。先辨认实际路径落在哪个挂载上，再分别检查挂载访问设置与进程身份，不能把这个字段理解成整个容器没有任何可写位置。</p>
+<h2 id="根层限制与挂载访问是两份配置"><a href="#根层限制与挂载访问是两份配置" class="headerlink" title="根层限制与挂载访问是两份配置"></a>根层限制与挂载访问是两份配置</h2><p><a target="_blank" rel="noopener" href="https://kubernetes.io/docs/tasks/configure-pod-container/security-context/">Kubernetes 安全上下文指南</a>将 readOnlyRootFilesystem 定义为以只读方式挂载容器根文件系统。<a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/storage/volumes/">卷文档</a>则说明独立存储如何挂入容器。本文于二〇二六年十一月一日核对当前页面；导航中的版本入口不是固定发布版证明，没有连接集群或执行写入测试。</p>
+<p>程序看到统一的目录树，但不同路径可以由不同文件系统提供。镜像根层里的程序文件与挂在 /work 的卷，不因为路径都以斜杠开头就共享一个写入开关。排障应记录绝对路径、卷名、挂载点及访问模式，而不是只记录安全字段已经设为 true。</p>
+<p>身份权限又是另一层。一个可写挂载仍可能因为目录属主、组或权限位拒绝当前进程；一个权限位允许写入的根层路径，也可能被只读挂载拒绝。修改属主不能把只读文件系统变可写，改挂载模式也不能自动解决所有身份权限。失败表面相似，修复位置却不同。</p>
+<h2 id="一个隔离根层与卷的完整配置"><a href="#一个隔离根层与卷的完整配置" class="headerlink" title="一个隔离根层与卷的完整配置"></a>一个隔离根层与卷的完整配置</h2><p>下面是未经执行的教学清单，包含独立命名空间与单个 Pod。busybox 镜像用于 shell 和文件操作，需在测试环境确认可取得。为了让普通属主权限不抢先解释根路径失败，练习明确用 UID 零；这不是生产安全基线，也不要求绕过集群原有的准入政策。若环境禁止这一身份，应保留拒绝结果，另选获准的测试方法。</p>
+<pre><code class="yaml">apiVersion: v1
+kind: Namespace
+metadata:
+  name: readonly-root-demo
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: root-versus-volume
+  namespace: readonly-root-demo
+spec:
+  restartPolicy: Never
+  containers:
+    - name: probe
+      image: busybox:1.37
+      securityContext:
+        runAsUser: 0
+        readOnlyRootFilesystem: true
+      command: [&quot;sh&quot;, &quot;-c&quot;]
+      args:
+        - |
+          if touch /root-proof; then
+            echo &#39;unexpected root write&#39;
+            exit 1
+          else
+            echo &#39;root write rejected; inspect the actual error&#39;
+          fi
+          printf &#39;training marker\n&#39; &gt; /work/proof
+          cat /work/proof
+      volumeMounts:
+        - name: scratch
+          mountPath: /work
+  volumes:
+    - name: scratch
+      emptyDir: {}
+</code></pre>
+<p>脚本让第一个预期失败留在条件分支里，不会因此跳过卷写入对照。应查看实际错误是否指向只读文件系统，并检查 /work 的写入与读取。仅看到第一个操作非零，不够确定原因；镜像缺少命令、路径设置不对或另有安全控制，都需要按原始错误说明。</p>
+<p>这份清单没有创建回执。若 Pod 在镜像拉取或准入就失败，后面的文件操作根本没有发生，不能把对象失败当成根层写入被拒的证据。也不要从日志里有一个训练标记就宣称整个文件系统安全；它最多支持对应路径和运行条件下那一次操作。</p>
+<h2 id="怎样证明失败确实来自根层只读？"><a href="#怎样证明失败确实来自根层只读？" class="headerlink" title="怎样证明失败确实来自根层只读？"></a>怎样证明失败确实来自根层只读？</h2><p>可在另一个可丢弃Pod建立基线：保持镜像、命令、运行身份和卷不变，只把根层只读设置关闭，再比较同一训练路径的写入。若关闭后仍失败，就应调查命令、身份或其他限制；不能把第一次失败全部归功于只读根。这个基线会改变练习对象的可写范围，因此只在获准测试条件下安排，不修改真实应用来追求一个成功标记。</p>
+<p>随后把根层恢复只读，只改变卷挂载访问模式。这样有三份可区分记录：根层允许且卷允许、根层拒绝且卷允许、根层拒绝且卷也拒绝。每份保存最终对象、实际挂载和原始错误，才能说明两项控制各自限制了哪一个路径。对象没运行时不要填入预期结果，也不要用另一个Pod的日志替代当前对象。</p>
+<h2 id="应用需要写入时，应开放哪一块？"><a href="#应用需要写入时，应开放哪一块？" class="headerlink" title="应用需要写入时，应开放哪一块？"></a>应用需要写入时，应开放哪一块？</h2><p>先列真实写入清单：临时文件、缓存、上传中间件、锁文件或应用生成的状态分别放在哪里。静态程序与配置未必需要写权限，临时状态则可以有明确的专用目录。只读根能帮助发现应用偷偷写回程序目录的行为，但不能替维护者决定哪些可变数据必须保留。</p>
+<p>如果仅需要可丢弃的暂存，独立 emptyDir 可以表达这种用途。若文件是唯一结果或用户原始上传，就应另行设计跨 Pod 保存与确认点。<a href="/zh-CN/2026/10/19/kubernetes-emptydir-pod-lifetime/">emptyDir 的 Pod 生命周期</a>解释为什么容器重启时还在，不等于替换 Pod 后仍有。能够写入与能够恢复是两个不同验收题。</p>
+<p>真实部署还应以目标非特权身份检查卷权限，而不是把教学里的 UID 零复制过去解决全部错误。可以通过适当的目录准备、组策略或存储平台能力提供必要权限，但要核对实际实现。对所有路径递归开放写入会扩大影响面，并没有解释应用究竟需要改哪些数据。</p>
+<h2 id="给volumeMount加readOnly，会发生什么对照？"><a href="#给volumeMount加readOnly，会发生什么对照？" class="headerlink" title="给volumeMount加readOnly，会发生什么对照？"></a>给volumeMount加readOnly，会发生什么对照？</h2><p>可以在另一个测试 Pod 中保留相同根层设置，只将 scratch 挂载标记为 readOnly，再观察 /work 的写入。该对照的意图是区分卷挂载限制与根层限制，不是通过一次测试认证所有卷类型。应保存两份实际配置、挂载状态与命令错误，确认除此之外没有更换身份或存储内容。</p>
+<p>只读也不等于内容永久不变。卷可能存在其他写者，或由平台更新来源；某个容器不能通过自己的挂载写入，并不证明观察到的字节永远不会变化。需要配置不可变性或完整性时，应另行定义来源、版本与验证，而不把挂载属性当成内容签名。</p>
+<p><a href="/zh-CN/2026/10/20/docker-copy-chown-runtime-user/">Docker运行用户与复制属主</a>讨论相邻的身份权限问题。本题增加的是挂载边界：同一进程面对多个路径时，访问模式可能不同。排障记录把身份、属主与挂载只读状态并列，才能选择修改镜像、存储设置还是应用路径。</p>
+<h2 id="一个只读挂载能限制同卷的其他容器吗？"><a href="#一个只读挂载能限制同卷的其他容器吗？" class="headerlink" title="一个只读挂载能限制同卷的其他容器吗？"></a>一个只读挂载能限制同卷的其他容器吗？</h2><p>不能把本消费者的挂载意图扩大成全卷的全局写入禁令。应逐个检查共享该卷的容器、挂载点和外部写入者；另一个获准可写的消费者仍可能改变内容。若需求是只有一个写者或所有消费者都只读，需要在整体卷设计与权限配置中明确表达。</p>
+<p>拟议验收至少比较根层路径、可写卷路径、只读卷路径与目标运行身份，分别记录允许和拒绝；同时让应用运行一次真正需要临时写入的任务，确认它没有退回镜像目录。本文未执行这些检查，没有集群安全通过或业务完成的结论。只读根是有明确范围的控制，写入清单、卷权限与数据生命周期仍需各自成立。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://kubernetes.io/docs/tasks/configure-pod-container/security-context/" rel="noopener">Configure a Security Context for a Pod or Container | Kubernetes</a></li><li><a target="_blank" href="https://kubernetes.io/docs/concepts/storage/volumes/" rel="noopener">Volumes | Kubernetes</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--quality" href="/zh-CN/tags/Quality/">Quality</a>
+          
+            <a class="tag tag--kubernetes" href="/zh-CN/tags/Kubernetes/">Kubernetes</a>
+          
+            <a class="tag tag--filesystem" href="/zh-CN/tags/Filesystem/">Filesystem</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--quality" href="/zh-CN/categories/Quality/">Quality</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fkubernetes-readonly-root-volume-boundary%2F&text=Kubernetes%E6%A0%B9%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E5%8F%AA%E8%AF%BB%EF%BC%8C%E6%8C%82%E8%BD%BD%E7%9B%AE%E5%BD%95%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E5%8F%AF%E5%86%99%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fkubernetes-readonly-root-volume-boundary%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Kubernetes%E6%A0%B9%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E5%8F%AA%E8%AF%BB%EF%BC%8C%E6%8C%82%E8%BD%BD%E7%9B%AE%E5%BD%95%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E5%8F%AF%E5%86%99%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fkubernetes-readonly-root-volume-boundary%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/">
+              <span>上一篇</span>
+              <strong>Node.js pipeline 失败后，为什么 res.end 也发不出错误？</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/01/kubernetes-nonpreempting-priority-queue/">
+              <span>下一篇</span>
+              <strong>Kubernetes preemptionPolicy Never，为什么仍排在低优先级Pod前？</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#根层限制与挂载访问是两份配置">根层限制与挂载访问是两份配置</a>
+          
+            <a class="toc-link toc-link--h2" href="#一个隔离根层与卷的完整配置">一个隔离根层与卷的完整配置</a>
+          
+            <a class="toc-link toc-link--h2" href="#怎样证明失败确实来自根层只读？">怎样证明失败确实来自根层只读？</a>
+          
+            <a class="toc-link toc-link--h2" href="#应用需要写入时，应开放哪一块？">应用需要写入时，应开放哪一块？</a>
+          
+            <a class="toc-link toc-link--h2" href="#给volumeMount加readOnly，会发生什么对照？">给volumeMount加readOnly，会发生什么对照？</a>
+          
+            <a class="toc-link toc-link--h2" href="#一个只读挂载能限制同卷的其他容器吗？">一个只读挂载能限制同卷的其他容器吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>264</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>203</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>89</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/30/kubernetes-projected-token-rotation-reload/">投射token文件已经更新，Pod为什么还在发送旧凭据？</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/30/kubernetes-rbac-resource-names-request-shape/">RBAC只允许一个对象，为什么get成功而list仍被拒？</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/30/kubernetes-networkpolicy-additive-allow/">NetworkPolicy 新增 deny-all，为什么前端的新连接仍被允许？</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,441 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Python itertools.tee 分出慢消费者，为什么内存可能上涨？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="以来源推进计数对照 tee 的分支进度差，解释辅助存储、元素共享、调度与线程安全，并给出容量选择依据。">
+  
+  
+    <meta name="keywords" content="itertools.tee,慢消费者,辅助存储">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-tee-lag-buffer/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-tee-lag-buffer/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-tee-lag-buffer/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/01/python-itertools-tee-lag-buffer/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Python itertools.tee 分出慢消费者，为什么内存可能上涨？ | Midnight blog">
+    <meta property="og:description" content="以来源推进计数对照 tee 的分支进度差，解释辅助存储、元素共享、调度与线程安全，并给出容量选择依据。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-tee-lag-buffer/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-tee-lag-buffer/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-tee-lag-buffer/","name":"Python itertools.tee 分出慢消费者，为什么内存可能上涨？ | Midnight blog","description":"以来源推进计数对照 tee 的分支进度差，解释辅助存储、元素共享、调度与线程安全，并给出容量选择依据。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-tee-lag-buffer/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-tee-lag-buffer/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-tee-lag-buffer/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-tee-lag-buffer/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-tee-lag-buffer/","headline":"Python itertools.tee 分出慢消费者，为什么内存可能上涨？","description":"以来源推进计数对照 tee 的分支进度差，解释辅助存储、元素共享、调度与线程安全，并给出容量选择依据。","inLanguage":"zh-CN","datePublished":"2026-10-31T19:32:05.000Z","dateModified":"2026-10-31T19:32:05.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.14/library/itertools.html"],"keywords":"Development, Python, Iterators"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-tee-lag-buffer/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Python itertools.tee 分出慢消费者，为什么内存可能上涨？","item":"https://www.zyweb.vip/zh-CN/2026/11/01/python-itertools-tee-lag-buffer/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/python-itertools-tee-lag-buffer/" selected>zh-CN</option><option value="/en/2026/11/01/python-itertools-tee-lag-buffer/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/python-itertools-tee-lag-buffer/" selected>zh-CN</option><option value="/en/2026/11/01/python-itertools-tee-lag-buffer/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time>
+    </div>
+
+    <h1>Python itertools.tee 分出慢消费者，为什么内存可能上涨？</h1>
+
+    
+      <p class="post-hero__summary">以来源推进计数对照 tee 的分支进度差，解释辅助存储、元素共享、调度与线程安全，并给出容量选择依据。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/01/python-itertools-tee-lag-buffer/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/01/python-itertools-tee-lag-buffer/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>独立读取位置不等于固定内存或重复生产来源。</li><li>慢分支生命周期与进度差需要明确预算。</li><li>元素副本、并发调度和线程安全不能由 tee 名称推导。</li></ul></section>
+      <div class="article-content">
+        <p>Python <code>itertools.tee</code> 提供多个读取位置，不承诺固定内存。快分支已经读过、慢分支尚未读到的值，需要为落后者保留，因此消费进度差可能形成大量辅助存储。使用它之前应明确分支允许落后多少、何时结束以及来源能否重放，不能只因接口是惰性的就省略容量设计。</p>
+<h2 id="独立位置，不是独立生产"><a href="#独立位置，不是独立生产" class="headerlink" title="独立位置，不是独立生产"></a>独立位置，不是独立生产</h2><p><a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/itertools.html#itertools.tee">Python itertools 的 tee 说明</a>提醒，所需辅助存储可能很多，取决于需要暂存的数据；如果一路先消费大部分甚至全部输入，另一路才开始，文档建议考虑直接使用列表。本文于二〇二六年十一月一日核对 Python 3.14.10 文档，没有执行内存测量或下面的程序。</p>
+<p>两条分支可以以不同速度前进，是因为它们分别保留读取位置，而不是来源被重新调用两遍。快分支需要下一项时，来源继续生产；慢分支以后还要得到同一序列，就必须能够取回自己没读过的部分。这个交接关系解释了为什么“生成器逐条产生”与“整个流程只保留一条”不能画等号。</p>
+<p>假设一路计算总额，一路等待用户确认后才导出明细。总额计算先走完整个输入，明细分支尚未开始，尚待明细使用的历史值就不能因为快分支处理完而立即丢弃。若输入无界，而慢分支长期不前进，差距没有业务上限；仅给快分支提高吞吐，可能让保留增长更快。</p>
+<p>这不是禁止所有 tee。两路按近似步调推进、数据规模有界且共享输入符合需求时，它能清楚表达重复遍历。错误在于把一个方便的分流工具扩张成容量管理器。应先说清允许的差距，再决定工具是否匹配；不能从示例里只有几个数字推断真实导出也没有资源压力。</p>
+<h2 id="用来源计数观察分支差距"><a href="#用来源计数观察分支差距" class="headerlink" title="用来源计数观察分支差距"></a>用来源计数观察分支差距</h2><p>以下是未执行的完整标准库程序。它只生成六个整数，用日志记录来源实际走了多少步，没有网络、数据库或后台线程。计数展示消费关系，不测量每个元素占多少字节，也不承诺某个解释器的内存回收时点。</p>
+<pre><code class="python">from itertools import tee
+
+
+def source(log):
+    for value in range(6):
+        log.append(value)
+        yield value
+
+
+def main():
+    produced = []
+    fast, slow = tee(source(produced))
+    fast_prefix = [next(fast) for _ in range(4)]
+    if fast_prefix != [0, 1, 2, 3] or produced != [0, 1, 2, 3]:
+        raise RuntimeError(&#39;Unexpected source advancement&#39;)
+
+    slow_prefix = [next(slow) for _ in range(2)]
+    if slow_prefix != [0, 1] or produced != [0, 1, 2, 3]:
+        raise RuntimeError(&#39;Slow branch unexpectedly reproduced source data&#39;)
+
+    fast_tail = list(fast)
+    slow_tail = list(slow)
+    if fast_tail != [4, 5] or slow_tail != [2, 3, 4, 5]:
+        raise RuntimeError(&#39;Branches lost their independent positions&#39;)
+    print(&#39;source values:&#39;, produced)
+
+    interleaved_log = []
+    left, right = tee(source(interleaved_log))
+    paired = []
+    for _ in range(6):
+        paired.append((next(left), next(right)))
+    if paired != [(n, n) for n in range(6)]:
+        raise RuntimeError(&#39;Interleaved readers disagree&#39;)
+    print(&#39;interleaved source:&#39;, interleaved_log)
+
+
+if __name__ == &#39;__main__&#39;:
+    main()
+</code></pre>
+<p>快分支先取四项，慢分支随后取两项时，来源不应重新生成零和一。两条分支最终都应得到完整序列，但读取位置不同；第二组则交替推进。预期来自给定代码与接口合同，不是记录的终端输出。程序没有证明第二种方式在某台机器上节省了具体内存量。</p>
+<p>来源日志本身也保存了数据，因此不能拿这个教学程序的内存曲线直接代表 tee 的成本。若做真实资源测量，应先移除无界日志等额外持有者，固定元素形状、输入规模和观察工具，再区分峰值、保留对象与进程驻留内存。本文没有执行这样的实验，也不提供人为编造的差值。</p>
+<p>进度差需要按条数和元素大小一起考虑。两个分支只差几十项，如果每项都引用很大的内容，也可能并不便宜；差很多项但元素很小，则有另一种成本。业务预算应针对实际载荷，而不是把某个固定条数当成所有类型的通用安全线。</p>
+<h2 id="不能等待的慢分支，应该怎样安排？"><a href="#不能等待的慢分支，应该怎样安排？" class="headerlink" title="不能等待的慢分支，应该怎样安排？"></a>不能等待的慢分支，应该怎样安排？</h2><p>如果可以重读可信来源，两个阶段可能独立打开来源，各自承担读取成本，并用来源版本确认处理同一份数据。这样不会要求在一条内存分流中长期保存差距，但也不是免费：来源保留、再次访问权限和内容变更都需要约定。</p>
+<p>如果来源不能重放而两路都必须收到，可以考虑明确有容量与停止策略的交接，或先保存为受控持久产物。满了以后是让快分支等待、拒绝新输入还是停止整项任务，应由业务选择。tee 不提供这样的产品决策，不应在内存增长之后才临时丢掉慢分支的数据。</p>
+<p>如果慢分支其实只需要抽样或摘要，应明确它不要求完整序列，再按那个合同设计。不能先承诺每项都交给它，资源不足时却悄悄跳过。容量策略一旦改变接收集合，就改变了业务输出，而不只是实现细节。</p>
+<p>本站<a href="/zh-CN/2026/10/13/node-stream-backpressure/">可写流背压</a>讨论生产与消费速度不匹配的另一种表现。当前问题不是 Node 写缓冲，而是 Python 分支读取位置之间需要保留历史；共同的审查动作是找出谁仍需要这些值，而不是从“流式”名称推断保留量。</p>
+<h2 id="两路读到的字典，会自动成为两个副本吗？"><a href="#两路读到的字典，会自动成为两个副本吗？" class="headerlink" title="两路读到的字典，会自动成为两个副本吗？"></a>两路读到的字典，会自动成为两个副本吗？</h2><p>独立迭代位置不等于深复制元素。若来源产生一个可变字典，两路取得的内容不能被无条件当作互不影响的编辑草稿。若消费者需要修改，应明确何处复制、复制哪些层，以及是否还与来源共享成员；若只读共享适合需求，则无需为所有元素盲目深复制。</p>
+<p>这项追问也影响测量。一个分支把元素保存进自己的结果列表，即使 tee 内部不再需要那项，应用列表仍在持有它。调查资源增长应画出全部持有者，区分内部等待历史与业务有意保存的输出，不能把所有保留都归因于同一个分流函数。</p>
+<p>如果一个分支提前返回，谁仍持有它的引用也应明确。不要宣称丢掉局部变量就保证某个时点释放了所有数据；外围闭包、任务对象与结果结构都可能继续持有相关对象。需要确定的资源上限，应通过流程合同与实际观察证明，而不是依赖垃圾回收的名字。</p>
+<h2 id="来源线程安全，就能并发使用-tee-分支吗？"><a href="#来源线程安全，就能并发使用-tee-分支吗？" class="headerlink" title="来源线程安全，就能并发使用 tee 分支吗？"></a>来源线程安全，就能并发使用 tee 分支吗？</h2><p>官方文档明确指出，同一次 tee 生成的迭代器不是线程安全的，即使底层来源本身安全，也不能据此推导包装后的分支安全。把两路交给线程，并没有因为独立读取位置就建立同步协议。需要并发交付时，应选择具有相应合同的队列或其他方案，核对取消与错误如何传播。</p>
+<p>此外，创建分支不会替程序启动两个执行者。主线程顺序执行两个 list，仍是先完整消费一路再消费另一路；不能把“有两个迭代器”写成两项工作正在并行。调度、线程与读取位置属于不同能力，性能报告应说明实际运行方式。</p>
+<p>拟议验证应覆盖交替消费、快分支先读完、慢分支暂停、某路提前退出和来源抛错。分别记录每路已接收身份、来源推进位置以及仍被保存的对象，避免只比较最后两个列表是否相等。最终输出相同，也可能是在承担大量中间保留之后才得到的。</p>
+<p>本文未运行这些检查。选用 tee 时，先给慢分支一个可解释的生命周期和消费差距，再让资源测量验证这份安排。独立位置是接口功能；差距是否有界、来源是否可重放、失败后怎样继续，仍须由应用承担。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/itertools.html" rel="noopener">itertools — Functions creating iterators for efficient looping — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+            <a class="tag tag--iterators" href="/zh-CN/tags/Iterators/">Iterators</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fpython-itertools-tee-lag-buffer%2F&text=Python%20itertools.tee%20%E5%88%86%E5%87%BA%E6%85%A2%E6%B6%88%E8%B4%B9%E8%80%85%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%86%85%E5%AD%98%E5%8F%AF%E8%83%BD%E4%B8%8A%E6%B6%A8%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fpython-itertools-tee-lag-buffer%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Python%20itertools.tee%20%E5%88%86%E5%87%BA%E6%85%A2%E6%B6%88%E8%B4%B9%E8%80%85%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%86%85%E5%AD%98%E5%8F%AF%E8%83%BD%E4%B8%8A%E6%B6%A8%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fpython-itertools-tee-lag-buffer%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/01/python-sqlite-executemany-returning-discard/">
+              <span>上一篇</span>
+              <strong>Python sqlite3 executemany 执行了 RETURNING，为什么 fetchall 为空？</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/">
+              <span>下一篇</span>
+              <strong>Python itertools.groupby 保存的组，遍历后为什么变空？</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#独立位置，不是独立生产">独立位置，不是独立生产</a>
+          
+            <a class="toc-link toc-link--h2" href="#用来源计数观察分支差距">用来源计数观察分支差距</a>
+          
+            <a class="toc-link toc-link--h2" href="#不能等待的慢分支，应该怎样安排？">不能等待的慢分支，应该怎样安排？</a>
+          
+            <a class="toc-link toc-link--h2" href="#两路读到的字典，会自动成为两个副本吗？">两路读到的字典，会自动成为两个副本吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#来源线程安全，就能并发使用-tee-分支吗？">来源线程安全，就能并发使用 tee 分支吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>264</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>203</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>89</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/">Python itertools.groupby 保存的组，遍历后为什么变空？</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/">asyncio.Queue.join 返回，不等于每条业务都成功了</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/python-sqlite-executemany-returning-discard/">Python sqlite3 executemany 执行了 RETURNING，为什么 fetchall 为空？</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

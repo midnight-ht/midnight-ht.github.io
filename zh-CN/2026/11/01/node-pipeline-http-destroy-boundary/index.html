@@ -1,0 +1,450 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Node.js pipeline 失败后，为什么 res.end 也发不出错误？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="以完整本地文件服务区分打开前拒绝与 pipeline 接管后的传输中断，解释连接销毁、真实句柄、响应阶段和验证边界。">
+  
+  
+    <meta name="keywords" content="pipeline 错误出口,HTTP 响应销毁,文件句柄">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/01/node-pipeline-http-destroy-boundary/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Node.js pipeline 失败后，为什么 res.end 也发不出错误？ | Midnight blog">
+    <meta property="og:description" content="以完整本地文件服务区分打开前拒绝与 pipeline 接管后的传输中断，解释连接销毁、真实句柄、响应阶段和验证边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/","name":"Node.js pipeline 失败后，为什么 res.end 也发不出错误？ | Midnight blog","description":"以完整本地文件服务区分打开前拒绝与 pipeline 接管后的传输中断，解释连接销毁、真实句柄、响应阶段和验证边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/","headline":"Node.js pipeline 失败后，为什么 res.end 也发不出错误？","description":"以完整本地文件服务区分打开前拒绝与 pipeline 接管后的传输中断，解释连接销毁、真实句柄、响应阶段和验证边界。","inLanguage":"zh-CN","datePublished":"2026-10-31T19:32:05.000Z","dateModified":"2026-10-31T19:32:05.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://nodejs.org/docs/latest-v24.x/api/stream.html","https://nodejs.org/docs/latest-v24.x/api/fs.html"],"keywords":"Development, Node.js, Streams"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Node.js pipeline 失败后，为什么 res.end 也发不出错误？","item":"https://www.zyweb.vip/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/" selected>zh-CN</option><option value="/en/2026/11/01/node-pipeline-http-destroy-boundary/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/" selected>zh-CN</option><option value="/en/2026/11/01/node-pipeline-http-destroy-boundary/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time>
+    </div>
+
+    <h1>Node.js pipeline 失败后，为什么 res.end 也发不出错误？</h1>
+
+    
+      <p class="post-hero__summary">以完整本地文件服务区分打开前拒绝与 pipeline 接管后的传输中断，解释连接销毁、真实句柄、响应阶段和验证边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time> · 预计阅读 8 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/01/node-pipeline-http-destroy-boundary/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/01/node-pipeline-http-destroy-boundary/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>捕获 pipeline 异常不保证响应通道仍可写。</li><li>先取得实际读取句柄，不用存在预检保证后续读取。</li><li>打开前拒绝、传输中断和接收成功需要不同证据。</li></ul></section>
+      <div class="article-content">
+        <p>Node.js 的 <code>pipeline</code> 失败时会清理参与的流，HTTP 响应所用连接也可能已经被销毁。因此，回调或 catch 能收到错误，不代表还能用 <code>res.end</code> 改发一段 JSON。文件响应应把接入 pipeline 之前的拒绝，与开始流式交付之后的中断分开设计；后者不能承诺替换已经开始或结束的响应。</p>
+<h2 id="错误到了-catch，写通道为什么没有回来？"><a href="#错误到了-catch，写通道为什么没有回来？" class="headerlink" title="错误到了 catch，写通道为什么没有回来？"></a>错误到了 catch，写通道为什么没有回来？</h2><p><a target="_blank" rel="noopener" href="https://nodejs.org/docs/latest-v24.x/api/stream.html#streampipelinesource-transforms-destination-callback">Node.js 二十四版 Stream 文档的 pipeline 章节</a>列出错误销毁规则，并直接给出 HTTP 文件读取失败后无法再发送预期错误消息的例子。本文于二〇二六年十一月一日核对的页面标为 v24.22.2；没有运行下面的服务，也没有观察真实网络回执。</p>
+<p>pipeline 的职责不只是把数据接起来，还包括传播错误和处理参与流的结束。源读取失败后，不能让下游无限等待未来不会再有的数据。自动关闭通常是有用的资源处置；问题是应用同时假设自己在错误出现后仍拥有可写的响应，把两份相冲突的所有权合同放进了同一段处理器。</p>
+<p>应先画三段时间：尚未把响应交给数据管道，已经接入但尚未完成，已经完成或销毁。第一段的错误通常还有机会按普通 HTTP 路径返回；第二段应按实际交付阶段处理；第三段再写文字不能倒转连接寿命。只看有没有异常，并不足以选择错误出口。</p>
+<p>也不能简单推论“任何 pipeline 错误都必然销毁所有对象”。官方列出了已经结束的可读或可写流等例外，具体生命周期应按所用接口核对。需要保留的判断是：接收错误不保证恢复写通道，而不是把一种失败顺序包装成所有自定义流的绝对行为。</p>
+<h2 id="先取得真正使用的文件句柄"><a href="#先取得真正使用的文件句柄" class="headerlink" title="先取得真正使用的文件句柄"></a>先取得真正使用的文件句柄</h2><p>下面是未执行的完整 Node.js ESM 教学服务。保存为 <code>download-demo.mjs</code> 后以 Node 二十四版运行；它自己创建独立临时目录和固定文件，只监听本机，不允许用户指定任意文件路径。按 Ctrl+C 退出时清理本次临时目录。该程序说明响应阶段，没有实现真实账户、业务下载授权或生产服务器能力。</p>
+<pre><code class="js">import http from &#39;node:http&#39;;
+import { mkdtemp, writeFile, open, rm } from &#39;node:fs/promises&#39;;
+import { tmpdir } from &#39;node:os&#39;;
+import { join } from &#39;node:path&#39;;
+import { pipeline } from &#39;node:stream/promises&#39;;
+
+const directory = await mkdtemp(join(tmpdir(), &#39;pipeline-demo-&#39;));
+const report = join(directory, &#39;report.txt&#39;);
+await writeFile(report, &#39;teaching report\n&#39;, &#39;utf8&#39;);
+
+function reject(response, status, message) {
+  response.writeHead(status, { &#39;Content-Type&#39;: &#39;text/plain; charset=utf-8&#39; });
+  response.end(message);
+}
+
+const server = http.createServer(async (request, response) =&gt; {
+  if (![&#39;/report&#39;, &#39;/missing&#39;].includes(request.url)) {
+    reject(response, 404, &#39;unknown teaching route&#39;);
+    return;
+  }
+  let handle;
+  try {
+    const target = request.url === &#39;/report&#39; ? report : join(directory, &#39;missing.txt&#39;);
+    handle = await open(target, &#39;r&#39;);
+  } catch (error) {
+    reject(response, error.code === &#39;ENOENT&#39; ? 404 : 500, &#39;cannot open report&#39;);
+    return;
+  }
+  const source = handle.createReadStream({ autoClose: true });
+  response.setHeader(&#39;Content-Type&#39;, &#39;text/plain; charset=utf-8&#39;);
+  try {
+    await pipeline(source, response);
+  } catch (error) {
+    console.error(&#39;transfer interrupted&#39;, error.code ?? error.message);
+    // The response has been handed to pipeline. Do not promise another body.
+  }
+});
+
+server.listen(8766, &#39;localhost&#39;);
+process.once(&#39;SIGINT&#39;, () =&gt; {
+  server.close(async () =&gt; {
+    await rm(directory, { recursive: true, force: true });
+  });
+});
+</code></pre>
+<p>另一个终端可分别检查正常读取与打开前失败：</p>
+<pre><code class="sh">node download-demo.mjs
+# 服务应在独立终端运行；下面请求在另一终端发出。
+curl -i http://localhost:8766/report
+curl -i http://localhost:8766/missing
+</code></pre>
+<p>服务终端应保持运行，不是执行完启动命令后继续在同一前台终端发送请求。正常路径使用已经打开的同一句柄创建流，缺文件路径在 pipeline 接管之前拒绝。这里的状态码与文字是教学选择；真实服务还需要按对象授权和错误披露规则制定响应。</p>
+<p>句柄取得以后，读取仍可能失败。磁盘、流实现、对端断开或进程退出都可能改变后续过程。这个安排只是把“文件无法打开”的错误移到尚可选择响应的阶段，没有给整段传输加上成功保证，更没有证明接收者已保存或处理文件。</p>
+<p>示例把文件流的关闭交给其自动关闭与管道生命周期，未把 <code>handle</code> 再交给另一个并发读取者。若项目把同一句柄用于多条流，就需要重新核对所有权，不能让其中一路失败时关闭别人还在使用的资源。临时目录清理也只对应正常受控退出，强制终止后的遗留物需要另外管理。</p>
+<h2 id="为什么不用-access-或-stat-预检查？"><a href="#为什么不用-access-或-stat-预检查？" class="headerlink" title="为什么不用 access 或 stat 预检查？"></a>为什么不用 access 或 stat 预检查？</h2><p>先检查存在，随后重新打开，是两次操作。中间文件可能被替换或删除；即使检查通过，真正读取仍能失败。本站<a href="/zh-CN/2026/10/29/node-fs-access-open-race/">access 与 open 的竞争窗口</a>讨论这一层问题。本例先取得实际句柄，避免把一次预检查当作后续文件状态的许可证。</p>
+<p>不过，句柄取得成功也不是业务授权。固定教学路径减少了输入范围，真实下载仍要验证当前身份能否读取对应产物，不能把任意请求路径拼成磁盘地址。授权失败应尽可能在交付数据之前完成；一旦敏感字节已经发出，后面的 catch 无法把它收回。</p>
+<p>另外，不应为了保留错误正文而把整个文件先读进内存。对于有界小对象，缓冲可以是有意选择；对于大文件或不受控来源，这会引入另一份容量责任。应比较数据规模、取消需求与接收协议，而不是用一个统一读取函数替换所有流。</p>
+<h2 id="headersSent-为假，就一定能补发-JSON-吗？"><a href="#headersSent-为假，就一定能补发-JSON-吗？" class="headerlink" title="headersSent 为假，就一定能补发 JSON 吗？"></a>headersSent 为假，就一定能补发 JSON 吗？</h2><p>不能据一个标志作这样的保证。它描述头部发送状态，不代表对端仍连接、响应未被销毁或写入必定成功。若 pipeline 已接管并按错误规则销毁通道，应用不应因为头部尚未发出就承诺还能换一种响应；需要实际检查生命周期，并把不可交付的错误留给可观察记录。</p>
+<p>这里也要区分记录与补偿。记录传输中断，可以解释服务端观察到了什么；若用户需要恢复下载，应由可重试产物身份、保留期限或协议支持提供路径。记录一条 error 日志不创建恢复能力，更不证明客户端究竟收到了多少内容。</p>
+<h2 id="怎样验证两个错误出口？"><a href="#怎样验证两个错误出口？" class="headerlink" title="怎样验证两个错误出口？"></a>怎样验证两个错误出口？</h2><p>第一组测试使用不存在的固定文件，核对打开失败仍得到约定的拒绝响应。第二组在隔离样本中让读取流于交付后报错，检查调用方观察的是中断，而不是伪造的完整 JSON 错误。第三组让客户端下载中途断开，检查源读取和句柄是否结束，并保留实际错误类别。</p>
+<p>每组分别记录响应状态是否已经确定、客户端是否收到完整正文、服务器是否完成资源收尾。不要把服务端 pipeline 返回成功直接写成客户端业务成功；需要端到端校验的文件，还要定义长度、摘要或应用级接收确认。本文没有执行这些测试，示例也不包含故障注入后的成功日志。</p>
+<p>排查提交应指出数据何时交给 pipeline，以及错误发生时谁还能决定响应。打开之前能拒绝，交付之后能识别中断，结束之后不再假装写入；这三项边界明确，catch 才是在处理真实状态，而不是向已经失效的连接补写一个看起来完整的答案。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://nodejs.org/docs/latest-v24.x/api/stream.html" rel="noopener">Stream | Node.js v24.22.2 Documentation</a></li><li><a target="_blank" href="https://nodejs.org/docs/latest-v24.x/api/fs.html" rel="noopener">File system | Node.js v24.22.2 Documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--node-js" href="/zh-CN/tags/Node.js/">Node.js</a>
+          
+            <a class="tag tag--streams" href="/zh-CN/tags/Streams/">Streams</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fnode-pipeline-http-destroy-boundary%2F&text=Node.js%20pipeline%20%E5%A4%B1%E8%B4%A5%E5%90%8E%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%20res.end%20%E4%B9%9F%E5%8F%91%E4%B8%8D%E5%87%BA%E9%94%99%E8%AF%AF%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fnode-pipeline-http-destroy-boundary%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Node.js%20pipeline%20%E5%A4%B1%E8%B4%A5%E5%90%8E%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%20res.end%20%E4%B9%9F%E5%8F%91%E4%B8%8D%E5%87%BA%E9%94%99%E8%AF%AF%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fnode-pipeline-http-destroy-boundary%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/01/playwright-test-step-boxed-error-location/">
+              <span>上一篇</span>
+              <strong>Playwright test.step：box为何把错误指到调用处？</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/01/kubernetes-readonly-root-volume-boundary/">
+              <span>下一篇</span>
+              <strong>Kubernetes根文件系统只读，挂载目录为什么仍可写？</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#错误到了-catch，写通道为什么没有回来？">错误到了 catch，写通道为什么没有回来？</a>
+          
+            <a class="toc-link toc-link--h2" href="#先取得真正使用的文件句柄">先取得真正使用的文件句柄</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么不用-access-或-stat-预检查？">为什么不用 access 或 stat 预检查？</a>
+          
+            <a class="toc-link toc-link--h2" href="#headersSent-为假，就一定能补发-JSON-吗？">headersSent 为假，就一定能补发 JSON 吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#怎样验证两个错误出口？">怎样验证两个错误出口？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>264</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>203</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>89</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/30/node-dns-lookup-resolve-scope/">hosts 里能找到地址，Node.js resolve 为什么仍失败？</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/30/node-process-exit-stdout-truncation/">Node.js 打印完就 exit，管道里的 JSON 为什么少了一截？</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/node-fs-access-open-race/">access 已通过，Node.js open 为什么仍报 ENOENT？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

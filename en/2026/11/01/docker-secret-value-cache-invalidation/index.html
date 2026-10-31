@@ -1,0 +1,423 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why does a Docker build reuse a step after its secret changes? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Compare three builds using a harmless secret and independent revision, separating cache reuse, credential validation, and dependency updates.">
+  
+  
+    <meta name="keywords" content="secret cache invalidation,non-secret revision,credential rotation validation">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/01/docker-secret-value-cache-invalidation/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/01/docker-secret-value-cache-invalidation/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why does a Docker build reuse a step after its secret changes? | Midnight blog">
+    <meta property="og:description" content="Compare three builds using a harmless secret and independent revision, separating cache reuse, credential validation, and dependency updates.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/01/docker-secret-value-cache-invalidation/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/01/docker-secret-value-cache-invalidation/#webpage","url":"https://www.zyweb.vip/en/2026/11/01/docker-secret-value-cache-invalidation/","name":"Why does a Docker build reuse a step after its secret changes? | Midnight blog","description":"Compare three builds using a harmless secret and independent revision, separating cache reuse, credential validation, and dependency updates.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/01/docker-secret-value-cache-invalidation/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/01/docker-secret-value-cache-invalidation/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/01/docker-secret-value-cache-invalidation/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/01/docker-secret-value-cache-invalidation/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/01/docker-secret-value-cache-invalidation/","headline":"Why does a Docker build reuse a step after its secret changes?","description":"Compare three builds using a harmless secret and independent revision, separating cache reuse, credential validation, and dependency updates.","inLanguage":"en","datePublished":"2026-10-31T19:32:05.000Z","dateModified":"2026-10-31T19:32:05.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://docs.docker.com/build/cache/invalidation/"],"keywords":"Delivery, Docker, BuildKit"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/01/docker-secret-value-cache-invalidation/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why does a Docker build reuse a step after its secret changes?","item":"https://www.zyweb.vip/en/2026/11/01/docker-secret-value-cache-invalidation/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/">zh-CN</option><option value="/en/2026/11/01/docker-secret-value-cache-invalidation/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/">zh-CN</option><option value="/en/2026/11/01/docker-secret-value-cache-invalidation/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time>
+    </div>
+
+    <h1>Why does a Docker build reuse a step after its secret changes?</h1>
+
+    
+      <p class="post-hero__summary">Compare three builds using a harmless secret and independent revision, separating cache reuse, credential validation, and dependency updates.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time> · Estimated read 13 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/01/docker-secret-value-cache-invalidation/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Changing secret contents does not automatically invalidate cache.</li><li>An independent non-secret revision can express rerun intent.</li><li>A cache hit validates neither new access nor old-access revocation.</li></ul></section>
+      <div class="article-content">
+        <p>Changing only a Docker build secret can leave the consuming step cached. Secret contents do not participate in cache comparison, so a successful rebuild may never have used the new credential. If rotation requires an access check, explicitly rerun the relevant step and inspect its result rather than interpreting reuse as authentication success.</p>
+<h2 id="Which-changes-cause-another-execution"><a href="#Which-changes-cause-another-execution" class="headerlink" title="Which changes cause another execution?"></a>Which changes cause another execution?</h2><p>Docker&#39;s <a target="_blank" rel="noopener" href="https://docs.docker.com/build/cache/invalidation/">Build cache invalidation guide</a> separates secret contents from other inputs. Changing the value does not invalidate cache; secret identifiers and mount properties participate in cache checks. A separately changed build argument can express the need to rerun. The online guide was checked on November 1, 2026. No build, credential rotation, or private dependency request was performed.</p>
+<p>The cache has not determined that the new credential works. It has reused an earlier result without running this attempt at authentication. Previous access does not establish the replacement credential&#39;s permissions, scope, or expiry. If testing rotation is the goal, a skipped command leaves that evidence missing.</p>
+<p>Not every rotation requires rebuilding every approved dependency. Some deliveries intentionally reuse an accepted result; others must contact the remote service again. State that choice. Credential replacement, dependency updates, and image rebuilding are related operations with different completion conditions.</p>
+<h2 id="A-harmless-cache-comparison"><a href="#A-harmless-cache-comparison" class="headerlink" title="A harmless cache comparison"></a>A harmless cache comparison</h2><p>This example has not been executed. In one terminal, create the owned lab parent and context subdirectory below, then save the Dockerfile in that context. The fake value belongs only to this new parent, not an arbitrary existing project sibling. A BuildKit-capable builder is required; verify the selected busybox tag independently rather than treating it as a pinned production image.</p>
+<pre><code class="sh">lab_root=&quot;$(mktemp -d)&quot;
+mkdir &quot;$lab_root/context&quot;
+secret_file=&quot;$lab_root/training-secret&quot;
+</code></pre>
+<p>Save this as context/Dockerfile under the newly created directory:</p>
+<pre><code class="dockerfile"># syntax=docker/dockerfile:1
+FROM busybox:1.37
+ARG SECRET_REV=first
+RUN --mount=type=secret,id=training \
+    test -s /run/secrets/training \
+    &amp;&amp; printf &#39;executed revision %s\n&#39; &quot;$SECRET_REV&quot; &gt; /run-proof
+CMD [&quot;cat&quot;, &quot;/run-proof&quot;]
+</code></pre>
+<p>In the same terminal, define the complete build function and run the three comparisons. Every call uses the newly owned paths. These values are invalid training material, not production credentials.</p>
+<pre><code class="sh">run_build() {
+  docker buildx build --load --progress=plain \
+    --secret &quot;id=training,src=$secret_file&quot; \
+    --build-arg &quot;SECRET_REV=$1&quot; \
+    -t secret-cache-demo &quot;$lab_root/context&quot;
+}
+printf &#39;training-only-a\n&#39; &gt; &quot;$secret_file&quot;
+run_build first
+printf &#39;training-only-b\n&#39; &gt; &quot;$secret_file&quot;
+run_build first
+run_build second
+</code></pre>
+<p>The first build supplies an existing result. The second changes only secret contents; the third changes an independently consumed revision argument. The value change alone does not require invalidation, while the changed argument can trigger execution. Inspect the actual target-step cache status rather than three occurrences of the same image name.</p>
+<p>The run-proof file contains only a public revision marker. It does not copy the secret. It helps identify the result included in the image when read alongside build logs, but proves no authentication outcome: this fixture contacts no authenticated service. Its purpose is to isolate cache semantics.</p>
+<h2 id="Keep-the-refresh-signal-separate-from-the-secret"><a href="#Keep-the-refresh-signal-separate-from-the-secret" class="headerlink" title="Keep the refresh signal separate from the secret"></a>Keep the refresh signal separate from the secret</h2><p>A public configuration revision or another non-sensitive identifier can mean that this attempt requires execution. The rotation process must maintain it; a permanently unchanged value cannot support a claim of repeated authentication. It also should not imply a new dependency version. A credential revision expresses rerun intent, not a requirement to fetch the latest package.</p>
+<p>Do not put a password into an ordinary build argument to invalidate cache. Arguments have different recording and artifact boundaries from secret mounts. A password digest is not automatically public either: guessability and cross-system correlation still need assessment. An independent revision expresses intent without propagating derived secret material.</p>
+<p>Where supported, invalidate a named dependency stage rather than every step, or explicitly choose a broader cache bypass and its cost. Renaming secret IDs or paths can affect the cache, but endlessly renaming interfaces is a poor implicit rotation policy. Keep mount contracts understandable.</p>
+<h2 id="What-establishes-that-the-new-credential-was-checked"><a href="#What-establishes-that-the-new-credential-was-checked" class="headerlink" title="What establishes that the new credential was checked?"></a>What establishes that the new credential was checked?</h2><p>In an authorized environment, fix the target resource, request and required permissions, ensure the consuming step actually executes, and observe access with the new identity. Test old-access revocation separately. New success does not establish that the old credential stopped working, nor does access success establish the final dependency contents.</p>
+<p>If new authentication fails but the pipeline falls back to an old cached artifact, that is a fallback decision. It is not successful validation of the replacement credential. An approved old artifact may remain usable under release policy, but record what was reused and which rotation check remains open. Do not swallow the access failure to obtain a green result.</p>
+<p><a href="/en/2026/10/10/docker-secret-output/">Build secrets and final outputs</a> explains why a protected input channel does not prevent a command from copying secrets. This article explains why providing a new input does not prove the command ran. Both controls are needed; a cache revision does not replace output or permission protection.</p>
+<h2 id="Should-a-secret-digest-become-CACHEBUST"><a href="#Should-a-secret-digest-become-CACHEBUST" class="headerlink" title="Should a secret digest become CACHEBUST?"></a>Should a secret digest become CACHEBUST?</h2><p>Not by default. Assess whether it reveals guessable information, creates durable correlation, or enters build records. Prefer an independent revision where it adequately expresses the rerun. No universal safe digest construction or real-secret entropy assessment is provided here.</p>
+<p>A proposed receipt records a non-sensitive secret-object identity, public revision, build inputs, step execution status, and authorized-access outcome without the value itself. Check the final image&#39;s dependencies and deployment adoption separately. This fixture has no execution, image digest, authentication receipt, or completed rotation claim. Cache reuse is evidence of reuse; rotation validation requires new access evidence.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://docs.docker.com/build/cache/invalidation/" rel="noopener">Build cache invalidation | Docker Docs</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--delivery" href="/en/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--docker" href="/en/tags/docker/">Docker</a>
+          
+            <a class="tag tag--buildkit" href="/en/tags/BuildKit/">BuildKit</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--delivery" href="/en/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F01%2Fdocker-secret-value-cache-invalidation%2F&text=Why%20does%20a%20Docker%20build%20reuse%20a%20step%20after%20its%20secret%20changes%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F01%2Fdocker-secret-value-cache-invalidation%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20does%20a%20Docker%20build%20reuse%20a%20step%20after%20its%20secret%20changes%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F01%2Fdocker-secret-value-cache-invalidation%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/01/dom-mutationobserver-delivery-batching/">
+              <span>Previous Post</span>
+              <strong>MutationObserver: why has the DOM changed before the callback runs?</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/01/css-subgrid-shared-track-sizing/">
+              <span>Next Post</span>
+              <strong>CSS subgrid: why do identical nested grids still misalign?</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Which-changes-cause-another-execution">Which changes cause another execution?</a>
+          
+            <a class="toc-link toc-link--h2" href="#A-harmless-cache-comparison">A harmless cache comparison</a>
+          
+            <a class="toc-link toc-link--h2" href="#Keep-the-refresh-signal-separate-from-the-secret">Keep the refresh signal separate from the secret</a>
+          
+            <a class="toc-link toc-link--h2" href="#What-establishes-that-the-new-credential-was-checked">What establishes that the new credential was checked?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Should-a-secret-digest-become-CACHEBUST">Should a secret digest become CACHEBUST?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>264</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>203</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>89</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/31/docker-run-network-fetch-scope/">RUN has no network. Why can remote ADD still fetch?</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/30/docker-healthcheck-start-period-early-success/">Why can Docker become unhealthy before start-period ends?</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/29/docker-multistage-named-source/">A new Docker build stage can change what COPY --from=0 means</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

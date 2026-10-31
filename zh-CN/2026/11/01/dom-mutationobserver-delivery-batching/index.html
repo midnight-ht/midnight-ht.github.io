@@ -1,0 +1,434 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>MutationObserver：DOM已修改，回调为何还没执行？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用完整属性修改样本区分同步DOM、排队记录与回调批次，检查oldValue、takeRecords和停止观察。">
+  
+  
+    <meta name="keywords" content="MutationObserver,微任务通知,oldValue">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/01/dom-mutationobserver-delivery-batching/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/01/dom-mutationobserver-delivery-batching/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/01/dom-mutationobserver-delivery-batching/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/01/dom-mutationobserver-delivery-batching/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="MutationObserver：DOM已修改，回调为何还没执行？ | Midnight blog">
+    <meta property="og:description" content="用完整属性修改样本区分同步DOM、排队记录与回调批次，检查oldValue、takeRecords和停止观察。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/01/dom-mutationobserver-delivery-batching/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/dom-mutationobserver-delivery-batching/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/01/dom-mutationobserver-delivery-batching/","name":"MutationObserver：DOM已修改，回调为何还没执行？ | Midnight blog","description":"用完整属性修改样本区分同步DOM、排队记录与回调批次，检查oldValue、takeRecords和停止观察。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/dom-mutationobserver-delivery-batching/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/dom-mutationobserver-delivery-batching/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/dom-mutationobserver-delivery-batching/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/dom-mutationobserver-delivery-batching/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/01/dom-mutationobserver-delivery-batching/","headline":"MutationObserver：DOM已修改，回调为何还没执行？","description":"用完整属性修改样本区分同步DOM、排队记录与回调批次，检查oldValue、takeRecords和停止观察。","inLanguage":"zh-CN","datePublished":"2026-10-31T19:32:05.000Z","dateModified":"2026-10-31T19:32:05.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://dom.spec.whatwg.org/#mutation-observers","https://dom.spec.whatwg.org/#dom-mutationobserver-takerecords"],"keywords":"Development, DOM, JavaScript"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/dom-mutationobserver-delivery-batching/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"MutationObserver：DOM已修改，回调为何还没执行？","item":"https://www.zyweb.vip/zh-CN/2026/11/01/dom-mutationobserver-delivery-batching/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/dom-mutationobserver-delivery-batching/" selected>zh-CN</option><option value="/en/2026/11/01/dom-mutationobserver-delivery-batching/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/dom-mutationobserver-delivery-batching/" selected>zh-CN</option><option value="/en/2026/11/01/dom-mutationobserver-delivery-batching/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time>
+    </div>
+
+    <h1>MutationObserver：DOM已修改，回调为何还没执行？</h1>
+
+    
+      <p class="post-hero__summary">用完整属性修改样本区分同步DOM、排队记录与回调批次，检查oldValue、takeRecords和停止观察。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/01/dom-mutationobserver-delivery-batching/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/01/dom-mutationobserver-delivery-batching/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>回调次数不等于修改次数。</li><li>target引用的当前值与oldValue记录不同。</li><li>takeRecords和disconnect需要明确收尾政策。</li></ul></section>
+      <div class="article-content">
+        <p>同一段脚本连续改两次属性，DOM已经是新值，MutationObserver回调却可能还没执行。修改本身与观察记录的通知不是同一时刻。先区分当前树、排队记录和回调交付，再判断是没有观察到变化，还是检查得太早。</p>
+<h2 id="一次回调不是一次修改"><a href="#一次回调不是一次修改" class="headerlink" title="一次回调不是一次修改"></a>一次回调不是一次修改</h2><p><a target="_blank" rel="noopener" href="https://dom.spec.whatwg.org/#mutation-observers">DOM标准的变更观察器算法</a>把变更记录加入队列，再通过微任务通知待处理的观察器。同一个通知微任务已排队时，不必为每次同步修改再排一个相同通知。回调收到的是一批记录，不能把回调执行次数当成用户修改次数。</p>
+<p>这不表示浏览器把所有变化合成一条最终记录。记录类型、目标与配置影响会保留什么，attributes、childList和characterData也不是可互换的选项。需要观察属性变化，却只启用childList，当然不能用“回调没来”证明修改没有发生。</p>
+<p>还要分清记录与目标引用。record.target指向实际节点，不是一份完整历史DOM副本。回调开始以后读取它的属性，可能已经是后续修改留下的值；若需要前一个值，应核对相应oldValue选项，而不是期待再次读取target能恢复过去。</p>
+<h2 id="一个完整的同步修改与通知样本"><a href="#一个完整的同步修改与通知样本" class="headerlink" title="一个完整的同步修改与通知样本"></a>一个完整的同步修改与通知样本</h2><p>以下HTML未执行，不依赖框架或接口。按钮连续改同一个属性，输出区域放在被观察目标之外，避免记录日志本身又成为观察输入。日志顺序是待验证对象，不是本文已经取得的控制台结果。</p>
+<pre><code class="html">&lt;!doctype html&gt;
+&lt;html lang=&quot;zh-CN&quot;&gt;
+&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;title&gt;变更记录教学&lt;/title&gt;&lt;/head&gt;
+&lt;body&gt;
+&lt;h1&gt;比较当前DOM与排队记录&lt;/h1&gt;
+&lt;div id=&quot;target&quot; data-state=&quot;idle&quot;&gt;教学目标&lt;/div&gt;
+&lt;button id=&quot;run&quot; type=&quot;button&quot;&gt;连续修改两次&lt;/button&gt;
+&lt;pre id=&quot;log&quot;&gt;&lt;/pre&gt;
+&lt;script&gt;
+const [target, run, log] = [&#39;target&#39;, &#39;run&#39;, &#39;log&#39;].map(
+  id =&gt; document.getElementById(id)
+);
+function write(entry) {
+  log.textContent += JSON.stringify(entry) + &#39;\n&#39;;
+}
+const observer = new MutationObserver(records =&gt; {
+  write({ phase: &#39;observer&#39;, records: records.map(record =&gt; ({
+    type: record.type, old: record.oldValue,
+    current: record.target.getAttribute(&#39;data-state&#39;)
+  })) });
+});
+observer.observe(target, {
+  attributes: true, attributeFilter: [&#39;data-state&#39;], attributeOldValue: true
+});
+run.onclick = () =&gt; {
+  write({ phase: &#39;handler-start&#39; });
+  target.setAttribute(&#39;data-state&#39;, &#39;loading&#39;);
+  target.setAttribute(&#39;data-state&#39;, &#39;ready&#39;);
+  write({ phase: &#39;handler-end&#39;, current: target.getAttribute(&#39;data-state&#39;) });
+};
+window.addEventListener(&#39;pagehide&#39;, () =&gt; observer.disconnect(), { once: true });
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+<p>首次点击时，按算法推导，同步处理器结束前目标已是ready；之后的观察通知可以带来两条属性记录，其旧值分别来自idle和loading。回调里读取同一个目标的当前值，则可能两条都读到ready。旧值不同、当前值相同，并不说明某条记录被错误复制。</p>
+<p>这个推演限定本样本的同步两次修改，没有其他脚本插入变化。真实应用若在不同任务、微任务或组件周期里操作，通知批次可能不同。不要把样本中的两条记录和一次通知当成所有调度条件下的保证；更不能靠一个随意的固定等待来证明每个中间状态都已被保存。</p>
+<h2 id="需要保存中间状态，选项够不够？"><a href="#需要保存中间状态，选项够不够？" class="headerlink" title="需要保存中间状态，选项够不够？"></a>需要保存中间状态，选项够不够？</h2><p>如果任务是查谁把属性改坏，旧值记录可能有帮助；如果任务是每次业务编辑的审计，DOM观察通常还缺少操作身份、原因和服务器确认。一次用户动作可能修改多个节点，一次框架渲染也可能重建整个区域。把每个MutationRecord直接当作一笔业务交易，会把实现细节混进审计口径。</p>
+<p>记录配置应从需要的证据反推。只关心data-state时使用属性筛选，避免整棵页面所有样式变化淹没日志；需要子节点增删时再选择childList与适当subtree范围。开启更多选项可以增加数据，也会增加处理和解释责任，不能把“记录最多”视为“结论最可靠”。</p>
+<p>如果只想在相关变化后重新计算一个摘要，可以在一批通知后读取最终状态。此时不需要假装逐条重播了用户动作。选择最终状态还是变更历史，是两份不同合同；回调提供的节点引用更适合哪一种，需要按任务说明。</p>
+<p><a href="/zh-CN/2026/10/28/dom-nodelist-live-static-membership/">动态NodeList与静态成员</a>同样区分引用与快照，但它不规定观察通知时机。本篇增加了队列与oldValue之间的关系。两种机制可以一起出现，不能因为先取得了静态节点列表，就假定后来读取的节点内容也被冻结。</p>
+<h2 id="disconnect会先把最后几条回调完吗？"><a href="#disconnect会先把最后几条回调完吗？" class="headerlink" title="disconnect会先把最后几条回调完吗？"></a>disconnect会先把最后几条回调完吗？</h2><p><a target="_blank" rel="noopener" href="https://dom.spec.whatwg.org/#dom-mutationobserver-takerecords">MutationObserver接口算法</a>说明，takeRecords返回并清空记录队列；disconnect则移除观察关系并清空相应队列。停止观察不是一个承诺“先交付全部未处理记录”的刷新操作。若收尾需要保留记录，应明确先取得并处理，再停止观察。</p>
+<p>takeRecords也不会替调用者执行回调逻辑。若代码拿走队列后丢弃返回值，之后没有回调不代表原来没有变化，而可能是记录已被自己取走。共享一个处理函数处理回调批次与主动取得的批次，是一种设计选择，但必须避免同一批记录重复记账。</p>
+<p>页面销毁时要先决定目标。如果只是临时界面摘要，丢掉尚未显示的通知可能可以接受；如果承诺完整记录，离开页面、切换组件和停止观察时的收尾就需要专门设计。本文不把这套观察器当成持久可靠的业务日志，也没有实现跨页面记录交付。</p>
+<h2 id="为什么观察器有时像在自己触发自己？"><a href="#为什么观察器有时像在自己触发自己？" class="headerlink" title="为什么观察器有时像在自己触发自己？"></a>为什么观察器有时像在自己触发自己？</h2><p>回调改动被观察范围内的节点，会产生新的变化。这可能是有意的后处理，也可能持续生成下一批通知。样本把pre放在目标之外，正是为了让诊断输出不改变输入；它不是所有真实组件都应采用同样DOM位置的强制规则。</p>
+<p>更复杂的组件应说明哪些节点由谁修改，何时不必再写入相同派生结果，如何停止观察和释放相关引用。只在回调开头加一个布尔锁，可能掩盖合法的后续变化；只不断清空日志，又会失去调查依据。修复应回到产生记录的动作与实际需要维护的状态。</p>
+<p>拟议验收先比较首次两次属性修改，再测试不同批次、改变筛选范围、主动takeRecords和disconnect前后的记录。分别保留同步DOM值、记录数量、旧值、回调时间和最终摘要，不只看回调计数。本文没有执行这些场景。交付时应能解释每条记录描述什么，以及为什么当前读取不等于历史快照。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://dom.spec.whatwg.org/#mutation-observers" rel="noopener">DOM Living Standard §4.3 Mutation observers: queue and notify</a></li><li><a target="_blank" href="https://dom.spec.whatwg.org/#dom-mutationobserver-takerecords" rel="noopener">DOM Living Standard §4.3.1 MutationObserver disconnect/takeRecords</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--dom" href="/zh-CN/tags/DOM/">DOM</a>
+          
+            <a class="tag tag--javascript" href="/zh-CN/tags/JavaScript/">JavaScript</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fdom-mutationobserver-delivery-batching%2F&text=MutationObserver%EF%BC%9ADOM%E5%B7%B2%E4%BF%AE%E6%94%B9%EF%BC%8C%E5%9B%9E%E8%B0%83%E4%B8%BA%E4%BD%95%E8%BF%98%E6%B2%A1%E6%89%A7%E8%A1%8C%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fdom-mutationobserver-delivery-batching%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=MutationObserver%EF%BC%9ADOM%E5%B7%B2%E4%BF%AE%E6%94%B9%EF%BC%8C%E5%9B%9E%E8%B0%83%E4%B8%BA%E4%BD%95%E8%BF%98%E6%B2%A1%E6%89%A7%E8%A1%8C%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fdom-mutationobserver-delivery-batching%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/01/git-force-with-lease-explicit-expectation/">
+              <span>上一篇</span>
+              <strong>Git --force-with-lease为何仍可能覆盖没审过的远端提交？</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/">
+              <span>下一篇</span>
+              <strong>Docker secret值换了，为什么认证步骤仍命中缓存？</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#一次回调不是一次修改">一次回调不是一次修改</a>
+          
+            <a class="toc-link toc-link--h2" href="#一个完整的同步修改与通知样本">一个完整的同步修改与通知样本</a>
+          
+            <a class="toc-link toc-link--h2" href="#需要保存中间状态，选项够不够？">需要保存中间状态，选项够不够？</a>
+          
+            <a class="toc-link toc-link--h2" href="#disconnect会先把最后几条回调完吗？">disconnect会先把最后几条回调完吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么观察器有时像在自己触发自己？">为什么观察器有时像在自己触发自己？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>264</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>203</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>89</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/30/dom-passive-preventdefault-cancellation/">DOM事件已调用preventDefault，为什么defaultPrevented仍是false？</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/28/dom-nodelist-live-static-membership/">删节点时隔一个漏一个：先看列表会不会跟着变</a></h3>
+          <p>2026-10-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/intersectionobserver-ratio-not-visibility/">IntersectionObserver比例为1，就能证明用户看见了吗？</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

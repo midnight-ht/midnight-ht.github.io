@@ -1,0 +1,426 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why can Git --force-with-lease still overwrite unreviewed remote work? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Explain implicit leases and background fetch with a local bare-repository fixture, then inspect explicit expectations, rejection recovery, and final refs.">
+  
+  
+    <meta name="keywords" content="explicit lease,expected remote object,background fetch">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/01/git-force-with-lease-explicit-expectation/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/01/git-force-with-lease-explicit-expectation/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/01/git-force-with-lease-explicit-expectation/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/01/git-force-with-lease-explicit-expectation/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why can Git --force-with-lease still overwrite unreviewed remote work? | Midnight blog">
+    <meta property="og:description" content="Explain implicit leases and background fetch with a local bare-repository fixture, then inspect explicit expectations, rejection recovery, and final refs.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/01/git-force-with-lease-explicit-expectation/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/01/git-force-with-lease-explicit-expectation/#webpage","url":"https://www.zyweb.vip/en/2026/11/01/git-force-with-lease-explicit-expectation/","name":"Why can Git --force-with-lease still overwrite unreviewed remote work? | Midnight blog","description":"Explain implicit leases and background fetch with a local bare-repository fixture, then inspect explicit expectations, rejection recovery, and final refs.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/01/git-force-with-lease-explicit-expectation/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/01/git-force-with-lease-explicit-expectation/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/01/git-force-with-lease-explicit-expectation/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/01/git-force-with-lease-explicit-expectation/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/01/git-force-with-lease-explicit-expectation/","headline":"Why can Git --force-with-lease still overwrite unreviewed remote work?","description":"Explain implicit leases and background fetch with a local bare-repository fixture, then inspect explicit expectations, rejection recovery, and final refs.","inLanguage":"en","datePublished":"2026-10-31T19:32:05.000Z","dateModified":"2026-10-31T19:32:05.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://git-scm.com/docs/git-push"],"keywords":"Delivery, Git, force-with-lease"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/01/git-force-with-lease-explicit-expectation/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why can Git --force-with-lease still overwrite unreviewed remote work?","item":"https://www.zyweb.vip/en/2026/11/01/git-force-with-lease-explicit-expectation/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/01/git-force-with-lease-explicit-expectation/">zh-CN</option><option value="/en/2026/11/01/git-force-with-lease-explicit-expectation/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/01/git-force-with-lease-explicit-expectation/">zh-CN</option><option value="/en/2026/11/01/git-force-with-lease-explicit-expectation/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time>
+    </div>
+
+    <h1>Why can Git --force-with-lease still overwrite unreviewed remote work?</h1>
+
+    
+      <p class="post-hero__summary">Explain implicit leases and background fetch with a local bare-repository fixture, then inspect explicit expectations, rejection recovery, and final refs.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time> · Estimated read 15 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/01/git-force-with-lease-explicit-expectation/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/01/git-force-with-lease-explicit-expectation/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Background fetch can move an implicit lease&#39;s comparison point.</li><li>An explicit expectation needs an acknowledged state, not automatic overwrite approval.</li><li>Ref acceptance does not establish ancestry, behavior, or deployment.</li></ul></section>
+      <div class="article-content">
+        <p>Git --force-with-lease without an explicit expected value generally uses local remote-tracking state as its comparison point. A background fetch can advance that state even when you have not reviewed or integrated the new remote work. Protect an acknowledged remote object identity rather than relying on the presence of lease in the command name.</p>
+<h2 id="Why-can-the-comparison-point-move-without-a-code-edit"><a href="#Why-can-the-comparison-point-move-without-a-code-edit" class="headerlink" title="Why can the comparison point move without a code edit?"></a>Why can the comparison point move without a code edit?</h2><p>The <a target="_blank" rel="noopener" href="https://git-scm.com/docs/git-push">git-push manual&#39;s force-with-lease discussion</a> warns about interaction with background fetches and describes a form naming the ref and expected value. This article checked the online manual on November 1, 2026. No push, rebase, or ref update was performed in the current workspace or against a remote. Check the installed Git version and repository policy before applying a workflow.</p>
+<p>There are three objects: the server branch tip, the local remote-tracking ref recording it, and the new tip proposed for publication. An implicit lease relies on the second; it does not ask whether a person read the added commits. An editor can refresh that ref while the proposed tip remains based on older history.</p>
+<p>Suppose B is the common base, a colleague advances the server to C, and you rewrite the old history into A. A background fetch updates origin/main to C without integrating C into A. A comparison against C can match the server even though A does not preserve the colleague&#39;s work. The assumed comparison point moved; Git did not randomly ignore a promise of review.</p>
+<h2 id="A-complete-local-practice-setup"><a href="#A-complete-local-practice-setup" class="headerlink" title="A complete local practice setup"></a>A complete local practice setup</h2><p>This script has not been executed. It creates a bare repository and two clones in a new temporary directory, with no network remote and no operation on this site&#39;s repository. The name main keeps the example short; it is not a recommendation to rewrite a shared main branch.</p>
+<pre><code class="sh">demo_root=&quot;$(mktemp -d)&quot;
+git init --bare --initial-branch=main &quot;$demo_root/remote.git&quot;
+git clone &quot;$demo_root/remote.git&quot; &quot;$demo_root/a&quot;
+git -C &quot;$demo_root/a&quot; config user.name Training
+git -C &quot;$demo_root/a&quot; config user.email training.invalid
+printf &#39;base\n&#39; &gt; &quot;$demo_root/a/demo-file&quot;
+git -C &quot;$demo_root/a&quot; add demo-file
+git -C &quot;$demo_root/a&quot; commit -m base
+git -C &quot;$demo_root/a&quot; push origin main
+git clone &quot;$demo_root/remote.git&quot; &quot;$demo_root/b&quot;
+git -C &quot;$demo_root/b&quot; config user.name Training
+git -C &quot;$demo_root/b&quot; config user.email training.invalid
+expected_oid=&quot;$(git -C &quot;$demo_root/a&quot; rev-parse refs/remotes/origin/main)&quot;
+printf &#39;peer\n&#39; &gt; &quot;$demo_root/b/peer-file&quot;
+git -C &quot;$demo_root/b&quot; add peer-file
+git -C &quot;$demo_root/b&quot; commit -m peer
+git -C &quot;$demo_root/b&quot; push origin main
+git -C &quot;$demo_root/a&quot; fetch origin
+printf &#39;rewritten\n&#39; &gt; &quot;$demo_root/a/demo-file&quot;
+git -C &quot;$demo_root/a&quot; add demo-file
+git -C &quot;$demo_root/a&quot; commit --amend -m rewritten-base
+git -C &quot;$demo_root/a&quot; push \
+  &quot;--force-with-lease=refs/heads/main:$expected_oid&quot; \
+  origin HEAD:refs/heads/main
+</code></pre>
+<p>The final explicit condition still expects the server to be at the originally recorded B. Because the other clone advanced it, rejection is the intended direction. It does not integrate the peer commit. A rejection is not a reason to replace the command with ordinary force. No output was captured here.</p>
+<p>Compare the implicit form only in another independently recreated setup with the same starting state. Record the base, peer commit, fetched tracking ref, proposed tip, server result, and final ref. Reusing a scene altered by the first push would change the question being tested.</p>
+<h2 id="What-should-establish-the-expected-value"><a href="#What-should-establish-the-expected-value" class="headerlink" title="What should establish the expected value?"></a>What should establish the expected value?</h2><p>A full object identity fixes a comparison point, but it must correspond to an actual review. Taking the latest tracking ref and immediately calling it approved does not supply that review. Inspect the new work, decide whether the proposed replacement is authorized, then record the acknowledged state.</p>
+<p>The server can change after that decision. An explicit lease can reject a newer head rather than overwrite it; it does not lock the remote for an exclusive interval. Recovery should stop and compare again, not repeatedly fetch and refresh the expected value until a push happens to pass.</p>
+<p>Scope matters too. Identify both the server ref being updated and the local object supplying its new contents. Default push configuration, multiple branches, or additional tags can expand an operation. The example spells out the target ref so the condition and affected object can be reviewed together.</p>
+<h2 id="Which-records-prevent-a-timing-mistake"><a href="#Which-records-prevent-a-timing-mistake" class="headerlink" title="Which records prevent a timing mistake?"></a>Which records prevent a timing mistake?</h2><p>Retain the complete target ref, acknowledged expected object, proposed object, and final server object. They identify where to update, which previous state authorizes it, what is proposed, and what actually remains. One moving branch name cannot replace all four, and a pre-push observation is not a post-push result.</p>
+<p>Consider checking the remote, then allowing a peer update before the push. Equality at query time does not prevent that later change. The explicit lease supplies a condition checked when the server accepts the update rather than an indefinitely safe interval after one query. This race was not executed here; it explains why object and timing records matter.</p>
+<h2 id="What-remains-after-a-lease-passes"><a href="#What-remains-after-a-lease-passes" class="headerlink" title="What remains after a lease passes?"></a>What remains after a lease passes?</h2><p>Acceptance establishes the ref-update condition, not content correctness or preservation of required ancestry. Use an ancestry check when history reachability is required and behavior tests when the requirement concerns the current code. <a href="/en/2026/10/20/git-merge-base-ancestry-evidence/">Tree equality and commit ancestry</a> explains why those claims can differ.</p>
+<p>For undoing one change on a shared branch, a new reverse commit may fit the traceable workflow better than rewriting history. <a href="/en/2026/10/14/git-revert-shared-history/">Revert and shared history</a> provides that alternative without making it mandatory for every situation. Personal scratch branches, collaboration branches, and protected release refs have different policies.</p>
+<p>Record the final remote object rather than only a success message. If a push result is unknown, inspect the target ref and operation records before retrying with a stronger overwrite. A ref update also does not establish subsequent build or deployment adoption; no such outcome is claimed here.</p>
+<h2 id="Can-you-fetch-and-immediately-retry-a-rejected-lease"><a href="#Can-you-fetch-and-immediately-retry-a-rejected-lease" class="headerlink" title="Can you fetch and immediately retry a rejected lease?"></a>Can you fetch and immediately retry a rejected lease?</h2><p>Refreshing information is not renewed approval to overwrite it. Compare the new remote work with the candidate, decide whether to integrate, abandon the rewrite, or obtain collaboration approval, and establish a new condition. A wrong target, missing object, or permission policy needs a different repair from a changed remote head.</p>
+<p>A proposed test covers an unchanged remote, a peer update, a background fetch, and another update after review, retaining full ref identities and exit results. These disposable local exercises have not been run. The useful result is a statement of which acknowledged server state authorizes the update and who decides again when it changes.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://git-scm.com/docs/git-push" rel="noopener">Git - git-push Documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--delivery" href="/en/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--git" href="/en/tags/git/">Git</a>
+          
+            <a class="tag tag--force-with-lease" href="/en/tags/force-with-lease/">force-with-lease</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--delivery" href="/en/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F01%2Fgit-force-with-lease-explicit-expectation%2F&text=Why%20can%20Git%20--force-with-lease%20still%20overwrite%20unreviewed%20remote%20work%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F01%2Fgit-force-with-lease-explicit-expectation%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20can%20Git%20--force-with-lease%20still%20overwrite%20unreviewed%20remote%20work%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F01%2Fgit-force-with-lease-explicit-expectation%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/01/html-dirname-submitted-direction/">
+              <span>Previous Post</span>
+              <strong>HTML dirname: why does saved text lose its writing direction?</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/01/dom-mutationobserver-delivery-batching/">
+              <span>Next Post</span>
+              <strong>MutationObserver: why has the DOM changed before the callback runs?</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Why-can-the-comparison-point-move-without-a-code-edit">Why can the comparison point move without a code edit?</a>
+          
+            <a class="toc-link toc-link--h2" href="#A-complete-local-practice-setup">A complete local practice setup</a>
+          
+            <a class="toc-link toc-link--h2" href="#What-should-establish-the-expected-value">What should establish the expected value?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Which-records-prevent-a-timing-mistake">Which records prevent a timing mistake?</a>
+          
+            <a class="toc-link toc-link--h2" href="#What-remains-after-a-lease-passes">What remains after a lease passes?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Can-you-fetch-and-immediately-retry-a-rejected-lease">Can you fetch and immediately retry a rejected lease?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>264</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>203</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>89</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/30/git-archive-tree-attributes-export-ignore/">Why did a local export-ignore change leave the release archive unchanged?</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/28/git-cherry-pick-empty-commit-policy/">Why --allow-empty does not settle a redundant cherry-pick</a></h3>
+          <p>2026-10-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/27/git-bundle-prerequisite-restoration/">Why a Verified Git Bundle May Not Restore into an Empty Repository</a></h3>
+          <p>2026-10-27</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

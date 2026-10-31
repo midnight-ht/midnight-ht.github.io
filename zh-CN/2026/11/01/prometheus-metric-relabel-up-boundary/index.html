@@ -1,0 +1,435 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Prometheus丢弃全部抓取样本后，up为什么还在？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用两份完整自抓取配置区分样本过滤与目标过滤，解释up例外、历史样本以及下游告警输入的验收。">
+  
+  
+    <meta name="keywords" content="metric_relabel_configs,up自动序列,目标过滤">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/01/prometheus-metric-relabel-up-boundary/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Prometheus丢弃全部抓取样本后，up为什么还在？ | Midnight blog">
+    <meta property="og:description" content="用两份完整自抓取配置区分样本过滤与目标过滤，解释up例外、历史样本以及下游告警输入的验收。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/","name":"Prometheus丢弃全部抓取样本后，up为什么还在？ | Midnight blog","description":"用两份完整自抓取配置区分样本过滤与目标过滤，解释up例外、历史样本以及下游告警输入的验收。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/","headline":"Prometheus丢弃全部抓取样本后，up为什么还在？","description":"用两份完整自抓取配置区分样本过滤与目标过滤，解释up例外、历史样本以及下游告警输入的验收。","inLanguage":"zh-CN","datePublished":"2026-10-31T19:32:05.000Z","dateModified":"2026-10-31T19:32:05.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://prometheus.io/docs/prometheus/latest/configuration/configuration/","https://prometheus.io/docs/prometheus/latest/command-line/prometheus/"],"keywords":"Delivery, Prometheus, Observability"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Prometheus丢弃全部抓取样本后，up为什么还在？","item":"https://www.zyweb.vip/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/" selected>zh-CN</option><option value="/en/2026/11/01/prometheus-metric-relabel-up-boundary/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/" selected>zh-CN</option><option value="/en/2026/11/01/prometheus-metric-relabel-up-boundary/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--delivery">Delivery</span>
+      <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time>
+    </div>
+
+    <h1>Prometheus丢弃全部抓取样本后，up为什么还在？</h1>
+
+    
+      <p class="post-hero__summary">用两份完整自抓取配置区分样本过滤与目标过滤，解释up例外、历史样本以及下游告警输入的验收。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/01/prometheus-metric-relabel-up-boundary/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>样本重标记不作用于up等自动序列。</li><li>不抓目标与不保存抓取样本属于不同阶段。</li><li>过滤后历史数据存在不证明当前仍持续抓取。</li></ul></section>
+      <div class="article-content">
+        <p>Prometheus 的 metric_relabel_configs 即使丢弃了全部抓取样本，up 仍可能存在，因为这个阶段不作用于 up 这类自动生成序列。先确定目标是不保存某些样本，还是根本不抓某个目标，再选择对应阶段。不能从 up 仍可查询，就断言样本过滤没有生效。</p>
+<h2 id="目标过滤与样本过滤发生在不同位置"><a href="#目标过滤与样本过滤发生在不同位置" class="headerlink" title="目标过滤与样本过滤发生在不同位置"></a>目标过滤与样本过滤发生在不同位置</h2><p><a target="_blank" rel="noopener" href="https://prometheus.io/docs/prometheus/latest/configuration/configuration/">Prometheus 配置参考的 metric_relabel_configs 章节</a>将样本重标记放在入库前最后一步，并明确排除 up 等自动生成序列。目标重标记则在抓取之前处理目标集合。本文于二〇二六年十一月一日核对当前在线参考，实际部署还需匹配所用版本，没有启动 Prometheus 或查询真实指标。</p>
+<p>可以沿一条链排查：服务发现给出候选目标，目标重标记决定保留哪些目标，抓取获得暴露样本，样本重标记选择哪些抓取样本进入存储。不同阶段都可以有 drop 动作，但它们删除的对象不同。复用同一套动作语法，不代表控制范围也相同。</p>
+<p>up 不能简单看成应用自己暴露的业务计数。它由 Prometheus 的抓取过程生成，属于样本过滤例外。查询到它，并不能证明任何特定业务指标已经保存；反过来，某个业务指标没有结果，也不能直接说明目标没有被请求。这些判断需要目标状态与所需序列分别提供证据。</p>
+<h2 id="用自抓取建立完整对照"><a href="#用自抓取建立完整对照" class="headerlink" title="用自抓取建立完整对照"></a>用自抓取建立完整对照</h2><p>下面是一份未执行的最小配置，计划用于独立本地 Prometheus，假设它以默认端口监听且端口没有冲突。它只抓取自己的公开监控端点，使用独立作业名，不涉及业务服务或凭据。把内容保存为 sample-filter.yml，并用匹配版本的程序加载；加载成功与后续序列结果仍要分别检查。</p>
+<pre><code class="yaml">global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: sample-filter-demo
+    static_configs:
+      - targets: [&#39;127.0.0.1:9090&#39;]
+        labels:
+          demo_scope: sample-filter-demo
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: &#39;.*&#39;
+        action: drop
+</code></pre>
+<p>准备与本机匹配版本的prometheus可执行程序，并从保存配置的练习目录启动第一份；程序以前台方式运行，查询需在另一个终端或浏览器中进行。新建存储目录只属于本次练习，不使用已有监控数据目录。以下启动命令同样未执行，<a target="_blank" rel="noopener" href="https://prometheus.io/docs/prometheus/latest/command-line/prometheus/">Prometheus命令行参考</a>说明配置文件与存储路径参数。</p>
+<pre><code class="sh">sample_data=&quot;$(mktemp -d)&quot;
+prometheus --config.file=sample-filter.yml --storage.tsdb.path=&quot;$sample_data&quot;
+</code></pre>
+<p>计划分别检查目标状态、up 以及一项原本由自监控端点暴露的指标。查询可以明确限定作业名，避免把另一份默认自抓取配置的数据混进来：</p>
+<pre><code class="promql">up{job=&quot;sample-filter-demo&quot;}
+prometheus_build_info{job=&quot;sample-filter-demo&quot;}
+</code></pre>
+<p>纸面预期是目标仍被抓取，而匹配规则的抓取样本被丢弃；up 不因这条样本规则被删除。需要先确认端点确实暴露所选对照指标，且配置已加载并经过实际抓取。没有这个基线，业务指标查询为空也可能只是名字错了或版本不同，不能解释成过滤成功。</p>
+<p>这份规则故意过宽，只用于隔离机制。真实配置若把所有抓取样本都丢弃，会失去诊断材料；要先列清成本控制目标与必须保留的指标。仅为了让页面看起来少一点，就用宽泛正则删数据，可能让后续故障只有一个 up 而没有原因线索。</p>
+<h2 id="真正不想抓目标，应换哪个阶段？"><a href="#真正不想抓目标，应换哪个阶段？" class="headerlink" title="真正不想抓目标，应换哪个阶段？"></a>真正不想抓目标，应换哪个阶段？</h2><p>可以用目标重标记选择候选目标，而不是期待样本规则停止请求。下面是另一份独立测试配置，计划在使用独立存储目录的实例中验证，避免旧样本干扰。它的作业名也明确不同，便于辨认两份实验。</p>
+<pre><code class="yaml">global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: target-filter-demo
+    static_configs:
+      - targets: [&#39;127.0.0.1:9090&#39;]
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: &#39;.+&#39;
+        action: drop
+</code></pre>
+<p>把第二份配置保存为target-filter.yml。先在第一份前台进程所在终端按Ctrl-C，并确认它已经退出、释放端口；不要同时在同9090端口启动两个实例。再从同一练习目录用另一份新存储启动第二份：</p>
+<pre><code class="sh">target_data=&quot;$(mktemp -d)&quot;
+prometheus --config.file=target-filter.yml --storage.tsdb.path=&quot;$target_data&quot;
+</code></pre>
+<p>如果首实例还在，第二份可能先遇到端口冲突，那不是目标过滤结果。分别记录哪个进程加载哪份文件，查询也要指向当时实际运行的实例。</p>
+<p>这里的规则针对发现的目标地址，意图是在抓取前去掉该候选。验收应看目标发现与丢弃状态，以及是否形成该目标的新抓取，而不是只比较一个最终查询是否为空。两份配置都含 drop，但一个保留抓取、处理样本，另一个处理目标；这正是需要分开的责任。</p>
+<p>若目标集合来自动态发现，还应保留规则使用的元标签与重标记后的身份。静态示例只有一个地址，不等于真实集群里也只有一个匹配对象。选择规则前列出应保留和应排除的目标，测试正反两组，避免把另一个环境或同名服务一起删掉。</p>
+<h2 id="过滤后历史曲线为什么还看得到？"><a href="#过滤后历史曲线为什么还看得到？" class="headerlink" title="过滤后历史曲线为什么还看得到？"></a>过滤后历史曲线为什么还看得到？</h2><p>过滤配置决定后续处理，不等于删除已经保存的历史样本。范围查询仍可能返回变更前的数据，当前查询也有自己的样本选择语义。应记录配置生效点、查询时间范围与目标身份，不要把一张跨越变更时刻的历史曲线当作“仍在持续采集”的证明。</p>
+<p>本例建议独立存储，就是为了减少这类干扰；真实变更又不能假装历史不存在。可以同时保存变更前基线、加载状态、后续抓取记录和新窗口查询，解释每项证据回答哪个阶段。没有覆盖某个窗口时，保留未知，不随意删除数据来让测试显得干净。</p>
+<p><a href="/zh-CN/2026/10/14/prometheus-missing-data-signal/">指标缺失与真实零值</a>讨论另一个后果：序列没有结果，不等于业务测到了零。过滤是可能原因之一，需要与端点变化、抓取错误和查询条件一起排查。本题不把自动序列例外推广为所有指标都不会被样本规则影响。</p>
+<h2 id="怎样避免改规则后才发现告警失去输入？"><a href="#怎样避免改规则后才发现告警失去输入？" class="headerlink" title="怎样避免改规则后才发现告警失去输入？"></a>怎样避免改规则后才发现告警失去输入？</h2><p>先列下游使用者：告警、记录规则、仪表盘与临时排障查询依赖哪些指标和标签。对希望节省的样本定义明确集合，再验证必要数据仍存在。配置能解析，只说明语法层通过；up 为一，只说明相关抓取状态，不能替全部下游契约验收。</p>
+<p>可以安排受控对照：无过滤时证明端点与序列基线，样本过滤时观察抓取继续且目标样本消失，目标过滤时观察候选被排除，再分别读取明确时间窗口的数据。每一步保存实际加载配置与版本，不能拿编辑器里的文件代替运行配置。</p>
+<p>本文未执行这些检查，没有样本量下降、告警通过或存储收益数据。决定放在哪个阶段之前，先把句子说完整：不请求哪个目标，还是请求后不保留哪些样本？这个选择明确以后，up 仍在就不再是一个需要靠猜测解释的矛盾。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://prometheus.io/docs/prometheus/latest/configuration/configuration/" rel="noopener">Configuration | Prometheus — metric_relabel_configs</a></li><li><a target="_blank" href="https://prometheus.io/docs/prometheus/latest/command-line/prometheus/" rel="noopener">prometheus | Prometheus — monitoring server command-line flags</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+            <a class="tag tag--prometheus" href="/zh-CN/tags/Prometheus/">Prometheus</a>
+          
+            <a class="tag tag--observability" href="/zh-CN/tags/Observability/">Observability</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fprometheus-metric-relabel-up-boundary%2F&text=Prometheus%E4%B8%A2%E5%BC%83%E5%85%A8%E9%83%A8%E6%8A%93%E5%8F%96%E6%A0%B7%E6%9C%AC%E5%90%8E%EF%BC%8Cup%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E5%9C%A8%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fprometheus-metric-relabel-up-boundary%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Prometheus%E4%B8%A2%E5%BC%83%E5%85%A8%E9%83%A8%E6%8A%93%E5%8F%96%E6%A0%B7%E6%9C%AC%E5%90%8E%EF%BC%8Cup%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E5%9C%A8%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fprometheus-metric-relabel-up-boundary%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/">
+              <span>上一篇</span>
+              <strong>asyncio.Queue.join 返回，不等于每条业务都成功了</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/01/postgres-unlogged-crash-replication/">
+              <span>下一篇</span>
+              <strong>PostgreSQL UNLOGGED 不是“更快但其余相同”的普通表</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#目标过滤与样本过滤发生在不同位置">目标过滤与样本过滤发生在不同位置</a>
+          
+            <a class="toc-link toc-link--h2" href="#用自抓取建立完整对照">用自抓取建立完整对照</a>
+          
+            <a class="toc-link toc-link--h2" href="#真正不想抓目标，应换哪个阶段？">真正不想抓目标，应换哪个阶段？</a>
+          
+            <a class="toc-link toc-link--h2" href="#过滤后历史曲线为什么还看得到？">过滤后历史曲线为什么还看得到？</a>
+          
+            <a class="toc-link toc-link--h2" href="#怎样避免改规则后才发现告警失去输入？">怎样避免改规则后才发现告警失去输入？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>264</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>203</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>89</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/26/prometheus-rule-evaluation-limit/">规则超过 limit，为何整条结果都被丢弃？</a></h3>
+          <p>2026-10-26</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/24/promql-group-left-vector-matching/">PromQL group_left：保留左侧明细，先证明右侧唯一</a></h3>
+          <p>2026-10-24</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/18/prometheus-counter-increase-extrapolation/">整数计数器为什么算出了小数 increase</a></h3>
+          <p>2026-10-18</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

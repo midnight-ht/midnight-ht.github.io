@@ -1,0 +1,444 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>asyncio.Queue.join 返回，不等于每条业务都成功了 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用事件屏障与明确拒绝结果区分 Queue 的空队列、未结算记账和业务成功，补足 task_done、重试及立即关闭的边界。">
+  
+  
+    <meta name="keywords" content="队列 join,task_done,未结算计数">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/01/python-asyncio-queue-join-accounting/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="asyncio.Queue.join 返回，不等于每条业务都成功了 | Midnight blog">
+    <meta property="og:description" content="用事件屏障与明确拒绝结果区分 Queue 的空队列、未结算记账和业务成功，补足 task_done、重试及立即关闭的边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/","name":"asyncio.Queue.join 返回，不等于每条业务都成功了 | Midnight blog","description":"用事件屏障与明确拒绝结果区分 Queue 的空队列、未结算记账和业务成功，补足 task_done、重试及立即关闭的边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/","headline":"asyncio.Queue.join 返回，不等于每条业务都成功了","description":"用事件屏障与明确拒绝结果区分 Queue 的空队列、未结算记账和业务成功，补足 task_done、重试及立即关闭的边界。","inLanguage":"zh-CN","datePublished":"2026-10-31T19:32:05.000Z","dateModified":"2026-10-31T19:32:05.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.14/library/asyncio-queue.html"],"keywords":"Development, Python, asyncio"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"asyncio.Queue.join 返回，不等于每条业务都成功了","item":"https://www.zyweb.vip/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/" selected>zh-CN</option><option value="/en/2026/11/01/python-asyncio-queue-join-accounting/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/" selected>zh-CN</option><option value="/en/2026/11/01/python-asyncio-queue-join-accounting/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time>
+    </div>
+
+    <h1>asyncio.Queue.join 返回，不等于每条业务都成功了</h1>
+
+    
+      <p class="post-hero__summary">用事件屏障与明确拒绝结果区分 Queue 的空队列、未结算记账和业务成功，补足 task_done、重试及立即关闭的边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-10-31T19:32:05.000Z">2026-11-01</time> · 预计阅读 8 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/01/python-asyncio-queue-join-accounting/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>get 移除排队项，task_done 才结算未完成计数。</li><li>join 正常返回不证明每条业务成功。</li><li>立即关闭、重试与生产者结束需独立定义结果范围。</li></ul></section>
+      <div class="article-content">
+        <p><code>asyncio.Queue.join()</code> 返回，表示队列的未结算计数满足了等待条件，不代表每条业务都成功。get 会把项目从等待队列取走，task_done 才按约定报告该项处理已结算。因此队列可以已经为空而 join 仍在等待；消费者记录失败后正确结算，也可以让 join 正常结束。</p>
+<h2 id="等待队列与未结算工作是两份数量"><a href="#等待队列与未结算工作是两份数量" class="headerlink" title="等待队列与未结算工作是两份数量"></a>等待队列与未结算工作是两份数量</h2><p><a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/asyncio-queue.html">Python asyncio 队列文档</a>分别定义 get、join 与 task_done：放入项目增加未完成计数，消费者报告完成减少计数，计数归零后解除 join 等待。本文于二〇二六年十一月一日核对 Python 3.14.10 文档，示例没有运行，也不代表可靠持久作业系统。</p>
+<p>假设有一个项目排队，工作者取出后正等待外部结果。此时等待队列里没有项目，却还有正在处理的一项。用 empty 判断“整个任务都做完”，会漏掉这段时间；用 qsize 决定最终完成提示，也是在把排队数量误当作全部工作数量。</p>
+<p>反过来，队列的记账依赖消费者调用。task_done 不是检查远程订单状态的函数，不知道文件是否写入，也不会读取数据库提交结果。消费者在一个捕获失败的分支里调用它，只会表示该项的这轮处理已经结算；业务是否成功，应从另外保存的结果判断。</p>
+<p>所以状态至少需要区分排队、进行中、处理结束，以及成功或明确失败。是否还要重试、由谁拥有重试项目，又是产品与执行协议的选择。不要为保持一个“全部完成”布尔字段，把失败项默默改成成功；也不要让一条失败永远悬挂，只为不让 join 返回。</p>
+<h2 id="不靠固定延时观察两个边界"><a href="#不靠固定延时观察两个边界" class="headerlink" title="不靠固定延时观察两个边界"></a>不靠固定延时观察两个边界</h2><p>下面是未执行的完整标准库程序。它只有一条内存教学任务，故意产生一个预期业务拒绝，并把结果写入字典。事件用来控制处理阶段，不访问真实服务，也不测量完成耗时。</p>
+<pre><code class="python">from asyncio import Queue, Event, create_task, gather, run
+
+
+async def main():
+    queue = Queue()
+    retrieved = Event()
+    release = Event()
+    join_started = Event()
+    outcomes = {}
+    await queue.put({&#39;id&#39;: &#39;demo-1&#39;})
+
+    async def worker():
+        item = await queue.get()
+        try:
+            retrieved.set()
+            await release.wait()
+            raise ValueError(&#39;teaching rejection&#39;)
+        except ValueError as error:
+            outcomes[item[&#39;id&#39;]] = {&#39;state&#39;: &#39;rejected&#39;, &#39;reason&#39;: str(error)}
+        finally:
+            queue.task_done()
+
+    async def wait_for_accounting():
+        join_started.set()
+        await queue.join()
+
+    worker_task = create_task(worker())
+    joining = create_task(wait_for_accounting())
+    await gather(retrieved.wait(), join_started.wait())
+    if not queue.empty() or joining.done():
+        raise RuntimeError(&#39;Expected empty queue with unfinished work&#39;)
+    release.set()
+    await joining
+    await worker_task
+    if outcomes.get(&#39;demo-1&#39;, {}).get(&#39;state&#39;) != &#39;rejected&#39;:
+        raise RuntimeError(&#39;Business outcome was lost&#39;)
+    print(&#39;queue accounting settled; outcome:&#39;, outcomes)
+
+
+if __name__ == &#39;__main__&#39;:
+    run(main())
+</code></pre>
+<p>工作者取走项目并发出 retrieved 事件，等待主协程释放下一阶段。等待者先登记已经开始，再进入 join；主协程恢复时检查队列为空而等待者尚未结束。这个安排控制的是事件先后，不要求某台机器在几毫秒内打印日志。</p>
+<p>释放以后，工作者按设计记录拒绝，并在 finally 结算队列项目。主协程同时等待队列记账和工作者结束，最后独立核对业务结果。join 没有因为这条业务拒绝自动抛错；记录仍应显示拒绝，不能把等待正常返回改写成处理成功。</p>
+<p>示例只捕获预期的 ValueError，没有把所有异常吞掉。若换成未预期异常，调用方仍需要观察工作者的任务结果；仅 await join 而丢掉 worker_task，会漏掉另一条错误通道。实际消费者的错误分类应来自业务合同，不能为了让演示一直返回而宽泛捕获所有异常。</p>
+<p>如果清理或结果记录自己失败，也必须保留可观察状态。finally 中调用 task_done 负责结束这次队列记账，不会自动补齐丢失的 outcome。主协程要求存在对应结果，正是为了区分“计数已经结算”和“结果记录也可用”；真实系统应为未知结果提供进一步查询或恢复路径。</p>
+<h2 id="task-done-放在哪里，取决于谁拥有这项处理"><a href="#task-done-放在哪里，取决于谁拥有这项处理" class="headerlink" title="task_done 放在哪里，取决于谁拥有这项处理"></a>task_done 放在哪里，取决于谁拥有这项处理</h2><p>通常应在成功取得一个项目以后，围绕它的处理范围安排结算。get 自身没有取得项目就失败时，不应凭空报告完成；同一项目又不能在多个嵌套 finally 中重复报告。官方文档说明，多于已放入项目数量的 task_done 会触发 ValueError，但这不是逐项业务身份校验器。</p>
+<p>一个计数恰好归零的错误程序，仍可能把甲任务报告两次、乙任务漏报一次。队列只看到调用次数，无法据此重建哪项真正完成。需要逐条可追踪时，应在应用层保留任务身份与处理记录，测试也按身份比较结果，而不只检查 join 有没有返回。</p>
+<p>重试也改变记账范围。如果把失败项目重新放入同一队列，新一次 put 会增加计数，旧一轮仍需明确结算。是否允许重试、最大次数以及重试失败怎样退出，应有独立规则；不要通过任意增加或减少 task_done 来操纵等待结束。</p>
+<h2 id="失败后故意不结算，就能保证成功吗？"><a href="#失败后故意不结算，就能保证成功吗？" class="headerlink" title="失败后故意不结算，就能保证成功吗？"></a>失败后故意不结算，就能保证成功吗？</h2><p>这可能让等待永久停住，却没有创造成功结果。调用方不知道是消费者仍在工作、消费者已退出，还是根本漏了记账。更可解释的安排是记录明确失败，并按合同选择重试、停止整批或进入人工处理；每个分支都应有可观察终态。</p>
+<p>本站<a href="/zh-CN/2026/10/26/python-asyncio-taskgroup-failure-scope/">TaskGroup 的失败范围</a>说明同组任务怎样因异常共同退出。这里的队列计数等待不是那个任务组合同。即使工作者由任务组管理，业务结果、队列结算与组成员终态也要分别核对，不能用其中一个名字覆盖所有责任。</p>
+<p>同样，给 join 包一个超时，只能限制等待安排，不能证明未完成项目已经取消或回滚。超时后的拥有者需要知道哪些项目正在处理、是否还能收到结果，以及哪些操作可能已经触达外部系统。等待结束不确定，不能自动译成任务未执行。</p>
+<h2 id="immediate-shutdown-后-join-返回，可以全标成功吗？"><a href="#immediate-shutdown-后-join-返回，可以全标成功吗？" class="headerlink" title="immediate shutdown 后 join 返回，可以全标成功吗？"></a>immediate shutdown 后 join 返回，可以全标成功吗？</h2><p>Python 三点十三起提供队列 shutdown。当前文档说明，立即关闭会移除尚在队列中的项目并减少相应未完成计数；等待可能因此结束，即使这些项目没有经过处理。正在处理的项目与被移除的排队项目不是同一集合，不能把立即关闭理解成每一项都完成。</p>
+<p>这项路径应记录丢弃或取消，而不是复用成功状态。若业务需要恢复，先保留需要恢复的任务身份与来源，再决定怎样重建；内存队列的计数本身不是可供进程重启后读取的任务清单。本篇没有实现持久队列，也不因展示一个消费者就宣称故障后不会丢任务。</p>
+<p>最后还要控制生产者。某次 join 观察到计数归零，并不阻止另一个协程随后再 put 新任务。需要“这一批已经结束”的合同，应先确定批次范围或停止生产，再判断该范围的结算与结果。只在某个瞬间观察队列为空，不能为未来输入提供保证。</p>
+<p>拟议验证包括出队后暂停、正常成功、预期拒绝、工作者异常退出、重复结算、重新入队与立即关闭。每项分别核对等待状态、工作者终态和按身份记录的业务结果。本文没有运行这些用例。交付前应能解释：空的是等待队列，归零的是记账，成功的是哪一项业务；三句话不能省成同一个绿色提示。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/asyncio-queue.html" rel="noopener">Queues — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+            <a class="tag tag--asyncio" href="/zh-CN/tags/asyncio/">asyncio</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fpython-asyncio-queue-join-accounting%2F&text=asyncio.Queue.join%20%E8%BF%94%E5%9B%9E%EF%BC%8C%E4%B8%8D%E7%AD%89%E4%BA%8E%E6%AF%8F%E6%9D%A1%E4%B8%9A%E5%8A%A1%E9%83%BD%E6%88%90%E5%8A%9F%E4%BA%86" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fpython-asyncio-queue-join-accounting%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=asyncio.Queue.join%20%E8%BF%94%E5%9B%9E%EF%BC%8C%E4%B8%8D%E7%AD%89%E4%BA%8E%E6%AF%8F%E6%9D%A1%E4%B8%9A%E5%8A%A1%E9%83%BD%E6%88%90%E5%8A%9F%E4%BA%86&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F01%2Fpython-asyncio-queue-join-accounting%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/">
+              <span>上一篇</span>
+              <strong>Python itertools.groupby 保存的组，遍历后为什么变空？</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/">
+              <span>下一篇</span>
+              <strong>Prometheus丢弃全部抓取样本后，up为什么还在？</strong>
+              <small>2026-11-01</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#等待队列与未结算工作是两份数量">等待队列与未结算工作是两份数量</a>
+          
+            <a class="toc-link toc-link--h2" href="#不靠固定延时观察两个边界">不靠固定延时观察两个边界</a>
+          
+            <a class="toc-link toc-link--h2" href="#task-done-放在哪里，取决于谁拥有这项处理">task_done 放在哪里，取决于谁拥有这项处理</a>
+          
+            <a class="toc-link toc-link--h2" href="#失败后故意不结算，就能保证成功吗？">失败后故意不结算，就能保证成功吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#immediate-shutdown-后-join-返回，可以全标成功吗？">immediate shutdown 后 join 返回，可以全标成功吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>264</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>203</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>89</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/python-aclosing-generator-cleanup/">用 aclosing 把异步生成器的关闭留在当前任务内</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/">Python wait_for 一秒超时，为什么一秒后还没返回？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/python-itertools-groupby-shared-iterator/">Python itertools.groupby 保存的组，遍历后为什么变空？</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
