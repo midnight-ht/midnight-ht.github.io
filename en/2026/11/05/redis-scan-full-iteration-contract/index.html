@@ -1,0 +1,408 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why an empty Redis SCAN batch does not finish an iteration | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="End Redis SCAN by cursor, handle empty batches and repeated keys, and qualify COUNT, changing membership, and single-database coverage.">
+  
+  
+    <meta name="keywords" content="Redis SCAN,COUNT,full iteration">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/05/redis-scan-full-iteration-contract/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/05/redis-scan-full-iteration-contract/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/05/redis-scan-full-iteration-contract/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/05/redis-scan-full-iteration-contract/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why an empty Redis SCAN batch does not finish an iteration | Midnight blog">
+    <meta property="og:description" content="End Redis SCAN by cursor, handle empty batches and repeated keys, and qualify COUNT, changing membership, and single-database coverage.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/05/redis-scan-full-iteration-contract/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/05/redis-scan-full-iteration-contract/#webpage","url":"https://www.zyweb.vip/en/2026/11/05/redis-scan-full-iteration-contract/","name":"Why an empty Redis SCAN batch does not finish an iteration | Midnight blog","description":"End Redis SCAN by cursor, handle empty batches and repeated keys, and qualify COUNT, changing membership, and single-database coverage.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/05/redis-scan-full-iteration-contract/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/05/redis-scan-full-iteration-contract/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/05/redis-scan-full-iteration-contract/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/05/redis-scan-full-iteration-contract/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/05/redis-scan-full-iteration-contract/","headline":"Why an empty Redis SCAN batch does not finish an iteration","description":"End Redis SCAN by cursor, handle empty batches and repeated keys, and qualify COUNT, changing membership, and single-database coverage.","inLanguage":"en","datePublished":"2026-11-04T19:59:03.000Z","dateModified":"2026-11-04T19:59:03.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://redis.io/docs/latest/commands/scan/"],"keywords":"Development, Redis, Iteration"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/05/redis-scan-full-iteration-contract/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why an empty Redis SCAN batch does not finish an iteration","item":"https://www.zyweb.vip/en/2026/11/05/redis-scan-full-iteration-contract/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/05/redis-scan-full-iteration-contract/">zh-CN</option><option value="/en/2026/11/05/redis-scan-full-iteration-contract/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/05/redis-scan-full-iteration-contract/">zh-CN</option><option value="/en/2026/11/05/redis-scan-full-iteration-contract/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-11-04T19:59:03.000Z">2026-11-05</time>
+    </div>
+
+    <h1>Why an empty Redis SCAN batch does not finish an iteration</h1>
+
+    
+      <p class="post-hero__summary">End Redis SCAN by cursor, handle empty batches and repeated keys, and qualify COUNT, changing membership, and single-database coverage.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-04T19:59:03.000Z">2026-11-05</time> · Estimated read 10 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/05/redis-scan-full-iteration-contract/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/05/redis-scan-full-iteration-contract/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>An empty nonzero-cursor batch continues; the zero-cursor batch still needs processing.</li><li>COUNT is a work hint, and the application must handle duplicate effects.</li><li>Full iteration covers continuously present elements, not a point-in-time or cross-cluster snapshot.</li></ul></section>
+      <div class="article-content">
+        <p>A SCAN iteration ends when the returned cursor is zero, not when a batch is empty. Keys may also appear more than once, so a maintenance action must tolerate repeated processing. SCAN is not a fixed-size page API that delivers every key exactly once.</p>
+<p>A task can receive no matches for an owned prefix and still have work remaining. “Processed zero items” describes that call; it does not establish completion. This article covers a selected database, without connecting to Redis or performing cleanup.</p>
+<h2 id="Finish-by-cursor-not-batch-length"><a href="#Finish-by-cursor-not-batch-length" class="headerlink" title="Finish by cursor, not batch length"></a>Finish by cursor, not batch length</h2><p>The <a target="_blank" rel="noopener" href="https://redis.io/docs/latest/commands/scan/">official SCAN reference</a> defines a full iteration as starting at cursor zero and feeding back each returned cursor until zero returns again. An empty batch with a nonzero cursor requires another call.</p>
+<p>Do not increment the cursor as a page number or treat it as a completion percentage. The following unexecuted pseudocode retains the client’s decimal-string representation to avoid accidental numeric conversion; use the actual library’s prescribed cursor type.</p>
+<pre><code class="text">cursor = &quot;0&quot;
+repeat:
+    reply = scan(cursor, match=owned_prefix + &quot;*&quot;, count=100)
+    next_cursor = reply.cursor
+    keys = reply.keys
+    for key in keys:
+        process_repeatably(key)
+    cursor = next_cursor
+until cursor == &quot;0&quot;
+</code></pre>
+<p>process_repeatably is a required application behavior, not an implemented helper. Processing precedes the termination check, so the final batch is retained. A failed network call must not become an empty array followed by a success report. Preserve an incomplete or unknown task state instead.</p>
+<p>A client protocol test can supply three explicit fixtures: a nonzero cursor with no keys; another nonzero cursor with two keys; then zero with a duplicate key. Expect three calls, processing of the final batch, and safe duplicate handling. These are designed fixtures, not observed Redis replies.</p>
+<h2 id="COUNT-is-a-work-hint"><a href="#COUNT-is-a-work-hint" class="headerlink" title="COUNT is a work hint"></a>COUNT is a work hint</h2><p>The reference describes COUNT as the requested amount of work, not a fixed output size. MATCH results do not turn that hint into a database total. Fewer than 100 results, no results, or an entire small collection in one response need not indicate a paging failure.</p>
+<p>Choose COUNT from measurements on the target workload. Larger calls can change both call count and per-call resource use; no universal optimum follows from a documentation example. Progress can report calls made and keys observed, but the numeric cursor does not supply a reliable percentage. A total or deadline needs its own contract.</p>
+<h2 id="Repeated-keys-require-repeated-safe-effects"><a href="#Repeated-keys-require-repeated-safe-effects" class="headerlink" title="Repeated keys require repeated-safe effects"></a>Repeated keys require repeated-safe effects</h2><p>SCAN may return an element several times. An unprotected increment can therefore overcount. A process-local seen set also loses its protection on restart. Choose a repeatable action or durable identity handling according to the actual effect, not just the loop’s shape.</p>
+<p>Even deletion needs a concurrency decision. A key observed earlier can be replaced with new content before deletion runs. Repeating a delete may be harmless in one sense while deleting a newly created value is still wrong. If cleanup targets a specific generation, define that generation through naming or an appropriate conditional operation. “DEL can be repeated” does not prove ownership of the current value.</p>
+<p>Operate only in an isolated instance or under explicitly owned unique prefixes. No shared-database deletion script or database-clearing command is provided here.</p>
+<h2 id="A-full-iteration-is-not-a-snapshot"><a href="#A-full-iteration-is-not-a-snapshot" class="headerlink" title="A full iteration is not a snapshot"></a>A full iteration is not a snapshot</h2><p>Coverage applies to elements continuously present from the beginning through the end of the iteration. An element present for only part of that period may or may not appear. Creation, expiration, deletion, and recreation can prevent the observed list from representing any single instant.</p>
+<p>The October 10, 2026 article on <a href="/en/2026/10/10/postgres-pagination-order/">pagination and stable reads</a> separates ordering from cross-request snapshots. SCAN has its own weak iteration guarantees; adding SQL-style unique ordering does not change them. Exact inventory requires a separately justified data source or coordination design.</p>
+<p>An indefinitely growing collection also does not justify an unconditional completion deadline. A time budget can stop a task as incomplete, with its processed scope recorded. One selected database’s iteration does not establish coverage across every Redis Cluster node.</p>
+<h3 id="Does-a-zero-cursor-reply-still-need-processing"><a href="#Does-a-zero-cursor-reply-still-need-processing" class="headerlink" title="Does a zero-cursor reply still need processing?"></a>Does a zero-cursor reply still need processing?</h3><p>Yes. Zero means no further call is needed, not that the current batch should be discarded. Test this alongside an empty batch with a nonzero cursor; the two cases expose different early-exit mistakes. Record request and response cursors, processed identities, and final task state, then inspect actual behavior in an isolated version-specific test.</p>
+<p>The pseudocode and fixture sequence were not executed. Completion requires a zero cursor, a processed final batch, controlled repeated effects, and a claim about changing membership that stays within the documented guarantee. An empty batch alone establishes none of those outcomes.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://redis.io/docs/latest/commands/scan/" rel="noopener">SCAN | Docs</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--redis" href="/en/tags/Redis/">Redis</a>
+          
+            <a class="tag tag--iteration" href="/en/tags/Iteration/">Iteration</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F05%2Fredis-scan-full-iteration-contract%2F&text=Why%20an%20empty%20Redis%20SCAN%20batch%20does%20not%20finish%20an%20iteration" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F05%2Fredis-scan-full-iteration-contract%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20an%20empty%20Redis%20SCAN%20batch%20does%20not%20finish%20an%20iteration&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F05%2Fredis-scan-full-iteration-contract%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/05/redis-set-expire-ttl-replacement/">
+              <span>Previous Post</span>
+              <strong>Why a Redis cache update can remove its expiration</strong>
+              <small>2026-11-05</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/05/pytest-tmp-path-retention-basetemp/">
+              <span>Next Post</span>
+              <strong>pytest reruns erased the evidence: check --basetemp first</strong>
+              <small>2026-11-05</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Finish-by-cursor-not-batch-length">Finish by cursor, not batch length</a>
+          
+            <a class="toc-link toc-link--h2" href="#COUNT-is-a-work-hint">COUNT is a work hint</a>
+          
+            <a class="toc-link toc-link--h2" href="#Repeated-keys-require-repeated-safe-effects">Repeated keys require repeated-safe effects</a>
+          
+            <a class="toc-link toc-link--h2" href="#A-full-iteration-is-not-a-snapshot">A full iteration is not a snapshot</a>
+          
+            <a class="toc-link toc-link--h3" href="#Does-a-zero-cursor-reply-still-need-processing">Does a zero-cursor reply still need processing?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>261</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>211</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/05/redis-set-expire-ttl-replacement/">Why a Redis cache update can remove its expiration</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/05/openapi-discriminator-validation-outcome/">Why an OpenAPI discriminator does not validate your payment variant</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/05/postgres-last-value-window-frame/">Why PostgreSQL last_value does not automatically mean the last row in a partition</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

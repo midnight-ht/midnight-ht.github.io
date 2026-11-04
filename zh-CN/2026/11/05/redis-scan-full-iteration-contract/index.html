@@ -1,0 +1,409 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Redis SCAN 返回空数组，遍历为什么还不能结束？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="以游标回零结束 Redis SCAN，处理空批与重复键，并限定 COUNT、遍历期间变化和单库覆盖的保证。">
+  
+  
+    <meta name="keywords" content="Redis SCAN,COUNT,完整遍历">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/05/redis-scan-full-iteration-contract/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/05/redis-scan-full-iteration-contract/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/05/redis-scan-full-iteration-contract/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/05/redis-scan-full-iteration-contract/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Redis SCAN 返回空数组，遍历为什么还不能结束？ | Midnight blog">
+    <meta property="og:description" content="以游标回零结束 Redis SCAN，处理空批与重复键，并限定 COUNT、遍历期间变化和单库覆盖的保证。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/05/redis-scan-full-iteration-contract/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/redis-scan-full-iteration-contract/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/05/redis-scan-full-iteration-contract/","name":"Redis SCAN 返回空数组，遍历为什么还不能结束？ | Midnight blog","description":"以游标回零结束 Redis SCAN，处理空批与重复键，并限定 COUNT、遍历期间变化和单库覆盖的保证。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/redis-scan-full-iteration-contract/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/redis-scan-full-iteration-contract/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/redis-scan-full-iteration-contract/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/redis-scan-full-iteration-contract/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/05/redis-scan-full-iteration-contract/","headline":"Redis SCAN 返回空数组，遍历为什么还不能结束？","description":"以游标回零结束 Redis SCAN，处理空批与重复键，并限定 COUNT、遍历期间变化和单库覆盖的保证。","inLanguage":"zh-CN","datePublished":"2026-11-04T19:59:03.000Z","dateModified":"2026-11-04T19:59:03.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://redis.io/docs/latest/commands/scan/"],"keywords":"Development, Redis, Iteration"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/redis-scan-full-iteration-contract/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Redis SCAN 返回空数组，遍历为什么还不能结束？","item":"https://www.zyweb.vip/zh-CN/2026/11/05/redis-scan-full-iteration-contract/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/05/redis-scan-full-iteration-contract/" selected>zh-CN</option><option value="/en/2026/11/05/redis-scan-full-iteration-contract/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/05/redis-scan-full-iteration-contract/" selected>zh-CN</option><option value="/en/2026/11/05/redis-scan-full-iteration-contract/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-11-04T19:59:03.000Z">2026-11-05</time>
+    </div>
+
+    <h1>Redis SCAN 返回空数组，遍历为什么还不能结束？</h1>
+
+    
+      <p class="post-hero__summary">以游标回零结束 Redis SCAN，处理空批与重复键，并限定 COUNT、遍历期间变化和单库覆盖的保证。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-04T19:59:03.000Z">2026-11-05</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/05/redis-scan-full-iteration-contract/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/05/redis-scan-full-iteration-contract/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>非零游标的空批不能结束，零游标的最后批仍须处理。</li><li>COUNT是工作提示，重复键与重复副作用由应用负责。</li><li>完整遍历覆盖持续存在元素，不等于时点快照或全Cluster覆盖。</li></ul></section>
+      <div class="article-content">
+        <p>SCAN 是否结束看返回游标是否为零，不看这一批有没有键。完整遍历还可能重复返回键，因此维护动作需要能够安全重做。把 SCAN 当作每页固定数量、每个键恰好出现一次的列表接口，会同时写错停止条件与处理语义。</p>
+<p>一个维护任务请求匹配某前缀的键，拿到空数组就退出，日志显示“处理零项，已完成”。这份日志最多说明该次调用没有返回匹配项，不能证明整个集合已经走完。下面讨论单个选定数据库的遍历合同，没有连接 Redis，也没有执行清理任务。</p>
+<h2 id="游标回零，才是一轮完整遍历"><a href="#游标回零，才是一轮完整遍历" class="headerlink" title="游标回零，才是一轮完整遍历"></a>游标回零，才是一轮完整遍历</h2><p><a target="_blank" rel="noopener" href="https://redis.io/docs/latest/commands/scan/">Redis SCAN 官方文档</a>把从游标零开始、持续使用返回游标，直到它再次为零的过程定义为完整遍历。返回值包括下一游标和本批元素。文档允许一批没有元素，只要游标非零，客户端就应继续。</p>
+<p>调用方不应把游标改成页码，也不应自己递增。它不是已经走过多少条的计数，更不是剩余工作的百分比。为避免客户端语言把大整数游标处理错，以下伪代码保持客户端返回的十进制字符串形式；实际库若提供专用类型，应按其接口原样传回。</p>
+<pre><code class="text">cursor = &quot;0&quot;
+repeat:
+    reply = scan(cursor, match=owned_prefix + &quot;*&quot;, count=100)
+    next_cursor = reply.cursor
+    keys = reply.keys
+    for key in keys:
+        process_repeatably(key)
+    cursor = next_cursor
+until cursor == &quot;0&quot;
+</code></pre>
+<p>这段是未执行的流程示意，不是某个客户端库可直接运行的代码。process_repeatably 也不是声称已有实现的工具函数，而是必须由应用提供的重复安全动作。先处理本批，再判断是否结束，因此游标回零时返回的最后一批同样不会丢掉。网络调用失败不应被包装成空数组继续宣称完成；应保留任务未完成或结果未知的状态。</p>
+<p>可以为客户端循环设定三份明确标注的协议测试输入：第一次返回非零游标和空数组，第二次返回另一非零游标及两个键，第三次返回零游标及其中一个重复键。预期循环调用三次、消费最后一批，并由处理层应对重复。这些响应是测试设定，不是 Redis 实测输出，不能配上“现场复现”的描述。</p>
+<h2 id="COUNT-一百，为何不是每次返回一百个键？"><a href="#COUNT-一百，为何不是每次返回一百个键？" class="headerlink" title="COUNT 一百，为何不是每次返回一百个键？"></a>COUNT 一百，为何不是每次返回一百个键？</h2><p>官方将 COUNT 描述为每次调用希望完成的工作量提示，不承诺返回数量固定。MATCH 的匹配结果也不能据此推算整个数据库的条目数。少于一百、零条，或者某些小型集合一次返回全部，都不应触发“分页异常”的结论。</p>
+<p>调整 COUNT 可以作为实际负载下的取舍：较大工作量可能减少调用次数，也会改变一次调用的资源消耗。应观察待维护实例的延迟和任务进度后选择，不从文档中的默认示例推导通用最佳值。本文没有做负载测量，也没有提供吞吐或时间节省数据。</p>
+<p>维护进度宜表达为已调用次数、已观察键数与任务仍在进行，而不是根据游标数值估算完成百分比。若读者需要可靠的总量或截止时间，必须另行定义统计与预算，不能让 COUNT 参数承担这些承诺。</p>
+<h2 id="重复键应该怎样处理？"><a href="#重复键应该怎样处理？" class="headerlink" title="重复键应该怎样处理？"></a>重复键应该怎样处理？</h2><p>文档明确允许同一元素在一轮中多次返回，责任在应用侧。如果动作是无保护地递增计数，重复一次就可能多加一次；仅在扫描循环里记一个局部已见集合，又可能在进程重启后失去保护。先确认结果是否允许重复，再决定采用天然可重复动作、持久身份记录或其他业务方案。</p>
+<p>即使动作叫删除，也需审查并发变化。第一次看到某个缓存键后，另一个请求可能已经用同名键创建新值；稍后执行删除，可能删到这份新内容。重复删除本身通常不增加删除次数带来的副作用，但它不能证明删除对象仍是当初看到的那个版本。严格清理某批版本时，应从命名或条件操作上界定目标，而不是用“DEL 可重复”替代并发合同。</p>
+<p>维护任务应只操作独立测试实例或明确自有唯一前缀内的键。本篇不提供对共享数据库直接删键的脚本，更不使用清库命令。重复安全的判断依赖实际业务效果，不是看到某个命令名字就自动成立。</p>
+<h2 id="跑完一轮，可以称为时点快照吗？"><a href="#跑完一轮，可以称为时点快照吗？" class="headerlink" title="跑完一轮，可以称为时点快照吗？"></a>跑完一轮，可以称为时点快照吗？</h2><p>不能。官方的覆盖保证针对从遍历开始到结束持续存在的元素；只在其中一段时间存在的元素，是否出现没有确定保证。新增、删除、过期和重建都可能让观察清单无法对应某个单一时刻。完整游标循环说明这一轮按协议结束，不说明观察到了某一时刻的全部键。</p>
+<p>站内二〇二六年十月十日的<a href="/zh-CN/2026/10/10/postgres-pagination-order/">分页与稳定读取</a>区分顺序与跨次快照；SCAN 这里更需要尊重自身的弱迭代保证，不能借用 SQL 的唯一排序方案修复。若任务要求财务式精确清点，应另选能满足一致性要求的数据来源或协调方案，并单独评估代价。</p>
+<p>整个集合若持续无界增长，也不能无条件承诺遍历按时结束。可以给任务定义运行预算，超出时记录未完成与已处理范围；这和返回完整成功不同。Redis Cluster 的多个节点还需要各自的遍历与覆盖安排，单数据库这一圈不等于全集群这一圈。</p>
+<h3 id="最后一批有键，但游标已是零，还要处理吗？"><a href="#最后一批有键，但游标已是零，还要处理吗？" class="headerlink" title="最后一批有键，但游标已是零，还要处理吗？"></a>最后一批有键，但游标已是零，还要处理吗？</h3><p>要。零表示后面不需要再调用，不表示当前元素应该丢弃。测试应把这条路径与非零游标空批同时保留，因为两种提前退出写法会分别漏掉不同工作。验收时记录请求游标、返回游标、实际处理身份与最终任务状态，先验证循环，再在隔离实例检验实际版本的行为。</p>
+<p>本文的伪代码与测试响应尚未执行。可交付的完成条件应包括游标回零、最后批次已处理、重复副作用受控，以及对遍历期变化的声明符合保证。只看到某一批为空，不能成为整项维护工作的完成依据。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://redis.io/docs/latest/commands/scan/" rel="noopener">SCAN | Docs</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--redis" href="/zh-CN/tags/Redis/">Redis</a>
+          
+            <a class="tag tag--iteration" href="/zh-CN/tags/Iteration/">Iteration</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fredis-scan-full-iteration-contract%2F&text=Redis%20SCAN%20%E8%BF%94%E5%9B%9E%E7%A9%BA%E6%95%B0%E7%BB%84%EF%BC%8C%E9%81%8D%E5%8E%86%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E4%B8%8D%E8%83%BD%E7%BB%93%E6%9D%9F%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fredis-scan-full-iteration-contract%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Redis%20SCAN%20%E8%BF%94%E5%9B%9E%E7%A9%BA%E6%95%B0%E7%BB%84%EF%BC%8C%E9%81%8D%E5%8E%86%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E4%B8%8D%E8%83%BD%E7%BB%93%E6%9D%9F%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fredis-scan-full-iteration-contract%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/05/redis-set-expire-ttl-replacement/">
+              <span>上一篇</span>
+              <strong>Redis 更新缓存后，过期时间为什么消失？</strong>
+              <small>2026-11-05</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/05/pytest-tmp-path-retention-basetemp/">
+              <span>下一篇</span>
+              <strong>pytest 重跑后产物消失：先检查 --basetemp 的清空规则</strong>
+              <small>2026-11-05</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#游标回零，才是一轮完整遍历">游标回零，才是一轮完整遍历</a>
+          
+            <a class="toc-link toc-link--h2" href="#COUNT-一百，为何不是每次返回一百个键？">COUNT 一百，为何不是每次返回一百个键？</a>
+          
+            <a class="toc-link toc-link--h2" href="#重复键应该怎样处理？">重复键应该怎样处理？</a>
+          
+            <a class="toc-link toc-link--h2" href="#跑完一轮，可以称为时点快照吗？">跑完一轮，可以称为时点快照吗？</a>
+          
+            <a class="toc-link toc-link--h3" href="#最后一批有键，但游标已是零，还要处理吗？">最后一批有键，但游标已是零，还要处理吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>261</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>211</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/redis-set-expire-ttl-replacement/">Redis 更新缓存后，过期时间为什么消失？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/openapi-discriminator-validation-outcome/">OpenAPI 写了 discriminator，为什么混合类型请求仍会通过？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/postgres-last-value-window-frame/">PostgreSQL last_value 为什么没有返回分组最后一条？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

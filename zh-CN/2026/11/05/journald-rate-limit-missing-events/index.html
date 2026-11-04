@@ -1,0 +1,400 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>journald 少了故障日志：先核对每个服务的限流窗口 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="解释 journald 按服务窗口丢弃、磁盘倍数与单元覆盖，用有界事件实验核对诊断缺口。">
+  
+  
+    <meta name="keywords" content="RateLimitBurst,日志抑制,单元覆盖">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/05/journald-rate-limit-missing-events/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/05/journald-rate-limit-missing-events/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/05/journald-rate-limit-missing-events/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/05/journald-rate-limit-missing-events/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="journald 少了故障日志：先核对每个服务的限流窗口 | Midnight blog">
+    <meta property="og:description" content="解释 journald 按服务窗口丢弃、磁盘倍数与单元覆盖，用有界事件实验核对诊断缺口。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/05/journald-rate-limit-missing-events/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/journald-rate-limit-missing-events/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/05/journald-rate-limit-missing-events/","name":"journald 少了故障日志：先核对每个服务的限流窗口 | Midnight blog","description":"解释 journald 按服务窗口丢弃、磁盘倍数与单元覆盖，用有界事件实验核对诊断缺口。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/journald-rate-limit-missing-events/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/journald-rate-limit-missing-events/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/journald-rate-limit-missing-events/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/journald-rate-limit-missing-events/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/05/journald-rate-limit-missing-events/","headline":"journald 少了故障日志：先核对每个服务的限流窗口","description":"解释 journald 按服务窗口丢弃、磁盘倍数与单元覆盖，用有界事件实验核对诊断缺口。","inLanguage":"zh-CN","datePublished":"2026-11-04T19:59:03.000Z","dateModified":"2026-11-04T19:59:03.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html"],"keywords":"journald, 日志, 可观测性"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/journald-rate-limit-missing-events/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"journald 少了故障日志：先核对每个服务的限流窗口","item":"https://www.zyweb.vip/zh-CN/2026/11/05/journald-rate-limit-missing-events/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/05/journald-rate-limit-missing-events/" selected>zh-CN</option><option value="/en/2026/11/05/journald-rate-limit-missing-events/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/05/journald-rate-limit-missing-events/" selected>zh-CN</option><option value="/en/2026/11/05/journald-rate-limit-missing-events/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--journald">journald</span>
+      <time datetime="2026-11-04T19:59:03.000Z">2026-11-05</time>
+    </div>
+
+    <h1>journald 少了故障日志：先核对每个服务的限流窗口</h1>
+
+    
+      <p class="post-hero__summary">解释 journald 按服务窗口丢弃、磁盘倍数与单元覆盖，用有界事件实验核对诊断缺口。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-04T19:59:03.000Z">2026-11-05</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/05/journald-rate-limit-missing-events/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/05/journald-rate-limit-missing-events/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>窗口限流可能让故障日志缺失。</li><li>单个 Burst 值不能预测精确截断点。</li><li>抑制计数无法还原每条业务事件。</li></ul></section>
+      <div class="article-content">
+        <p>journald 会对服务日志按窗口限流，超出的消息可能在进入可查询日志前被丢弃。排查缺失事件时，要检查有效的全局与单元配置、丢弃计数和消息路径，不能只按查询结果倒推应用没执行。限流是一条需要证据的诊断分支，不能拿它解释所有日志空洞。</p>
+<h2 id="故障越密集，证据越可能不完整"><a href="#故障越密集，证据越可能不完整" class="headerlink" title="故障越密集，证据越可能不完整"></a>故障越密集，证据越可能不完整</h2><p><a target="_blank" rel="noopener" href="https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html">journald.conf 手册</a>说明，同一服务在 RateLimitIntervalSec 定义的窗口内超过 RateLimitBurst 后，后续消息会被丢弃，直到窗口结束，并生成关于丢弃数量的消息。限制按服务应用，因此不能把两个无关服务简单合并成一个总额度。本文核对二〇二六年十一月五日的在线 latest 手册，没有改变主机配置或制造日志洪峰。</p>
+<p>假设一个报表服务短时间重复打印连接失败，某个关键任务的失败说明恰好在这一阶段发出。查询不到它，至少可能有几类原因：应用没有进入该分支，日志级别过滤，输出没有走向预期收集路径，journald 限流，或者后续转发与查询条件不正确。只看到 journalctl 的一页结果，不能选定其中任何一个作为根因。</p>
+<p>应该先建立事件身份与路径。应用是否有发送动作的可核对计数，消息写向标准输出还是其他出口，是否属于同一服务，查询是否覆盖相应启动实例与时间范围。若发送端与接收端的计数口径不同，例如把一条多行消息当成多条事件，直接比较差值也会制造虚假的丢失结论。</p>
+<h2 id="一个-Burst-数值为什么不是精确截断点"><a href="#一个-Burst-数值为什么不是精确截断点" class="headerlink" title="一个 Burst 数值为什么不是精确截断点"></a>一个 Burst 数值为什么不是精确截断点</h2><p>手册特别说明，有效限额还乘以由可用磁盘空间决定的因子。单元的 LogRateLimitIntervalSec 或 LogRateLimitBurst 又能覆盖全局设置。因此看到全局 Burst=1000，不能预测“第1001条必定丢弃”。窗口、服务归属、单元覆盖和磁盘条件都要进入解释。</p>
+<p>这个细节直接影响验证方法。若只发一千零一条，发现全都可查，就宣布限流未生效，可能只是没有触到实际额度。反过来，少了一条也不证明发生限流，写入途中退出或查询范围错误仍可能造成差异。测试应该先记录有效条件，再选择有界输入，而不是不断增加生产日志直到看见缺口。</p>
+<p>存储容量限制与发送速率限制也不是一回事。空间政策影响日志文件能保留多少，窗口限流影响消息在那段时间是否进入日志。旧记录因为保留政策消失，与刚发出的突发消息被丢弃，可以在结果上都表现为查不到，但它们需要不同观察。不要靠调大一个容量字段就声称修复了窗口丢弃。</p>
+<h2 id="在独立服务里设计一组可核对的输入"><a href="#在独立服务里设计一组可核对的输入" class="headerlink" title="在独立服务里设计一组可核对的输入"></a>在独立服务里设计一组可核对的输入</h2><p>一个候选沙盒实验先建立专用服务，固定发送方式、日志级别与单元身份。消息只包含教学 run_id、顺序号和事件类型，不包含用户输入或凭据。发送程序独立记录尝试发送的数量与最终退出状态；该计数是发送尝试，不自动证明每条已被 journald 接受。</p>
+<p>实验分两组。第一组在明确低于有效预算的节奏下发送，核对顺序号是否完整；第二组在短时间内发送有界突发，观察查询序列、丢弃提示与窗口后恢复。所有数字只是事先确定的测试输入，不能借本文片段声称某台机器已经丢失了固定数量日志。实际窗口与额度需要结合已记录的覆盖和磁盘条件设置。</p>
+<p>例如一次教学计划准备五十条低速事件与五百条突发事件，每条带本轮身份。是否足以触发限流，取决于沙盒有效配置；先核对条件，再执行，不把这两个数当作推荐生产预算。实验目标是解释事件流的变化，而不是刷出尽可能多的消息。为测试保留总量上限与停止条件，避免连验证本身都无法说明磁盘开销。</p>
+<p>为让这组输入可推演，纸面方案设全局 RateLimitIntervalSec=30s、RateLimitBurst=100；测试单元没有 LogRateLimit 覆盖，没有同服务其他写者，第二组从独立的新窗口开始。假设 journal 可用空间为六十四 MiB，按此次核对的 latest 手册表格，落在不超过二百五十六 MB 的乘数三档，名义预算就是一百乘三等于三百。</p>
+<p>第一组五十条若都在一个窗口内，也低于这份纸面预算；第二组五百条同窗口突发则超过预算，应观察是否出现抑制及窗口后的恢复。三百可接纳、二百超额只是简化输入下的数量推演，不是实际截断回执；真实环境的窗口归属、发送错误与额外消息仍须逐项核对。这里不建议为了取得该乘数压低生产磁盘，也不把假设空间当作某台主机的观测。</p>
+<p>收集端保存这一轮的查询参数、服务启动身份和时间边界，关联所有可见顺序号与抑制数量。若没有观察到丢弃，应保留“当前输入下未观察到”的结论，不可改写成限流已经关闭；若看见抑制提示，也不能凭数量给每个缺失业务事件一一定位。</p>
+<h2 id="丢弃计数能恢复那条订单日志吗？"><a href="#丢弃计数能恢复那条订单日志吗？" class="headerlink" title="丢弃计数能恢复那条订单日志吗？"></a>丢弃计数能恢复那条订单日志吗？</h2><p>不能。计数提示告诉排查者某段输入遭到抑制，不会把被丢弃的正文重新生成，也不一定指出缺的是哪个任务。它能帮助确认日志证据存在缺口，不能补回已丢失内容。关键业务状态应有适合用途的持久记录，不能只靠一条可被限流的诊断消息决定订单究竟成功还是失败。</p>
+<p>这也约束事故报告的措辞。可以写“该服务窗口出现抑制提示，本次日志覆盖不完整”，但若没有进一步证据，不能写“订单甲的失败消息被 journald 丢弃”。后一判断需要发送记录、身份关联与其他原因排除。诊断假设应与已观察事实分栏保留。</p>
+<h2 id="要不要直接把限流关闭？"><a href="#要不要直接把限流关闭？" class="headerlink" title="要不要直接把限流关闭？"></a>要不要直接把限流关闭？</h2><p>先确认是重复噪音耗尽了预算，还是额度确实不能容纳必要事件。可以压缩重复报错，保留次数与首末时间，把详细诊断限制在受控范围，再评估按单元调整额度。关闭限流只是取消一道保护，不会修复应用日志级别、输出路由或下游存储，可能还增加容量压力。</p>
+<p>手册说明将任一相关值设为零可关闭此类限流，但“允许配置”不是“适合本服务”的结论。选择需要同时考虑排查需求、磁盘与转发能力，并验证改变后实际单元条件；全局配置改了而单元覆盖仍在，观察到的行为可能完全不变。本文没有给出可直接套用的生产数值。</p>
+<p>二〇二六年十月十六日的<a href="/zh-CN/2026/10/16/docker-log-driver-existing-container/">Docker 日志驱动文章</a>关注运行实例实际采用哪份配置，本题补的是消息进入 journal 时的窗口丢弃。先把发送、接收、保留与查询几层证据对齐，再决定是否调限额；没有这条链，减少日志与缺少日志很容易被误写成同一件事。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html" rel="noopener">journald.conf</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--journald" href="/zh-CN/tags/journald/">journald</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%97%A5%E5%BF%97/">日志</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">可观测性</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fjournald-rate-limit-missing-events%2F&text=journald%20%E5%B0%91%E4%BA%86%E6%95%85%E9%9A%9C%E6%97%A5%E5%BF%97%EF%BC%9A%E5%85%88%E6%A0%B8%E5%AF%B9%E6%AF%8F%E4%B8%AA%E6%9C%8D%E5%8A%A1%E7%9A%84%E9%99%90%E6%B5%81%E7%AA%97%E5%8F%A3" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fjournald-rate-limit-missing-events%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=journald%20%E5%B0%91%E4%BA%86%E6%95%85%E9%9A%9C%E6%97%A5%E5%BF%97%EF%BC%9A%E5%85%88%E6%A0%B8%E5%AF%B9%E6%AF%8F%E4%B8%AA%E6%9C%8D%E5%8A%A1%E7%9A%84%E9%99%90%E6%B5%81%E7%AA%97%E5%8F%A3&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fjournald-rate-limit-missing-events%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/05/openapi-discriminator-validation-outcome/">
+              <span>上一篇</span>
+              <strong>OpenAPI 写了 discriminator，为什么混合类型请求仍会通过？</strong>
+              <small>2026-11-05</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/05/html-showpicker-activation-boundary/">
+              <span>下一篇</span>
+              <strong>HTML showPicker点击过仍报NotAllowedError，该查哪个激活状态？</strong>
+              <small>2026-11-05</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#故障越密集，证据越可能不完整">故障越密集，证据越可能不完整</a>
+          
+            <a class="toc-link toc-link--h2" href="#一个-Burst-数值为什么不是精确截断点">一个 Burst 数值为什么不是精确截断点</a>
+          
+            <a class="toc-link toc-link--h2" href="#在独立服务里设计一组可核对的输入">在独立服务里设计一组可核对的输入</a>
+          
+            <a class="toc-link toc-link--h2" href="#丢弃计数能恢复那条订单日志吗？">丢弃计数能恢复那条订单日志吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#要不要直接把限流关闭？">要不要直接把限流关闭？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>261</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>211</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/css-cascade-layer-important-order/">CSS后声明的layer，为什么加important后反而输了？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/gnu-make-delete-on-error-target/">GNU Make 首轮失败，次轮为什么把半成品当成最新目标</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/gnu-make-phony-target-collision/">GNU Make 的 clean 被同名文件跳过，何时该用 .PHONY？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

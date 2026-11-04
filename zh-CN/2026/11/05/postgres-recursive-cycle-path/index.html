@@ -1,0 +1,416 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>PostgreSQL 递归查询加了 UNION，为什么仍绕着环走？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用 PostgreSQL 18 CYCLE 跟踪节点路径，区分整行去重、合流和回环，并保留诊断标记与终止边界。">
+  
+  
+    <meta name="keywords" content="PostgreSQL CYCLE,递归查询,UNION depth">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/05/postgres-recursive-cycle-path/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/05/postgres-recursive-cycle-path/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/05/postgres-recursive-cycle-path/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/05/postgres-recursive-cycle-path/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="PostgreSQL 递归查询加了 UNION，为什么仍绕着环走？ | Midnight blog">
+    <meta property="og:description" content="用 PostgreSQL 18 CYCLE 跟踪节点路径，区分整行去重、合流和回环，并保留诊断标记与终止边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/05/postgres-recursive-cycle-path/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-recursive-cycle-path/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-recursive-cycle-path/","name":"PostgreSQL 递归查询加了 UNION，为什么仍绕着环走？ | Midnight blog","description":"用 PostgreSQL 18 CYCLE 跟踪节点路径，区分整行去重、合流和回环，并保留诊断标记与终止边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-recursive-cycle-path/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-recursive-cycle-path/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-recursive-cycle-path/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-recursive-cycle-path/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-recursive-cycle-path/","headline":"PostgreSQL 递归查询加了 UNION，为什么仍绕着环走？","description":"用 PostgreSQL 18 CYCLE 跟踪节点路径，区分整行去重、合流和回环，并保留诊断标记与终止边界。","inLanguage":"zh-CN","datePublished":"2026-11-04T19:59:03.000Z","dateModified":"2026-11-04T19:59:03.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/queries-with.html"],"keywords":"Development, PostgreSQL, Graph"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-recursive-cycle-path/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"PostgreSQL 递归查询加了 UNION，为什么仍绕着环走？","item":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-recursive-cycle-path/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/05/postgres-recursive-cycle-path/" selected>zh-CN</option><option value="/en/2026/11/05/postgres-recursive-cycle-path/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/05/postgres-recursive-cycle-path/" selected>zh-CN</option><option value="/en/2026/11/05/postgres-recursive-cycle-path/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-11-04T19:59:03.000Z">2026-11-05</time>
+    </div>
+
+    <h1>PostgreSQL 递归查询加了 UNION，为什么仍绕着环走？</h1>
+
+    
+      <p class="post-hero__summary">用 PostgreSQL 18 CYCLE 跟踪节点路径，区分整行去重、合流和回环，并保留诊断标记与终止边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-04T19:59:03.000Z">2026-11-05</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/05/postgres-recursive-cycle-path/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/05/postgres-recursive-cycle-path/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>depth变化会让同一节点形成不同结果行。</li><li>路径内重复与不同路径合流不能混成全局去重。</li><li>CYCLE停止扩展但不修复原图，外层LIMIT不作生产保险。</li></ul></section>
+      <div class="article-content">
+        <p>递归结果包含 depth 时，同一节点再次到达可能形成不同结果行，UNION 因而不能替你识别环。应明确跟踪节点身份和当前路径，再决定环行怎样输出。防止查询继续绕环，与向读者展示哪里形成了环，是可以分别设计的两项要求。</p>
+<p>假设依赖关系是甲指向乙、乙指向丙、丙又指回甲，乙还指向丁。报表从甲出发查全部下游，并显示层数。开发者将 UNION ALL 换成 UNION，希望去掉重复节点，但下一次甲的层数已经不同。下面按 PostgreSQL 18 文档推演，不运行无界递归，也不提供已经成功终止的日志。</p>
+<h2 id="UNION-看的是整行，不是心里的节点"><a href="#UNION-看的是整行，不是心里的节点" class="headerlink" title="UNION 看的是整行，不是心里的节点"></a>UNION 看的是整行，不是心里的节点</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/queries-with.html#QUERIES-WITH-RECURSIVE">PostgreSQL 18 的递归查询说明</a>区分非递归项与递归项；UNION 会排除完整结果行的重复。如果只输出节点标识，同一节点再次出现可能被去重；加入 depth 后，甲零层与甲三层已经不是相同行。再带上变化路径，差别会更多。</p>
+<p>因此，不能把结果去重和环检测当作同一件事。前者问“这整行是否已经出现”，后者问“沿着这次行走，是否回到已经访问过的身份”。修改投影列可能改变 UNION 是否能终止，正说明原来的终止依赖并未被独立定义。这里仅纸面描述错误递推，不给可直接启动的无界反例。</p>
+<p>节点身份还必须真实唯一。若组织名可以重复，只用名字检测会把合法的不同部门当成环；多租户数据里的编号也可能只在租户内部唯一。应该根据实际关系使用节点主键，必要时连同租户一起跟踪，不让显示名称承担图中身份。</p>
+<h2 id="完整正例保留环标记与访问路径"><a href="#完整正例保留环标记与访问路径" class="headerlink" title="完整正例保留环标记与访问路径"></a>完整正例保留环标记与访问路径</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/queries-with.html#QUERIES-WITH-CYCLE">文档的 Cycle Detection 章节</a>提供 CYCLE 子句，指定跟踪列、环标记名和路径列名。下面是未执行的完整教学查询，四条边都在语句里；结果保留标记行，便于调查，不只返回一份看似正常的下游名单。</p>
+<pre><code class="sql">WITH RECURSIVE
+edges(src, dst) AS (
+  VALUES (&#39;A&#39;::text, &#39;B&#39;::text),
+         (&#39;B&#39;, &#39;C&#39;), (&#39;C&#39;, &#39;A&#39;), (&#39;B&#39;, &#39;D&#39;)
+),
+walk(node, depth) AS (
+  SELECT &#39;A&#39;::text, 0
+  UNION ALL
+  SELECT e.dst, w.depth + 1
+  FROM walk AS w
+  JOIN edges AS e ON e.src = w.node
+)
+CYCLE node SET is_cycle USING path
+SELECT node, depth, is_cycle, path
+FROM walk
+ORDER BY path;
+</code></pre>
+<p>按给定图推演，应有起点 A、后续 B、C、D，以及再次到达 A 的环标记行。沿 A、B、C 回到 A 时，标记为环的这一行仍可进入结果，但不会再从它继续展开；不是把所有与 A 有关的行删除。depth 用于说明走了几步，不参与这里的节点身份判断。path 与 is_cycle 由 CYCLE 加入输出，不需要在递归列列表中手工重复声明。</p>
+<p>如果产品只展示非环路径，可以在最终 SELECT 加 WHERE NOT is_cycle，但应保留另一份诊断结果或记录，让异常关系有出处。过滤结果的环行并不等于图已被修复，原始边仍然存在。查询停止是一项行为，数据约束正确是另一项结论。</p>
+<h2 id="两条路径到同一节点，算环吗？"><a href="#两条路径到同一节点，算环吗？" class="headerlink" title="两条路径到同一节点，算环吗？"></a>两条路径到同一节点，算环吗？</h2><p>不一定。另一个无环图中，A 分别到 B、C，B 和 C 都到 D。两条路线都走到 D，却没有沿自己的路径回到旧节点。这是合流，不是环。若需要每一条依赖路径，两份 D 都有用；若只要唯一可达节点清单，才应在选定阶段按节点合并。</p>
+<p>全局“已经见过 D”集合与每条路径上的环检测，承担的责任不同。全局去重可以减少重复探索，却也会丢掉路径数量、不同父节点和层级证据。不能因为最终页面只显示一次 D，就在递归内部提前丢弃另一条路径，再把结果用于统计全部依赖关系。</p>
+<p>选择之前先说明输出对象：节点清单、边清单、路径清单，还是每个节点的最短层级。这些问题没有一条 CYCLE 就能统一回答。示例输出路径以便诊断，不承诺最短路径，也没有给路径爆炸的图提供通用资源上限。</p>
+<h2 id="外层-LIMIT-能当停止保险吗？"><a href="#外层-LIMIT-能当停止保险吗？" class="headerlink" title="外层 LIMIT 能当停止保险吗？"></a>外层 LIMIT 能当停止保险吗？</h2><p>文档将父查询 LIMIT 介绍为试验递归时的技巧，同时明确不建议作为生产依赖。外层排序或连接常常需要先取得完整递归结果，才知道该返回哪些行，因此 LIMIT 不一定限制递归实际产生多少工作。本例能够使用 ORDER BY path，是因为递归已有环检测，而不是排序之后的 LIMIT 在保护它。</p>
+<p>如需研究错误写法，应使用隔离环境与递归内部明确的深度上限，再把它标为受限实验。深度达到上限而停止，只能说明截断，不能宣称发现了全部节点或解决了环。业务确实只允许查若干层时，上限可以是正式合同，但结果应说明范围和是否存在被截断的后续。</p>
+<p>站内二〇二六年十月二十一日的<a href="/zh-CN/2026/10/21/postgres-cte-materialization-plan/">CTE 物化与过滤下推</a>限定普通非递归查询的复用安排。本题处理递归的终止与路径身份，不应把物化提示当成防环开关。</p>
+<p>如果边表带租户字段，递归连接也必须按租户关联。只在 CYCLE 中增加租户列，却让连接把两个租户的同号节点连起来，会让检测正确地描述一条本来就不该存在的跨租户路径。环检测负责终止，不负责授权或修正连接条件。验收因此要同时核对每一步边的归属，不能仅检查最后的环标记；身份组合、连接范围与可见权限各自需要依据。</p>
+<h2 id="把合流与环一起纳入验收"><a href="#把合流与环一起纳入验收" class="headerlink" title="把合流与环一起纳入验收"></a>把合流与环一起纳入验收</h2><p>拟议用例应包含无环链、自环、三节点回环、菱形合流，以及跨租户同编号。对每组先写下应输出的节点与路径、哪条行应被标记，再检查是否终止。只看总行数可能掩盖合法路径丢失；只看没有超时，又可能让错误的全局去重通过。</p>
+<p>执行时保存版本、完整输入、SQL 与原始输出，并观察资源预算。即使没有环，庞大有向无环图也可能有很多路径；CYCLE 防止沿环无限扩展，不保证所有图都便宜。本文没有执行查询。首个交付依据应是能解释那条再次出现的 A 为什么被标记、为何不再扩展，同时仍保留两条合法到 D 的路线。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/queries-with.html" rel="noopener">PostgreSQL: Documentation: 18: 7.8. WITH Queries (Common Table Expressions)</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--graph" href="/zh-CN/tags/Graph/">Graph</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fpostgres-recursive-cycle-path%2F&text=PostgreSQL%20%E9%80%92%E5%BD%92%E6%9F%A5%E8%AF%A2%E5%8A%A0%E4%BA%86%20UNION%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E7%BB%95%E7%9D%80%E7%8E%AF%E8%B5%B0%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fpostgres-recursive-cycle-path%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=PostgreSQL%20%E9%80%92%E5%BD%92%E6%9F%A5%E8%AF%A2%E5%8A%A0%E4%BA%86%20UNION%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E7%BB%95%E7%9D%80%E7%8E%AF%E8%B5%B0%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fpostgres-recursive-cycle-path%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/05/postgres-rollup-grouping-null-markers/">
+              <span>上一篇</span>
+              <strong>PostgreSQL ROLLUP 的 NULL，哪一行才是总计？</strong>
+              <small>2026-11-05</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/05/postgres-partition-pruning-stages/">
+              <span>下一篇</span>
+              <strong>PostgreSQL 查询有索引，为什么还要检查分区裁剪？</strong>
+              <small>2026-11-05</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#UNION-看的是整行，不是心里的节点">UNION 看的是整行，不是心里的节点</a>
+          
+            <a class="toc-link toc-link--h2" href="#完整正例保留环标记与访问路径">完整正例保留环标记与访问路径</a>
+          
+            <a class="toc-link toc-link--h2" href="#两条路径到同一节点，算环吗？">两条路径到同一节点，算环吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#外层-LIMIT-能当停止保险吗？">外层 LIMIT 能当停止保险吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#把合流与环一起纳入验收">把合流与环一起纳入验收</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>261</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>211</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/postgres-last-value-window-frame/">PostgreSQL last_value 为什么没有返回分组最后一条？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/postgres-partition-pruning-stages/">PostgreSQL 查询有索引，为什么还要检查分区裁剪？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/postgres-rollup-grouping-null-markers/">PostgreSQL ROLLUP 的 NULL，哪一行才是总计？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

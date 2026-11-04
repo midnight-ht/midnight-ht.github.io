@@ -1,0 +1,413 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>systemd start 已成功，为什么依赖服务仍抢跑 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="按 Type、READY 通知身份、超时与排序依赖推演 systemd 启动，区分正常、延迟、退出和无通知。">
+  
+  
+    <meta name="keywords" content="Type=notify,NotifyAccess,TimeoutStartSec">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/05/systemd-notify-startup-readiness/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/05/systemd-notify-startup-readiness/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/05/systemd-notify-startup-readiness/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/05/systemd-notify-startup-readiness/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="systemd start 已成功，为什么依赖服务仍抢跑 | Midnight blog">
+    <meta property="og:description" content="按 Type、READY 通知身份、超时与排序依赖推演 systemd 启动，区分正常、延迟、退出和无通知。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/05/systemd-notify-startup-readiness/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/systemd-notify-startup-readiness/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/05/systemd-notify-startup-readiness/","name":"systemd start 已成功，为什么依赖服务仍抢跑 | Midnight blog","description":"按 Type、READY 通知身份、超时与排序依赖推演 systemd 启动，区分正常、延迟、退出和无通知。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/systemd-notify-startup-readiness/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/systemd-notify-startup-readiness/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/systemd-notify-startup-readiness/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/systemd-notify-startup-readiness/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/05/systemd-notify-startup-readiness/","headline":"systemd start 已成功，为什么依赖服务仍抢跑","description":"按 Type、READY 通知身份、超时与排序依赖推演 systemd 启动，区分正常、延迟、退出和无通知。","inLanguage":"zh-CN","datePublished":"2026-11-04T19:59:03.000Z","dateModified":"2026-11-04T19:59:03.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html","https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html","https://www.freedesktop.org/software/systemd/man/latest/sd_notify.html"],"keywords":"systemd, 服务启动, 通知协议"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/systemd-notify-startup-readiness/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"systemd start 已成功，为什么依赖服务仍抢跑","item":"https://www.zyweb.vip/zh-CN/2026/11/05/systemd-notify-startup-readiness/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/05/systemd-notify-startup-readiness/" selected>zh-CN</option><option value="/en/2026/11/05/systemd-notify-startup-readiness/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/05/systemd-notify-startup-readiness/" selected>zh-CN</option><option value="/en/2026/11/05/systemd-notify-startup-readiness/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--systemd">systemd</span>
+      <time datetime="2026-11-04T19:59:03.000Z">2026-11-05</time>
+    </div>
+
+    <h1>systemd start 已成功，为什么依赖服务仍抢跑</h1>
+
+    
+      <p class="post-hero__summary">按 Type、READY 通知身份、超时与排序依赖推演 systemd 启动，区分正常、延迟、退出和无通知。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-04T19:59:03.000Z">2026-11-05</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/05/systemd-notify-startup-readiness/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/05/systemd-notify-startup-readiness/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>simple、exec 与 notify 等待不同的启动时点。</li><li>需求依赖与启动顺序需要分别配置。</li><li>READY 的发送点与主进程身份都要验证。</li></ul></section>
+      <div class="article-content">
+        <p>对 systemd 启动完成的判断取决于 <code>Type</code>。simple 在 fork 后继续，exec 等到可执行文件成功执行；需要等待应用初始化时，应让支持通知的服务在真实完成后发送 <code>READY=1</code>。如果后继单元没有独立配置启动顺序，换成 notify 也不会自动建立它们之间的等待关系。</p>
+<h2 id="先选启动完成的时点，再写依赖"><a href="#先选启动完成的时点，再写依赖" class="headerlink" title="先选启动完成的时点，再写依赖"></a>先选启动完成的时点，再写依赖</h2><p><a target="_blank" rel="noopener" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html">systemd.service 手册</a>将 Type 定义为服务通知管理器启动已完成的机制。simple 的边界早于程序执行，exec 能暴露可执行文件不存在等调用失败，但二者都没有读取应用初始化进度。notify 则要求服务通过通知协议明确报告。本文核对二〇二六年十一月五日的 latest 手册，不据此推断任何主机安装的版本。</p>
+<p>假设报表服务先加载模板、建立只读索引，再绑定本地请求端口；另一个预热任务必须在这三步结束后访问它。选择 simple 时，预热可能在程序执行前获准启动；选择 exec 时，程序已经成功执行，却仍可能在加载模板。仅改变进程启动方式，不能让管理器知道第三步何时完成。</p>
+<p>notify 把这个判断交给应用，但没有替应用决定标准。应用应先写清发送点：本例要求模板可用、索引准备完成、监听已经建立，才报告 READY。若在 main 函数刚进入时发送，协议使用形式虽然存在，等待者仍会过早继续。配置只能等待报告，不能证明报告内容诚实。</p>
+<h2 id="一组有前提的单元与事件方案"><a href="#一组有前提的单元与事件方案" class="headerlink" title="一组有前提的单元与事件方案"></a>一组有前提的单元与事件方案</h2><p>以下是未执行的协议方案，假设自有 report-service 已在主进程实现 sd_notify，并且支持明确的初始化延迟测试开关。/opt 下的程序不是本文提供的可运行实现；片段展示接口条件与状态推演，不能只保存两个文件就声称获得了可运行教程。服务文件拟保存为 report-demo.service。</p>
+<pre><code class="ini">[Unit]
+Description=Report initialization contract demo
+
+[Service]
+Type=notify
+NotifyAccess=main
+TimeoutStartSec=30s
+ExecStart=/opt/report-service/bin/report-service
+</code></pre>
+<p>后继文件拟保存为 warmup-demo.service。假设自有 warmup 程序只发送一条只读请求并以明确退出值报告结果。它的两项依赖分别表达拉起服务与等待顺序，不是可互换字段。</p>
+<pre><code class="ini">[Unit]
+Requires=report-demo.service
+After=report-demo.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/report-service/bin/warmup
+</code></pre>
+<p><a target="_blank" rel="noopener" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html">systemd.unit 手册</a>说明，需求依赖本身不决定启动排序；After 或 Before 需要单独配置。对本例，启动 warmup 时 Requires 把 report 纳入启动事务，After 让 warmup 的启动排在 report 启动完成之后。只写 After 不负责拉起另一个单元，只写 Requires 也不保证按预期顺序启动。</p>
+<p>三十秒是教学预算，不是推荐的通用初始化时限。实际值应结合最慢可接受初始化、机器与数据规模决定。TimeoutStartSec 限制启动等待；未在规定时间内完成会被视为失败并按超时策略处理。某些通知协议可以延长预算，但本例不采用该功能，也不把延长当作无限等待的理由。</p>
+<h2 id="四条事件线分别会发生什么"><a href="#四条事件线分别会发生什么" class="headerlink" title="四条事件线分别会发生什么"></a>四条事件线分别会发生什么</h2><p>正常推演是：管理器执行主进程，状态进入启动中；应用完成模板与索引，建立监听；同一主进程发送 READY=1，report 的启动完成，排在它后面的 warmup 才可执行。warmup 最终是否请求成功仍需记录，不能从前者启动完成直接写成后者任务已通过。</p>
+<p>延迟推演把模板加载延后，但仍在预算内结束。此时 report 保持启动中，warmup 等待；到真正完成并报告 READY 后才继续。等待时长应由事件记录说明，而不是用固定 sleep 估算。若初始化慢于超时预算，本例按启动超时失败处理，不应把更晚出现的端口当成这次启动事务已经成功。</p>
+<p>退出推演让主进程在初始化时因模板错误退出，且没有发送 READY。服务没有完成约定的启动；本例后继使用 Requires 与 After 组合，其前提未成立，不能继续当作正常预热。这条路径需要保存退出原因与依赖任务结果，而不只看某一刻进程曾经存在。</p>
+<p>无通知推演则让程序一直运行、甚至已经监听，却不发送 READY。管理器不能从监听状态猜测通知已经发生，会继续等待并受启动超时约束。把 Type 改成 notify 并不会给旧程序注入协议能力；若它不支持，应先实现或明确选择别的启动边界，不能靠无限超时隐藏缺失。</p>
+<h2 id="为什么通知发送者身份也属于协议？"><a href="#为什么通知发送者身份也属于协议？" class="headerlink" title="为什么通知发送者身份也属于协议？"></a>为什么通知发送者身份也属于协议？</h2><p>因为管理器只接受 NotifyAccess 允许的发送者更新；设为 main 时，就只接受该服务主进程的状态更新。任意启动一个辅助命令发送消息，不一定具有这个身份；手册还说明，辅助进程发送后立即退出可能产生归属竞态，即使放宽到 all 也不能随意忽略。可靠设计优先由长驻主进程在正确终点发送，而不是让不明 helper 代为宣布完成。</p>
+<p>sd_notify 手册还明确 READY=0 并不是撤回就绪的定义。启动完成协议不能当作持续路由健康开关。READY 之后数据库短暂失联，需要应用失败响应、恢复和监控另行处理，不能简单反向发送零值并假设后继工作被自动撤销。</p>
+<p>拟议验证应在隔离 Linux 主机记录管理器版本与实际单元配置，让自有进程分别执行正常、延迟、初始化退出、无通知四种输入。为初始化开始、监听建立、READY 发送、后继启动和请求结果保存可关联事件；同时观察服务启动作业状态。事件记录至少保留本轮身份、主进程 PID、输入模式、初始化步骤、单调时间和后继退出值。用同一轮身份连接管理器与应用记录，能区分“通知未发送”“发送者不被接受”和“已通知但请求失败”；这些分支不能只靠一条端口检查区分。语法校验即使通过也不证明通知归属或请求结果。</p>
+<p>二〇二六年十月二十四日的<a href="/zh-CN/2026/10/24/compose-depends-on-health-startup/">Compose 启动依赖文章</a>同样区分启动条件与运行期恢复，但 systemd 在这里等待的是受身份约束的应用通知，并由单独的排序依赖约束后继。先确认程序确实支持协议、发送点真实、后继关系完整，再把启动成功写入交付记录。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html" rel="noopener">systemd.service</a></li><li><a target="_blank" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html" rel="noopener">systemd.unit</a></li><li><a target="_blank" href="https://www.freedesktop.org/software/systemd/man/latest/sd_notify.html" rel="noopener">sd_notify</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--systemd" href="/zh-CN/tags/systemd/">systemd</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%9C%8D%E5%8A%A1%E5%90%AF%E5%8A%A8/">服务启动</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E9%80%9A%E7%9F%A5%E5%8D%8F%E8%AE%AE/">通知协议</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fsystemd-notify-startup-readiness%2F&text=systemd%20start%20%E5%B7%B2%E6%88%90%E5%8A%9F%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BE%9D%E8%B5%96%E6%9C%8D%E5%8A%A1%E4%BB%8D%E6%8A%A2%E8%B7%91" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fsystemd-notify-startup-readiness%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=systemd%20start%20%E5%B7%B2%E6%88%90%E5%8A%9F%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BE%9D%E8%B5%96%E6%9C%8D%E5%8A%A1%E4%BB%8D%E6%8A%A2%E8%B7%91&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fsystemd-notify-startup-readiness%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/05/wcag-switch-state-notification/">
+              <span>上一篇</span>
+              <strong>WCAG自定义开关变绿了，读屏为什么仍说关闭？</strong>
+              <small>2026-11-05</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/05/restic-forget-prune-retention-groups/">
+              <span>下一篇</span>
+              <strong>restic forget 删了快照，仓库空间为什么还没降</strong>
+              <small>2026-11-05</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#先选启动完成的时点，再写依赖">先选启动完成的时点，再写依赖</a>
+          
+            <a class="toc-link toc-link--h2" href="#一组有前提的单元与事件方案">一组有前提的单元与事件方案</a>
+          
+            <a class="toc-link toc-link--h2" href="#四条事件线分别会发生什么">四条事件线分别会发生什么</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么通知发送者身份也属于协议？">为什么通知发送者身份也属于协议？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>261</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>211</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/css-cascade-layer-important-order/">CSS后声明的layer，为什么加important后反而输了？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/gnu-make-delete-on-error-target/">GNU Make 首轮失败，次轮为什么把半成品当成最新目标</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/gnu-make-phony-target-collision/">GNU Make 的 clean 被同名文件跳过，何时该用 .PHONY？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

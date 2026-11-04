@@ -1,0 +1,424 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>PostgreSQL 查询有索引，为什么还要检查分区裁剪？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="把 PostgreSQL 18 分区裁剪与分区内索引分开，按规划、初始化与执行时点核对参数、子计划和实际访问。">
+  
+  
+    <meta name="keywords" content="partition pruning,Subplans Removed,分区裁剪">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/05/postgres-partition-pruning-stages/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/05/postgres-partition-pruning-stages/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/05/postgres-partition-pruning-stages/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/05/postgres-partition-pruning-stages/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="PostgreSQL 查询有索引，为什么还要检查分区裁剪？ | Midnight blog">
+    <meta property="og:description" content="把 PostgreSQL 18 分区裁剪与分区内索引分开，按规划、初始化与执行时点核对参数、子计划和实际访问。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/05/postgres-partition-pruning-stages/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-partition-pruning-stages/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-partition-pruning-stages/","name":"PostgreSQL 查询有索引，为什么还要检查分区裁剪？ | Midnight blog","description":"把 PostgreSQL 18 分区裁剪与分区内索引分开，按规划、初始化与执行时点核对参数、子计划和实际访问。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-partition-pruning-stages/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-partition-pruning-stages/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-partition-pruning-stages/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-partition-pruning-stages/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-partition-pruning-stages/","headline":"PostgreSQL 查询有索引，为什么还要检查分区裁剪？","description":"把 PostgreSQL 18 分区裁剪与分区内索引分开，按规划、初始化与执行时点核对参数、子计划和实际访问。","inLanguage":"zh-CN","datePublished":"2026-11-04T19:59:03.000Z","dateModified":"2026-11-04T19:59:03.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/ddl-partitioning.html"],"keywords":"Development, PostgreSQL, QueryPlan"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-partition-pruning-stages/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"PostgreSQL 查询有索引，为什么还要检查分区裁剪？","item":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-partition-pruning-stages/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/05/postgres-partition-pruning-stages/" selected>zh-CN</option><option value="/en/2026/11/05/postgres-partition-pruning-stages/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/05/postgres-partition-pruning-stages/" selected>zh-CN</option><option value="/en/2026/11/05/postgres-partition-pruning-stages/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-11-04T19:59:03.000Z">2026-11-05</time>
+    </div>
+
+    <h1>PostgreSQL 查询有索引，为什么还要检查分区裁剪？</h1>
+
+    
+      <p class="post-hero__summary">把 PostgreSQL 18 分区裁剪与分区内索引分开，按规划、初始化与执行时点核对参数、子计划和实际访问。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-04T19:59:03.000Z">2026-11-05</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/05/postgres-partition-pruning-stages/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/05/postgres-partition-pruning-stages/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>分区边界负责排除分区，索引负责留下分区内的访问。</li><li>参数可在规划、初始化或执行时触发裁剪。</li><li>计划名、实际扫描和锁范围需要不同证据。</li></ul></section>
+      <div class="article-content">
+        <p>分区裁剪先排除不可能包含匹配行的分区，索引再帮助读取留下的分区。PostgreSQL 18 还可能在执行时裁剪，不能只凭静态计划列出多个子计划就宣布失败。排查时先问哪些分区需要参与，再问其中的行怎样读取。</p>
+<p>假设日志表按月分区，查询只要十一月前三天。表上已经有日期索引，并不回答十月分区是否被排除；反过来，十月分区被裁掉，也不保证十一月分区一定使用索引。两层选择服务不同范围，不能把某个计划节点名字当成全部优化已经完成。</p>
+<h2 id="裁剪依赖边界，不依赖先建索引"><a href="#裁剪依赖边界，不依赖先建索引" class="headerlink" title="裁剪依赖边界，不依赖先建索引"></a>裁剪依赖边界，不依赖先建索引</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/ddl-partitioning.html#DDL-PARTITION-PRUNING">PostgreSQL 18 分区裁剪文档</a>说明，优化器检查分区定义，证明某分区不可能满足查询条件时，将它排除。声明式分区使用的是分区边界；这不同于在保留分区内部查找具体行的索引。</p>
+<p>因此，没有分区键索引也可以发生裁剪。如果剩下分区中绝大多数行都符合条件，顺序扫描可能是合理选择；如果只取其中很少行，索引可能有用。应由实际查询、数据分布与成本判断，不把“顺序扫描”自动写成故障。这个区分也避免为了修裁剪问题不断增加分区内索引，承担维护成本却没有触及条件证明。</p>
+<p>查询形式同样要核对。应用说按日期查，实际 SQL 可能先对分区键套函数，再与另一种类型比较。是否还能从这种表达式推导边界，需要具体计划证据；不能保证所有包函数的写法都失败，也不能因为表达式数学上看似等价，就断言优化器一定认识。</p>
+<h2 id="先用两个分区固定正确结果"><a href="#先用两个分区固定正确结果" class="headerlink" title="先用两个分区固定正确结果"></a>先用两个分区固定正确结果</h2><p>下面是未执行的教学 SQL，只供独立隔离测试库使用，不应在已有业务库直接运行。表名是示例，不代表可以覆盖同名对象。事务最终回滚创建的数据与表；本例先说明查询和边界，不提供预制执行计划。</p>
+<pre><code class="sql">BEGIN;
+CREATE TABLE demo_measurements (
+  id bigint NOT NULL,
+  logdate date NOT NULL,
+  value integer
+) PARTITION BY RANGE (logdate);
+CREATE TABLE demo_measurements_oct PARTITION OF demo_measurements
+  FOR VALUES FROM (&#39;2026-10-01&#39;) TO (&#39;2026-11-01&#39;);
+CREATE TABLE demo_measurements_nov PARTITION OF demo_measurements
+  FOR VALUES FROM (&#39;2026-11-01&#39;) TO (&#39;2026-12-01&#39;);
+INSERT INTO demo_measurements VALUES
+  (1, DATE &#39;2026-10-31&#39;, 10),
+  (2, DATE &#39;2026-11-01&#39;, 20),
+  (3, DATE &#39;2026-11-03&#39;, 30);
+PREPARE demo_lookup(date, date) AS
+  SELECT id, logdate, value
+  FROM demo_measurements
+  WHERE logdate &gt;= $1 AND logdate &lt; $2;
+EXPLAIN (COSTS OFF) EXECUTE demo_lookup(
+  DATE &#39;2026-11-01&#39;, DATE &#39;2026-11-03&#39;
+);
+EXECUTE demo_lookup(DATE &#39;2026-11-01&#39;, DATE &#39;2026-11-03&#39;);
+DEALLOCATE demo_lookup;
+ROLLBACK;
+</code></pre>
+<p>按输入推演，结果应只含编号二：下界包含十一月一日，上界不包含十一月三日。先核对这份集合，再研究裁剪。否则一条错误地少取边界行的查询即使访问更少，也不是可接受的优化。跨月参数还应另做预期，因为那时两个分区可能都包含合格行，访问多个分区未必错误。</p>
+<p>此例没有创建索引，正好让分区边界与索引访问分开观察。如果后续增加索引，应比较相同 SQL 与参数，分别记录裁剪范围和剩余分区的访问方式，而不是把两项变化合并成一个“已优化”结论。</p>
+<h2 id="参数在什么时候可知？"><a href="#参数在什么时候可知？" class="headerlink" title="参数在什么时候可知？"></a>参数在什么时候可知？</h2><p>官方文档区分规划期裁剪与执行期裁剪。参数值在规划时已经可用，可能提前排除分区；某些准备语句参数、子查询值或参数化连接值，到初始化或执行过程中才可用，仍可能触发后续裁剪。</p>
+<p>因此，PREPARE 并不保证总是展示同一种计划，也不保证每次都有 Subplans Removed。规划方式、参数与实际语句共同决定观察结果。不要为配合教程预期而把计划中没有出现的字段补进报告；应该保存真实计划，并说明哪些阶段有证据，哪些尚不能判断。</p>
+<p>初始化阶段被裁掉的数量，可由计划中的 Subplans Removed 等信息帮助确认；执行中随参数变化发生的裁剪，还要结合 EXPLAIN ANALYZE 中各子计划的 loops。部分子计划可能显示 never executed，但这个标记单独出现，也可能来自其他未进入的执行分支，不能脱离父节点就归因裁剪。</p>
+<h3 id="计划里仍有分区，等于真的扫描了吗？"><a href="#计划里仍有分区，等于真的扫描了吗？" class="headerlink" title="计划里仍有分区，等于真的扫描了吗？"></a>计划里仍有分区，等于真的扫描了吗？</h3><p>不等于。普通 EXPLAIN 描述计划，不提供所有实际执行次数。需要检查运行时行为时，可在受控隔离环境使用带 ANALYZE 的计划；它会真的执行语句，不是只做排版展示。站内二〇二六年十月九日的<a href="/zh-CN/2026/10/09/postgres-explain-evidence/">EXPLAIN 证据边界</a>讨论估算与实际观察的区别。</p>
+<p>检查应同时保留具体参数、enable_partition_pruning 设置、完整父子节点及执行次数。只截下某分区的 never executed，或者只数计划中分区名的数量，都不足以解释为何没有访问它。重复执行的参数也要覆盖不同月份，避免一个恰好能在规划期求值的样例代表全部请求。</p>
+<p>还不能把“没扫描”写成“完全没有触及这个分区”。官方文档指出，初始化裁剪移除的分区，在执行开始时仍会被加锁。若评审的是维护期间的锁冲突，读取量减少不能替代锁范围证据。应分别观察查询实际读了哪些数据与它持有哪些锁，避免用一份裁剪计划为在线变更承诺互不干扰。</p>
+<p>如果测试开关关闭裁剪，比较的也是同一结果集合下的计划变化，不是改变业务过滤。应在隔离事务里控制设置并保存原值，不能为了对照把共享连接池的会话设置长期改掉；连接复用可能把实验配置带到下一次请求。</p>
+<h2 id="何时需要重新考虑分区设计？"><a href="#何时需要重新考虑分区设计？" class="headerlink" title="何时需要重新考虑分区设计？"></a>何时需要重新考虑分区设计？</h2><p>如果主要查询根本不限制分区键，裁剪就可能帮不上忙。此时应回到过滤习惯和生命周期管理要求，而不是靠增加分区数量制造“分得更细就更快”的预期。分区还带来规划、对象维护和变更安排；小表或跨全部历史的汇总未必适合照搬按月结构。</p>
+<p>拟议验收先比较单月、跨月、空范围与边界日期的结果集合，再检查各阶段证据；语义一致之后才测负载、缓冲读取与延迟。本文没有运行 SQL、测量收益或给出某种固定计划。交付时让“排除了哪些分区”和“剩余行怎样读取”各有证据，比仅报告已建索引更能解释真实查询。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/ddl-partitioning.html" rel="noopener">PostgreSQL: Documentation: 18: 5.12. Table Partitioning</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--queryplan" href="/zh-CN/tags/QueryPlan/">QueryPlan</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fpostgres-partition-pruning-stages%2F&text=PostgreSQL%20%E6%9F%A5%E8%AF%A2%E6%9C%89%E7%B4%A2%E5%BC%95%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E8%A6%81%E6%A3%80%E6%9F%A5%E5%88%86%E5%8C%BA%E8%A3%81%E5%89%AA%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fpostgres-partition-pruning-stages%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=PostgreSQL%20%E6%9F%A5%E8%AF%A2%E6%9C%89%E7%B4%A2%E5%BC%95%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E8%A6%81%E6%A3%80%E6%9F%A5%E5%88%86%E5%8C%BA%E8%A3%81%E5%89%AA%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fpostgres-partition-pruning-stages%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/05/postgres-recursive-cycle-path/">
+              <span>上一篇</span>
+              <strong>PostgreSQL 递归查询加了 UNION，为什么仍绕着环走？</strong>
+              <small>2026-11-05</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/05/postgres-last-value-window-frame/">
+              <span>下一篇</span>
+              <strong>PostgreSQL last_value 为什么没有返回分组最后一条？</strong>
+              <small>2026-11-05</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#裁剪依赖边界，不依赖先建索引">裁剪依赖边界，不依赖先建索引</a>
+          
+            <a class="toc-link toc-link--h2" href="#先用两个分区固定正确结果">先用两个分区固定正确结果</a>
+          
+            <a class="toc-link toc-link--h2" href="#参数在什么时候可知？">参数在什么时候可知？</a>
+          
+            <a class="toc-link toc-link--h3" href="#计划里仍有分区，等于真的扫描了吗？">计划里仍有分区，等于真的扫描了吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#何时需要重新考虑分区设计？">何时需要重新考虑分区设计？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>261</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>211</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/postgres-last-value-window-frame/">PostgreSQL last_value 为什么没有返回分组最后一条？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/postgres-recursive-cycle-path/">PostgreSQL 递归查询加了 UNION，为什么仍绕着环走？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/postgres-rollup-grouping-null-markers/">PostgreSQL ROLLUP 的 NULL，哪一行才是总计？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,424 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>GNU Make 首轮失败，次轮为什么把半成品当成最新目标 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="解释 GNU Make 失败后残留目标的时间戳陷阱，比较失败删除、退出状态与先生成后发布。">
+  
+  
+    <meta name="keywords" content="DELETE_ON_ERROR,增量构建,recipe">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/05/gnu-make-delete-on-error-target/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/05/gnu-make-delete-on-error-target/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/05/gnu-make-delete-on-error-target/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/05/gnu-make-delete-on-error-target/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="GNU Make 首轮失败，次轮为什么把半成品当成最新目标 | Midnight blog">
+    <meta property="og:description" content="解释 GNU Make 失败后残留目标的时间戳陷阱，比较失败删除、退出状态与先生成后发布。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/05/gnu-make-delete-on-error-target/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/gnu-make-delete-on-error-target/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/05/gnu-make-delete-on-error-target/","name":"GNU Make 首轮失败，次轮为什么把半成品当成最新目标 | Midnight blog","description":"解释 GNU Make 失败后残留目标的时间戳陷阱，比较失败删除、退出状态与先生成后发布。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/gnu-make-delete-on-error-target/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/gnu-make-delete-on-error-target/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/gnu-make-delete-on-error-target/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/gnu-make-delete-on-error-target/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/05/gnu-make-delete-on-error-target/","headline":"GNU Make 首轮失败，次轮为什么把半成品当成最新目标","description":"解释 GNU Make 失败后残留目标的时间戳陷阱，比较失败删除、退出状态与先生成后发布。","inLanguage":"zh-CN","datePublished":"2026-11-04T19:59:03.000Z","dateModified":"2026-11-04T19:59:03.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.gnu.org/software/make/manual/html_node/Errors.html"],"keywords":"GNU Make, 构建, 失败清理"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/gnu-make-delete-on-error-target/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"GNU Make 首轮失败，次轮为什么把半成品当成最新目标","item":"https://www.zyweb.vip/zh-CN/2026/11/05/gnu-make-delete-on-error-target/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/05/gnu-make-delete-on-error-target/" selected>zh-CN</option><option value="/en/2026/11/05/gnu-make-delete-on-error-target/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/05/gnu-make-delete-on-error-target/" selected>zh-CN</option><option value="/en/2026/11/05/gnu-make-delete-on-error-target/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--gnu-make">GNU Make</span>
+      <time datetime="2026-11-04T19:59:03.000Z">2026-11-05</time>
+    </div>
+
+    <h1>GNU Make 首轮失败，次轮为什么把半成品当成最新目标</h1>
+
+    
+      <p class="post-hero__summary">解释 GNU Make 失败后残留目标的时间戳陷阱，比较失败删除、退出状态与先生成后发布。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-04T19:59:03.000Z">2026-11-05</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/05/gnu-make-delete-on-error-target/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/05/gnu-make-delete-on-error-target/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>部分目标的较新时间戳可能误导下一轮构建。</li><li>失败删除要求非零退出真正传到 make。</li><li>保留旧有效版本时应考虑独立生成再发布。</li></ul></section>
+      <div class="article-content">
+        <p>构建失败时，GNU Make 不一定删除刚写过的目标文件。部分文件若留下较新的时间戳，下一轮可能跳过生成；对会原地更新目标的 recipe，应审查 <code>.DELETE_ON_ERROR</code> 和真正传回 make 的退出状态。先确认坏文件为何被留下，再决定用失败删除还是先生成临时文件。</p>
+<h2 id="第一轮的失败怎样污染第二轮"><a href="#第一轮的失败怎样污染第二轮" class="headerlink" title="第一轮的失败怎样污染第二轮"></a>第一轮的失败怎样污染第二轮</h2><p><a target="_blank" rel="noopener" href="https://www.gnu.org/software/make/manual/html_node/Errors.html">GNU Make 的 recipe 错误说明</a>描述了这个具体问题：命令修改目标后失败，部分文件可能留在磁盘；时间戳却显示它已更新，下一次 make 因而不再尝试生成。文档建议显式开启特殊目标所控制的失败删除。本文于二〇二六年十一月五日核对在线手册，没有执行下面的 Makefile。</p>
+<p>假设报表依赖 input.txt。生成程序先打开 report.txt 写入标题，随后读取某一行时失败。第一次 make 已经非零退出，流水线也正确标红，但 report.txt 的修改时间晚于输入文件。下一轮没有改变输入，make 的普通时间戳判断可能把它看成最新目标。两次运行并不矛盾：一次观察到执行失败，另一次只看到文件与依赖的更新时间关系。</p>
+<p>这不是“make 忘了上次失败”，而是构建目录里留下了一个会被当作有效产物的对象。持久保存失败状态、验证内容或删除无效目标，都可以改变这个条件；只反复按重试键，却不改变目标状态，无法表达文件其实没完成。对生成报表、归档或代码文件的规则，这个差别值得进入构建设计。</p>
+<h2 id="一个能推演两轮结果的最小规则"><a href="#一个能推演两轮结果的最小规则" class="headerlink" title="一个能推演两轮结果的最小规则"></a>一个能推演两轮结果的最小规则</h2><p>以下例子要求 GNU Make、常规命令行 shell 及可写的独立目录。recipe 行的缩进必须是制表符。先准备一个 input.txt；report.txt 是真正的文件目标，不是标记为 phony 的任务名称。生成器用两条命令模拟写了部分内容后失败。</p>
+<pre><code class="make">.DELETE_ON_ERROR:
+
+report.txt: input.txt
+    printf &#39;partial report\n&#39; &gt; report.txt
+    false
+</code></pre>
+<p>没有第一行开关时，第一次运行写出 partial report，随后 false 返回非零；普通失败不会自动保证这个文件消失。如果文件时间关系满足前面的条件，第二次可能不再执行 recipe。有开关时，已改变的目标在失败后会被删除，第二轮就缺少目标，需要重新尝试。这里是按手册进行的教学推演，没有对应运行日志。</p>
+<p>比较时应记录两个输出：make 的退出状态，以及 report.txt 是否存在、内容是什么。只截一段终端错误会漏掉残留文件；只检查文件存在又会把半成品误认成完成。还要控制输入时间，避免编辑器恰好重写 input.txt，导致第二次重跑，从而掩盖本来要验证的增量判断。</p>
+<p>该规则的目的不是让错误程序成功，而是防止它把半成品留成下一轮的有效目标。false 仍然失败，修复前再次运行仍然可能失败。若报告要求包含两行数据，应另加内容验证，不能把“目标被删除”称作“报表已生成正确”。失败清理与成功验收是两项结果。</p>
+<p>将上面的片段保存为独立沙盒中的 Makefile，输入文件与目标都只属于本例。下面的未执行调用序列创建新目录；第二份规则只移除第一行开关，原始代码不变。不要在已有发布目录尝试这项实验。每次调用后立即打印退出值，再看目录；有开关的两轮仍应失败；无开关组则用于观察目标残留怎样影响第二次运行。</p>
+<pre><code class="sh">make_demo_dir=$(mktemp -d)
+cd &quot;$make_demo_dir&quot; || exit 1
+printf &#39;input\n&#39; &gt; input.txt
+# Save the displayed Makefile here before continuing.
+sed &#39;1d&#39; Makefile &gt; WithoutControl
+run_demo() {
+    make -f &quot;$1&quot;
+    make_result=$?
+    printf &#39;status=%s\n&#39; &quot;$make_result&quot;
+    ls -l
+}
+run_demo WithoutControl
+run_demo WithoutControl
+rm -f report.txt
+run_demo Makefile
+run_demo Makefile
+</code></pre>
+<p>无开关的第二轮若把残留文件视为最新，可能不再执行 false，从而返回成功；这正是要暴露的错误复用，不是报表修好了。有开关的两轮都应重新尝试并失败。若本机时间戳精度或文件时间关系使分支不同，应先保留记录、核对时间条件，不通过重跑直到碰巧符合来伪造证明。</p>
+<h2 id="Make-得先知道失败，才会进行失败处理"><a href="#Make-得先知道失败，才会进行失败处理" class="headerlink" title="Make 得先知道失败，才会进行失败处理"></a>Make 得先知道失败，才会进行失败处理</h2><p>每次 recipe shell 调用的退出状态都会交给 make 检查。行首的减号、全局忽略错误参数或 .IGNORE 可以让它将错误按成功处理，只另行提示已忽略。若生成命令后面接了吞错的 shell 表达式，make 也可能只看见零。此时该开关没有收到目标失败这一条件。</p>
+<p>因此评审不能只找特殊目标是否写在文件里。沿生成器、shell 与 make 逐层看退出值：谁可能失败，谁把失败覆盖，最后谁决定这条规则已经完成。一个常见反例是在同一条 shell 命令最后打印“完成”，却没有把前面的失败传出来；屏幕出现错误与 shell 最终非零也不是同一个事实。</p>
+<p>Make 默认每一行 recipe 使用新的 shell，上面写文件与 false 两行均由各自调用返回状态。若改成一行复合命令，要重新审查它的语义；若使用 .ONESHELL 或其他 shell 配置，也不能把另一个项目的规则直接当成本项目行为。本文只解释这个最小普通规则，不提供所有 shell 的失败继承清单。</p>
+<h2 id="k-会继续检查，但会把失败变成成功吗？"><a href="#k-会继续检查，但会把失败变成成功吗？" class="headerlink" title="-k 会继续检查，但会把失败变成成功吗？"></a>-k 会继续检查，但会把失败变成成功吗？</h2><p>不会。手册说明，keep-going 模式继续考虑不依赖失败目标的其他工作，最后仍返回非零。依赖失败目标的规则不能因此获得有效前提。它适合一次收集多个独立编译问题，和忽略错误不同，也不负责修复留下的目标文件。</p>
+<p>例如甲、乙两个报表互不依赖，甲生成失败后仍可检查乙；最终构建依旧失败。若归档依赖甲、乙，甲失败就不能把乙成功解释成归档可交付。保留独立诊断与阻止不完整交付可以同时成立，不需要为“多跑一些”放松失败结论。</p>
+<h2 id="先写临时文件再改名，应该怎样选？"><a href="#先写临时文件再改名，应该怎样选？" class="headerlink" title="先写临时文件再改名，应该怎样选？"></a>先写临时文件再改名，应该怎样选？</h2><p>如果上一个完整报表还需要继续使用，直接覆盖真实目标再失败删除，会连旧版本也失去。另一种候选策略是在独立临时路径完成写入与验证，成功后再发布为目标。这样发布前可以保留旧文件，但临时文件清理、改名条件与并发写入仍需明确。不要把一次改名泛化为跨文件、跨文件系统或远端存储的事务承诺。</p>
+<p>选择依据是失败后希望留下什么。目标无效就不应存在时，失败删除很合适；需要保留最后一个有效版本时，先生成再发布更贴近需求。若生成器还写数据库、发送通知或上传对象，两种本地文件策略都不会自动撤销这些副作用，应另设幂等、对账或补偿协议。</p>
+<p>拟议验证在隔离目录中保留有无开关两份规则，固定输入，分别记录首轮退出、目标内容与时间，再原样运行第二轮。补测错误被忽略和正常生成两条路径，确认失败不会留下可误用目标，成功产物满足内容要求。测试素材不要放在真实发布目录。</p>
+<p>二〇二六年十月二十五日的<a href="/zh-CN/2026/10/25/source-date-epoch-reproducible-scope/">构建时间与可复现性文章</a>讨论固定输入后能否重建相同字节；这里先处理更早的条件：上次失败留下的文件是否有资格参与下一次增量构建。先让无效目标可辨认，再检查成功产物的一致性。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.gnu.org/software/make/manual/html_node/Errors.html" rel="noopener">Errors (GNU make)</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--gnu-make" href="/zh-CN/tags/GNU-Make/">GNU Make</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%9E%84%E5%BB%BA/">构建</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%A4%B1%E8%B4%A5%E6%B8%85%E7%90%86/">失败清理</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fgnu-make-delete-on-error-target%2F&text=GNU%20Make%20%E9%A6%96%E8%BD%AE%E5%A4%B1%E8%B4%A5%EF%BC%8C%E6%AC%A1%E8%BD%AE%E4%B8%BA%E4%BB%80%E4%B9%88%E6%8A%8A%E5%8D%8A%E6%88%90%E5%93%81%E5%BD%93%E6%88%90%E6%9C%80%E6%96%B0%E7%9B%AE%E6%A0%87" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fgnu-make-delete-on-error-target%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=GNU%20Make%20%E9%A6%96%E8%BD%AE%E5%A4%B1%E8%B4%A5%EF%BC%8C%E6%AC%A1%E8%BD%AE%E4%B8%BA%E4%BB%80%E4%B9%88%E6%8A%8A%E5%8D%8A%E6%88%90%E5%93%81%E5%BD%93%E6%88%90%E6%9C%80%E6%96%B0%E7%9B%AE%E6%A0%87&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fgnu-make-delete-on-error-target%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/05/gnu-make-phony-target-collision/">
+              <span>上一篇</span>
+              <strong>GNU Make 的 clean 被同名文件跳过，何时该用 .PHONY？</strong>
+              <small>2026-11-05</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/05/css-cascade-layer-important-order/">
+              <span>下一篇</span>
+              <strong>CSS后声明的layer，为什么加important后反而输了？</strong>
+              <small>2026-11-05</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#第一轮的失败怎样污染第二轮">第一轮的失败怎样污染第二轮</a>
+          
+            <a class="toc-link toc-link--h2" href="#一个能推演两轮结果的最小规则">一个能推演两轮结果的最小规则</a>
+          
+            <a class="toc-link toc-link--h2" href="#Make-得先知道失败，才会进行失败处理">Make 得先知道失败，才会进行失败处理</a>
+          
+            <a class="toc-link toc-link--h2" href="#k-会继续检查，但会把失败变成成功吗？">-k 会继续检查，但会把失败变成成功吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#先写临时文件再改名，应该怎样选？">先写临时文件再改名，应该怎样选？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>261</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>211</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/gnu-make-phony-target-collision/">GNU Make 的 clean 被同名文件跳过，何时该用 .PHONY？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/css-cascade-layer-important-order/">CSS后声明的layer，为什么加important后反而输了？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/html-lazy-image-window-load/">window load已经触发，lazy图片为什么还没显示？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

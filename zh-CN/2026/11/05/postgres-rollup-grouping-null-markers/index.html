@@ -1,0 +1,412 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>PostgreSQL ROLLUP 的 NULL，哪一行才是总计？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用 PostgreSQL GROUPING 位掩码区分原始空分类与 ROLLUP 小计、总计，保留行层级并避免混合层级再次加总。">
+  
+  
+    <meta name="keywords" content="PostgreSQL ROLLUP,GROUPING,汇总层级">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/05/postgres-rollup-grouping-null-markers/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/05/postgres-rollup-grouping-null-markers/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/05/postgres-rollup-grouping-null-markers/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/05/postgres-rollup-grouping-null-markers/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="PostgreSQL ROLLUP 的 NULL，哪一行才是总计？ | Midnight blog">
+    <meta property="og:description" content="用 PostgreSQL GROUPING 位掩码区分原始空分类与 ROLLUP 小计、总计，保留行层级并避免混合层级再次加总。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/05/postgres-rollup-grouping-null-markers/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-rollup-grouping-null-markers/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-rollup-grouping-null-markers/","name":"PostgreSQL ROLLUP 的 NULL，哪一行才是总计？ | Midnight blog","description":"用 PostgreSQL GROUPING 位掩码区分原始空分类与 ROLLUP 小计、总计，保留行层级并避免混合层级再次加总。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-rollup-grouping-null-markers/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-rollup-grouping-null-markers/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-rollup-grouping-null-markers/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-rollup-grouping-null-markers/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-rollup-grouping-null-markers/","headline":"PostgreSQL ROLLUP 的 NULL，哪一行才是总计？","description":"用 PostgreSQL GROUPING 位掩码区分原始空分类与 ROLLUP 小计、总计，保留行层级并避免混合层级再次加总。","inLanguage":"zh-CN","datePublished":"2026-11-04T19:59:03.000Z","dateModified":"2026-11-04T19:59:03.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/queries-table-expressions.html","https://www.postgresql.org/docs/18/functions-aggregate.html"],"keywords":"Development, PostgreSQL, Reporting"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-rollup-grouping-null-markers/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"PostgreSQL ROLLUP 的 NULL，哪一行才是总计？","item":"https://www.zyweb.vip/zh-CN/2026/11/05/postgres-rollup-grouping-null-markers/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/05/postgres-rollup-grouping-null-markers/" selected>zh-CN</option><option value="/en/2026/11/05/postgres-rollup-grouping-null-markers/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/05/postgres-rollup-grouping-null-markers/" selected>zh-CN</option><option value="/en/2026/11/05/postgres-rollup-grouping-null-markers/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-11-04T19:59:03.000Z">2026-11-05</time>
+    </div>
+
+    <h1>PostgreSQL ROLLUP 的 NULL，哪一行才是总计？</h1>
+
+    
+      <p class="post-hero__summary">用 PostgreSQL GROUPING 位掩码区分原始空分类与 ROLLUP 小计、总计，保留行层级并避免混合层级再次加总。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-04T19:59:03.000Z">2026-11-05</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/05/postgres-rollup-grouping-null-markers/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/05/postgres-rollup-grouping-null-markers/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>原始NULL与维度省略的占位NULL可相同，GROUPING对应位区分其层级。</li><li>最右参数对应最低位，参与分组为零、省略为一。</li><li>保留原始键与mask身份，先选汇总层级再使用金额。</li></ul></section>
+      <div class="article-content">
+        <p>ROLLUP 结果里的 NULL 不一定代表总计，也可能来自原始数据中未分类的键。PostgreSQL 的 GROUPING 可以标出当前行缺少哪些分组维度；应先识别分组层级，再给小计与未知分类命名。</p>
+<p>假设销售报表同时返回地区与商品明细、地区小计和全体总计。某笔记录的地区还未归类，商品分类也允许缺失。若页面看到空地区就显示“全部地区”，原始未知数据便会被误标成总计；若只用两个分类键生成行标识，不同汇总层级还可能互相覆盖。问题不是先把 NULL 换成什么文字，而是识别这行由哪一份分组产生。</p>
+<h2 id="ROLLUP-将几个分组层级放在同一结果里"><a href="#ROLLUP-将几个分组层级放在同一结果里" class="headerlink" title="ROLLUP 将几个分组层级放在同一结果里"></a>ROLLUP 将几个分组层级放在同一结果里</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/queries-table-expressions.html#QUERIES-GROUPING-SETS">PostgreSQL 18 表表达式的分组集说明</a>解释，ROLLUP 包含给定表达式列表及其各级前缀，直到空分组集。对 region、product 两项，等价的层级是按地区和商品分组、只按地区分组，以及全体汇总。</p>
+<p>某个表达式不参与当前分组集时，它在对应结果行里用 NULL 表示。因此，地区小计行里的 product 为空，表示这一层没有按商品划分，不表示商品数据缺失；全体汇总行中的两个键都为空。同一个可见空值，也可能本来就存在于原始数据。仅检查键值无法分辨原因。</p>
+<p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-aggregate.html">同版聚合函数的 Grouping Operations 表</a>给出 GROUPING：每一位说明相应表达式是否被当前分组集省略，参与时为零，省略时为一。最右参数对应最低位。因此 GROUPING(region, product) 在明细层为零，只省略商品的地区小计为一，两项都省略的全体总计为三。</p>
+<h2 id="让三个同样的空键保留不同身份"><a href="#让三个同样的空键保留不同身份" class="headerlink" title="让三个同样的空键保留不同身份"></a>让三个同样的空键保留不同身份</h2><p>下面是未执行的完整教学 SQL，金额是同一单位的假设数字，不代表真实销售或财务数据。四条输入中既有未知地区，也有未知商品；最后一条两个键都为空，专门检验它是否会被误当成总计。</p>
+<pre><code class="sql">WITH sales(region, product, amount) AS (
+  VALUES (&#39;north&#39;::text, &#39;book&#39;::text, 10),
+         (NULL::text, &#39;book&#39;::text, 20),
+         (&#39;north&#39;::text, NULL::text, 5),
+         (NULL::text, NULL::text, 7)
+)
+SELECT region, product,
+       GROUPING(region, product) AS level_mask,
+       SUM(amount) AS amount
+FROM sales
+GROUP BY ROLLUP(region, product)
+ORDER BY level_mask, region NULLS FIRST, product NULLS FIRST;
+</code></pre>
+<p>纸面预期共七行：四行明细的 mask 都是零，金额分别为十、二十、五、七；两行地区小计的 mask 都是一，north 为十五，未知地区为二十七；一行全体总计的 mask 为三，金额四十二。这里列的是按文档规则推导的验收目标，没有运行查询或保存数据库输出。</p>
+<p>尤其要检查键同为 NULL、NULL 的三行。它们分别是金额七的原始未知分类明细、金额二十七的未知地区小计，以及金额四十二的总计。只返回两个键和一个含糊的显示名称，会失去这些身份区别。把 level_mask 与原始键一起带给接口和导出，消费方才能保留行所属层级。</p>
+<p>显示标签可以随后生成：先根据某一维的 GROUPING 位判断是否为汇总，再在仍参与分组的情况下，为真实 NULL 选择“未归类”等文字。不要先 COALESCE(region, &#39;总计&#39;)，因为它会把两个来源不同的空值同时改名。真实数据也可能恰好包含“总计”这个分类名，文字标签因此不适合独自充当机器键。</p>
+<h2 id="原始键为-NULL，GROUPING-对应位就会是一吗？"><a href="#原始键为-NULL，GROUPING-对应位就会是一吗？" class="headerlink" title="原始键为 NULL，GROUPING 对应位就会是一吗？"></a>原始键为 NULL，GROUPING 对应位就会是一吗？</h2><p>不会。只要该表达式仍参与当前分组集，对应位就是零，与这个组的实际键值是否为空无关。上例金额七的明细两个键都为空，mask 仍为零；未知地区小计只省略商品，所以 mask 是一，而不是因为地区未知又多设置一位。</p>
+<p>这也说明 GROUPING 不是对键再做一次空值检查。文档明确指出，其参数并不作为普通数据值求值，而必须精确匹配当前查询层级 GROUP BY 中的表达式。若分组键实际使用某个表达式，应让 GROUPING 对应同一表达式；不能随便包一层显示转换，再期待它继续代表原键的分组参与情况。</p>
+<p>本题中的空键是结果结构与分类值的问题。站内二〇二六年十月十九日的<a href="/zh-CN/2026/10/19/postgres-sum-empty-set/">SUM 空输入与未知金额</a>讨论聚合输入有没有可计算的数值；那份默认值选择不能替这份多层结果识别明细和总计。</p>
+<h2 id="为什么不能把返回金额全部再求和？"><a href="#为什么不能把返回金额全部再求和？" class="headerlink" title="为什么不能把返回金额全部再求和？"></a>为什么不能把返回金额全部再求和？</h2><p>因为同一输入已经在多个层级参与计算。上例明细合计四十二，地区小计合计四十二，全体总计也是四十二；把七行金额全部相加会得到一百二十六，而不是新的销售总额。金额列的名字相同，不代表所有行具有同一个可相加的粒度。</p>
+<p>若需要只展示明细，可以按 mask 为零选择；需要全体总计，就选择 mask 为三的对应行。若在 SQL 中按 GROUPING 过滤层级，应明确这是聚合后的层级选择，不是把原始未分类记录从输入中删除。WHERE region IS NOT NULL 会改变参与金额，不能作为“去掉总计行”的替代写法。</p>
+<p>有固定地区、商品层级时，ROLLUP 很直观；只需要某几种不构成前缀的组合时，可以明确列 GROUPING SETS。不要为了得到一个总计顺手加入所有组合，再让客户端猜哪几行有用。SELECT DISTINCT 也不能充当层级识别：省略 mask 后，不同层级在键与金额恰好相同时可能看起来完全相同，去重会删掉本来不同的汇总行。</p>
+<h2 id="GROUPING-参数换序后，旧的层级数字还能直接用吗？"><a href="#GROUPING-参数换序后，旧的层级数字还能直接用吗？" class="headerlink" title="GROUPING 参数换序后，旧的层级数字还能直接用吗？"></a>GROUPING 参数换序后，旧的层级数字还能直接用吗？</h2><p>不能直接沿用。最低位属于最右参数，换序会改变位与维度的对应关系。若仍按地区与商品做同样的 ROLLUP，却改为 GROUPING(product, region)，省略商品对应的位已经不同。接口应固定参数顺序和层级映射，或明确版本变化，不能把某个数字当成脱离查询定义的通用分类。</p>
+<p>拟议验收应逐行比较原始键、mask 和金额，同时核对七行以及四、二、一的层级分布。再把输入顺序打乱，把未知地区换成真实分类，并让不同层级金额偶然相等，检查页面与导出是否仍保留身份。最后对同一层级单独核对四十二，确认没有混层再加总。本文未执行数据库或接口测试，也不承诺查询性能。先让每行可解释地属于一个层级，再决定它应显示在哪个位置。</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/queries-table-expressions.html" rel="noopener">PostgreSQL: Documentation: 18: 7.2. Table Expressions</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-aggregate.html" rel="noopener">PostgreSQL: Documentation: 18: 9.21. Aggregate Functions</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--reporting" href="/zh-CN/tags/Reporting/">Reporting</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fpostgres-rollup-grouping-null-markers%2F&text=PostgreSQL%20ROLLUP%20%E7%9A%84%20NULL%EF%BC%8C%E5%93%AA%E4%B8%80%E8%A1%8C%E6%89%8D%E6%98%AF%E6%80%BB%E8%AE%A1%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fpostgres-rollup-grouping-null-markers%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=PostgreSQL%20ROLLUP%20%E7%9A%84%20NULL%EF%BC%8C%E5%93%AA%E4%B8%80%E8%A1%8C%E6%89%8D%E6%98%AF%E6%80%BB%E8%AE%A1%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F05%2Fpostgres-rollup-grouping-null-markers%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/05/protobuf-reserved-field-evolution/">
+              <span>上一篇</span>
+              <strong>Protobuf 删除字段后，为什么还要 reserved 编号和名字？</strong>
+              <small>2026-11-05</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/05/postgres-recursive-cycle-path/">
+              <span>下一篇</span>
+              <strong>PostgreSQL 递归查询加了 UNION，为什么仍绕着环走？</strong>
+              <small>2026-11-05</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#ROLLUP-将几个分组层级放在同一结果里">ROLLUP 将几个分组层级放在同一结果里</a>
+          
+            <a class="toc-link toc-link--h2" href="#让三个同样的空键保留不同身份">让三个同样的空键保留不同身份</a>
+          
+            <a class="toc-link toc-link--h2" href="#原始键为-NULL，GROUPING-对应位就会是一吗？">原始键为 NULL，GROUPING 对应位就会是一吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么不能把返回金额全部再求和？">为什么不能把返回金额全部再求和？</a>
+          
+            <a class="toc-link toc-link--h2" href="#GROUPING-参数换序后，旧的层级数字还能直接用吗？">GROUPING 参数换序后，旧的层级数字还能直接用吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>261</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>211</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/postgres-last-value-window-frame/">PostgreSQL last_value 为什么没有返回分组最后一条？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/postgres-partition-pruning-stages/">PostgreSQL 查询有索引，为什么还要检查分区裁剪？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/postgres-recursive-cycle-path/">PostgreSQL 递归查询加了 UNION，为什么仍绕着环走？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

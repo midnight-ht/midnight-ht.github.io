@@ -1,0 +1,417 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why deleting a Protobuf field still needs reserved numbers and names | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Separate binary field numbers from text-format names, preserve retired identities, and review compiler failures, historical bytes, and mixed deployment independently.">
+  
+  
+    <meta name="keywords" content="Protobuf reserved,field number reuse,schema compatibility">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/05/protobuf-reserved-field-evolution/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/05/protobuf-reserved-field-evolution/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/05/protobuf-reserved-field-evolution/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/05/protobuf-reserved-field-evolution/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why deleting a Protobuf field still needs reserved numbers and names | Midnight blog">
+    <meta property="og:description" content="Separate binary field numbers from text-format names, preserve retired identities, and review compiler failures, historical bytes, and mixed deployment independently.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/05/protobuf-reserved-field-evolution/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/05/protobuf-reserved-field-evolution/#webpage","url":"https://www.zyweb.vip/en/2026/11/05/protobuf-reserved-field-evolution/","name":"Why deleting a Protobuf field still needs reserved numbers and names | Midnight blog","description":"Separate binary field numbers from text-format names, preserve retired identities, and review compiler failures, historical bytes, and mixed deployment independently.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/05/protobuf-reserved-field-evolution/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/05/protobuf-reserved-field-evolution/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/05/protobuf-reserved-field-evolution/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/05/protobuf-reserved-field-evolution/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/05/protobuf-reserved-field-evolution/","headline":"Why deleting a Protobuf field still needs reserved numbers and names","description":"Separate binary field numbers from text-format names, preserve retired identities, and review compiler failures, historical bytes, and mixed deployment independently.","inLanguage":"en","datePublished":"2026-11-04T19:59:03.000Z","dateModified":"2026-11-04T19:59:03.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://protobuf.dev/programming-guides/proto3/"],"keywords":"Development, Protobuf, Schema"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/05/protobuf-reserved-field-evolution/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why deleting a Protobuf field still needs reserved numbers and names","item":"https://www.zyweb.vip/en/2026/11/05/protobuf-reserved-field-evolution/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/05/protobuf-reserved-field-evolution/">zh-CN</option><option value="/en/2026/11/05/protobuf-reserved-field-evolution/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/05/protobuf-reserved-field-evolution/">zh-CN</option><option value="/en/2026/11/05/protobuf-reserved-field-evolution/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-11-04T19:59:03.000Z">2026-11-05</time>
+    </div>
+
+    <h1>Why deleting a Protobuf field still needs reserved numbers and names</h1>
+
+    
+      <p class="post-hero__summary">Separate binary field numbers from text-format names, preserve retired identities, and review compiler failures, historical bytes, and mixed deployment independently.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-04T19:59:03.000Z">2026-11-05</time> · Estimated read 14 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/05/protobuf-reserved-field-evolution/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/05/protobuf-reserved-field-evolution/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Removing a declaration does not free an existing binary field number.</li><li>Reserved numbers and names have distinct roles and do not supply a universal runtime rejection policy.</li><li>Compiler checks, historical decoding, and client retirement require separate evidence.</li></ul></section>
+      <div class="article-content">
+        <p>When you delete a Protobuf field, reserve its old number and consider its name for text-format compatibility. Removing the declaration does not retire bytes or clients already using that identity. Decide separately whether you are retiring a field from new code or retiring the data still held in files, queues, and older applications.</p>
+<h2 id="Why-a-deleted-number-is-still-occupied"><a href="#Why-a-deleted-number-is-still-occupied" class="headerlink" title="Why a deleted number is still occupied"></a>Why a deleted number is still occupied</h2><p>The <a target="_blank" rel="noopener" href="https://protobuf.dev/programming-guides/proto3/#assigning">Protocol Buffers proto3 language guide</a> explains that field numbers identify fields in the binary wire format. Once a message type is in use, its numbers must not be changed or reused. A field name helps a developer read the declaration; the number is part of the serialized identity.</p>
+<p>Suppose an older order message declares <code>string legacy_note = 4</code> for a support note. A later version removes it and introduces <code>string routing_region = 4</code>. An old note can now be interpreted as a routing region. Both fields have a string representation, so an absence of decoding errors would not establish business correctness. Matching types can make the mistake less visible. This is a hypothetical consequence of the format rules, not an executed serialization experiment.</p>
+<p>The scope is the message type. This does not require every message in an entire project to share one global number ledger. Using number four in a separate message is different from assigning a second meaning to number four in the same order message. A review needs the complete message identity as well as the number.</p>
+<h2 id="Preserve-the-retirement-decision-in-the-declaration"><a href="#Preserve-the-retirement-decision-in-the-declaration" class="headerlink" title="Preserve the retirement decision in the declaration"></a>Preserve the retirement decision in the declaration</h2><p>These are uncompiled teaching examples. Keep the versions in separate test directories rather than compiling both declarations of the same message together. Version two reserves the retired identity and gives the new business field a fresh number.</p>
+<pre><code class="proto">// v1/order.proto
+syntax = &quot;proto3&quot;;
+package example;
+message Order {
+  string id = 1;
+  string legacy_note = 4;
+}
+</code></pre>
+<pre><code class="proto">// v2/order.proto
+syntax = &quot;proto3&quot;;
+package example;
+message Order {
+  reserved 4;
+  reserved &quot;legacy_note&quot;;
+  string id = 1;
+  string routing_region = 5;
+}
+</code></pre>
+<p>The guide’s <a target="_blank" rel="noopener" href="https://protobuf.dev/programming-guides/proto3/#deleting">deleting-fields section</a> recommends reserving deleted numbers and discusses reserving names. <code>reserved 4</code> gives a compiler a rule it can check: a future declaration cannot allocate number four in this message. A comment asking developers not to reuse it does not supply that compiler check. Numbers and names belong in separate reserved statements; they cannot be mixed in one statement.</p>
+<p>The new declaration does not convert old notes into regions. Nor does it promise to preserve old notes forever. It prevents two meanings from receiving the same field identity. What happens to undeclared fields in old messages depends on encoding, runtime behavior, and any transformations performed by the application. A reserved declaration is not a data-retention or erasure procedure.</p>
+<p>Moving a field from number four to number five is also not a transparent binary rename. It removes one identity and adds another. Older readers do not automatically understand the new number. If the migration needs both old and new meanings for a while, specify the readers’ and writers’ behavior explicitly rather than relying on similar names or adjacent numbers.</p>
+<h2 id="Is-reserving-the-number-enough"><a href="#Is-reserving-the-number-enough" class="headerlink" title="Is reserving the number enough?"></a>Is reserving the number enough?</h2><p>The number protects binary identity. Names require a separate decision when the system uses JSON or TextProto. The official guide notes that reusing a name is generally safe for binary encoding but can create problems in encodings that serialize names. Check exported JSON, text fixtures, debugging formats, and cross-system text messages, not just binary RPC traffic.</p>
+<p>Reserving a name primarily constrains later schema compilation. It is not a universal runtime rule telling a JSON parser to reject that property. The guide explicitly says reserved names do not affect runtime JSON parsing. It also describes a special TextProto behavior in some language implementations that can discard unknown fields with reserved names. That is not a promise that every runtime rejects an old name.</p>
+<p>If an API still receives <code>legacy_note</code> in JSON, decide whether the application rejects it, ignores it, or reads it for compatibility. Test that policy at the actual parsing boundary. Preventing a future binary-number allocation and deciding what to do with an incoming text property are separate checks. A single statement that “compatibility passed” can hide which behavior was actually inspected.</p>
+<h2 id="Will-reserved-stop-older-clients-from-sending-the-field"><a href="#Will-reserved-stop-older-clients-from-sending-the-field" class="headerlink" title="Will reserved stop older clients from sending the field?"></a>Will reserved stop older clients from sending the field?</h2><p>No. It checks future declarations. It does not update deployed clients or empty a queue of historical messages. A retirement record should identify producers that have stopped writing the field, consumers that still depend on it, and the period during which stored messages may be replayed. No recent traffic only supports an observation about that period; it does not prove an offline client can never return.</p>
+<p>Use those dependencies to determine deployment order. If a consumer stops applying the old field while an older producer still relies on that behavior, messages may remain parseable while the business operation changes. A binary-compatibility check alone will not catch that decision. Obtain agreement that the old meaning can be discarded before removing the read behavior. Reserving the number prevents future reassignment; it does not authorize today’s feature retirement.</p>
+<p>The site’s October 23, 2026 article on <a href="/en/2026/10/23/grpc-status-trailers-result/">gRPC terminal status and business results</a> examines whether a call actually completed. This check asks whether its fields were interpreted correctly. A normally completed call can still carry data interpreted under an incorrectly reused field number.</p>
+<h2 id="Test-declarations-and-historical-bytes-separately"><a href="#Test-declarations-and-historical-bytes-separately" class="headerlink" title="Test declarations and historical bytes separately"></a>Test declarations and historical bytes separately</h2><p>Start with compiler checks. In a disposable copy of version two, deliberately add a field using number four and verify that the actual protoc version rejects it. Then try the reserved name. Preserve the version and errors, and restore the correct declaration afterward. These checks establish compiler behavior, not compatibility across a deployed fleet.</p>
+<p>Next, produce bytes with version one and decode them with both an intentionally incorrect reuse version and the correct version two. Inspect the specific business fields rather than merely checking for exceptions. For text paths, exercise the old name, an unknown name, the new name, and omission through the actual JSON or TextProto library and application entry point.</p>
+<p>Finally, test mixed deployment and historical replay against the agreed retirement policy. None of these procedures was executed for this article, and the snippets are not successful test records. A reviewable retirement identifies where the old number remains reserved, which readers and writers still exist, and how compilation plus compatibility tests constrain the next change.</p>
+
+      </div>
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://protobuf.dev/programming-guides/proto3/" rel="noopener">Language Guide (proto 3) | Protocol Buffers Documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--protobuf" href="/en/tags/Protobuf/">Protobuf</a>
+          
+            <a class="tag tag--schema" href="/en/tags/Schema/">Schema</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F05%2Fprotobuf-reserved-field-evolution%2F&text=Why%20deleting%20a%20Protobuf%20field%20still%20needs%20reserved%20numbers%20and%20names" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F05%2Fprotobuf-reserved-field-evolution%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20deleting%20a%20Protobuf%20field%20still%20needs%20reserved%20numbers%20and%20names&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F05%2Fprotobuf-reserved-field-evolution%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/05/pytest-tmp-path-retention-basetemp/">
+              <span>Previous Post</span>
+              <strong>pytest reruns erased the evidence: check --basetemp first</strong>
+              <small>2026-11-05</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/05/postgres-rollup-grouping-null-markers/">
+              <span>Next Post</span>
+              <strong>Which PostgreSQL ROLLUP rows are totals when source keys are null?</strong>
+              <small>2026-11-05</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Why-a-deleted-number-is-still-occupied">Why a deleted number is still occupied</a>
+          
+            <a class="toc-link toc-link--h2" href="#Preserve-the-retirement-decision-in-the-declaration">Preserve the retirement decision in the declaration</a>
+          
+            <a class="toc-link toc-link--h2" href="#Is-reserving-the-number-enough">Is reserving the number enough?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Will-reserved-stop-older-clients-from-sending-the-field">Will reserved stop older clients from sending the field?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Test-declarations-and-historical-bytes-separately">Test declarations and historical bytes separately</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>261</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>211</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/05/openapi-discriminator-validation-outcome/">Why an OpenAPI discriminator does not validate your payment variant</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/05/postgres-last-value-window-frame/">Why PostgreSQL last_value does not automatically mean the last row in a partition</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/05/postgres-partition-pruning-stages/">Why an index does not answer PostgreSQL partition pruning questions</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
