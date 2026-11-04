@@ -195,6 +195,7 @@
       
 
       <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>PostgreSQL 外键不会自动为子表引用列建索引，父端唯一索引不能证明反向查找成本。</li><li>已有组合 B-tree 的列顺序与前导约束影响效率，不能只看索引名称或一列是否出现。</li><li>是否新增索引要结合父表删除/键更新频率、代表性计划、写入与构建成本，且不改变删除策略。</li></ul></section>
+      <!--email_off-->
       <div class="article-content">
         <p><code>orders.customer_id</code> 已有外键指向 <code>customers.id</code>，客户删除仍然慢。团队找到 <code>customers</code> 的主键索引，便认为“外键已带索引”，准备改成级联删除。这里混了三件事：父表查找客户、子表查找引用该客户的订单，以及删除时允许怎样处理这些订单。PostgreSQL 18 的<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/ddl-constraints.html#DDL-CONSTRAINTS-FK">外键文档</a>明确说，被引用列必须满足主键或唯一性要求，外键声明却不会自动为引用端建索引；父行删除或被引用键更新时，需要查找子表匹配旧值的行。索引是查找成本选择，级联是数据生命周期选择，不能互相替代。</p>
 <h2 id="沿客户删除路径看两端"><a href="#沿客户删除路径看两端" class="headerlink" title="沿客户删除路径看两端"></a>沿客户删除路径看两端</h2><p>设 <code>customers(id)</code> 有客户 17，<code>orders(id,customer_id,status)</code> 有五十万行，其中客户 17 对应三张订单：101、102、103。<code>customers.id</code> 的主键索引可以帮助数据库定位父行，也用于新订单插入时确认父键存在；它不是 <code>orders.customer_id</code> 上的索引。若执行删除客户 17，数据库必须按外键动作处理那三张订单。未写 <code>ON DELETE</code> 时，PostgreSQL 默认是 <code>NO ACTION</code>：引用仍存在通常导致错误；若外键检查被设置为可延期，事务中仍有机会先修复引用。显式 <code>ON DELETE RESTRICT</code> 更严格，不能延后这一检查；<code>CASCADE</code> 与 <code>SET NULL</code> 则是另外的业务选择。这些动作都离不开对相关子行的判断。没有合适子表访问路径时，查找成本可能随订单表规模增加；有索引也仍需考虑找到的行数、锁、触发器和实际数据分布。这里的三张订单是教学输入，未在数据库跑删除。</p>
@@ -209,6 +210,7 @@
 <p>验收要同时查正确性与成本。验证新增索引有效、计划确实选择合适路径、目标父表动作在规定时间内完成、并发订单写入没有不可接受的退化；对不允许删除的客户，仍须确认外键拒绝行为保持原样。若代表性值分布与生产不同或删除动作还会触发别的表，单个客户 17 的计划不能外推。原文讨论的核心疑问仍是“子表索引为什么单独检查”：因为关系约束、父端唯一索引与引用端访问路径是三份不同证据，只有最后一份能回答反向查找是否被合理支持。</p>
 
       </div>
+      <!--/email_off-->
 
       <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/ddl-constraints.html#DDL-CONSTRAINTS-FK" rel="noopener">PostgreSQL: Documentation: 18: 5.5. Constraints — DDL CONSTRAINTS FK</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/indexes-multicolumn.html" rel="noopener">PostgreSQL: Documentation: 18: 11.3. Multicolumn Indexes</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-createindex.html" rel="noopener">PostgreSQL: Documentation: 18: CREATE INDEX</a></li></ol></section>
       

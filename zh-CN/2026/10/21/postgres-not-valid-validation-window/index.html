@@ -195,6 +195,7 @@
       
 
       <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>NOT VALID 跳过添加约束时的存量扫描，提交后仍检查后续插入与更新。</li><li>历史坏行须先按业务含义清理，再以 VALIDATE CONSTRAINT 成功证明全表满足约束。</li><li>CHECK 的 NULL 语义、旧坏行更新和验证阶段的锁都应进入迁移验收。</li></ul></section>
+      <!--email_off-->
       <div class="article-content">
         <p>订单表里已经有负金额，团队准备增加 <code>CHECK (total_cents &gt;= 0)</code>。直接添加约束会检查存量行，第一条违规订单就使迁移失败；先把所有旧订单清完又可能持续几天，期间新写入仍能制造同样的问题。<code>NOT VALID</code> 解决的是这个时间顺序：先让数据库对后续写入执法，再另开一次验证去确认历史数据。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-altertable.html">PostgreSQL 18 的 ALTER TABLE 文档</a>明确说，添加时跳过初始扫描，但约束仍作用于后续插入或更新。它绝不是“暂时不检查约束”。</p>
 <h2 id="先挡住新坏行，再证明旧行"><a href="#先挡住新坏行，再证明旧行" class="headerlink" title="先挡住新坏行，再证明旧行"></a>先挡住新坏行，再证明旧行</h2><p>先把三种状态写在迁移单上。开始前，旧行和新行都可能违规；执行 <code>ADD CONSTRAINT ... NOT VALID</code> 并提交之后，新写入必须满足条件，而旧行尚未整体证明合规；执行 <code>VALIDATE CONSTRAINT</code> 成功之后，数据库才可以把整张表视为满足该约束。这个状态分界比“SQL 执行成功”更有用。只看到 ADD 成功，不能向依赖方宣称历史数据已清洁；只看到批处理清理完成，也不能跳过数据库最终验证。</p>
@@ -209,6 +210,7 @@
 <p>如果系统允许历史行永远不修，<code>NOT VALID</code> 可以长期保持“新行受管，旧行未证”的状态，但下游不能把全表当成一致数据。报表按总金额统计时仍会纳入负数旧行，API 也可能读到它。迁移负责人应把这种暂态写进数据契约，给清理明确责任和截止条件；否则一个看似成功的 schema 变更会变成永久的数据质量分叉。真正的完成点，是约束表达了已确认的业务规则、旧数据被正确处理、最终验证成功，而且相关读写路径都接受这个规则。</p>
 
       </div>
+      <!--/email_off-->
 
       <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-altertable.html" rel="noopener">PostgreSQL: Documentation: 18: ALTER TABLE</a></li></ol></section>
       

@@ -195,6 +195,7 @@
       
 
       <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>同房同一时段的约束是 room_id 相等且 during 重叠，UNIQUE 开始时间不能表达。</li><li>tstzrange 的 [) 边界允许前一预约结束点等于后一预约开始点；空区间和 NULL 要另设规则。</li><li>btree_gist 为整数房间号提供 GiST 等值支持，排斥约束负责最终拒绝冲突写入。</li></ul></section>
+      <!--email_off-->
       <div class="article-content">
         <p>同一间会议室，甲预订十点到十一点，乙预订十点半到十一点半。两笔记录的开始时间不同，<code>UNIQUE (room_id, starts_at)</code> 可以让它们同时入库；房门却不能同时交给两组人。预约系统真正要禁止的是“同一房间且时间区间有交集”的记录对，而非某个标量值重复。PostgreSQL 的<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/rangetypes.html#RANGETYPES-CONSTRAINT">范围类型与排斥约束</a>可以把这条业务规则留在数据库里，令所有写入路径接受同一裁决。</p>
 <h2 id="把“相邻可用、交叠不可用”写成表约束"><a href="#把“相邻可用、交叠不可用”写成表约束" class="headerlink" title="把“相邻可用、交叠不可用”写成表约束"></a>把“相邻可用、交叠不可用”写成表约束</h2><p>以下是独立的教学表。预约时刻用 <code>tstzrange</code>，其端点是带时区的时间戳；输入显式写 <code>+08</code>，避免把会场当地时间和连接的会话时区混为一谈。<code>[)</code> 表示包含开始点而排除结束点，因此十点到十一点与十一点到十二点共用的十一点不构成重叠。这个边界定义需要产品和场地运维共同确认：若退场、清洁占用五分钟，应把缓冲计入区间，不能指望约束替业务猜出它。范围边界的包含与排除含义，见前述范围类型文档的边界小节。</p>
@@ -238,6 +239,7 @@ INSERT INTO room_booking (room_id, during) VALUES
 <p>选择分区键时，需要先证明同一资源的潜在冲突不会跨分区，例如评估让同一房间的记录归入同一资源分区的方案，而不是为了按月归档就默认完整性仍成立。验收应专门包含跨月、跨年和更新跨分区键的用例；确实需要按时间切分时，应另行设计全局预约裁决路径。这个反例依据 <a href="#sources-title">PostgreSQL 18 的分区排斥约束限制</a> 推导，不能代替目标表的实测。</p>
 
       </div>
+      <!--/email_off-->
 
       <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/rangetypes.html#RANGETYPES-CONSTRAINT" rel="noopener">PostgreSQL: Documentation: 18: 8.17. Range Types — RANGETYPES CONSTRAINT</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/btree-gist.html" rel="noopener">PostgreSQL: Documentation: 18: F.8. btree_gist — GiST operator classes with B-tree behavior</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/rangetypes.html#RANGETYPES-BOUNDS" rel="noopener">PostgreSQL: Documentation: 18: 8.17. Range Types — RANGETYPES BOUNDS</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/ddl-constraints.html#DDL-CONSTRAINTS-EXCLUSION" rel="noopener">PostgreSQL: Documentation: 18: 5.5. Constraints — DDL CONSTRAINTS EXCLUSION</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-range.html" rel="noopener">PostgreSQL: Documentation: 18: 9.20. Range/Multirange Functions and Operators</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-sequence.html" rel="noopener">PostgreSQL: Documentation: 18: 9.17. Sequence Manipulation Functions</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-createtable.html#SQL-CREATETABLE-EXCLUDE" rel="noopener">PostgreSQL: Documentation: 18: CREATE TABLE — SQL CREATETABLE EXCLUDE</a></li></ol></section>
       

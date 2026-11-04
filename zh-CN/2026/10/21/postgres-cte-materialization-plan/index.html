@@ -195,6 +195,7 @@
       
 
       <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>非递归无副作用 SELECT 的单次引用默认可折叠，多次引用默认倾向物化。</li><li>NOT MATERIALIZED 可能让各引用下推过滤，也可能重复昂贵计算。</li><li>对照实际计划、行数、缓冲读与函数成本，并核对改写前后的结果语义。</li></ul></section>
+      <!--email_off-->
       <div class="article-content">
         <p>一段报表 SQL 用 <code>WITH</code> 把订单清洗结果命名为 <code>w</code>，主查询再引用 <code>w</code> 两次：两次引用同一客户的订单以计算配对。团队看到查询变慢，就说“CTE 会物化，所以不要写 WITH”。这个判断过于粗糙。PostgreSQL 18 的 <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/queries-with.html">WITH 查询文档</a>指出，对于非递归、无副作用的 SELECT，单次引用默认可以折叠进父查询，多次引用默认不折叠；<code>MATERIALIZED</code> 与 <code>NOT MATERIALIZED</code> 能影响这个选择。真正需要判断的是：下推过滤能少读多少行，展开后又会重算多少工作。</p>
 <h2 id="两次引用怎样改变过滤路径"><a href="#两次引用怎样改变过滤路径" class="headerlink" title="两次引用怎样改变过滤路径"></a>两次引用怎样改变过滤路径</h2><p>先看一个小型案例。设 <code>orders(id, customer_id, amount)</code> 有一百万行，其中客户 17 只有八行，<code>customer_id</code> 上有可用索引。报表想计算客户 17 的订单之间共有多少对（允许同一订单与自身配对）。若 <code>WITH w AS (SELECT * FROM orders)</code> 被主查询引用两次，默认物化可能先形成一份覆盖大范围 <code>orders</code> 的中间结果，再由父查询过滤 <code>customer_id = 17</code>。概念上，八行目标被放在百万行候选之后才找；这正是想排查的代价路径，而不是任何环境已经测得的执行计划。</p>
@@ -218,6 +219,7 @@ WHERE left_order.customer_id = 17
 <p>这项决策的边界是“一次查询内部的工作安排”。CTE 物化不是持久缓存，不会让第二次请求免费复用，也不自动为中间结果建立可供父查询使用的普通表索引。若需求是跨请求共享结果，可能需要物化视图、缓存或预聚合，但它们带来更新时效和维护成本，是另一份设计。本文没有运行数据库探针，因此只给出由 PostgreSQL 18 文档支持的默认规则、可能的计划路径和可执行的验证方案；具体快慢要让自己的工作负载回答。</p>
 
       </div>
+      <!--/email_off-->
 
       <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/queries-with.html" rel="noopener">PostgreSQL: Documentation: 18: 7.8. WITH Queries (Common Table Expressions)</a></li></ol></section>
       

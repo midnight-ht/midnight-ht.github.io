@@ -195,6 +195,7 @@
       
 
       <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>PostgreSQL Read Committed 的普通 SELECT 使用语句开始时的快照，同一事务内两次查询可能看到不同提交状态。</li><li>先查后写的旧读数不能代替受并发保护的实际写入条件与返回行数。</li><li>判断异常需记录两会话提交顺序、自身写入和隔离级别；本稿时间线尚未在数据库实测。</li></ul></section>
+      <!--email_off-->
       <div class="article-content">
         <p>一笔事务里连续查两次账户余额，第一次是 <code>100</code>，第二次是 <code>80</code>。两条查询之间本事务没有更新余额，开发者便怀疑连接切换或缓存失效。对 PostgreSQL 默认的 <code>Read Committed</code> 隔离级别来说，这种变化可能完全正常：每条 <code>SELECT</code> 在开始执行时取得自己的快照，而不是在 <code>BEGIN</code> 那刻锁定一张贯穿整个事务的照片。另一笔事务在两次查询之间提交，第二条语句就可能看见它。</p>
 <p>先用两个会话写出时间线，避免把“同一事务”理解成“同一快照”。账户 <code>id=42</code> 初值 <code>100</code>。会话 A 执行 <code>BEGIN</code>，随后 <code>SELECT balance FROM wallet WHERE id=42</code>，读到 <code>100</code>；会话 B 把该行改成 <code>80</code> 并 <code>COMMIT</code>；会话 A 再执行相同 <code>SELECT</code>，可以读到 <code>80</code>。两次读都发生在 A 的事务里，差别在于第二次语句开始时，B 的提交已经可见。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/transaction-iso.html">PostgreSQL 18 隔离文档</a>明确说 <code>Read Committed</code> 是默认隔离级别，也明确指出同一事务内连续的 <code>SELECT</code> 可以看到不同数据。</p>
@@ -215,6 +216,7 @@ COMMIT;
 <p>测试还应覆盖“没有并发提交”这一负例：在同一事务内重复读取，如果没有自己的写入、也没有其他已提交变化，预期值不应凭空改变。若此时变了，先检查查询条件、连接路由、数据源和应用缓存，而不是把一切交给隔离级别解释。再单独验证“本事务自己写入”路径，避免为了修复第二次查询可见新提交而意外误解自写可见性。这样三组对照——无变化、并发提交、自身写入——能把一句抽象的隔离定义变成可追踪的故障判定表。</p>
 
       </div>
+      <!--/email_off-->
 
       <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/transaction-iso.html" rel="noopener">PostgreSQL: Documentation: 18: 13.2. Transaction Isolation</a></li></ol></section>
       
