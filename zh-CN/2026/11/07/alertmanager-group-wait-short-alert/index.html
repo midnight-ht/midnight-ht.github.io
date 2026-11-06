@@ -1,0 +1,459 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Alertmanager 收到过 firing，为什么仍没有通知这条短告警？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用本地接收器与短暂、持续告警对照解释 Alertmanager 新组等待、后续周期与首发完整性的取舍。">
+  
+  
+    <meta name="keywords" content="group_wait,group_interval,短告警">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/07/alertmanager-group-wait-short-alert/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/07/alertmanager-group-wait-short-alert/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/07/alertmanager-group-wait-short-alert/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/07/alertmanager-group-wait-short-alert/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Alertmanager 收到过 firing，为什么仍没有通知这条短告警？ | Midnight blog">
+    <meta property="og:description" content="用本地接收器与短暂、持续告警对照解释 Alertmanager 新组等待、后续周期与首发完整性的取舍。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/07/alertmanager-group-wait-short-alert/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/alertmanager-group-wait-short-alert/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/07/alertmanager-group-wait-short-alert/","name":"Alertmanager 收到过 firing，为什么仍没有通知这条短告警？ | Midnight blog","description":"用本地接收器与短暂、持续告警对照解释 Alertmanager 新组等待、后续周期与首发完整性的取舍。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/alertmanager-group-wait-short-alert/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/alertmanager-group-wait-short-alert/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/alertmanager-group-wait-short-alert/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/alertmanager-group-wait-short-alert/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/07/alertmanager-group-wait-short-alert/","headline":"Alertmanager 收到过 firing，为什么仍没有通知这条短告警？","description":"用本地接收器与短暂、持续告警对照解释 Alertmanager 新组等待、后续周期与首发完整性的取舍。","inLanguage":"zh-CN","datePublished":"2026-11-06T19:00:30.000Z","dateModified":"2026-11-06T19:00:30.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://prometheus.io/docs/alerting/latest/configuration/","https://raw.githubusercontent.com/prometheus/alertmanager/main/api/v2/openapi.yaml"],"keywords":"Alertmanager, 可观测性, 通知"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/alertmanager-group-wait-short-alert/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Alertmanager 收到过 firing，为什么仍没有通知这条短告警？","item":"https://www.zyweb.vip/zh-CN/2026/11/07/alertmanager-group-wait-short-alert/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/07/alertmanager-group-wait-short-alert/" selected>zh-CN</option><option value="/en/2026/11/07/alertmanager-group-wait-short-alert/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/07/alertmanager-group-wait-short-alert/" selected>zh-CN</option><option value="/en/2026/11/07/alertmanager-group-wait-short-alert/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--alertmanager">Alertmanager</span>
+      <time datetime="2026-11-06T19:00:30.000Z">2026-11-07</time>
+    </div>
+
+    <h1>Alertmanager 收到过 firing，为什么仍没有通知这条短告警？</h1>
+
+    
+      <p class="post-hero__summary">用本地接收器与短暂、持续告警对照解释 Alertmanager 新组等待、后续周期与首发完整性的取舍。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-06T19:00:30.000Z">2026-11-07</time> · 预计阅读 10 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/07/alertmanager-group-wait-short-alert/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/07/alertmanager-group-wait-short-alert/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>新组等待前恢复的告警不会为它发通知。</li><li>新组首发与既有组后续处理不同。</li><li>零等待不保证首发包含完整集合。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>新告警组的 group_wait 到期前，如果某条告警已经恢复，Alertmanager 不会为它发送通知。先核对它进入哪一组、何时恢复，再把有意等待与投递失败区分开。收到过 firing，不等于已经产生一项必须补发的历史通知。</p>
+<h2 id="等待属于新组，不是每条消息自己的倒计时"><a href="#等待属于新组，不是每条消息自己的倒计时" class="headerlink" title="等待属于新组，不是每条消息自己的倒计时"></a>等待属于新组，不是每条消息自己的倒计时</h2><p><a target="_blank" rel="noopener" href="https://prometheus.io/docs/alerting/latest/configuration/">Alertmanager 配置参考</a>把 group_wait 定义为新组首次通知前的等待，并明确说明：在它结束前恢复的告警不会发送通知。等待可以容纳其他相关告警或抑制源先到达，也会过滤短暂波动。本文核对二〇二六年十一月六日的在线参考，没有连接任何告警系统。</p>
+<p>假设一条故障告警已到达 Alertmanager，二十秒后恢复，而新组配置等三十秒。没有通知可以是按设计发生的结果，并不自动说明静默残留、receiver 断开或 Prometheus 没有 firing。反过来，同一现象也可能有其他原因，必须先保留到达记录与分组身份，不能仅凭手机安静选定原因。</p>
+<p>组身份由实际路由和 group_by 等条件决定。下面按 cluster 与 alertname 分组，因此同组的不同 instance 可以出现在一份通知里。改变标签可能创建新组，改变路由也可能采用不同的继承配置；只比较 alertname 的显示文字，无法证明等待起点相同。</p>
+<h2 id="一份只向本地接收器发送的教学配置"><a href="#一份只向本地接收器发送的教学配置" class="headerlink" title="一份只向本地接收器发送的教学配置"></a>一份只向本地接收器发送的教学配置</h2><p>以下完整配置和程序均未执行。要求独立 Alertmanager、Python 标准库及空闲本地端口，数据目录只用于本次练习。配置不包含外部接收器、真实告警或静默；它测试通知时序，不制造真实服务故障。</p>
+<pre><code class="yaml"># alertmanager.yml
+route:
+  receiver: local
+  group_by: [cluster, alertname]
+  group_wait: 30s
+  group_interval: 2m
+  repeat_interval: 10m
+receivers:
+  - name: local
+    webhook_configs:
+      - url: http://localhost:18555/
+        send_resolved: true
+</code></pre>
+<p>将下列程序保存为 receiver.py。它只打印本地收到的测试 JSON，返回成功响应；这些打印将来可以成为接收证据，但本文没有产生这样的记录。</p>
+<pre><code class="python">import json
+from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+class Receiver(BaseHTTPRequestHandler):
+    def do_POST(self):
+        size = int(self.headers.get(&quot;Content-Length&quot;, &quot;0&quot;))
+        payload = json.loads(self.rfile.read(size))
+        print(datetime.now(timezone.utc).isoformat(), payload, flush=True)
+        self.send_response(200)
+        self.end_headers()
+
+ThreadingHTTPServer((&quot;localhost&quot;, 18555), Receiver).serve_forever()
+</code></pre>
+<p>先在一个终端运行 python receiver.py；另一个终端从练习目录启动独立 Alertmanager。确认所用程序支持这些参数，并且两个进程都属于本次沙盒；不要向已有生产实例提交测试告警。</p>
+<pre><code class="sh">alertmanager --config.file=alertmanager.yml \
+  --storage.path=./alert-data --web.listen-address=localhost:19093
+</code></pre>
+<p>准备完成后，第三个终端可保存并运行下面的 driver.py。<a target="_blank" rel="noopener" href="https://raw.githubusercontent.com/prometheus/alertmanager/main/api/v2/openapi.yaml">官方 API v2 定义</a>规定告警输入的 labels、startsAt 与 endsAt。脚本打印的是提交响应，不等于接收器已得到通知；若提交失败，应停止并保存真实错误。</p>
+<pre><code class="python">import json
+import time
+from datetime import datetime, timedelta, timezone
+from urllib.request import Request, urlopen
+
+endpoint = &quot;http://localhost:19093/api/v2/alerts&quot;
+
+def current_utc():
+    return datetime.now(timezone.utc)
+
+def as_timestamp(value):
+    return value.isoformat()
+
+start = current_utc()
+
+def alert(cluster, instance, begins, ends):
+    return {&quot;labels&quot;: {&quot;alertname&quot;: &quot;TimingProbe&quot;, &quot;cluster&quot;: cluster,
+                       &quot;instance&quot;: instance},
+            &quot;startsAt&quot;: as_timestamp(begins), &quot;endsAt&quot;: as_timestamp(ends)}
+
+def post(items):
+    request = Request(endpoint, data=json.dumps(items).encode(),
+                      headers={&quot;Content-Type&quot;: &quot;application/json&quot;}, method=&quot;POST&quot;)
+    with urlopen(request, timeout=5) as response:
+        print(&quot;submission-status&quot;, response.status, flush=True)
+
+post([alert(&quot;A&quot;, &quot;one&quot;, start, start + timedelta(minutes=5)),
+      alert(&quot;B&quot;, &quot;one&quot;, start, start + timedelta(minutes=5))])
+time.sleep(20)
+post([alert(&quot;A&quot;, &quot;one&quot;, start, current_utc())])
+time.sleep(25)
+later = current_utc()
+post([alert(&quot;B&quot;, &quot;two&quot;, later, later + timedelta(minutes=5))])
+</code></pre>
+<p>这份驱动让 A 的同一标签身份在首次等待结束前恢复，B 则持续到等待之后，再向 B 的既有组增加第二个实例。执行器的 sleep 不是精确事件时刻证明；要用实际提交、Alertmanager 状态与 receiver 时间对齐。练习结束在各自终端停止两个自有前台进程，保留输入与日志，不把进程退出当作历史通知已经补发。</p>
+<h2 id="三十秒与两分钟分别从哪里计算"><a href="#三十秒与两分钟分别从哪里计算" class="headerlink" title="三十秒与两分钟分别从哪里计算"></a>三十秒与两分钟分别从哪里计算</h2><p>纸面预期是 A 不产生该条告警的通知，B 在新组等待结束后才进入首发通知处理。第二个 B 实例较晚到达，错过初次等待，应由后续 group_interval 路径考虑，而不是给它单独重新计三十秒。接收时间还受通知处理与本地 HTTP 响应影响，不能把配置相加后宣称精确某秒送达。</p>
+<p>官方参考把 group_interval 描述为首次等待之后的周期检查：新活动或已恢复的变化影响是否发送后续通知；没有变化时还会检查重复间隔。因此本例的十分钟 repeat_interval 不是短告警的历史重放开关。它不能让从未发送过的每个短事件自动成为待补发消息。</p>
+<p>验证时应保留 A 与 B 的完整标签、首次组建立、恢复或加入时点，以及每份接收 JSON 中的告警身份。只看到一份 B 通知，不足以说明 A 在哪一步被处理；只看到 API 返回成功，也不证明路由与receiver正常。持续告警 B 是同路径对照，让“没有任何通知”这类采集故障更容易与短事件策略区分。</p>
+<p>对齐时点时，不要直接把startsAt当作新组等待的起点。输入里的开始时间描述告警，组还需要真正到达当前路由后才有处理身份。若驱动提交变慢，二十秒sleep并不证明Alertmanager已经观察到二十秒；应保存实际请求响应时间与组状态，再判断恢复是否发生在首次等待之前。</p>
+<p>可以用三条诊断分支避免误归因。第一条，API没有成功接受输入，接收器安静只能说明测试前提未建立；先查提交错误。第二条，API已接受、A的组存在且等待前恢复，B持续对照正常收到，支持短事件策略解释。第三条，B也持续活动却没有接收记录，则继续核对实际路由、静默/抑制状态与HTTP投递错误，不能拿A的预期无通知替整条链路背书。</p>
+<p>同一个receiver地址还不够证明两条告警走同一路由。应核对保存的实际配置、继承的计时值与完整分组标签。旧数据目录可能保留先前状态，因此示例要求新目录；如果重复练习，应让新的测试身份与之前分开，并记录这一变化。不能把旧组已有的计时状态当作新组三十秒测试的输入。</p>
+<p>在接收JSON里，检查的是实际出现哪些告警身份与状态，而不仅是HTTP请求次数。一份通知可以包含多个实例，多次投递也可能与通知处理有关；把请求数直接当告警数，会误解本例的加入和恢复。保留完整人工样本是为了核对这种关系，不应用同样方式默认记录真实告警中的敏感业务字段。</p>
+<h2 id="把-group-wait-设为零，就能保证首条通知完整吗？"><a href="#把-group-wait-设为零，就能保证首条通知完整吗？" class="headerlink" title="把 group_wait 设为零，就能保证首条通知完整吗？"></a>把 group_wait 设为零，就能保证首条通知完整吗？</h2><p>不能。相关告警或抑制源可能还没有到达。官方文档指出，过短等待可能让首条通知不包含预期的完整集合，也可能错过本应先到的抑制条件。去掉等待只改变一个时间窗口，不会保证网络及时或接收端成功。</p>
+<p>选择因此需要看响应风险。必须尽快行动的告警可能容忍后续补充信息，短暂波动则可能不值得每次打断值班。应在实际标签与路由下比较策略，而不是把零秒或某个默认值当成所有服务的最佳答案。静默、抑制、分组与规则持续时长各有对象，不能一起随意缩短来追求“终于响了”。</p>
+<p>二〇二六年十月三十一日的<a href="/zh-CN/2026/10/31/alertmanager-silence-evaluation-boundary/">静默与规则状态文章</a>解释人为通知抑制，本篇限定新组的等待。先证明告警到了哪一组、等待是否结束及恢复发生在何时，再决定调通知窗口还是修投递链路；一条短告警没有通知，不足以单独宣布系统漏报。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://prometheus.io/docs/alerting/latest/configuration/" rel="noopener">Configuration | Prometheus</a></li><li><a target="_blank" href="https://raw.githubusercontent.com/prometheus/alertmanager/main/api/v2/openapi.yaml" rel="noopener">Alertmanager API v2 OpenAPI specification</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--alertmanager" href="/zh-CN/tags/Alertmanager/">Alertmanager</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">可观测性</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E9%80%9A%E7%9F%A5/">通知</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Falertmanager-group-wait-short-alert%2F&text=Alertmanager%20%E6%94%B6%E5%88%B0%E8%BF%87%20firing%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E6%B2%A1%E6%9C%89%E9%80%9A%E7%9F%A5%E8%BF%99%E6%9D%A1%E7%9F%AD%E5%91%8A%E8%AD%A6%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Falertmanager-group-wait-short-alert%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Alertmanager%20%E6%94%B6%E5%88%B0%E8%BF%87%20firing%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E6%B2%A1%E6%9C%89%E9%80%9A%E7%9F%A5%E8%BF%99%E6%9D%A1%E7%9F%AD%E5%91%8A%E8%AD%A6%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Falertmanager-group-wait-short-alert%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/07/cmake-generator-build-configuration/">
+              <span>上一篇</span>
+              <strong>CMake 写了 CMAKE_BUILD_TYPE=Release，为什么还要看生成器？</strong>
+              <small>2026-11-07</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#等待属于新组，不是每条消息自己的倒计时">等待属于新组，不是每条消息自己的倒计时</a>
+          
+            <a class="toc-link toc-link--h2" href="#一份只向本地接收器发送的教学配置">一份只向本地接收器发送的教学配置</a>
+          
+            <a class="toc-link toc-link--h2" href="#三十秒与两分钟分别从哪里计算">三十秒与两分钟分别从哪里计算</a>
+          
+            <a class="toc-link toc-link--h2" href="#把-group-wait-设为零，就能保证首条通知完整吗？">把 group_wait 设为零，就能保证首条通知完整吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>258</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>209</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/journald-rate-limit-missing-events/">journald 少了故障日志：先核对每个服务的限流窗口</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/alertmanager-silence-evaluation-boundary/">Alertmanager静默后，Prometheus告警为什么仍在firing？</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/17/prometheus-honor-labels-conflict/">Prometheus 出现 exported_job，哪一方标签被保留下来了？</a></h3>
+          <p>2026-10-17</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

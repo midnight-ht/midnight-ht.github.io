@@ -1,0 +1,419 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>都按十五分钟统计，date_bin 的桶边界为什么不同？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="十五分钟只规定跨度，origin 还决定边界。用边界前后与锚点之前的输入，拆开分桶对齐、过滤窗口和日历意图。">
+  
+  
+    <meta name="keywords" content="date_bin,origin,时间分桶">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/07/postgres-date-bin-origin-stride/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/07/postgres-date-bin-origin-stride/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/07/postgres-date-bin-origin-stride/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/07/postgres-date-bin-origin-stride/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="都按十五分钟统计，date_bin 的桶边界为什么不同？ | Midnight blog">
+    <meta property="og:description" content="十五分钟只规定跨度，origin 还决定边界。用边界前后与锚点之前的输入，拆开分桶对齐、过滤窗口和日历意图。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/07/postgres-date-bin-origin-stride/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/postgres-date-bin-origin-stride/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/07/postgres-date-bin-origin-stride/","name":"都按十五分钟统计，date_bin 的桶边界为什么不同？ | Midnight blog","description":"十五分钟只规定跨度，origin 还决定边界。用边界前后与锚点之前的输入，拆开分桶对齐、过滤窗口和日历意图。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/postgres-date-bin-origin-stride/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/postgres-date-bin-origin-stride/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/postgres-date-bin-origin-stride/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/postgres-date-bin-origin-stride/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/07/postgres-date-bin-origin-stride/","headline":"都按十五分钟统计，date_bin 的桶边界为什么不同？","description":"十五分钟只规定跨度，origin 还决定边界。用边界前后与锚点之前的输入，拆开分桶对齐、过滤窗口和日历意图。","inLanguage":"zh-CN","datePublished":"2026-11-06T19:00:30.000Z","dateModified":"2026-11-06T19:00:30.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/functions-datetime.html"],"keywords":"PostgreSQL, 时间处理"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/postgres-date-bin-origin-stride/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"都按十五分钟统计，date_bin 的桶边界为什么不同？","item":"https://www.zyweb.vip/zh-CN/2026/11/07/postgres-date-bin-origin-stride/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/07/postgres-date-bin-origin-stride/" selected>zh-CN</option><option value="/en/2026/11/07/postgres-date-bin-origin-stride/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/07/postgres-date-bin-origin-stride/" selected>zh-CN</option><option value="/en/2026/11/07/postgres-date-bin-origin-stride/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--postgresql">PostgreSQL</span>
+      <time datetime="2026-11-06T19:00:30.000Z">2026-11-07</time>
+    </div>
+
+    <h1>都按十五分钟统计，date_bin 的桶边界为什么不同？</h1>
+
+    
+      <p class="post-hero__summary">十五分钟只规定跨度，origin 还决定边界。用边界前后与锚点之前的输入，拆开分桶对齐、过滤窗口和日历意图。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-06T19:00:30.000Z">2026-11-07</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/07/postgres-date-bin-origin-stride/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/07/postgres-date-bin-origin-stride/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>分桶规则需要跨度、锚点和输入时间类型。</li><li>origin 是对齐锚点，不是过滤起点。</li><li>月与更大单位不能用作 date_bin 的 stride。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>两个服务都按十五分钟统计，桶边界仍可能不同，因为 <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-datetime.html#FUNCTIONS-DATETIME-BIN"><code>date_bin</code></a> 同时使用 <code>stride</code> 和 <code>origin</code>。前者给出桶的跨度，后者给出对齐锚点；只统一“十五分钟”这句话，没有统一完整的分桶规则。</p>
+<p>假设一个采集服务把九点零二分作为锚点，报表服务却按整刻钟显示。九点十六分的同一条记录，前者会放进九点零二分开始的桶，后者会标成九点十五分。两边都没有把十五分钟算错，冲突发生在分界位置。把一个标签换成另一个标签，不能保证桶里的记录集合也相同。</p>
+<h2 id="先写出四个边界输入"><a href="#先写出四个边界输入" class="headerlink" title="先写出四个边界输入"></a>先写出四个边界输入</h2><p>下面使用 PostgreSQL 18 的 <code>date_bin</code>，输入明确为不带时区的 <code>timestamp</code>，用于隔离对齐问题。它是只读例子，结果为按官方规则推演的预期，未声称在数据库执行过。真实系统若存的是 <code>timestamptz</code>，应另外统一它的类型与转换契约。</p>
+<pre><code class="sql">WITH samples(t) AS (VALUES
+  (timestamp &#39;2026-11-06 09:01:59&#39;),
+  (timestamp &#39;2026-11-06 09:02:00&#39;),
+  (timestamp &#39;2026-11-06 09:16:59&#39;),
+  (timestamp &#39;2026-11-06 09:17:00&#39;)
+)
+SELECT t,
+       date_bin(interval &#39;15 minutes&#39;, t,
+                timestamp &#39;2026-11-06 09:02:00&#39;) AS bucket
+FROM samples
+ORDER BY t;
+</code></pre>
+<p>四个桶起点依次是当天的 <code>08:47:00</code>、<code>09:02:00</code>、<code>09:02:00</code>、<code>09:17:00</code>。九点零二分正好开始新桶，九点十七分也开始新桶。用区间表达，九点零二分这一桶包含从九点零二分起、到九点十七分之前的输入；右边界属于下一个桶，不应该在两边各算一次。</p>
+<p>第一条尤其值得保留。它比 <code>origin</code> 早一秒，结果不是九点零二分，也不是拒绝输入，而是前一个桶的起点八点四十七分。锚点向前向后定义对齐，并不限定可接受的最早记录。若产品只允许统计九点零二分之后的数据，还需要单独的过滤条件。</p>
+<p>官方文档把返回值定义为输入所属桶的开头，并明确指出桶按指定的 <code>origin</code> 对齐。因此，这里不应把“输入减去锚点后除以跨度”草率写成整数截断代码；对负差值，向零截断与选择更早的桶不是一回事。边界前的一秒正好可以暴露这种错误实现。</p>
+<h2 id="同一条记录，换锚点再比较"><a href="#同一条记录，换锚点再比较" class="headerlink" title="同一条记录，换锚点再比较"></a>同一条记录，换锚点再比较</h2><p>第二个例子让两个定义同时出现在一行，避免比对两个已经各自聚合完的报表。输入、跨度和类型保持相同，只改变锚点。</p>
+<pre><code class="sql">SELECT timestamp &#39;2026-11-06 09:16:00&#39; AS t,
+       date_bin(interval &#39;15 minutes&#39;,
+                timestamp &#39;2026-11-06 09:16:00&#39;,
+                timestamp &#39;2026-11-06 09:00:00&#39;) AS aligned_at_zero,
+       date_bin(interval &#39;15 minutes&#39;,
+                timestamp &#39;2026-11-06 09:16:00&#39;,
+                timestamp &#39;2026-11-06 09:02:00&#39;) AS aligned_at_two;
+</code></pre>
+<p>预期分别是 <code>09:15:00</code> 与 <code>09:02:00</code>。若接口只传 <code>bucket=15m</code>，消费者无法从这个字符串判断生产者用了哪一种边界。比较聚合结果之前，应先拿同一个原始时间点算标签，确认双方实现的是相同划分，再检查过滤窗口与聚合函数。</p>
+<p>对固定跨度，锚点也不必是某个真实事件发生的时刻。可以选择稳定、可共享的配置值。另一方面，不同的锚点值也未必代表不同划分：相差整数个十五分钟的两个锚点，会给出相同的一组边界。真正应检查的是它们是否在该跨度上对齐，而不是配置字符串是否逐字相同。这是从周期分界推导的判断，不是新增的执行测量。</p>
+<h2 id="分桶、过滤与补空桶要分开决定"><a href="#分桶、过滤与补空桶要分开决定" class="headerlink" title="分桶、过滤与补空桶要分开决定"></a>分桶、过滤与补空桶要分开决定</h2><p>分桶回答的是一条已选记录属于哪个区间。过滤回答哪些记录参加本次查询。补空桶回答没有记录的区间是否也要显示。这三项可以出现在同一张报表，却不是一个函数提供的三种自动行为。<code>date_bin</code> 返回一个时间值，不会仅凭调用就生成所有空区间，也不会替你选择业务查询窗口。</p>
+<p>例如报表从九点开始，但分桶沿用九点零二分对齐，九点到九点零二分之前的记录会被标到八点四十七分。把结果标签再按“九点以后”过滤，可能丢掉已经通过原始时间过滤的记录。应先明确页面想展示完整桶还是截断窗口，再决定查询结构；不能因为标签早于页面起点就认定输入错误。</p>
+<p>这也影响历史数据重算。若更改了锚点，却沿用旧缓存键和旧聚合表标识，同一个标签可能被赋予两套记录边界。先记录规则版本，并用原始时间点核对新旧归属，再决定是否需要重建聚合。这个建议是应用层的规则管理选择，不代表 PostgreSQL 会自动识别或迁移缓存。</p>
+<h2 id="什么情况下不该继续加大-stride"><a href="#什么情况下不该继续加大-stride" class="headerlink" title="什么情况下不该继续加大 stride"></a>什么情况下不该继续加大 stride</h2><p><code>stride</code> 必须大于零，而且<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-datetime.html#FUNCTIONS-DATETIME-BIN">不能包含月或更大的单位</a>。把一个月填进去，不会得到业务月报所需的日历分界。月份长短不同；“固定跨度的格子”与“每月按某个本地日期开始”是不同需求。遇到后者，应重新选择日历模型，不要用三十天冒充所有月份。</p>
+<p>官方文档提到，完整标准单位可以与相应的 <code>date_trunc</code> 得到相同结果。使用这句话时仍要保留锚点条件：边界必须对齐对应的标准单位。偏移了两分钟的十五分钟桶，本来就不是整刻钟；任意 <code>origin</code> 并不因为单位名称熟悉就获得相同边界。</p>
+<p>若业务意图涉及本地时区中的循环时间，可接着阅读<a href="/zh-CN/2026/10/10/timestamps-recurring-intent/">时间戳与循环日程的区别</a>。当前例子只解决固定跨度与锚点，不能据此承诺夏令时下每个本地日历区间都具有相同持续时间。</p>
+<h2 id="十五分钟相同就能共享缓存桶键吗？"><a href="#十五分钟相同就能共享缓存桶键吗？" class="headerlink" title="十五分钟相同就能共享缓存桶键吗？"></a>十五分钟相同就能共享缓存桶键吗？</h2><p>不够；还要确认 <code>origin</code> 在这个跨度上对齐，并统一输入时间类型与转换规则。缓存键可以使用一个明确的规则标识，再附上桶起点；它不应只凭一个看似完整的“十五分钟”标签掩盖剩余配置。</p>
+<p>验证时保留边界前一秒、恰在边界、边界后一段时间，以及早于锚点的样本。再换一个偏移两分钟的锚点，重新推算预期，不要沿用旧答案。最后把零跨度、负跨度和月跨度作为拒绝探针，实际错误措辞留给真实执行记录。只有这些分界约定一致，比较两个服务的桶内数量才有意义。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-datetime.html" rel="noopener">PostgreSQL: Documentation: 18: 9.9. Date/Time Functions and Operators</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%97%B6%E9%97%B4%E5%A4%84%E7%90%86/">时间处理</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Fpostgres-date-bin-origin-stride%2F&text=%E9%83%BD%E6%8C%89%E5%8D%81%E4%BA%94%E5%88%86%E9%92%9F%E7%BB%9F%E8%AE%A1%EF%BC%8Cdate_bin%20%E7%9A%84%E6%A1%B6%E8%BE%B9%E7%95%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E5%90%8C%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Fpostgres-date-bin-origin-stride%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E9%83%BD%E6%8C%89%E5%8D%81%E4%BA%94%E5%88%86%E9%92%9F%E7%BB%9F%E8%AE%A1%EF%BC%8Cdate_bin%20%E7%9A%84%E6%A1%B6%E8%BE%B9%E7%95%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E5%90%8C%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Fpostgres-date-bin-origin-stride%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/07/postgres-jsonb-set-missing-parents/">
+              <span>上一篇</span>
+              <strong>jsonb_set 开了 create_if_missing，为什么深层字段仍没出现？</strong>
+              <small>2026-11-07</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/07/openssl-s-client-verification-boundaries/">
+              <span>下一篇</span>
+              <strong>OpenSSL s_client 握手成功，为什么证书验证仍可能失败？</strong>
+              <small>2026-11-07</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#先写出四个边界输入">先写出四个边界输入</a>
+          
+            <a class="toc-link toc-link--h2" href="#同一条记录，换锚点再比较">同一条记录，换锚点再比较</a>
+          
+            <a class="toc-link toc-link--h2" href="#分桶、过滤与补空桶要分开决定">分桶、过滤与补空桶要分开决定</a>
+          
+            <a class="toc-link toc-link--h2" href="#什么情况下不该继续加大-stride">什么情况下不该继续加大 stride</a>
+          
+            <a class="toc-link toc-link--h2" href="#十五分钟相同就能共享缓存桶键吗？">十五分钟相同就能共享缓存桶键吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>258</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>209</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/07/postgres-jsonb-set-missing-parents/">jsonb_set 开了 create_if_missing，为什么深层字段仍没出现？</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/postgres-last-value-window-frame/">PostgreSQL last_value 为什么没有返回分组最后一条？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/postgres-partition-pruning-stages/">PostgreSQL 查询有索引，为什么还要检查分区裁剪？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

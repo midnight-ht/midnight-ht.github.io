@@ -1,0 +1,436 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why can fs.watch miss later writes after a file is replaced? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="On Linux/macOS a file watch follows its resolved inode, not a replacement at the same path. An owned temporary fixture separates callbacks from directory reconciliation and missing-filename recovery.">
+  
+  
+    <meta name="keywords" content="fs.watch,inode,configuration reload">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/07/node-fs-watch-replaced-inode/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/07/node-fs-watch-replaced-inode/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/07/node-fs-watch-replaced-inode/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/07/node-fs-watch-replaced-inode/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why can fs.watch miss later writes after a file is replaced? | Midnight blog">
+    <meta property="og:description" content="On Linux/macOS a file watch follows its resolved inode, not a replacement at the same path. An owned temporary fixture separates callbacks from directory reconciliation and missing-filename recovery.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/07/node-fs-watch-replaced-inode/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/07/node-fs-watch-replaced-inode/#webpage","url":"https://www.zyweb.vip/en/2026/11/07/node-fs-watch-replaced-inode/","name":"Why can fs.watch miss later writes after a file is replaced? | Midnight blog","description":"On Linux/macOS a file watch follows its resolved inode, not a replacement at the same path. An owned temporary fixture separates callbacks from directory reconciliation and missing-filename recovery.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/07/node-fs-watch-replaced-inode/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/07/node-fs-watch-replaced-inode/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/07/node-fs-watch-replaced-inode/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/07/node-fs-watch-replaced-inode/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/07/node-fs-watch-replaced-inode/","headline":"Why can fs.watch miss later writes after a file is replaced?","description":"On Linux/macOS a file watch follows its resolved inode, not a replacement at the same path. An owned temporary fixture separates callbacks from directory reconciliation and missing-filename recovery.","inLanguage":"en","datePublished":"2026-11-06T19:00:30.000Z","dateModified":"2026-11-06T19:00:30.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://nodejs.org/docs/latest-v24.x/api/fs.html"],"keywords":"Node.js, File watching"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/07/node-fs-watch-replaced-inode/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why can fs.watch miss later writes after a file is replaced?","item":"https://www.zyweb.vip/en/2026/11/07/node-fs-watch-replaced-inode/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/07/node-fs-watch-replaced-inode/">zh-CN</option><option value="/en/2026/11/07/node-fs-watch-replaced-inode/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/07/node-fs-watch-replaced-inode/">zh-CN</option><option value="/en/2026/11/07/node-fs-watch-replaced-inode/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--node-js">Node.js</span>
+      <time datetime="2026-11-06T19:00:30.000Z">2026-11-07</time>
+    </div>
+
+    <h1>Why can fs.watch miss later writes after a file is replaced?</h1>
+
+    
+      <p class="post-hero__summary">On Linux/macOS a file watch follows its resolved inode, not a replacement at the same path. An owned temporary fixture separates callbacks from directory reconciliation and missing-filename recovery.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-06T19:00:30.000Z">2026-11-07</time> · Estimated read 17 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/07/node-fs-watch-replaced-inode/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/07/node-fs-watch-replaced-inode/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>The same path does not make the original watch follow a new inode.</li><li>A missing callback filename still needs scoped reconciliation or another fallback.</li><li>Reconciling current state differs from retaining every intermediate update.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>An unchanged path does not mean <code>fs.watch</code> is following the replacement file now at that path. Node.js documents that on Linux and macOS a watch follows the inode resolved from the path. Deleting and recreating the file gives it another inode; the original watch does not automatically receive events for that new inode.</p>
+<p>This explains a stalled configuration reload when an editor writes a temporary file and renames it over the target instead of updating the old file in place. The replacement can produce a signal, yet later writes to the new file no longer reach the original file watch. Comparing path strings does not expose the identity change.</p>
+<p>The <a target="_blank" rel="noopener" href="https://nodejs.org/docs/latest-v24.x/api/fs.html#inodes">inode clause</a> was checked in documentation titled Node.js v24.22.2 when retrieved. That version-line URL can change, so the title and body are preserved in the source snapshot. This is not a claim that the program below was tested in that runtime. Nor does the documented behavior establish an unconditional guarantee for every platform or filesystem.</p>
+<h2 id="Separate-the-path-from-the-watched-object"><a href="#Separate-the-path-from-the-watched-object" class="headerlink" title="Separate the path from the watched object"></a>Separate the path from the watched object</h2><p>A path locates an object. When the watch is established, the system resolves it and watches the corresponding file. A different file subsequently occupying that name does not automatically inherit the subscription. The documentation says the original inode watch emits a deletion event but continues watching the original inode; events for the new inode are not emitted by that old file watch.</p>
+<p>Receiving a rename or deletion hint therefore does not establish that the subscription follows the replacement. A callback might reread the new file successfully while leaving the old watch installed. Current content can look correct once, then the next update loses its signal. One successful reread does not establish future subscription recovery.</p>
+<h2 id="Observe-an-owned-temporary-directory"><a href="#Observe-an-owned-temporary-directory" class="headerlink" title="Observe an owned temporary directory"></a>Observe an owned temporary directory</h2><p>This unexecuted ESM program creates its own temporary directory. It logs callbacks from both the file and its parent directory, separating replacement from the subsequent write. Manual Enter prompts allow observation, but are not barriers proving that the operating system has delivered every event. There is no fabricated fixed event count or transcript.</p>
+<pre><code class="js">import { watch } from &#39;node:fs&#39;;
+import { mkdtemp, writeFile, rename, rm } from &#39;node:fs/promises&#39;;
+import { tmpdir } from &#39;node:os&#39;;
+import { join } from &#39;node:path&#39;;
+import { createInterface } from &#39;node:readline/promises&#39;;
+import { stdin, stdout } from &#39;node:process&#39;;
+
+const dir = await mkdtemp(join(tmpdir(), &#39;watch-inode-&#39;));
+const file = join(dir, &#39;config.json&#39;);
+const next = join(dir, &#39;next.json&#39;);
+const rl = createInterface({ input: stdin, output: stdout });
+const watchers = [];
+const log = label =&gt; (eventType, filename) =&gt;
+  console.log(label, { eventType, filename });
+try {
+  await writeFile(file, &#39;{&quot;version&quot;:1}\n&#39;);
+  const fileWatch = watch(file, log(&#39;file&#39;));
+  watchers.push(fileWatch);
+  const directoryWatch = watch(dir, log(&#39;directory&#39;));
+  watchers.push(directoryWatch);
+  for (const watcher of watchers)
+    watcher.on(&#39;error&#39;, error =&gt; console.error(&#39;watch error&#39;, error));
+  console.log({ dir, file });
+  await rl.question(&#39;Press Enter to replace the file; observe callbacks afterwards. &#39;);
+  await writeFile(next, &#39;{&quot;version&quot;:2}\n&#39;);
+  await rename(next, file);
+  await rl.question(&#39;Press Enter after observing callbacks to write the replacement. &#39;);
+  await writeFile(file, &#39;{&quot;version&quot;:3}\n&#39;);
+  await rl.question(&#39;Press Enter after observing callbacks to close and clean up. &#39;);
+} finally {
+  for (const watcher of watchers) watcher.close();
+  rl.close();
+  await rm(dir, { recursive: true, force: true });
+}
+</code></pre>
+<p>Save it as <code>watch-inode.mjs</code> and, in a prepared owned environment, run <code>node watch-inode.mjs</code>. The first Enter writes a temporary file and replaces the target. The second writes to the replacement, and the third closes the watches and removes only the newly created directory. Do not substitute an existing user directory for the printed path.</p>
+<p>The question to investigate is whether the two watch scopes behave differently, not whether one run happens to produce a particular number of <code>rename</code> callbacks. Preserve raw callbacks and record the actual operating system, filesystem and Node version. Distinguish documented behavior from observations. Temporary-file activity can also trigger the parent watch; those messages do not establish that the target configuration is ready to adopt.</p>
+<h2 id="Reconcile-current-state-after-directory-hints"><a href="#Reconcile-current-state-after-directory-hints" class="headerlink" title="Reconcile current state after directory hints"></a>Reconcile current state after directory hints</h2><p>For applications that need eventually to adopt the current configuration, a parent-directory event can mean “recheck state.” Schedule a coalesced rescan, reopen the current target path, read its complete content, validate its format and version, and only then decide whether to adopt it. Several hints can be coalesced. The goal is reconciling the current state, rather than interpreting each hint as a distinct business update.</p>
+<p>That is an application design inference, not a promise that directory watches provide a reliable log. The program above only logs events; it is not a production reloader. A reread can encounter an absent file, incomplete content, changed permissions or parse failure. Keep the last known good configuration and record the retry or failure state explicitly.</p>
+<p>For example, if version two is active and a later read contains invalid JSON, an arriving file event should not clear the running state. Adopt a candidate only after complete parsing and domain validation. Configuration versions belong to the configuration protocol; counting events cannot infer them, because repeated hints are not repeated business versions.</p>
+<p>Reestablishing a file-level watch requires managing the old watch, creating the new one and reconciling changes during the interval. Calling <code>watch</code> again inside a callback does not, on its own, explain how that gap recovers. Review the complete reconciliation process rather than treating one subscription call as sufficient.</p>
+<h2 id="Can-an-event-with-a-null-filename-be-discarded"><a href="#Can-an-event-with-a-null-filename-be-discarded" class="headerlink" title="Can an event with a null filename be discarded?"></a>Can an event with a null filename be discarded?</h2><p>Not for that reason. The <a target="_blank" rel="noopener" href="https://nodejs.org/docs/latest-v24.x/api/fs.html#caveats">official filename and watch caveats</a> says the callback filename is not guaranteed, even on platforms supporting it. The application still knows the directory scope it watches and can fall back to rescanning instead of demanding a target name in every event.</p>
+<p>The same caveats section describe platform and filesystem dependencies, including unreliable behavior on some network or virtualized filesystems.</p>
+<p>A present filename is not content validation either. It can narrow the reconciliation scope, but proves neither existence nor completeness nor a new version. Returning immediately on a missing name can leave stale state; treating every name as a successful target update can misclassify temporary-file activity. Design both branches explicitly.</p>
+<p>A controlled logic test can call the reconciliation function with a null filename and check that it schedules a scoped rescan. That proves the function branch, not that the operating system actually produced that callback. Preserve real callbacks unchanged and label deliberately injected logic-test inputs separately.</p>
+<h2 id="Require-a-different-delivery-contract-for-every-update"><a href="#Require-a-different-delivery-contract-for-every-update" class="headerlink" title="Require a different delivery contract for every update"></a>Require a different delivery contract for every update</h2><p>If every intermediate update must be processed and traceable, hints followed by rereading the current file do not automatically meet that requirement. A newer version may already have replaced intermediate content.</p>
+<p>Choose a versioned delivery channel, durable record or other coordination mechanism matching the requirement, then define recovery. Periodic state reconciliation can help eventual recovery but is not an archive of every intermediate version. Decide whether the goal is eventual current-state agreement or accounting for every change before assigning reliability guarantees to a convenient notification mechanism.</p>
+<p>Rereading a path also has its own operation boundaries; see <a href="/en/2026/10/29/node-fs-access-open-race/">why access before open does not eliminate a file race</a>. A prior existence check does not prove the next operation succeeds. Handle read failures, validate current content and review watch scope together with recovery to explain how the system continues after a same-path replacement.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://nodejs.org/docs/latest-v24.x/api/fs.html" rel="noopener">File system | Node.js v24.22.2 Documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--node-js" href="/en/tags/Node.js/">Node.js</a>
+          
+            <a class="tag tag--file-watching" href="/en/tags/File-watching/">File watching</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F07%2Fnode-fs-watch-replaced-inode%2F&text=Why%20can%20fs.watch%20miss%20later%20writes%20after%20a%20file%20is%20replaced%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F07%2Fnode-fs-watch-replaced-inode%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20can%20fs.watch%20miss%20later%20writes%20after%20a%20file%20is%20replaced%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F07%2Fnode-fs-watch-replaced-inode%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/07/node-package-exports-subpath-contract/">
+              <span>Previous Post</span>
+              <strong>Why does Node reject a package subpath when the file exists?</strong>
+              <small>2026-11-07</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/07/jsonschema-dependent-required-presence/">
+              <span>Next Post</span>
+              <strong>Why does dependentRequired require an address when invoice is false?</strong>
+              <small>2026-11-07</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Separate-the-path-from-the-watched-object">Separate the path from the watched object</a>
+          
+            <a class="toc-link toc-link--h2" href="#Observe-an-owned-temporary-directory">Observe an owned temporary directory</a>
+          
+            <a class="toc-link toc-link--h2" href="#Reconcile-current-state-after-directory-hints">Reconcile current state after directory hints</a>
+          
+            <a class="toc-link toc-link--h2" href="#Can-an-event-with-a-null-filename-be-discarded">Can an event with a null filename be discarded?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Require-a-different-delivery-contract-for-every-update">Require a different delivery contract for every update</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>258</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>209</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/07/node-package-exports-subpath-contract/">Why does Node reject a package subpath when the file exists?</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/01/node-pipeline-http-destroy-boundary/">Why can res.end no longer send an error after Node.js pipeline fails?</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/30/node-dns-lookup-resolve-scope/">Why can Node.js resolve miss a name available through hosts?</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

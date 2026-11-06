@@ -1,0 +1,423 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>systemd Persistent timer 会逐次补齐停机漏掉的任务吗？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="区分 systemd 持久补触发与业务漏期清单，解释 OnCalendar、活动服务与一次启动的恢复范围。">
+  
+  
+    <meta name="keywords" content="Persistent,OnCalendar,漏期">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/07/systemd-timer-persistent-missed-runs/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/07/systemd-timer-persistent-missed-runs/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/07/systemd-timer-persistent-missed-runs/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/07/systemd-timer-persistent-missed-runs/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="systemd Persistent timer 会逐次补齐停机漏掉的任务吗？ | Midnight blog">
+    <meta property="og:description" content="区分 systemd 持久补触发与业务漏期清单，解释 OnCalendar、活动服务与一次启动的恢复范围。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/07/systemd-timer-persistent-missed-runs/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/systemd-timer-persistent-missed-runs/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/07/systemd-timer-persistent-missed-runs/","name":"systemd Persistent timer 会逐次补齐停机漏掉的任务吗？ | Midnight blog","description":"区分 systemd 持久补触发与业务漏期清单，解释 OnCalendar、活动服务与一次启动的恢复范围。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/systemd-timer-persistent-missed-runs/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/systemd-timer-persistent-missed-runs/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/systemd-timer-persistent-missed-runs/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/systemd-timer-persistent-missed-runs/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/07/systemd-timer-persistent-missed-runs/","headline":"systemd Persistent timer 会逐次补齐停机漏掉的任务吗？","description":"区分 systemd 持久补触发与业务漏期清单，解释 OnCalendar、活动服务与一次启动的恢复范围。","inLanguage":"zh-CN","datePublished":"2026-11-06T19:00:30.000Z","dateModified":"2026-11-06T19:00:30.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html"],"keywords":"systemd, 定时任务, 恢复"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/systemd-timer-persistent-missed-runs/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"systemd Persistent timer 会逐次补齐停机漏掉的任务吗？","item":"https://www.zyweb.vip/zh-CN/2026/11/07/systemd-timer-persistent-missed-runs/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/07/systemd-timer-persistent-missed-runs/" selected>zh-CN</option><option value="/en/2026/11/07/systemd-timer-persistent-missed-runs/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/07/systemd-timer-persistent-missed-runs/" selected>zh-CN</option><option value="/en/2026/11/07/systemd-timer-persistent-missed-runs/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--systemd">systemd</span>
+      <time datetime="2026-11-06T19:00:30.000Z">2026-11-07</time>
+    </div>
+
+    <h1>systemd Persistent timer 会逐次补齐停机漏掉的任务吗？</h1>
+
+    
+      <p class="post-hero__summary">区分 systemd 持久补触发与业务漏期清单，解释 OnCalendar、活动服务与一次启动的恢复范围。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-06T19:00:30.000Z">2026-11-07</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/07/systemd-timer-persistent-missed-runs/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/07/systemd-timer-persistent-missed-runs/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>持久触发时间不是逐期任务队列。</li><li>业务周期结果需独立清单与完成证据。</li><li>关联单元活动时不会因到点新增实例。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Persistent 的 OnCalendar 定时器重新激活时，会在发现至少漏过一次触发后安排一次补触发；它不是按每个遗漏周期生成任务的业务队列。需要补齐每日结果时，应由应用显式枚举缺少的周期，而不是把一次启动解释为三天报表都已经补完。</p>
+<h2 id="保存最后触发时间，不是保存每一期待办"><a href="#保存最后触发时间，不是保存每一期待办" class="headerlink" title="保存最后触发时间，不是保存每一期待办"></a>保存最后触发时间，不是保存每一期待办</h2><p><a target="_blank" rel="noopener" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html">systemd.timer 手册</a>说明，Persistent 为真时把服务最后触发时间保存到磁盘。定时器重新激活，如果不活动期间至少应触发过一次，就触发关联服务。这项设置只对 OnCalendar 生效，补触发仍可能受随机延迟影响。本文核对二〇二六年十一月六日的 rolling 手册，没有停止机器或启动单元。</p>
+<p>假设每日零点准备一天的结算文件。定时器在第一天之后停用，第二、第三、第四天零点都错过，第五天上午恢复。日历上有三个遗漏点，不意味着管理器创建三个携带日期的任务。Persistent 让系统知道存在需要补触发的间隙，但没有替应用保存“第二天未完成、第三天失败、第四天待处理”这样的业务状态。</p>
+<p>因此应分别记录计划周期、触发时间与结果周期。一次上午启动可以处理多期，也可以只刷新最新状态，取决于程序设计。若程序始终把当前日期当成任务日期，即使补触发真的发生，前三期也可能完全没有被检查。问题不在服务有没有被拉起，而在它如何知道该做哪一期。</p>
+<h2 id="用一对教学单元表达有限承诺"><a href="#用一对教学单元表达有限承诺" class="headerlink" title="用一对教学单元表达有限承诺"></a>用一对教学单元表达有限承诺</h2><p>以下是未安装、未执行的示例。假设隔离 Linux 环境使用 systemd，且 /usr/bin/date 存在；保存为 period-demo.timer 和 period-demo.service 后再按环境检查。它只记录启动时钟，不生成结算文件，因此观察到进程成功也不算业务补账。</p>
+<pre><code class="ini"># period-demo.timer
+[Unit]
+Description=Calendar catch-up demonstration
+
+[Timer]
+OnCalendar=*-*-* 00:00:00
+Persistent=true
+RandomizedDelaySec=0
+Unit=period-demo.service
+
+[Install]
+WantedBy=timers.target
+</code></pre>
+<pre><code class="ini"># period-demo.service
+[Unit]
+Description=Record one calendar activation
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/date --iso-8601=seconds
+</code></pre>
+<p>服务使用 oneshot，正常结束后不要求保留活动状态。示例的 date 参数要求该命令支持 GNU 风格选项；若目标路径或实现不同，应先换成当地可用的明确记录命令，而不是将可执行失败归为定时器没有补触发。这里没有给安装到系统目录或修改生产时钟的命令。</p>
+<p>纸面事件表可以很短：第一天触发后保存时点；第二至第四天定时器不活动；第五天上午重新激活，存在至少一次遗漏，因此安排一次激活。若改为 Persistent=false，这份持久补触发条件不再提供同样安排；仍需检查其他日历触发与实际激活时间，不能承诺任何环境都绝不会启动。</p>
+<p>RandomizedDelaySec 设为零，只是去掉本例的随机延迟输入，不意味着每次都精确在某个秒数接收业务结果。日历精度、机器负载与服务执行另有条件。验证应从实际管理器事件开始计数，而不是把配置中的零写成“立即完成”的服务承诺。</p>
+<h2 id="真正补齐三期，需要哪份清单"><a href="#真正补齐三期，需要哪份清单" class="headerlink" title="真正补齐三期，需要哪份清单"></a>真正补齐三期，需要哪份清单</h2><p>若业务要求每一期都有独立结果，可以让一次激活先确定有限的应完成集合，再读取持久结果记录，得到待处理差集。对上例，候选集合明确为第二、第三、第四天；程序不能只从本次开始时间推导第五天，然后宣布补齐。日期边界还需要业务时区，不能默认主机时区就是结算时区。</p>
+<p>这里的差集是设计方法，不是一份已经实现的可靠队列。处理第二天后进程退出，第三、第四天仍需在下一次检查中被发现；若开始处理就把它标成完成，中断后可能失去恢复入口。每个周期要区分待处理、执行中、完成及结果未知，并让完成绑定真实文件或下游确认。</p>
+<p>这也意味着一次触发可以有多个结果。调度日志记录一次服务激活，应用账本记录三期各自的状态，二者并不矛盾。相反，服务被重复触发也可能仍只对应同一份周期工作；应用应说明重复检查的安全性。Persistent 本身没有批准重发通知、重复结算或覆盖已有文件。</p>
+<p>可以把中断后的例子再具体一步：第二期文件已核对完成，第三期只知道外部系统曾收到请求但没有确认，第四期从未开始。下一次激活不应把三项都重新写一遍。第二期可按既定身份跳过；第三期先查询或对账，避免重复副作用；第四期才进入普通待处理路径。这是应用恢复选择，不是timer自动提供的状态。</p>
+<p>如果拿不到第三期的确认，应保留结果未知并指定后续处理，而不是把服务上次非零退出解释为三期全部未执行。进程级结果缺少周期粒度，恰好是独立清单的价值。记录每期身份、最后动作和可信结果来源，才能让接手者决定补哪项，而不只看到一次失败启动。</p>
+<h2 id="服务还在运行时，到点会再启动一个实例吗？"><a href="#服务还在运行时，到点会再启动一个实例吗？" class="headerlink" title="服务还在运行时，到点会再启动一个实例吗？"></a>服务还在运行时，到点会再启动一个实例吗？</h2><p>不会因此重启或产生新实例。手册说明，定时器到期时关联单元若已经活动，就保持它运行。长任务跨过下一个时点时，不能把每次到期都想象成新增一个后台进程，也不能从无重叠推导所有周期已被处理。</p>
+<p>这一条件对带 RemainAfterExit 的服务尤其重要：进程已经结束，单元仍可能保留活动状态，后续触发就不会按初学者预期重新运行。先检查单元真实状态与生命周期，再决定应该保持长驻、退出后等待下次，还是将周期队列交给另一种处理方式。改变任务内容与改变活动状态是两项不同操作。</p>
+<h2 id="Persistent-对-OnBootSec-也作同样补触发吗？"><a href="#Persistent-对-OnBootSec-也作同样补触发吗？" class="headerlink" title="Persistent 对 OnBootSec 也作同样补触发吗？"></a>Persistent 对 OnBootSec 也作同样补触发吗？</h2><p>不作同样承诺，这个设置只对 OnCalendar 生效。OnBootSec 等相对时间条件有自己的起点，不能因同属 timer 单元，就把持久日历语义套过去。选项存在于配置文件，不等于它在当前组合中控制了所期待的事情。</p>
+<p>拟议验证应在自有隔离环境分别覆盖多次日历遗漏、服务持续活动跨时点、明确的随机延迟，以及无 Persistent 的对照。保留单元内容、管理器版本、实际激活次数、触发时点与应用周期清单。若仅用 date 示例，结论限于触发记录；若接入真实报表，再核对每期文件及中断后的剩余集合。本文没有执行这组验证。</p>
+<p>二〇二六年十月十四日的<a href="/zh-CN/2026/10/14/kubernetes-cronjob-duplicate/">CronJob 业务身份文章</a>讨论调度实例与业务结果的分离。本题具体限定 systemd 的持久补触发：先问一次启动会检查哪些未完成周期，再决定是否足以满足停机后的恢复要求。服务醒来与历史结果补齐，需要两份证据。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html" rel="noopener">systemd.timer</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--systemd" href="/zh-CN/tags/systemd/">systemd</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/">定时任务</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%81%A2%E5%A4%8D/">恢复</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Fsystemd-timer-persistent-missed-runs%2F&text=systemd%20Persistent%20timer%20%E4%BC%9A%E9%80%90%E6%AC%A1%E8%A1%A5%E9%BD%90%E5%81%9C%E6%9C%BA%E6%BC%8F%E6%8E%89%E7%9A%84%E4%BB%BB%E5%8A%A1%E5%90%97%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Fsystemd-timer-persistent-missed-runs%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=systemd%20Persistent%20timer%20%E4%BC%9A%E9%80%90%E6%AC%A1%E8%A1%A5%E9%BD%90%E5%81%9C%E6%9C%BA%E6%BC%8F%E6%8E%89%E7%9A%84%E4%BB%BB%E5%8A%A1%E5%90%97%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Fsystemd-timer-persistent-missed-runs%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/07/wcag-images-of-text-customization/">
+              <span>上一篇</span>
+              <strong>图片有alt就满足WCAG文字图像要求了吗？</strong>
+              <small>2026-11-07</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/07/rsync-source-trailing-slash-root/">
+              <span>下一篇</span>
+              <strong>rsync 多套了一层目录：源路径末尾斜线改变了什么？</strong>
+              <small>2026-11-07</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#保存最后触发时间，不是保存每一期待办">保存最后触发时间，不是保存每一期待办</a>
+          
+            <a class="toc-link toc-link--h2" href="#用一对教学单元表达有限承诺">用一对教学单元表达有限承诺</a>
+          
+            <a class="toc-link toc-link--h2" href="#真正补齐三期，需要哪份清单">真正补齐三期，需要哪份清单</a>
+          
+            <a class="toc-link toc-link--h2" href="#服务还在运行时，到点会再启动一个实例吗？">服务还在运行时，到点会再启动一个实例吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#Persistent-对-OnBootSec-也作同样补触发吗？">Persistent 对 OnBootSec 也作同样补触发吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>258</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>209</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/systemd-notify-startup-readiness/">systemd start 已成功，为什么依赖服务仍抢跑</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/07/alertmanager-group-wait-short-alert/">Alertmanager 收到过 firing，为什么仍没有通知这条短告警？</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/07/cmake-generator-build-configuration/">CMake 写了 CMAKE_BUILD_TYPE=Release，为什么还要看生成器？</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

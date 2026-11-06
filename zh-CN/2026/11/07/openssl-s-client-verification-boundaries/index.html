@@ -1,0 +1,447 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>OpenSSL s_client 握手成功，为什么证书验证仍可能失败？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用未执行的本地证书脚本区分 OpenSSL 握手、可信链、预期名字与错误返回，避免把诊断输出当验收。">
+  
+  
+    <meta name="keywords" content="s_client,verify_hostname,SNI">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/07/openssl-s-client-verification-boundaries/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/07/openssl-s-client-verification-boundaries/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/07/openssl-s-client-verification-boundaries/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/07/openssl-s-client-verification-boundaries/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="OpenSSL s_client 握手成功，为什么证书验证仍可能失败？ | Midnight blog">
+    <meta property="og:description" content="用未执行的本地证书脚本区分 OpenSSL 握手、可信链、预期名字与错误返回，避免把诊断输出当验收。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/07/openssl-s-client-verification-boundaries/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/openssl-s-client-verification-boundaries/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/07/openssl-s-client-verification-boundaries/","name":"OpenSSL s_client 握手成功，为什么证书验证仍可能失败？ | Midnight blog","description":"用未执行的本地证书脚本区分 OpenSSL 握手、可信链、预期名字与错误返回，避免把诊断输出当验收。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/openssl-s-client-verification-boundaries/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/openssl-s-client-verification-boundaries/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/openssl-s-client-verification-boundaries/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/openssl-s-client-verification-boundaries/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/07/openssl-s-client-verification-boundaries/","headline":"OpenSSL s_client 握手成功，为什么证书验证仍可能失败？","description":"用未执行的本地证书脚本区分 OpenSSL 握手、可信链、预期名字与错误返回，避免把诊断输出当验收。","inLanguage":"zh-CN","datePublished":"2026-11-06T19:00:30.000Z","dateModified":"2026-11-06T19:00:30.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.openssl.org/3.6/man1/openssl-s_client/","https://docs.openssl.org/3.6/man1/openssl-verification-options/","https://docs.openssl.org/3.6/man1/openssl-req/","https://docs.openssl.org/3.6/man1/openssl-x509/","https://docs.openssl.org/3.6/man1/openssl-s_server/"],"keywords":"OpenSSL, TLS, 验证"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/openssl-s-client-verification-boundaries/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"OpenSSL s_client 握手成功，为什么证书验证仍可能失败？","item":"https://www.zyweb.vip/zh-CN/2026/11/07/openssl-s-client-verification-boundaries/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/07/openssl-s-client-verification-boundaries/" selected>zh-CN</option><option value="/en/2026/11/07/openssl-s-client-verification-boundaries/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/07/openssl-s-client-verification-boundaries/" selected>zh-CN</option><option value="/en/2026/11/07/openssl-s-client-verification-boundaries/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--openssl">OpenSSL</span>
+      <time datetime="2026-11-06T19:00:30.000Z">2026-11-07</time>
+    </div>
+
+    <h1>OpenSSL s_client 握手成功，为什么证书验证仍可能失败？</h1>
+
+    
+      <p class="post-hero__summary">用未执行的本地证书脚本区分 OpenSSL 握手、可信链、预期名字与错误返回，避免把诊断输出当验收。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-06T19:00:30.000Z">2026-11-07</time> · 预计阅读 9 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/07/openssl-s-client-verification-boundaries/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/07/openssl-s-client-verification-boundaries/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>诊断客户端可以在校验错误后继续。</li><li>SNI、信任材料与预期身份各有职责。</li><li>证书列表不是验证过的链。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>用于诊断的 OpenSSL s_client 默认可以在证书验证错误后继续。把它用于接受检查时，要明确受信来源、错误返回策略和预期主机名；发送 SNI 或打印证书列表都不能代替这几项验证。终端显示协商信息，不应直接写成 TLS 身份验收通过。</p>
+<h2 id="诊断工具为什么容忍错误继续"><a href="#诊断工具为什么容忍错误继续" class="headerlink" title="诊断工具为什么容忍错误继续"></a>诊断工具为什么容忍错误继续</h2><p><a target="_blank" rel="noopener" href="https://docs.openssl.org/3.6/man1/openssl-s_client/">OpenSSL 3.6 的 s_client 手册</a>说明，这个工具为了展示证书链问题，可以在验证错误后继续；verify_return_error 会让验证错误返回，并通常以致命错误终止握手。本文引用的是三点六文档路径，不是对读者本机版本的探测，也没有连接任何服务器。</p>
+<p>假设一台机器返回了证书，双方还协商出了密码套件。它说明某些协议步骤发生过，不说明证书链来自接受的根，也不说明证书代表调用者期待的名字。诊断输出包含多个不同结论，不能只截取一行看起来成功的文字。应先定义本次检查想接受什么，再决定哪些结果能够支持它。</p>
+<p>至少分清四项输入：连接地址决定网络去向，SNI 帮助服务端选择虚拟主机，受信材料参与证书链验证，预期名字参与身份匹配。它们可以在常见调用中看起来相似，却没有因此变成同一个控制。尤其从 IP 连接到本地端口时，网络地址与希望核验的 DNS 名字本来就可以不同。</p>
+<h2 id="一个只在本机使用的完整教学脚本"><a href="#一个只在本机使用的完整教学脚本" class="headerlink" title="一个只在本机使用的完整教学脚本"></a>一个只在本机使用的完整教学脚本</h2><p>以下脚本未执行，没有实际生成证书或成功握手记录。它要求可用的 OpenSSL 3.6 命令、常规 shell，以及空闲的本地端口；只在新建目录生成一天有效的教学材料，不安装到系统信任库。为避免依赖外部 DNS，证书名字使用 localhost。私钥不加密只为本地一次性例子，不能拿作真实服务配置。</p>
+<p>保存为 tls-demo.sh 后，在独立练习环境中用 sh 调用。准备步骤遇错停止；探针步骤允许预期失败，并立即保存每个客户端退出值。脚本最后的整体结束不代表四项探针都通过，判断应读取各自记录。</p>
+<pre><code class="sh">set -e
+tls_demo_dir=$(mktemp -d)
+cd &quot;$tls_demo_dir&quot;
+tls_endpoint=127.0.0.1:18443
+tls_name=localhost
+tls_root_cert=root.pem
+tls_other_cert=other.pem
+make_request() {
+  tls_material=$1; tls_subject=$2
+  shift 2
+  openssl req -newkey rsa:2048 -noenc -keyout &quot;$tls_material.key&quot; \
+    -subj &quot;$tls_subject&quot; &quot;$@&quot;
+}
+make_request root &#39;/CN=Demo Root&#39; -x509 -days 1 -out &quot;$tls_root_cert&quot; \
+  -addext &#39;basicConstraints=critical,CA:TRUE&#39; \
+  -addext &#39;keyUsage=critical,keyCertSign,cRLSign&#39;
+make_request other &#39;/CN=Other Root&#39; -x509 -days 1 -out &quot;$tls_other_cert&quot; \
+  -addext &#39;basicConstraints=critical,CA:TRUE&#39;
+make_request server &#39;/CN=localhost&#39; -new -out server.csr
+printf &#39;%s\n&#39; &#39;subjectAltName=DNS:localhost&#39; \
+  &#39;basicConstraints=CA:FALSE&#39; &#39;extendedKeyUsage=serverAuth&#39; &gt; server.ext
+openssl x509 -req -in server.csr -CA &quot;$tls_root_cert&quot; -CAkey root.key \
+  -CAcreateserial -out server.pem -days 1 -extfile server.ext
+openssl s_server -accept &quot;$tls_endpoint&quot; -cert server.pem \
+  -key server.key -www &gt; server.log 2&gt;&amp;1 &amp;
+tls_server_pid=$!
+trap &#39;kill &quot;$tls_server_pid&quot; 2&gt;/dev/null || true&#39; EXIT
+set +e
+probe() {
+  tls_case=$1; tls_trust=$2; tls_expected=$3
+  shift 3
+  printf &#39;GET / HTTP/1.0\r\nConnection: close\r\n\r\n&#39; |
+    openssl s_client -connect &quot;$tls_endpoint&quot; -servername &quot;$tls_name&quot; \
+      -verifyCAfile &quot;$tls_trust&quot; -verify_hostname &quot;$tls_expected&quot; \
+      -no-CAfile -no-CApath -no-CAstore -ign_eof &quot;$@&quot; \
+      &gt; &quot;$tls_case.log&quot; 2&gt;&amp;1
+  tls_result=$?
+  printf &#39;%s status=%s\n&#39; &quot;$tls_case&quot; &quot;$tls_result&quot;
+}
+probe diagnostic &quot;$tls_other_cert&quot; localhost
+probe wrong_chain &quot;$tls_other_cert&quot; localhost -verify_return_error
+probe wrong_name &quot;$tls_root_cert&quot; otherhost -verify_return_error
+probe matched &quot;$tls_root_cert&quot; localhost -verify_return_error
+printf &#39;inspect sandbox: %s\n&#39; &quot;$tls_demo_dir&quot;
+</code></pre>
+<p>证书准备分别依据官方 req、x509 与 s_server 命令接口：请求、签发与服务监听不是客户端验证的替代。脚本用扩展文件把本地名字放进 SAN，再提供显式信任材料；它不假设一份 CSR 的扩展必然自动复制进证书。准备后应先检查实际证书内容，并确认后台服务真的取得本例端口，不能用另一个已运行服务的响应充当本次输入。</p>
+<p>后台启动到可以接收连接之间也有时间差。如果探针先遇到连接拒绝，先核对 server.log 与进程状态，在确认本例监听后重做探针；这不是证书链错误，也不能被归入预期的 wrong_chain。HTTP 请求和连接关闭用于避免非交互客户端只因输入结束而提前离开，不能把协议关闭问题与身份验证混成一个失败类别。</p>
+<h2 id="四个记录应该怎样解释"><a href="#四个记录应该怎样解释" class="headerlink" title="四个记录应该怎样解释"></a>四个记录应该怎样解释</h2><p>diagnostic 使用不信任本例签发者的材料，但没有要求验证错误返回。它用来观察“出现错误后仍继续”的诊断行为，不应被计为接受通过。wrong_chain 增加返回错误策略，预期暴露链不受信；wrong_name 信任本例根，却故意使用不匹配名字，预期暴露身份错误。matched 才给出本例意图接受的根与名字。</p>
+<p>这些都是纸面预期，不是四条真实日志。即使 matched 返回零，也要检查客户端实际读取的材料、名字、连接终点与对应日志，不能把网络失败、证书过期、端口冲突等其他输入省略。反过来，非零也不是证书问题的同义词，应保留诊断类别，而不只记录一个红色结果。</p>
+<p><a target="_blank" rel="noopener" href="https://docs.openssl.org/3.6/man1/openssl-verification-options/">验证选项手册</a>单列预期名字的验证参数。这个区分让负例可解释：保持同一个服务、同一份证书与信任材料，只改变预期名字，才是在比较身份匹配；同时换地址、根和名字后失败，难以知道哪一项造成结果。</p>
+<p>每份记录还应明确“准备是否完成、连接是否建立、使用的信任文件、预期名字、校验诊断、客户端退出值”六项。准备失败时标为未进入探针；连接拒绝时标为传输前提不成立；只有真正收到本例证书，才继续解释链或名字的负例。这样另一位读者不会把四个非零值误当成四次验证器正确拒绝。</p>
+<p>检查证书输入时，应查看签发者、有效期与SAN是否符合这次方案，而不是只确认文件有内容。若扩展文件没有进入签发命令，证书名字可能与文字说明不同；若一天有效期已过，正确名字也不足以让 matched 成立。出现这些情况应保留原材料并重新安排实验输入，不能删除错误日志后只留下匹配的一次。</p>
+<p>还要把实际协商后的应用交互与身份接受分开。示例发送GET是为了让本地连接有明确的结束路径，不是在验收真实网站、浏览器策略或所有证书生命周期要求。接收HTML只说明这个教学服务回答过请求；信任根与预期名字仍需由各自记录解释。</p>
+<h2 id="SNI-名字与-verify-hostname-可以不同吗？"><a href="#SNI-名字与-verify-hostname-可以不同吗？" class="headerlink" title="SNI 名字与 verify_hostname 可以不同吗？"></a>SNI 名字与 verify_hostname 可以不同吗？</h2><p>可以，它们是两个输入，但检查必须解释差异。SNI 请求服务端选择哪个虚拟主机，验证名字表达最终准备接受哪个身份。本例固定 SNI 为 localhost，却在 wrong_name 中改成另一个预期名字，正是为了避免把选到证书与接受证书混为一谈。</p>
+<p>实际代理或专用访问路径可能有自己的身份设计，不能从本地例子推出所有不同值都正确，也不能把 SNI 填了当作匹配已经发生。记录这两个值及其来源，可以让评审者发现“连的是测试节点，检查的却是另一个业务名字”之类的输入错误。</p>
+<h2 id="showcerts-打印列表，就说明链可信吗？"><a href="#showcerts-打印列表，就说明链可信吗？" class="headerlink" title="showcerts 打印列表，就说明链可信吗？"></a>showcerts 打印列表，就说明链可信吗？</h2><p>不能。s_client 手册明确指出，它显示的是服务端按发送顺序提供的证书列表，不是验证过的链。打印出来有助于排查少发了什么或提供了哪张证书，却没有自动指定哪些根被接受。保存列表和保存验证结论应是两种证据。</p>
+<p>二〇二六年十一月五日的<a href="/zh-CN/2026/11/05/openssh-accept-new-host-key-trust/">SSH 主机身份文章</a>处理另一种首次信任输入，本题则限定 TLS 诊断客户端的验证开关。两者都需要明确依据，但不能混用 known_hosts 与证书链的接受规则。先固定本次要信任什么、核验什么名字以及错误如何返回，再把结果接进发布检查。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.openssl.org/3.6/man1/openssl-s_client/" rel="noopener">openssl-s_client - OpenSSL Documentation</a></li><li><a target="_blank" href="https://docs.openssl.org/3.6/man1/openssl-verification-options/" rel="noopener">openssl-verification-options - OpenSSL Documentation</a></li><li><a target="_blank" href="https://docs.openssl.org/3.6/man1/openssl-req/" rel="noopener">openssl-req - OpenSSL Documentation</a></li><li><a target="_blank" href="https://docs.openssl.org/3.6/man1/openssl-x509/" rel="noopener">openssl-x509 - OpenSSL Documentation</a></li><li><a target="_blank" href="https://docs.openssl.org/3.6/man1/openssl-s_server/" rel="noopener">openssl-s_server - OpenSSL Documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--openssl" href="/zh-CN/tags/OpenSSL/">OpenSSL</a>
+          
+            <a class="tag tag--tls" href="/zh-CN/tags/TLS/">TLS</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E9%AA%8C%E8%AF%81/">验证</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--quality" href="/zh-CN/categories/Quality/">Quality</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Fopenssl-s-client-verification-boundaries%2F&text=OpenSSL%20s_client%20%E6%8F%A1%E6%89%8B%E6%88%90%E5%8A%9F%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%AF%81%E4%B9%A6%E9%AA%8C%E8%AF%81%E4%BB%8D%E5%8F%AF%E8%83%BD%E5%A4%B1%E8%B4%A5%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Fopenssl-s-client-verification-boundaries%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=OpenSSL%20s_client%20%E6%8F%A1%E6%89%8B%E6%88%90%E5%8A%9F%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%AF%81%E4%B9%A6%E9%AA%8C%E8%AF%81%E4%BB%8D%E5%8F%AF%E8%83%BD%E5%A4%B1%E8%B4%A5%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Fopenssl-s-client-verification-boundaries%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/07/postgres-date-bin-origin-stride/">
+              <span>上一篇</span>
+              <strong>都按十五分钟统计，date_bin 的桶边界为什么不同？</strong>
+              <small>2026-11-07</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/07/openapi-security-and-or-requirements/">
+              <span>下一篇</span>
+              <strong>OpenAPI 的两个认证方案，怎样写才是同时满足？</strong>
+              <small>2026-11-07</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#诊断工具为什么容忍错误继续">诊断工具为什么容忍错误继续</a>
+          
+            <a class="toc-link toc-link--h2" href="#一个只在本机使用的完整教学脚本">一个只在本机使用的完整教学脚本</a>
+          
+            <a class="toc-link toc-link--h2" href="#四个记录应该怎样解释">四个记录应该怎样解释</a>
+          
+            <a class="toc-link toc-link--h2" href="#SNI-名字与-verify-hostname-可以不同吗？">SNI 名字与 verify_hostname 可以不同吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#showcerts-打印列表，就说明链可信吗？">showcerts 打印列表，就说明链可信吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>258</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>209</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/07/alertmanager-group-wait-short-alert/">Alertmanager 收到过 firing，为什么仍没有通知这条短告警？</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/07/cmake-generator-build-configuration/">CMake 写了 CMAKE_BUILD_TYPE=Release，为什么还要看生成器？</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/07/css-overscroll-scroll-chain-boundary/">CSS内层滚到底，为什么外层页面接着滚？</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
