@@ -1,0 +1,432 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>让迟到数据改报表之前，先约定累积结果还是增量 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="以Apache Beam事件时间窗口的五、十二和错误十七演算迟到修订，区分累积替换与增量叠加，说明触发、保留、定稿和补记的边界。">
+  
+  
+    <meta name="keywords" content="watermark,allowed lateness,accumulating panes">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/07/beam-late-data-correction-contract/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/07/beam-late-data-correction-contract/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/07/beam-late-data-correction-contract/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/07/beam-late-data-correction-contract/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="让迟到数据改报表之前，先约定累积结果还是增量 | Midnight blog">
+    <meta property="og:description" content="以Apache Beam事件时间窗口的五、十二和错误十七演算迟到修订，区分累积替换与增量叠加，说明触发、保留、定稿和补记的边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/07/beam-late-data-correction-contract/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/beam-late-data-correction-contract/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/07/beam-late-data-correction-contract/","name":"让迟到数据改报表之前，先约定累积结果还是增量 | Midnight blog","description":"以Apache Beam事件时间窗口的五、十二和错误十七演算迟到修订，区分累积替换与增量叠加，说明触发、保留、定稿和补记的边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/beam-late-data-correction-contract/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/beam-late-data-correction-contract/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/beam-late-data-correction-contract/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/beam-late-data-correction-contract/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/07/beam-late-data-correction-contract/","headline":"让迟到数据改报表之前，先约定累积结果还是增量","description":"以Apache Beam事件时间窗口的五、十二和错误十七演算迟到修订，区分累积替换与增量叠加，说明触发、保留、定稿和补记的边界。","inLanguage":"zh-CN","datePublished":"2026-11-06T19:41:54.000Z","dateModified":"2026-11-06T19:41:54.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://beam.apache.org/documentation/programming-guide/"],"keywords":"Apache Beam, 流式统计, 数据工程"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/beam-late-data-correction-contract/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"让迟到数据改报表之前，先约定累积结果还是增量","item":"https://www.zyweb.vip/zh-CN/2026/11/07/beam-late-data-correction-contract/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/07/beam-late-data-correction-contract/" selected>zh-CN</option><option value="/en/2026/11/07/beam-late-data-correction-contract/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/07/beam-late-data-correction-contract/" selected>zh-CN</option><option value="/en/2026/11/07/beam-late-data-correction-contract/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--apache-beam">Apache Beam</span>
+      <time datetime="2026-11-06T19:41:54.000Z">2026-11-07</time>
+    </div>
+
+    <h1>让迟到数据改报表之前，先约定累积结果还是增量</h1>
+
+    
+      <p class="post-hero__summary">以Apache Beam事件时间窗口的五、十二和错误十七演算迟到修订，区分累积替换与增量叠加，说明触发、保留、定稿和补记的边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-06T19:41:54.000Z">2026-11-07</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/07/beam-late-data-correction-contract/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/07/beam-late-data-correction-contract/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>事件时间决定归窗，水位之后同窗到达的元素属于迟到数据。</li><li>累计pane应按合同替换旧结果，不能把两版总额直接相加。</li><li>超过保留范围的业务更正需要独立的审计与补记流程。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>迟到事件可以修订已经输出的窗口，但接收方必须知道收到的是累计版本还是新增贡献。同一个窗口先输出五、再输出十二，若把两版都当增量相加，报表就会得到十七；延长等待时间并不能修复这个写入合同错误。</p>
+<p>假设订单按发生时间统计每分钟金额，网络延迟让部分订单晚到。看板希望尽早出数字，也允许两分钟内更正。这里需要共同决定事件归属、何时输出、保留多久，以及输出怎样落到报表。下面依据当前 Apache Beam 编程指南设计一份合同，示例没有运行 Beam SDK、TestStream 或任何 runner。</p>
+<h2 id="水位描述进展，不负责选择接收方的写法"><a href="#水位描述进展，不负责选择接收方的写法" class="headerlink" title="水位描述进展，不负责选择接收方的写法"></a>水位描述进展，不负责选择接收方的写法</h2><p><a target="_blank" rel="noopener" href="https://beam.apache.org/documentation/programming-guide/">Apache Beam 编程指南的窗口与迟到数据说明</a>区分事件时间与处理时间。前者来自元素时间戳，后者是处理系统的时钟；事件不保证按发生顺序到达。窗口按事件时间分配，水位表达系统对输入进展的判断。水位经过某窗口末尾后，再到达且属于该窗口的元素被视为迟到。</p>
+<p>这不是“服务器时间到整分，就永久证明数据完整”。水位由数据源及流水线决定，不能把指南里的简化延迟举例当成所有来源的固定计算公式。一个十点零一分收到、发生在十点零零分四十秒的订单，仍可能属于上一分钟；把到达时间直接覆盖事件时间，会改变统计问题本身。</p>
+<p>同一指南的触发器章节说明，默认窗口配置不允许迟到，允许迟到需要设置保留范围，并由适合的触发器输出相关结果。只把 allowed lateness 改成正数，却没有核对触发器是否还会响应，不能向报表方承诺一定收到更正。实施时应固定 SDK 与 runner 版本，检查它们对所用策略的实际支持；当前指南页面本身不是某个运行环境的验收回执。</p>
+<h2 id="两种-pane，要求两种接收合同"><a href="#两种-pane，要求两种接收合同" class="headerlink" title="两种 pane，要求两种接收合同"></a>两种 pane，要求两种接收合同</h2><p>Beam 把窗口每次触发输出的内容称为 pane。其累积模式保留此前已经输出的元素，后一次结果是同窗口截至当时的累计值；丢弃模式在每次触发后不再把那些元素放进下一 pane。是否累计不只是内存选项，它决定接收方应该替换还是叠加。</p>
+<p>教学窗口是从第零秒到第六十秒之前，金额单位统一为整数分。先有事件 a，时间十秒、金额二；再有 b，时间三十秒、金额三。水位到六十一秒时，首次总额是五。随后 c 到达，事件时间四十秒、金额七，仍属于原窗，但相对水位已经迟到。若允许迟到一百二十秒并响应这条元素，累计结果应为十二；若输出的是丢弃模式的新贡献，此次贡献则是七。</p>
+<p>所以接收方应在合同里明确：同一窗口及分组键的累计结果是替换旧版本，还是每个 pane 是可以相加的一段增量。仅有窗口起止时间还不够。如果采用增量且投递可能重送，还需稳定的 pane 身份或其他重复处理保护；不应把“丢弃模式”误解成外部数据库天然只写一次。</p>
+<p>下面完整的 Python 3 文件只演算累计替换合同。水位和事件都作为明确输入，不根据本机时间猜测；它没有模拟 runner，也不声称复现 Beam 内部触发调度。预期值来自二加三、再加七的独立手算。最后一条事件 d 的金额是十一分；这些金额不是实际订单或实测日志。</p>
+<pre><code class="python">&quot;&quot;&quot;Unexecuted arithmetic fixture, not Beam SDK/runner validation.
+Window [0,60), lateness120; explicit watermark advances are inputs.
+Output policy is accumulating replacement; expiry threshold is watermark&gt;180.
+&quot;&quot;&quot;
+inputs = [(&#39;event&#39;, 10, 2), (&#39;event&#39;, 30, 3), (&#39;watermark&#39;, 61),
+          (&#39;event&#39;, 40, 7), (&#39;watermark&#39;, 181), (&#39;event&#39;, 50, 11)]
+def evaluate(events):
+    watermark = -1
+    total = 0
+    emitted = []
+    rejected = []
+    on_time_fired = False
+    for event in events:
+        if event[0] == &#39;watermark&#39;:
+            watermark = event[1]
+            if watermark &gt; 60 and not on_time_fired:
+                emitted.append(total)
+                on_time_fired = True
+        else:
+            _, timestamp, value = event
+            if not 0 &lt;= timestamp &lt; 60:
+                raise ValueError(&#39;Fixture only owns one window&#39;)
+            if watermark &gt; 180:
+                rejected.append(value)
+                continue
+            total += value
+            if on_time_fired:
+                emitted.append(total)
+    return emitted, rejected
+expected = ([5, 12], [11])  # 2+3; then2+3+7; never add5+12.
+if __name__ == &#39;__main__&#39;:
+    assert evaluate(inputs) == expected
+    print(evaluate(inputs))
+</code></pre>
+<p>事件 d 的时间戳是第五十秒。轨迹先把水位推进到一百八十一秒，已经越过窗口末尾加一百二十秒的保留范围；教学合同便把 d 放进超期处理集合。它不宣称真实 runner 必然把元素写到一个名为 rejected 的外部渠道，真实超期记录如何收集需要实现和验证。</p>
+<h2 id="先确认报表要的是快数，还是不可变结算"><a href="#先确认报表要的是快数，还是不可变结算" class="headerlink" title="先确认报表要的是快数，还是不可变结算"></a>先确认报表要的是快数，还是不可变结算</h2><p>近实时看板可以按窗口和分组键保存累计版本，界面标出仍可修订的阶段。后到十二替换五，最终为十二。若接收方执行加法，五加十二得到十七，就是一个具体的重复统计错误；即使每个事件在流水线中只处理一次，接收合同不匹配仍然能制造它。</p>
+<p>不可变结算则要明确何时定稿，以及定稿后发现的旧业务事实怎样处理。无限增加允许迟到会增加状态保留责任，却不会让不受控来源承诺永远没有更晚事件。允许早出结果、暂存窗口和后续更正，是用延迟与成本换取一种可解释的完整度，而非消除全部不确定性。</p>
+<p>本站二〇二六年十月二十一日的<a href="/zh-CN/2026/10/21/cqrs-projection-read-confirmation/">CQRS 读侧确认</a>也使用“水位”一词，但那里关心的是相关修订已经连续应用。本篇事件时间水位表达输入进展，不能把一个最大的订单版本号直接拿来关闭时间窗口。名称相同不建立可替换的语义。</p>
+<h2 id="迟到期限过了，业务还能补记这张订单吗？"><a href="#迟到期限过了，业务还能补记这张订单吗？" class="headerlink" title="迟到期限过了，业务还能补记这张订单吗？"></a>迟到期限过了，业务还能补记这张订单吗？</h2><p>可以另走有审计身份的重算或调整流程，但不能假设流窗口仍保留着可直接修订的状态。应给补记关联原始订单、原统计窗口和修订原因，让下游区分重放一段历史与追加一次调整。它是新的业务合同，不是把已经回收的窗口自动叫醒。</p>
+<p>例如 d 在本例中没有进入累计十二，业务却确认它确实应计入该期。可以重新计算该期并发布新版本，或者按既定规则生成调整记录。两种方案都要防止原始数据和调整同时重复计入。对外说明“最终值”的接口，应同时约定版本替换与保留旧结果的方式，不能只把未知补成零；有关未知与零的差别，可参看<a href="/zh-CN/2026/10/19/postgres-sum-empty-set/">空集合汇总口径</a>。</p>
+<p>拟议验证应使用真实 Beam TestStream 输入上述时间戳并显式推进水位，固定窗口、迟到范围、触发器与累积模式。检查每个 pane 的内容，再检查 sink 最终行，而不只数输出次数。对照累计输出五和十二时最终为十二，以及错误累加为十七；另测超期元素、重复投递和不同分组键。保存 SDK、runner、配置与实际输出后，才能报告这些条件下的行为。本文只保留未执行的合同与手算目标。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://beam.apache.org/documentation/programming-guide/" rel="noopener">Beam Programming Guide</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--apache-beam" href="/zh-CN/tags/Apache-Beam/">Apache Beam</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%B5%81%E5%BC%8F%E7%BB%9F%E8%AE%A1/">流式统计</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B/">数据工程</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Fbeam-late-data-correction-contract%2F&text=%E8%AE%A9%E8%BF%9F%E5%88%B0%E6%95%B0%E6%8D%AE%E6%94%B9%E6%8A%A5%E8%A1%A8%E4%B9%8B%E5%89%8D%EF%BC%8C%E5%85%88%E7%BA%A6%E5%AE%9A%E7%B4%AF%E7%A7%AF%E7%BB%93%E6%9E%9C%E8%BF%98%E6%98%AF%E5%A2%9E%E9%87%8F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Fbeam-late-data-correction-contract%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E8%AE%A9%E8%BF%9F%E5%88%B0%E6%95%B0%E6%8D%AE%E6%94%B9%E6%8A%A5%E8%A1%A8%E4%B9%8B%E5%89%8D%EF%BC%8C%E5%85%88%E7%BA%A6%E5%AE%9A%E7%B4%AF%E7%A7%AF%E7%BB%93%E6%9E%9C%E8%BF%98%E6%98%AF%E5%A2%9E%E9%87%8F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Fbeam-late-data-correction-contract%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/07/broadcastchannel-late-subscriber-state/">
+              <span>上一篇</span>
+              <strong>晚开的标签页，为什么收不到先前的BroadcastChannel消息？</strong>
+              <small>2026-11-07</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/07/api-resource-name-reference-scope/">
+              <span>下一篇</span>
+              <strong>把资源身份与访问URL分开，接口换版本时少一份歧义</strong>
+              <small>2026-11-07</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#水位描述进展，不负责选择接收方的写法">水位描述进展，不负责选择接收方的写法</a>
+          
+            <a class="toc-link toc-link--h2" href="#两种-pane，要求两种接收合同">两种 pane，要求两种接收合同</a>
+          
+            <a class="toc-link toc-link--h2" href="#先确认报表要的是快数，还是不可变结算">先确认报表要的是快数，还是不可变结算</a>
+          
+            <a class="toc-link toc-link--h2" href="#迟到期限过了，业务还能补记这张订单吗？">迟到期限过了，业务还能补记这张订单吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>258</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/07/api-resource-name-reference-scope/">把资源身份与访问URL分开，接口换版本时少一份歧义</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/07/broadcastchannel-late-subscriber-state/">晚开的标签页，为什么收不到先前的BroadcastChannel消息？</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/07/card-sort-category-hypothesis/">为帮助中心选开放、封闭还是混合卡片分类</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

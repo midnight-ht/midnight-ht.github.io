@@ -1,0 +1,430 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>为离线包设计容量提示，而不是写入保证 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用只读函数和四组独立预期区分容量估值、本次写入与持久权限，处理等号边界和预检后失败。">
+  
+  
+    <meta name="keywords" content="StorageManager,estimate,容量预检">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/07/storage-estimate-not-reservation/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/07/storage-estimate-not-reservation/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/07/storage-estimate-not-reservation/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/07/storage-estimate-not-reservation/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="为离线包设计容量提示，而不是写入保证 | Midnight blog">
+    <meta property="og:description" content="用只读函数和四组独立预期区分容量估值、本次写入与持久权限，处理等号边界和预检后失败。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/07/storage-estimate-not-reservation/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/storage-estimate-not-reservation/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/07/storage-estimate-not-reservation/","name":"为离线包设计容量提示，而不是写入保证 | Midnight blog","description":"用只读函数和四组独立预期区分容量估值、本次写入与持久权限，处理等号边界和预检后失败。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/storage-estimate-not-reservation/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/storage-estimate-not-reservation/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/storage-estimate-not-reservation/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/storage-estimate-not-reservation/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/07/storage-estimate-not-reservation/","headline":"为离线包设计容量提示，而不是写入保证","description":"用只读函数和四组独立预期区分容量估值、本次写入与持久权限，处理等号边界和预检后失败。","inLanguage":"zh-CN","datePublished":"2026-11-06T19:41:54.000Z","dateModified":"2026-11-06T19:41:54.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://storage.spec.whatwg.org/"],"keywords":"Development, Storage, 离线资料"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/storage-estimate-not-reservation/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"为离线包设计容量提示，而不是写入保证","item":"https://www.zyweb.vip/zh-CN/2026/11/07/storage-estimate-not-reservation/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/07/storage-estimate-not-reservation/" selected>zh-CN</option><option value="/en/2026/11/07/storage-estimate-not-reservation/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/07/storage-estimate-not-reservation/" selected>zh-CN</option><option value="/en/2026/11/07/storage-estimate-not-reservation/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--development">Development</span>
+      <time datetime="2026-11-06T19:41:54.000Z">2026-11-07</time>
+    </div>
+
+    <h1>为离线包设计容量提示，而不是写入保证</h1>
+
+    
+      <p class="post-hero__summary">用只读函数和四组独立预期区分容量估值、本次写入与持久权限，处理等号边界和预检后失败。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-06T19:41:54.000Z">2026-11-07</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/07/storage-estimate-not-reservation/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/07/storage-estimate-not-reservation/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>estimate读取估值，没有为后续操作预订空间。</li><li>persist不承诺扩容，权限也可能被实现纳入配额政策。</li><li>may-fit仍须观察实际写入，unknown不能直接当成容量不足。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>离线资料包下载前可以检查估算余量，但不能把“看起来放得下”显示成“已经为你保留空间”。StorageManager 的 estimate 读取用量与配额估值，没有预订本次写入的步骤；持久化权限回答自动清理政策，也不承诺替这份资料包扩容。界面最终应以实际存储操作的结果更新状态。</p>
+<h2 id="余量数字究竟代表什么？"><a href="#余量数字究竟代表什么？" class="headerlink" title="余量数字究竟代表什么？"></a>余量数字究竟代表什么？</h2><p><a target="_blank" rel="noopener" href="https://storage.spec.whatwg.org/#usage-and-quota">Storage Standard 第六节“用量与配额”</a>将用量定义为实现决定的粗略估计，配额则是可容纳字节总量的保守估计。压缩、去重等实现方式会影响它们。这里使用的是最后更新于二〇二六年十月十九日的规范；不要从某台设备的一次返回值推导所有浏览器的固定额度，也不要把配额直接解释为整块磁盘的剩余空间。</p>
+<p>假设接口给出的配额为一千字节，用量为五百字节，准备保存的合成包为四百字节，算术余量是五百。这个比较适合提供“按当前估算可能容纳”的提示。它没有阻止其他页面随后写入，也没有扣除或锁住四百字节。即便不发生竞争，应用算出的包大小与存储实现最终计入的用量也可能不在相同口径上。</p>
+<p>读数应带着它的用途。下载前检查可帮助避免明显超出当前估值的大包，支持用户先删除可重建资料或选择较小内容。它不是账户权益，也不是下载成功率预测。若产品需要一个稳定承诺，应该先定义实际写入失败时如何保留输入、恢复下载或导出数据，不能让一个绿色容量图标承担所有责任。</p>
+<h2 id="一段只给建议、不申请权限的代码"><a href="#一段只给建议、不申请权限的代码" class="headerlink" title="一段只给建议、不申请权限的代码"></a>一段只给建议、不申请权限的代码</h2><p>以下未执行示例只判断传入数字，并演示如何读取浏览器接口；没有下载、写入或调用 persist。先用合成数据独立核对算术，再决定是否在支持的安全上下文中读取真实估值。示例单位均为字节，数值很小只是为了便于手算，并非真实浏览器配额。</p>
+<pre><code class="js">function advise({usage, quota}, bytes) {
+  const values = [usage, quota, bytes];
+  if (!values.every(Number.isFinite) || values.some(v =&gt; v &lt; 0)) {
+    return &#39;unknown&#39;;
+  }
+  return quota - usage &gt;= bytes ? &#39;may-fit&#39; : &#39;too-large-for-estimate&#39;;
+}
+
+const samples = [
+  [{usage: 700, quota: 1000}, 400],
+  [{usage: 500, quota: 1000}, 400],
+  [{usage: 600, quota: 1000}, 400],
+  [{usage: null, quota: 1000}, 400]
+];
+console.log(samples.map(([estimate, bytes]) =&gt; advise(estimate, bytes)));
+
+async function inspectStorage(bytes) {
+  if (!navigator.storage?.estimate || !navigator.storage?.persisted) {
+    return {advice: &#39;unknown&#39;, persistent: null};
+  }
+  try {
+    const [estimate, persistent] = await Promise.all([
+      navigator.storage.estimate(),
+      navigator.storage.persisted()
+    ]);
+    return {estimate, persistent, advice: advise(estimate, bytes)};
+  } catch (error) {
+    return {advice: &#39;unknown&#39;, persistent: null, errorName: error.name};
+  }
+}
+</code></pre>
+<p>四个合成输入的独立预期依次为 too-large-for-estimate、may-fit、may-fit、unknown。前三个余量分别为三百、五百和四百；第四个用量不是有限数字，不能悄悄当成零。unknown 表示缺少可用估值，不表示资料一定太大，更不应自动删除用户内容。代码没有执行记录，这些字符串是预期结果，不是控制台回执。</p>
+<p>真实调用还需要产品明确如何展示过时读数。例如用户停在容量确认页很久，返回后仍沿用旧估值，提示已经不再描述现在的判断条件。可以在实际操作前重新读取作为建议，但重新读取依然不是锁。不要用频繁轮询制造一种已经获得空间租约的错觉，也不要把估值中的细微变化包装成精确磁盘监测。</p>
+<h2 id="persist-改变的是哪一项条件？"><a href="#persist-改变的是哪一项条件？" class="headerlink" title="persist 改变的是哪一项条件？"></a>persist 改变的是哪一项条件？</h2><p><a target="_blank" rel="noopener" href="https://storage.spec.whatwg.org/#persistence">规范的持久权限与存储压力条款</a>区分默认的 best-effort 本地桶与 persistent 模式。存储压力下，自动清理策略优先面向 best-effort；持久模式受到相应保护，但用户或来源参与的清理仍然可能发生。它不等于备份，也不把会话存储改造成长期保存。</p>
+<p>配额政策和权限也不是绝对无关。规范鼓励用户代理在决定配额时考虑访问情况和持久权限等因素。因此，准确说法是 persist 不承诺为这次操作扩容或预留字节，不能断言所有实现的配额永远不受权限影响。若资料必须离线可用，可以在用户理解用途的时机单独设计持久化请求，并按真实返回值处理；本篇没有发出该请求。</p>
+<p>容量与留存可以同时需要，但应有两个判断。拒绝持久化，不必自动变成“本次保存失败”；获得持久化，也不能直接变成“这个包一定写得下”。界面可说明当前能否估算、估算建议是什么、实际写入进展如何，以及持久保护是否已获得，而不是把这些状态挤成一个含混的“已安全保存”。</p>
+<h2 id="估值够用，实际写入仍失败怎么办？"><a href="#估值够用，实际写入仍失败怎么办？" class="headerlink" title="估值够用，实际写入仍失败怎么办？"></a>估值够用，实际写入仍失败怎么办？</h2><p>设估算后另一项缓存写入消耗了二百字节，原先可能容纳的资料包就面临新的条件。接收侧应处理真实的请求错误与事务中止，保留尚可恢复的任务信息，并给用户重试、减少内容或导出的实际选择。不要为了让容量预检显得正确，把失败统一解释为网络不佳，也不要在第一条写请求成功时宣布整包已完成。</p>
+<p>实际实现应记录估值采集时间、待存内容大小口径、最终存储操作和用户可见结果。若采用 IndexedDB，一笔请求成功与事务完成仍须分别处理，可参看<a href="/zh-CN/2026/10/14/indexeddb-transaction-lifetime/">事务活动范围与最终结果</a>。这里补充的是写入前没有容量预订，而非重复讨论事务什么时候结束。</p>
+<p>测试应刻意覆盖可能容纳却写入失败、估值不可用但应用仍可走受控写入、用户取消，以及清理建议没有足够可删内容的路径。需要删除时，让用户知道具体对象及能否恢复；不能为了满足一个包的大小，静默清掉其他未同步的创作。本文没有运行这些写入或清理动作，实际产品仍需保留对应结果。</p>
+<h2 id="余量恰好等于资料包大小，可以显示“确定能保存”吗？"><a href="#余量恰好等于资料包大小，可以显示“确定能保存”吗？" class="headerlink" title="余量恰好等于资料包大小，可以显示“确定能保存”吗？"></a>余量恰好等于资料包大小，可以显示“确定能保存”吗？</h2><p>不能。等号只满足当前估值的算术条件；索引、编码和其他写入可能占用空间，接口又没有预订动作。示例中六百用量、一千配额与四百大小得到 may-fit，名称特意保留了不确定性。即使产品另加余量系数，也应把它描述为自己的保守策略，不能宣称某个百分比由规范保证。</p>
+<p>交付时让评审者看到这三个分开的证据：容量提示用了什么快照，真实写入最后怎样结束，持久权限处于什么状态。若目前只有 estimate 的返回值，便只能交付容量建议；把按钮文案和错误恢复按这个范围写清，再接入真正的离线保存流程。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://storage.spec.whatwg.org/" rel="noopener">Storage Standard</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--storage" href="/zh-CN/tags/Storage/">Storage</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E7%A6%BB%E7%BA%BF%E8%B5%84%E6%96%99/">离线资料</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Fstorage-estimate-not-reservation%2F&text=%E4%B8%BA%E7%A6%BB%E7%BA%BF%E5%8C%85%E8%AE%BE%E8%AE%A1%E5%AE%B9%E9%87%8F%E6%8F%90%E7%A4%BA%EF%BC%8C%E8%80%8C%E4%B8%8D%E6%98%AF%E5%86%99%E5%85%A5%E4%BF%9D%E8%AF%81" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Fstorage-estimate-not-reservation%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E4%B8%BA%E7%A6%BB%E7%BA%BF%E5%8C%85%E8%AE%BE%E8%AE%A1%E5%AE%B9%E9%87%8F%E6%8F%90%E7%A4%BA%EF%BC%8C%E8%80%8C%E4%B8%8D%E6%98%AF%E5%86%99%E5%85%A5%E4%BF%9D%E8%AF%81&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Fstorage-estimate-not-reservation%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/07/systemd-execcondition-skip-failure/">
+              <span>上一篇</span>
+              <strong>ExecCondition 返回 1，systemd 为什么没把服务判失败？</strong>
+              <small>2026-11-07</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/07/saga-compensation-business-outcomes/">
+              <span>下一篇</span>
+              <strong>给Saga安排补偿结果，而不只画一条失败箭头</strong>
+              <small>2026-11-07</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#余量数字究竟代表什么？">余量数字究竟代表什么？</a>
+          
+            <a class="toc-link toc-link--h2" href="#一段只给建议、不申请权限的代码">一段只给建议、不申请权限的代码</a>
+          
+            <a class="toc-link toc-link--h2" href="#persist-改变的是哪一项条件？">persist 改变的是哪一项条件？</a>
+          
+            <a class="toc-link toc-link--h2" href="#估值够用，实际写入仍失败怎么办？">估值够用，实际写入仍失败怎么办？</a>
+          
+            <a class="toc-link toc-link--h2" href="#余量恰好等于资料包大小，可以显示“确定能保存”吗？">余量恰好等于资料包大小，可以显示“确定能保存”吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>258</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/postgres-unlogged-crash-replication/">PostgreSQL UNLOGGED 不是“更快但其余相同”的普通表</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/07/broadcastchannel-late-subscriber-state/">晚开的标签页，为什么收不到先前的BroadcastChannel消息？</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/07/unicode-normalization-comparison-contract/">保留姓名原文，单独定义Unicode比较键</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

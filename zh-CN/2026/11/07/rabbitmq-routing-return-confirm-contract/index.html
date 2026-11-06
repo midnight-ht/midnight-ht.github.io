@@ -1,0 +1,430 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>RabbitMQ已ACK，消息为什么没有进入队列？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="按RabbitMQ 4.1的AMQP 0-9-1合同区分不可路由退回、发布确认与结果未知，用完整本地轨迹说明为什么后到的ACK不能覆盖return。">
+  
+  
+    <meta name="keywords" content="mandatory,publisher confirms,basic.return">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/07/rabbitmq-routing-return-confirm-contract/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/07/rabbitmq-routing-return-confirm-contract/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/07/rabbitmq-routing-return-confirm-contract/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/07/rabbitmq-routing-return-confirm-contract/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="RabbitMQ已ACK，消息为什么没有进入队列？ | Midnight blog">
+    <meta property="og:description" content="按RabbitMQ 4.1的AMQP 0-9-1合同区分不可路由退回、发布确认与结果未知，用完整本地轨迹说明为什么后到的ACK不能覆盖return。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/07/rabbitmq-routing-return-confirm-contract/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/rabbitmq-routing-return-confirm-contract/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/07/rabbitmq-routing-return-confirm-contract/","name":"RabbitMQ已ACK，消息为什么没有进入队列？ | Midnight blog","description":"按RabbitMQ 4.1的AMQP 0-9-1合同区分不可路由退回、发布确认与结果未知，用完整本地轨迹说明为什么后到的ACK不能覆盖return。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/rabbitmq-routing-return-confirm-contract/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/rabbitmq-routing-return-confirm-contract/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/rabbitmq-routing-return-confirm-contract/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/07/rabbitmq-routing-return-confirm-contract/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/07/rabbitmq-routing-return-confirm-contract/","headline":"RabbitMQ已ACK，消息为什么没有进入队列？","description":"按RabbitMQ 4.1的AMQP 0-9-1合同区分不可路由退回、发布确认与结果未知，用完整本地轨迹说明为什么后到的ACK不能覆盖return。","inLanguage":"zh-CN","datePublished":"2026-11-06T19:41:54.000Z","dateModified":"2026-11-06T19:41:54.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.rabbitmq.com/docs/4.1/confirms","https://www.rabbitmq.com/docs/4.1/publishers"],"keywords":"RabbitMQ, 消息路由, 接口设计"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/07/rabbitmq-routing-return-confirm-contract/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"RabbitMQ已ACK，消息为什么没有进入队列？","item":"https://www.zyweb.vip/zh-CN/2026/11/07/rabbitmq-routing-return-confirm-contract/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/07/rabbitmq-routing-return-confirm-contract/" selected>zh-CN</option><option value="/en/2026/11/07/rabbitmq-routing-return-confirm-contract/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/07/rabbitmq-routing-return-confirm-contract/" selected>zh-CN</option><option value="/en/2026/11/07/rabbitmq-routing-return-confirm-contract/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--rabbitmq">RabbitMQ</span>
+      <time datetime="2026-11-06T19:41:54.000Z">2026-11-07</time>
+    </div>
+
+    <h1>RabbitMQ已ACK，消息为什么没有进入队列？</h1>
+
+    
+      <p class="post-hero__summary">按RabbitMQ 4.1的AMQP 0-9-1合同区分不可路由退回、发布确认与结果未知，用完整本地轨迹说明为什么后到的ACK不能覆盖return。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-06T19:41:54.000Z">2026-11-07</time> · 预计阅读 8 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/07/rabbitmq-routing-return-confirm-contract/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/07/rabbitmq-routing-return-confirm-contract/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>无匹配队列的发布也可能得到代理确认。</li><li>退回事实必须保留，不能被后来的ACK覆盖。</li><li>确认、路由与消费者业务完成需要各自的证据。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>RabbitMQ 的发布确认可以在没有任何队列匹配时到来。收到 ACK 后仍找不到消息，应先查交换机路由结果，不能把确认直接解释为目标队列已保存，更不能解释为消费者完成了订单。</p>
+<p>假设订单事件发送到一个已经存在的 direct exchange，routing key 却拼错了。发布端只等待 confirm，随后把发件箱记录改成已交付。这个错误可能不会表现为网络异常：代理已经处理了发布，只是找不到可以接受它的队列。本篇固定讨论 RabbitMQ 4.1 文档中的 AMQP 0-9-1，最小案例没有 alternate exchange；没有连接代理或执行消息投递。</p>
+<h2 id="无路由与拒绝处理，是两种结果"><a href="#无路由与拒绝处理，是两种结果" class="headerlink" title="无路由与拒绝处理，是两种结果"></a>无路由与拒绝处理，是两种结果</h2><p><a target="_blank" rel="noopener" href="https://www.rabbitmq.com/docs/4.1/confirms">RabbitMQ 4.1 发布确认文档的确认时机说明</a>明确区分可路由与不可路由的消息。交换机判断没有匹配队列后，也会给不可路由消息发确认。若发布设置了 mandatory，代理先发送 basic.return，再发送 basic.ack；负确认也遵循先退回的规则。</p>
+<p>因此，ACK 不能单独充当“存在目标队列”的断言。它在这个分支上确认的是交换机已经处理了路由判断。相反，存在匹配队列时，文档说确认在消息被所有路由目标队列接受后发出；持久消息、耐久队列与 quorum queue 又有相应的接受条件。不要把这些有前提的条件压缩成“收到 ACK 就永久安全”。</p>
+<p>mandatory 负责暴露另一种情况。<a target="_blank" rel="noopener" href="https://www.rabbitmq.com/docs/4.1/publishers">同版本发布者指南的不可路由处理</a>说明，默认的 false 会让无路由消息被丢弃，或者送往已配置的备用交换机。true 会让消息退回，发布者必须安装退回处理器。给属性赋值却没有接收和保存退回结果，仍然可能让业务日志只剩一条成功确认。</p>
+<p>本例排除备用交换机，是为了让“没有匹配队列”具有单一解释。若系统实际配置了备用路由，必须同时检查它去了哪里。进入兜底队列可以符合运维策略，却不等于订单工作队列已经收到；是否允许把这种状态标为完成，应由交付合同决定。</p>
+<h2 id="让后来的-ACK-保留退回事实"><a href="#让后来的-ACK-保留退回事实" class="headerlink" title="让后来的 ACK 保留退回事实"></a>让后来的 ACK 保留退回事实</h2><p>发布账本至少要能区分代理拒绝、已退回和结果未知。为发布尝试保存 channel 与发布序号，给消息放入稳定的 message_id；序号用于关联确认，message_id 用于关联退回内容。重连后不能只凭相同数字，把旧 channel 的确认套到新 channel。</p>
+<p>下面是完整、未执行的 Python 3 合同示例。它不实现 AMQP 客户端，只对显式给定的事件轨迹分类；限制为单 channel、一次只有一条发布在途。输入中的 ACK 和 return 是教学数据，不能作为真实代理回执。真实应用还须接入客户端回调、连接生命周期和持久账本。</p>
+<pre><code class="python">&quot;&quot;&quot;Unexecuted local contract fixture. No AMQP connection or broker simulation.
+Single channel, one publication in flight; returns correlated by message_id.
+ACK correlation is channel+sequence; real asynchronous client needs full adapter.
+&quot;&quot;&quot;
+def classify(message_id, publish_key, events):
+    acked = returned = False
+    for kind, key in events:
+        if kind == &#39;return&#39; and key == message_id:
+            returned = True
+        elif kind == &#39;ack&#39; and key == publish_key:
+            acked = True
+        elif kind == &#39;nack&#39; and key == publish_key:
+            return &#39;broker_rejected&#39;
+        elif kind == &#39;disconnect&#39;:
+            break
+    if returned:
+        return &#39;returned_unroutable&#39;
+    return &#39;broker_accepted_no_return&#39; if acked else &#39;outcome_unknown&#39;
+
+cases = [
+    (&#39;p1&#39;, (&#39;ch1&#39;, 1), [(&#39;ack&#39;, (&#39;ch1&#39;, 1))]),
+    (&#39;p2&#39;, (&#39;ch1&#39;, 2), [(&#39;return&#39;, &#39;p2&#39;), (&#39;ack&#39;, (&#39;ch1&#39;, 2))]),
+    (&#39;p3&#39;, (&#39;ch1&#39;, 3), [(&#39;disconnect&#39;, None)]),
+]
+# Independently specified oracle. None certifies consumer completion.
+expected = [&#39;broker_accepted_no_return&#39;, &#39;returned_unroutable&#39;, &#39;outcome_unknown&#39;]
+if __name__ == &#39;__main__&#39;:
+    actual = [classify(*c) for c in cases]
+    assert actual == expected
+    print(actual)
+</code></pre>
+<p>第一条轨迹只有匹配的 ACK，分类为代理接受且没有退回证据；这仍不是消费者处理完成。第二条先退回再确认，最终必须保留无路由结果，不能因为最后一条事件叫 ACK 就改成成功。第三条在确认之前断线，分类为未知。未知不同于明确拒绝：消息可能已经被接受，只是回执没有到达，不能据此证明它没有发生。</p>
+<p>这三个预期不是从同一个分类函数反算出来的。它们分别依据文档中的可路由接受、无路由先退回后确认，以及断线不能证明接收结果的条件预先设定。账本设计应能把这些结果交给发件箱工作者，使其决定修复绑定、查询或重试，而不是把所有未成功情况都当成相同的网络错误。</p>
+<h2 id="最小示例省掉的并发责任"><a href="#最小示例省掉的并发责任" class="headerlink" title="最小示例省掉的并发责任"></a>最小示例省掉的并发责任</h2><p>生产发布者往往同时发送多条消息。确认可以用 multiple 覆盖同一 channel 上不大于给定序号的一组发布，而且不同消息的确认不保证按发布顺序到来。官方确认文档对此有专门的顺序说明。因此，不能把“收到第三个确认”直接映射为“第三条消息完成”，也不能用一张跨 channel 的整数表关联所有尝试。</p>
+<p>上述函数不处理 multiple，也不处理重连后的并行回调。若要扩展，应维护 channel 内尚未确认的序号集合，按确认范围更新对应尝试，再保留每条已经关联的退回事实；不能靠扩大一个最大成功数字跳过尚未解释的记录。这里给出的是需要实现的责任，没有声称这段教学函数已经覆盖它。</p>
+<p>重试还要区分消息身份和发送尝试身份。同一业务事件换连接重发，可以拥有新的 channel 序号，却不应无理由变成另一个业务事件。本站二〇二六年十月二十一日的<a href="/zh-CN/2026/10/21/cloudevents-identity-deduplication/">CloudEvents 身份去重</a>讨论接收端如何识别重送。本篇的路由判断不能替代那层去重，也不建议把所有未知结果盲目重新生成身份后发送。</p>
+<h2 id="没有消费者在线，mandatory-会把消息退回吗？"><a href="#没有消费者在线，mandatory-会把消息退回吗？" class="headerlink" title="没有消费者在线，mandatory 会把消息退回吗？"></a>没有消费者在线，mandatory 会把消息退回吗？</h2><p>不会仅仅因为消费者离线就退回。只要消息可以路由到已存在的队列，是否有在线消费者是另一项条件。若业务要求确认某个消费者确实执行了订单，需要消费者侧或业务侧的结果协议，不能把 mandatory 当作在线性检测。</p>
+<p><a target="_blank" rel="noopener" href="https://www.rabbitmq.com/docs/4.1/confirms">发布确认与消费确认的官方边界</a>说明，两种机制彼此独立、互不感知。发布端的 ACK 可以帮助结束发送尝试，却不会自动携带库存扣减或订单处理结果。对用户显示的“已受理”“已发送”“已处理”应从相应的权威状态取得。</p>
+<p>验证计划可以在独立 RabbitMQ 4.1 环境中建立一个已绑定与一个未匹配的 routing key，均使用已存在的交换机。先安装退回处理器并开启确认，再分别发布，保存消息身份、channel 序号、退回内容和确认先后。第二组应观察到退回不会被后来的确认覆盖；再保留队列但关闭消费者，检查发布确认与消费处理的区别。不存在的交换机属于 channel 错误，不能混进无路由对照里。</p>
+<p>还应在确认之前切断连接，核对应用是否保留未知结果和后续处理入口。这些检查尚未执行，没有兼容性或投递成功率结论。与<a href="/zh-CN/2026/10/09/postgres-transaction-outbox/">事务发件箱的交接责任</a>结合时，先写清每个发送终态对应什么证据，再让工作者据此更新记录；仅凭一个 ACK 布尔值结束交付，会丢掉本来已经可观察的路由失败。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.rabbitmq.com/docs/4.1/confirms" rel="noopener">Consumer Acknowledgements and Publisher Confirms | RabbitMQ</a></li><li><a target="_blank" href="https://www.rabbitmq.com/docs/4.1/publishers" rel="noopener">Publishers | RabbitMQ</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--rabbitmq" href="/zh-CN/tags/RabbitMQ/">RabbitMQ</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%B6%88%E6%81%AF%E8%B7%AF%E7%94%B1/">消息路由</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%8E%A5%E5%8F%A3%E8%AE%BE%E8%AE%A1/">接口设计</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Frabbitmq-routing-return-confirm-contract%2F&text=RabbitMQ%E5%B7%B2ACK%EF%BC%8C%E6%B6%88%E6%81%AF%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E6%9C%89%E8%BF%9B%E5%85%A5%E9%98%9F%E5%88%97%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Frabbitmq-routing-return-confirm-contract%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=RabbitMQ%E5%B7%B2ACK%EF%BC%8C%E6%B6%88%E6%81%AF%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E6%9C%89%E8%BF%9B%E5%85%A5%E9%98%9F%E5%88%97%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F07%2Frabbitmq-routing-return-confirm-contract%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/07/redis-eviction-authoritative-state/">
+              <span>上一篇</span>
+              <strong>缓存和业务真相共用Redis前，先安排内存耗尽的结果</strong>
+              <small>2026-11-07</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/07/questionnaire-cognitive-pretest-evidence/">
+              <span>下一篇</span>
+              <strong>小规模试发问卷，不能替代认知预试</strong>
+              <small>2026-11-07</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#无路由与拒绝处理，是两种结果">无路由与拒绝处理，是两种结果</a>
+          
+            <a class="toc-link toc-link--h2" href="#让后来的-ACK-保留退回事实">让后来的 ACK 保留退回事实</a>
+          
+            <a class="toc-link toc-link--h2" href="#最小示例省掉的并发责任">最小示例省掉的并发责任</a>
+          
+            <a class="toc-link toc-link--h2" href="#没有消费者在线，mandatory-会把消息退回吗？">没有消费者在线，mandatory 会把消息退回吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>258</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/25/postgres-join-using-output-contract/">JOIN USING 少了一列，接口为什么跟着变了？</a></h3>
+          <p>2026-10-25</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/07/api-resource-name-reference-scope/">把资源身份与访问URL分开，接口换版本时少一份歧义</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/07/beam-late-data-correction-contract/">让迟到数据改报表之前，先约定累积结果还是增量</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
