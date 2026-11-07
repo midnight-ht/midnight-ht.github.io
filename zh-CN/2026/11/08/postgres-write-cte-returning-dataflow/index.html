@@ -1,0 +1,442 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>WITH已经更新价格，后面的SELECT为什么仍读到旧值？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用两份完整临时表SQL核对基础表旧价、返回关系新价与审计输入，并界定重叠写入。">
+  
+  
+    <meta name="keywords" content="RETURNING,共享快照,写入CTE">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/08/postgres-write-cte-returning-dataflow/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="WITH已经更新价格，后面的SELECT为什么仍读到旧值？ | Midnight blog">
+    <meta property="og:description" content="用两份完整临时表SQL核对基础表旧价、返回关系新价与审计输入，并界定重叠写入。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/","name":"WITH已经更新价格，后面的SELECT为什么仍读到旧值？ | Midnight blog","description":"用两份完整临时表SQL核对基础表旧价、返回关系新价与审计输入，并界定重叠写入。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/","headline":"WITH已经更新价格，后面的SELECT为什么仍读到旧值？","description":"用两份完整临时表SQL核对基础表旧价、返回关系新价与审计输入，并界定重叠写入。","inLanguage":"zh-CN","datePublished":"2026-11-07T20:08:51.000Z","dateModified":"2026-11-07T20:08:51.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/queries-with.html"],"keywords":"PostgreSQL, CTE, 数据交接"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"WITH已经更新价格，后面的SELECT为什么仍读到旧值？","item":"https://www.zyweb.vip/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/" selected>zh-CN</option><option value="/en/2026/11/08/postgres-write-cte-returning-dataflow/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/" selected>zh-CN</option><option value="/en/2026/11/08/postgres-write-cte-returning-dataflow/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--postgresql">PostgreSQL</span>
+      <time datetime="2026-11-07T20:08:51.000Z">2026-11-08</time>
+    </div>
+
+    <h1>WITH已经更新价格，后面的SELECT为什么仍读到旧值？</h1>
+
+    
+      <p class="post-hero__summary">用两份完整临时表SQL核对基础表旧价、返回关系新价与审计输入，并界定重叠写入。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-07T20:08:51.000Z">2026-11-08</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/08/postgres-write-cte-returning-dataflow/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>同句基础表读取与返回关系不同。</li><li>从RETURNING交接本次修改值。</li><li>零消费行不会阻止数据修改CTE执行。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>同一条 WITH 里更新价格，再从基础表读取，不等于执行了两条先后可见的 SQL。在 PostgreSQL 18 的数据修改 CTE 中，子语句与主查询共享快照；要让本次修改后的值进入后续数据处理，应读取修改语句的 RETURNING 关系。把代码排在后面，不会自动建立一次读后写交接。</p>
+<p>假设后台要把商品一的价格从一百加到一百一十，同时把新价交给审计。开发者把 UPDATE 放进 changed，主查询却重新 SELECT 原表，结果拿到一百。如果只看 UPDATE 没报错，就可能把旧价写入本应表示本次结果的记录。这里的问题不是事务回滚，而是同一句命令中选择了哪个数据来源。</p>
+<h2 id="一份快照里有哪些输出可以读取？"><a href="#一份快照里有哪些输出可以读取？" class="headerlink" title="一份快照里有哪些输出可以读取？"></a>一份快照里有哪些输出可以读取？</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/queries-with.html#QUERIES-WITH-MODIFYING">PostgreSQL 18 的 WITH 查询第七点八点四节</a>说明，数据修改子语句与主查询使用相同快照，不能通过目标表看到彼此的修改；RETURNING 数据是它们传递变化的通道。文档给出更新价格后读取基础表与读取返回关系的对照。</p>
+<p>这不是说事务里永远看不到自己刚写的值。普通情况下，下一条 SQL 能看到本事务先前修改；本题限定的是一条含数据修改 CTE 的语句内部。二〇二六年十月二十日的<a href="/zh-CN/2026/10/20/postgres-read-committed-snapshots/">Read Committed 快照</a>讨论连续语句的可见性，不能把那个时间顺序直接套给 WITH 的书写顺序。</p>
+<p>下面是完整、未执行的隔离库教学输入。临时表在事务里建立，最后回滚；不包含序列、外部函数或触发器。两个商品提供一个受影响和一个不受影响的对照，返回来源名称使相同编号的两份价格可辨认。</p>
+<pre><code class="sql">BEGIN;
+CREATE TEMP TABLE price_probe (
+  id integer PRIMARY KEY,
+  amount integer NOT NULL
+);
+INSERT INTO price_probe VALUES (1,100),(2,200);
+
+WITH changed AS (
+  UPDATE price_probe SET amount=amount+10
+  WHERE id=1
+  RETURNING id,amount
+)
+SELECT &#39;base&#39; AS source,id,amount FROM price_probe WHERE id=1
+UNION ALL
+SELECT &#39;returned&#39;,id,amount FROM changed
+ORDER BY source;
+
+SELECT id,amount FROM price_probe ORDER BY id;
+ROLLBACK;
+</code></pre>
+<p>独立预期：第一份结果包含 base、一、一百，以及 returned、一、一百一十；第二条 SELECT 得到商品一的一百一十和商品二的二百。前两行展示同句不同数据入口，后一次查询展示跨语句的自身写入可见性。它们都不是已经运行的客户端输出，不应用注释伪装实际成功日志。</p>
+<h2 id="审计应接哪条数据流？"><a href="#审计应接哪条数据流？" class="headerlink" title="审计应接哪条数据流？"></a>审计应接哪条数据流？</h2><p>如果要保存本次实际更新的新价，审计 INSERT 可从 changed 读取明确列出的 id、amount，而不是重新从 price_probe 取一份猜测的新状态。下面给出完整的独立变体，同样未执行，需要在可丢弃环境单独运行，不应直接接在上段已经回滚后的语句中。</p>
+<pre><code class="sql">BEGIN;
+CREATE TEMP TABLE price_probe(id integer PRIMARY KEY, amount integer);
+CREATE TEMP TABLE price_audit(id integer, new_amount integer);
+INSERT INTO price_probe VALUES (1,100),(2,200);
+WITH changed AS (
+  UPDATE price_probe SET amount=amount+10 WHERE id=1
+  RETURNING id,amount
+)
+INSERT INTO price_audit(id,new_amount)
+SELECT id,amount FROM changed;
+SELECT id,new_amount FROM price_audit ORDER BY id;
+ROLLBACK;
+</code></pre>
+<p>预期审计只有一行，编号一、新价一百一十；不匹配的商品二不应凭空产生审计。把更新条件改为 id=99 时，changed 没有行，因此审计也没有输入行。需要返回“未找到”“状态冲突”还是允许无操作，应由业务定义，不能为了凑一份审计而用旧对象补出成功结果。</p>
+<p>这个写法建立的是同一数据库语句内的值交接。二〇二六年十月十六日的<a href="/zh-CN/2026/10/16/postgres-returning-commit-boundary/">RETURNING 与提交边界</a>提醒，返回值不单独证明显式事务已经提交。审计表写进了事务，也不代表外部消息已经交付；不要把这段 SQL 扩成跨系统原子性的保证。</p>
+<h2 id="能否按书写顺序连续修改同一行？"><a href="#能否按书写顺序连续修改同一行？" class="headerlink" title="能否按书写顺序连续修改同一行？"></a>能否按书写顺序连续修改同一行？</h2><p>官方文档指出，子语句的实际更新顺序不可预测；同一语句试图两次修改同一行不受支持，不能可靠预测哪次生效。这包括主语句与兄弟 CTE 的重叠修改。把第一段命名为 first、第二段命名为 second，只增加了阅读提示，没有增加数据库执行保证。</p>
+<p>若业务需要先更新一行，再基于更新结果执行第二次修改，可以考虑在一个明确事务里使用分别执行的语句，让下一步依据真正取得的状态作判断。仍需处理并发与约束，但至少没有把不受支持的同句重复修改当成顺序脚本。如果一次修改就能形成最终值，也可以先组合表达式，减少对同一目标的反复操作。</p>
+<p>不应为不确定写法编造一个固定预期值，再依赖某次实测碰巧吻合。负例的验收目标是识别并拒绝重叠写入设计，而不是寻找一种执行计划让它暂时按期望运行。可通过检查各写入条件和目标身份，把可能相交的行集作为代码审查项。</p>
+<p>站内二〇二六年十月二十一日的<a href="/zh-CN/2026/10/21/postgres-cte-materialization-plan/">CTE 物化与过滤下推</a>限定了普通无副作用 SELECT 的优化取舍。MATERIALIZED 或 NOT MATERIALIZED 不是让数据修改 CTE 变成按行号顺序脚本的工具，本题应按数据修改章节的规则判断。</p>
+<p>可把零消费者预期写成另一份完整输入，避免只在文字中假设外层没有取数据。主查询返回零行后，第二条查询仍应读到编号一、价格一百一十。再从头初始化，只把更新条件改为编号九十九，第二条查询则应保留一百。两条控制仅改变匹配行条件，分别证明“没有消费”与“没有修改对象”不是同一原因；测试工具不应看到第一次零行就跳过后续查询。执行时仍需保留实际输出，不把这些推演写成测得结果。</p>
+<pre><code class="sql">BEGIN;
+CREATE TEMP TABLE zero_consumer(id integer PRIMARY KEY, amount integer);
+INSERT INTO zero_consumer VALUES (1,100);
+WITH changed AS (
+  UPDATE zero_consumer SET amount=amount+10 WHERE id=1
+  RETURNING id,amount
+)
+SELECT id,amount FROM changed WHERE false;
+SELECT id,amount FROM zero_consumer ORDER BY id;
+ROLLBACK;
+</code></pre>
+<h2 id="外层查询不读取-changed，更新还会执行吗？"><a href="#外层查询不读取-changed，更新还会执行吗？" class="headerlink" title="外层查询不读取 changed，更新还会执行吗？"></a>外层查询不读取 changed，更新还会执行吗？</h2><p>会。数据修改 CTE 执行一次且执行完成，不由外层是否消费返回行决定。不能把普通 SELECT CTE 按需读取的直觉带进来，也不能指望外层 LIMIT 零或返回零行就阻止内部写入。</p>
+<p>拟议负例可从原价一百重新建表，执行含 UPDATE 的 CTE，但让主 SELECT 使用 WHERE false。即使客户端收到零行，也应检查下一条查询中价格已为一百一十。这个用例尚未运行，执行前必须确认在隔离库。正式验收应同时保留基础表入口、返回关系入口、下一语句、零修改行和零消费行的预期；每一项都指向一个不同的误判，而不是只给某条 SQL 贴“事务正确”的标签。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/queries-with.html" rel="noopener">PostgreSQL 18 — 7.8 WITH Queries, 7.8.4 Data-Modifying Statements</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--cte" href="/zh-CN/tags/CTE/">CTE</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%95%B0%E6%8D%AE%E4%BA%A4%E6%8E%A5/">数据交接</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F08%2Fpostgres-write-cte-returning-dataflow%2F&text=WITH%E5%B7%B2%E7%BB%8F%E6%9B%B4%E6%96%B0%E4%BB%B7%E6%A0%BC%EF%BC%8C%E5%90%8E%E9%9D%A2%E7%9A%84SELECT%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E8%AF%BB%E5%88%B0%E6%97%A7%E5%80%BC%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F08%2Fpostgres-write-cte-returning-dataflow%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=WITH%E5%B7%B2%E7%BB%8F%E6%9B%B4%E6%96%B0%E4%BB%B7%E6%A0%BC%EF%BC%8C%E5%90%8E%E9%9D%A2%E7%9A%84SELECT%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E8%AF%BB%E5%88%B0%E6%97%A7%E5%80%BC%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F08%2Fpostgres-write-cte-returning-dataflow%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/08/protobuf-presence-zero-update/">
+              <span>上一篇</span>
+              <strong>配额改成零为何没有生效？检查Protobuf合并时的字段存在性</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/08/postgres-collation-refresh-rebuild-proof/">
+              <span>下一篇</span>
+              <strong>collation警告消失后，旧索引就恢复了吗？</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#一份快照里有哪些输出可以读取？">一份快照里有哪些输出可以读取？</a>
+          
+            <a class="toc-link toc-link--h2" href="#审计应接哪条数据流？">审计应接哪条数据流？</a>
+          
+            <a class="toc-link toc-link--h2" href="#能否按书写顺序连续修改同一行？">能否按书写顺序连续修改同一行？</a>
+          
+            <a class="toc-link toc-link--h2" href="#外层查询不读取-changed，更新还会执行吗？">外层查询不读取 changed，更新还会执行吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>258</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/08/postgres-collation-refresh-rebuild-proof/">collation警告消失后，旧索引就恢复了吗？</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/08/postgres-logical-cutover-inventory/">把PostgreSQL逻辑迁移验收拆成行、结构和下一次写入</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/07/postgres-date-bin-origin-stride/">都按十五分钟统计，date_bin 的桶边界为什么不同？</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

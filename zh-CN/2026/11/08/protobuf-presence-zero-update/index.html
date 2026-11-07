@@ -1,0 +1,429 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>配额改成零为何没有生效？检查Protobuf合并时的字段存在性 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="对照显式与隐式存在性及旧节点重新编码，检查配额保持、清零和改值三条更新意图。">
+  
+  
+    <meta name="keywords" content="proto3 optional,MergeFrom,FieldMask">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/08/protobuf-presence-zero-update/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/08/protobuf-presence-zero-update/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/08/protobuf-presence-zero-update/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/08/protobuf-presence-zero-update/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="配额改成零为何没有生效？检查Protobuf合并时的字段存在性 | Midnight blog">
+    <meta property="og:description" content="对照显式与隐式存在性及旧节点重新编码，检查配额保持、清零和改值三条更新意图。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/08/protobuf-presence-zero-update/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/08/protobuf-presence-zero-update/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/08/protobuf-presence-zero-update/","name":"配额改成零为何没有生效？检查Protobuf合并时的字段存在性 | Midnight blog","description":"对照显式与隐式存在性及旧节点重新编码，检查配额保持、清零和改值三条更新意图。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/08/protobuf-presence-zero-update/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/08/protobuf-presence-zero-update/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/08/protobuf-presence-zero-update/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/08/protobuf-presence-zero-update/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/08/protobuf-presence-zero-update/","headline":"配额改成零为何没有生效？检查Protobuf合并时的字段存在性","description":"对照显式与隐式存在性及旧节点重新编码，检查配额保持、清零和改值三条更新意图。","inLanguage":"zh-CN","datePublished":"2026-11-07T20:08:51.000Z","dateModified":"2026-11-07T20:08:51.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://protobuf.dev/programming-guides/field_presence/"],"keywords":"Protobuf, 字段存在性, RPC更新"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/08/protobuf-presence-zero-update/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"配额改成零为何没有生效？检查Protobuf合并时的字段存在性","item":"https://www.zyweb.vip/zh-CN/2026/11/08/protobuf-presence-zero-update/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/08/protobuf-presence-zero-update/" selected>zh-CN</option><option value="/en/2026/11/08/protobuf-presence-zero-update/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/08/protobuf-presence-zero-update/" selected>zh-CN</option><option value="/en/2026/11/08/protobuf-presence-zero-update/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--protobuf">Protobuf</span>
+      <time datetime="2026-11-07T20:08:51.000Z">2026-11-08</time>
+    </div>
+
+    <h1>配额改成零为何没有生效？检查Protobuf合并时的字段存在性</h1>
+
+    
+      <p class="post-hero__summary">对照显式与隐式存在性及旧节点重新编码，检查配额保持、清零和改值三条更新意图。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-07T20:08:51.000Z">2026-11-08</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/08/protobuf-presence-zero-update/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/08/protobuf-presence-zero-update/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>零值与未提供需要分别表示。</li><li>旧定义重新编码可能丢失默认值的存在性。</li><li>按实际转发路径验收合并结果。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>配额原为九，更新消息的读取值是零，合并后仍可能是九。对采用隐式存在性的 Protobuf 标量，零既可能代表调用方要求清零，也可能代表字段从未设置。要把清零做成可靠的更新动作，应保存字段存在性，或另行传递由更新入口实际执行的字段掩码。</p>
+<p>这个判断针对消息合并与重新编码，不是说业务代码永远不能直接赋零。若服务端无条件把读取值覆盖到旧对象，清零也许成功，却又可能把“没有修改配额”的请求误当成清零。两种实现各自丢失一种意图。先要求接口同时表示保持九、设成零、设成四，再检查消息格式是否能区分三者。</p>
+<h2 id="零值为什么可能没有进入合并？"><a href="#零值为什么可能没有进入合并？" class="headerlink" title="零值为什么可能没有进入合并？"></a>零值为什么可能没有进入合并？</h2><p><a target="_blank" rel="noopener" href="https://protobuf.dev/programming-guides/field_presence/">官方字段存在性说明</a>区分隐式与显式规则：普通 proto3 基本标量没有显式存在性，默认值不会参与序列化，也不会作为来源合并；带 optional 的基本标量会保存是否设置，明确设置的默认值也参与合并。这里采用 proto3，不把消息字段、oneof 或 Editions 的默认规则混进同一结论。</p>
+<p>读取器给出一个整数，只回答现在可以读到什么值。更新处理还要知道调用方是否指定了它。若配额消息没有保存这份信息，服务端不能从读取到零倒推出原意。给零另起一个“清空”别名也没有帮助：编码规则仍然面对同一个数值，除非协议增加了可辨认的操作或存在性。</p>
+<p>下面是未编译、未运行的完整教学探针。需要先在隔离目录准备匹配的 protoc 与 Python protobuf 运行库，再生成 quota_pb2.py；此处没有依赖安装或服务调用记录。两个不同消息名共享字段一的编码，便于模拟旧定义转发，并非让两个同名声明进入同一次编译。</p>
+<pre><code class="proto">// quota.proto
+syntax = &quot;proto3&quot;;
+message ImplicitQuota { int32 quota = 1; }
+message ExplicitQuota { optional int32 quota = 1; }
+</code></pre>
+<pre><code class="text">protoc --python_out=. quota.proto
+python probe.py
+</code></pre>
+<pre><code class="python"># probe.py — unexecuted; requires generated quota_pb2.py
+from quota_pb2 import ExplicitQuota, ImplicitQuota
+
+# Each literal oracle contains final value and presence where supported.
+cases = [
+    (ExplicitQuota, ExplicitQuota(quota=0), (0, True)),
+    (ExplicitQuota, ExplicitQuota(), (9, True)),
+    (ImplicitQuota, ImplicitQuota(quota=0), (9, None)),
+    (ImplicitQuota, ImplicitQuota(quota=4), (4, None)),
+]
+for message_type, update, expected in cases:
+    target = message_type(quota=9)
+    target.MergeFrom(update)
+    presence = target.HasField(&quot;quota&quot;) if message_type is ExplicitQuota else None
+    assert (target.quota, presence) == expected
+
+for sent_value, expected in [(0, (0, False)), (4, (4, True))]:
+    sender = ExplicitQuota(quota=sent_value)
+    old_forwarder = ImplicitQuota()
+    old_forwarder.ParseFromString(sender.SerializeToString())
+    receiver = ExplicitQuota()
+    receiver.ParseFromString(old_forwarder.SerializeToString())
+    assert (receiver.quota, receiver.HasField(&quot;quota&quot;)) == expected
+</code></pre>
+<p>预期独立于探针计算写出：显式零合并得到零，隐式零合并仍是九，缺失字段合并仍是九。转发路径中的数值四应保留存在性；数值零经隐式节点重新编码后，接收端虽然仍读到零，却不再认为字段存在。验收不能只断言整数相等，否则最后这条故障路径会被放过。</p>
+<p>还要增加一个非零对照：隐式字段明确设为四，合并后应得到四，而不是仍为九。这个输入能区分“整个合并过程没有运行”和“默认值没有作为来源参与”两种故障。表中的每个预期同时列出最终值与可查询的存在性；隐式消息用 None 标记不提供该查询，不能把它解释为字段不存在。若实际程序连非零更新也失败，应回查模式、调用入口和业务覆盖逻辑，不应把全部异常归因于默认值规则。</p>
+<h2 id="二进制仍可读，为什么意图已经改变？"><a href="#二进制仍可读，为什么意图已经改变？" class="headerlink" title="二进制仍可读，为什么意图已经改变？"></a>二进制仍可读，为什么意图已经改变？</h2><p>官方说明给出了显式与隐式定义之间的往返例子。变化可以在二进制层保持兼容，但显式发送的默认值经过隐式定义重新序列化后可能消失。旧节点不需要报解析错误，也可能已经改变了后续更新的含义。因此，“新客户端到新服务端通过”只覆盖一条路径，没有覆盖网关、队列消费者或批处理作业重新编码消息的路径。</p>
+<p>这里要盘点的是实际的解析再编码节点，而不是所有经过的网络设备。只转发原始字节的代理，与按旧模式解码后重建消息的程序，承担不同风险。应在架构图上标出哪一处拥有生成代码、哪一处仅搬运字节，再决定混合版本矩阵。不能因为存在一个旧客户端，就无条件宣布全链路清零失败。</p>
+<p>站内二〇二六年十一月五日的<a href="/zh-CN/2026/11/05/protobuf-reserved-field-evolution/">字段编号退役</a>保护旧编号不被分配给新含义。本题保留编号和配额含义不变，追问的是活跃字段是否保留“明确设置”的事实。reserved 不负责补回这份事实，给字段换编号也不是必要修复。</p>
+<h2 id="选择存在性还是字段掩码？"><a href="#选择存在性还是字段掩码？" class="headerlink" title="选择存在性还是字段掩码？"></a>选择存在性还是字段掩码？</h2><p>新协议能够控制有效读写者时，可让需要区分缺失与默认值的标量使用显式存在性，并让处理器按存在性更新。对于已有隐式协议，官方合并讨论提到 FieldMask 一类外部机制：调用方明确指定修改哪些字段，服务端按掩码把对应读取值应用进去。掩码表达的是操作范围，不能只加在文档里而不改变更新入口。</p>
+<p>例如配额零配合掩码中的 quota，可以表示清零；相同读取值但掩码没有 quota，则保持原值。处理器还应校验允许修改的字段，不能让客户端借掩码触达管理字段。这个建议不是一份已经实现的掩码服务，也没有证明某个旧转发器会保留新增掩码字段；这条路径同样要验证。</p>
+<p>不要把 optional 当成请求业务必填。它保存存在性，是否必须提供由接口规则决定。重复字段与 map 也没有同样的空集合与未提供区别；如果需求涉及清空整个集合，必须另行定义更新协议。把标量的 HasField 检查复制到集合，会得到不适用的代码。</p>
+<h2 id="旧转发节点暂时不能升级，还能可靠地清零吗？"><a href="#旧转发节点暂时不能升级，还能可靠地清零吗？" class="headerlink" title="旧转发节点暂时不能升级，还能可靠地清零吗？"></a>旧转发节点暂时不能升级，还能可靠地清零吗？</h2><p>可以考虑显式更新掩码，但要让实际更新入口读取掩码并执行清零；只在消息里加一个掩码字段不会改变旧节点的业务逻辑。还需确认中间节点保存掩码，并分别测试掩码存在、缺失、未知字段与不允许字段的结果。否则只是把原来的存在性丢失搬到了另一字段。</p>
+<p>验收记录应保留模式、编译器、运行库、三类输入及每个有效节点的原始字节。用同一目标九分别执行保持、清零和改四，检查最终值与存在性；再经过旧定义转发重做。没有运行这些探针前，只能交付文档支持的预期，不能写混合部署已通过。实现更新时先选出“是否修改”的依据，再读取要写入的数值。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://protobuf.dev/programming-guides/field_presence/" rel="noopener">Application Note: Field Presence | Protocol Buffers Documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--protobuf" href="/zh-CN/tags/Protobuf/">Protobuf</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%AD%97%E6%AE%B5%E5%AD%98%E5%9C%A8%E6%80%A7/">字段存在性</a>
+          
+            <a class="tag tag--rpc" href="/zh-CN/tags/RPC%E6%9B%B4%E6%96%B0/">RPC更新</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F08%2Fprotobuf-presence-zero-update%2F&text=%E9%85%8D%E9%A2%9D%E6%94%B9%E6%88%90%E9%9B%B6%E4%B8%BA%E4%BD%95%E6%B2%A1%E6%9C%89%E7%94%9F%E6%95%88%EF%BC%9F%E6%A3%80%E6%9F%A5Protobuf%E5%90%88%E5%B9%B6%E6%97%B6%E7%9A%84%E5%AD%97%E6%AE%B5%E5%AD%98%E5%9C%A8%E6%80%A7" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F08%2Fprotobuf-presence-zero-update%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E9%85%8D%E9%A2%9D%E6%94%B9%E6%88%90%E9%9B%B6%E4%B8%BA%E4%BD%95%E6%B2%A1%E6%9C%89%E7%94%9F%E6%95%88%EF%BC%9F%E6%A3%80%E6%9F%A5Protobuf%E5%90%88%E5%B9%B6%E6%97%B6%E7%9A%84%E5%AD%97%E6%AE%B5%E5%AD%98%E5%9C%A8%E6%80%A7&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F08%2Fprotobuf-presence-zero-update%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/08/react-key-editor-draft-reset/">
+              <span>上一篇</span>
+              <strong>记录切换了，React 编辑框为什么还留着上一条草稿？</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/">
+              <span>下一篇</span>
+              <strong>WITH已经更新价格，后面的SELECT为什么仍读到旧值？</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#零值为什么可能没有进入合并？">零值为什么可能没有进入合并？</a>
+          
+            <a class="toc-link toc-link--h2" href="#二进制仍可读，为什么意图已经改变？">二进制仍可读，为什么意图已经改变？</a>
+          
+            <a class="toc-link toc-link--h2" href="#选择存在性还是字段掩码？">选择存在性还是字段掩码？</a>
+          
+            <a class="toc-link toc-link--h2" href="#旧转发节点暂时不能升级，还能可靠地清零吗？">旧转发节点暂时不能升级，还能可靠地清零吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>258</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/protobuf-reserved-field-evolution/">Protobuf 删除字段后，为什么还要 reserved 编号和名字？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/08/avro-reader-default-replay-meaning/">历史Avro事件多出一个字段，默认值是原始事实吗？</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/08/bloom-positive-exact-verification/">Bloom filter说用户名已存在，可以直接拒绝注册吗？</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

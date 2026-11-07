@@ -1,0 +1,441 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>After rotation leaves an empty log, check which file the writer still holds | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Use a local file-sequence exercise to explain retained writers and the copytruncate loss window, without presenting it as a real logrotate run.">
+  
+  
+    <meta name="keywords" content="file descriptors,copytruncate,log reopening">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/08/logrotate-open-descriptor-copytruncate-loss/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/08/logrotate-open-descriptor-copytruncate-loss/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="After rotation leaves an empty log, check which file the writer still holds | Midnight blog">
+    <meta property="og:description" content="Use a local file-sequence exercise to explain retained writers and the copytruncate loss window, without presenting it as a real logrotate run.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/08/logrotate-open-descriptor-copytruncate-loss/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/08/logrotate-open-descriptor-copytruncate-loss/#webpage","url":"https://www.zyweb.vip/en/2026/11/08/logrotate-open-descriptor-copytruncate-loss/","name":"After rotation leaves an empty log, check which file the writer still holds | Midnight blog","description":"Use a local file-sequence exercise to explain retained writers and the copytruncate loss window, without presenting it as a real logrotate run.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/08/logrotate-open-descriptor-copytruncate-loss/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/08/logrotate-open-descriptor-copytruncate-loss/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/08/logrotate-open-descriptor-copytruncate-loss/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/08/logrotate-open-descriptor-copytruncate-loss/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/08/logrotate-open-descriptor-copytruncate-loss/","headline":"After rotation leaves an empty log, check which file the writer still holds","description":"Use a local file-sequence exercise to explain retained writers and the copytruncate loss window, without presenting it as a real logrotate run.","inLanguage":"en","datePublished":"2026-11-07T20:08:51.000Z","dateModified":"2026-11-07T20:08:51.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://raw.githubusercontent.com/logrotate/logrotate/dcf2239d28b94f56c6375f7bad44a3dded7924eb/logrotate.8.in","https://man7.org/linux/man-pages/man2/rename.2.html"],"keywords":"logrotate, Logging, Operations"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/08/logrotate-open-descriptor-copytruncate-loss/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"After rotation leaves an empty log, check which file the writer still holds","item":"https://www.zyweb.vip/en/2026/11/08/logrotate-open-descriptor-copytruncate-loss/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/">zh-CN</option><option value="/en/2026/11/08/logrotate-open-descriptor-copytruncate-loss/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/">zh-CN</option><option value="/en/2026/11/08/logrotate-open-descriptor-copytruncate-loss/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--logrotate">logrotate</span>
+      <time datetime="2026-11-07T20:08:51.000Z">2026-11-08</time>
+    </div>
+
+    <h1>After rotation leaves an empty log, check which file the writer still holds</h1>
+
+    
+      <p class="post-hero__summary">Use a local file-sequence exercise to explain retained writers and the copytruncate loss window, without presenting it as a real logrotate run.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-07T20:08:51.000Z">2026-11-08</time> · Estimated read 16 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/08/logrotate-open-descriptor-copytruncate-loss/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Rename and new-path creation do not change an existing open descriptor.</li><li>Records added between copy and truncation may be lost; create has no effect with copytruncate.</li><li>Validate application reopening, file contents and collection outcomes separately.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Renaming app.log and creating a new file with that name does not redirect an open writer. Rotation also needs a reopen contract, or the writer may continue appending to the old file. When the new log is empty, identify the file the process actually holds before deciding that it produced no logs.</p>
+<h2 id="A-changed-name-does-not-replace-an-open-file"><a href="#A-changed-name-does-not-replace-an-open-file" class="headerlink" title="A changed name does not replace an open file"></a>A changed name does not replace an open file</h2><p><a target="_blank" rel="noopener" href="https://man7.org/linux/man-pages/man2/rename.2.html">The Linux rename manual</a> says open file descriptors are unaffected by rename. The checked page belongs to Linux man-pages 6.19, with a manual date of 8 February 2026 and HTML rendering dated 9 September. This analysis uses local POSIX file semantics, without claiming verified network-filesystem failure behavior or defaults on other operating systems.</p>
+<p>An application opening app.log holds a descriptor. Rotation renames that path to app.log.1 and creates a new file at the original pathname. There are now two names and two file objects, while the original descriptor still identifies the original object. Further appends enter the renamed file. Reading only the new pathname can make the application appear silent even as its old file grows.</p>
+<p><a target="_blank" rel="noopener" href="https://raw.githubusercontent.com/logrotate/logrotate/dcf2239d28b94f56c6375f7bad44a3dded7924eb/logrotate.8.in">The pinned upstream logrotate manual source</a> says create makes the same-named new file after rotation and before postrotate. This article pins the file commit dated 4 March 2026. It remains an upstream template containing a version placeholder, not evidence of an installed distribution release. A created pathname does not prove the application closed its old descriptor and reopened that path.</p>
+<h2 id="Establish-content-expectations-with-a-fixed-sequence"><a href="#Establish-content-expectations-with-a-fixed-sequence" class="headerlink" title="Establish content expectations with a fixed sequence"></a>Establish content expectations with a fixed sequence</h2><p>The following complete Python example is unexecuted. It uses an automatically cleaned temporary directory, calls no logrotate executable, sends no process signals and touches no production logs. The first section demonstrates rename and reopen. The second deliberately inserts a record between copying and truncation, without depending on a chance race.</p>
+<pre><code class="python">from pathlib import Path
+from tempfile import TemporaryDirectory
+import shutil
+
+def emit(stream, record):
+    stream.write(record + &quot;\n&quot;)
+    stream.flush()
+
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    active = root / &quot;app.log&quot;
+    rotated = root / &quot;app.log.1&quot;
+
+    def state():
+        return tuple(path.read_text() for path in (rotated, active))
+
+    observed = {}
+    with active.open(&quot;a&quot;) as writer:
+        emit(writer, &quot;A&quot;)
+        active.rename(rotated)
+        active.write_text(&quot;&quot;)
+        emit(writer, &quot;B&quot;)
+    observed[&quot;renamed&quot;] = state()
+    with active.open(&quot;a&quot;) as reopened:
+        emit(reopened, &quot;C&quot;)
+    observed[&quot;reopened&quot;] = state()
+
+    active.write_text(&quot;A\n&quot;)
+    shutil.copyfile(active, rotated)
+    with active.open(&quot;a&quot;) as late_writer:
+        emit(late_writer, &quot;B&quot;)
+    with active.open(&quot;w&quot;):
+        pass
+    observed[&quot;truncated&quot;] = state()
+    assert observed == {
+        &quot;renamed&quot;: (&quot;A\nB\n&quot;, &quot;&quot;),
+        &quot;reopened&quot;: (&quot;A\nB\n&quot;, &quot;C\n&quot;),
+        &quot;truncated&quot;: (&quot;A\n&quot;, &quot;&quot;),
+    }
+</code></pre>
+<p>A candidate command is <code>python3 rotation_probe.py</code> after saving the file in an isolated directory. Retain the interpreter version and actual exit result. Assertions are not passing evidence without execution. This fixture does not emulate a daemon’s reopen interface: closing writer and opening active again simply makes the object change explicit.</p>
+<p>emit keeps record append and flush together. state reads a complete old-file/new-file snapshot; observed names the three checkpoints renamed, reopened and truncated for comparison with predetermined contents. Opening and closing the original in w mode explicitly performs the final truncation. The first section’s independent expectation is an old file containing A and B, an empty new file before reopening and C alone in that new file afterward. B uses the original descriptor, while C uses a newly opened path. Checking only that both files exist misses the handoff. Identical contents could instead indicate a preparation or path error; preserve the input sequence.</p>
+<p>The second section copies a file containing A, appends B and truncates the original. The copy contains A and the original is empty, leaving B in neither. This is a deterministic ordering model, not a measurement of lost records on a server or a concurrent stress test. Successful copy and successful truncation can coexist with loss between those operations.</p>
+<h2 id="Which-coordination-does-copytruncate-replace"><a href="#Which-coordination-does-copytruncate-replace" class="headerlink" title="Which coordination does copytruncate replace?"></a>Which coordination does copytruncate replace?</h2><p>The upstream manual describes copytruncate as copying and then truncating the original file in place, useful when a program cannot be told to close its log. It explicitly warns that records may be lost in the short interval between the operations. The create directive has no effect because the original file remains. Combining them does not provide both retained descriptors and a new-file handoff.</p>
+<p>This handles retained writers without providing lossless coordination. Measuring the interval and observing loss under a specific workload requires real execution. A short interval is not permission to lose one business record. Diagnostic-log tolerance depends on investigation needs; a potentially lossy file should not be the sole record establishing an order’s state.</p>
+<p>The alternative is rename, create and the application’s documented reopen operation. Some applications expose a command or signal; others do not. HUP is not a universal reopen instruction: it may do nothing relevant, terminate the program or have another effect. Check version-specific documentation, target process, completion timing and failure results before connecting the operation to rotation.</p>
+<h2 id="Will-fixing-permissions-redirect-an-existing-writer-to-the-new-file"><a href="#Will-fixing-permissions-redirect-an-existing-writer-to-the-new-file" class="headerlink" title="Will fixing permissions redirect an existing writer to the new file?"></a>Will fixing permissions redirect an existing writer to the new file?</h2><p>Not automatically. Permissions affect whether a later open succeeds; an existing descriptor still refers to the old file, so verify the actual reopen action and its failure outcome.</p>
+<p>This adds a failure path: postrotate notified the application, but the application cannot open the new file because of ownership or permissions. A finished rotation script does not establish writer handoff. Check actual permissions, the reopen outcome and where subsequent unique sequence markers land. Do not turn later success after a permission repair into a claim that the first rotation never failed.</p>
+<p>Compressing or moving the old file while the application still writes it also needs review. A collector may retain an old descriptor as well. Coordinate retention with both parties’ handoffs. No universal compression delay or filename-based deletion policy is provided here. Establish that writers and readers have completed the transition before choosing retention actions.</p>
+<h2 id="Connect-writer-identity-to-validation"><a href="#Connect-writer-identity-to-validation" class="headerlink" title="Connect writer identity to validation"></a>Connect writer identity to validation</h2><p>An isolated validation plan gives each bounded event a run identifier and sequence number before, during and after rotation. Record paths, file identities, process descriptors and both files’ contents, alongside separate exit results for rotation and reopening. A decrease in app.log size alone cannot distinguish a successful handoff, continued old-file writes or data loss.</p>
+<p>Also establish whether collection received the records. File presence is not query visibility, and missing query results need not originate in the rotation window. <a href="/en/2026/11/05/journald-rate-limit-missing-events/">journald rate limiting</a> addresses another ingestion loss point, while <a href="/en/2026/10/16/docker-log-driver-existing-container/">Docker logging configuration</a> addresses which settings an existing instance uses. Those conclusions are not interchangeable.</p>
+<p>Choose based on reliable reopen support, acceptable record loss and observable handoff. When reopening is supported, assess that coordinated path. Otherwise explicitly accept the copytruncate window or change the output arrangement rather than describing convenience as a lossless guarantee. No logrotate run, production configuration change or complete logging-chain verification is claimed. Account for pathnames, descriptors and each test record’s destination before declaring writer handoff complete.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://raw.githubusercontent.com/logrotate/logrotate/dcf2239d28b94f56c6375f7bad44a3dded7924eb/logrotate.8.in" rel="noopener">logrotate(8) upstream manual source at dcf2239d28b9</a></li><li><a target="_blank" href="https://man7.org/linux/man-pages/man2/rename.2.html" rel="noopener">rename(2) — Linux man-pages6.19,2026-02-08</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--logrotate" href="/en/tags/logrotate/">logrotate</a>
+          
+            <a class="tag tag--logging" href="/en/tags/Logging/">Logging</a>
+          
+            <a class="tag tag--operations" href="/en/tags/Operations/">Operations</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--delivery" href="/en/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F08%2Flogrotate-open-descriptor-copytruncate-loss%2F&text=After%20rotation%20leaves%20an%20empty%20log%2C%20check%20which%20file%20the%20writer%20still%20holds" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F08%2Flogrotate-open-descriptor-copytruncate-loss%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=After%20rotation%20leaves%20an%20empty%20log%2C%20check%20which%20file%20the%20writer%20still%20holds&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F08%2Flogrotate-open-descriptor-copytruncate-loss%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/08/oauth-refresh-rotation-reuse-family/">
+              <span>Previous Post</span>
+              <strong>Why revoke the new refresh token when the old one is already invalid?</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/08/json-patch-array-coordinate-sequence/">
+              <span>Next Post</span>
+              <strong>Why did JSON Patch delete B and E when B and D were selected?</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#A-changed-name-does-not-replace-an-open-file">A changed name does not replace an open file</a>
+          
+            <a class="toc-link toc-link--h2" href="#Establish-content-expectations-with-a-fixed-sequence">Establish content expectations with a fixed sequence</a>
+          
+            <a class="toc-link toc-link--h2" href="#Which-coordination-does-copytruncate-replace">Which coordination does copytruncate replace?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Will-fixing-permissions-redirect-an-existing-writer-to-the-new-file">Will fixing permissions redirect an existing writer to the new file?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Connect-writer-identity-to-validation">Connect writer identity to validation</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>258</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/08/systemd-restart-start-limit-recovery/">An expired start-limit window does not schedule a systemd retry</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/08/otel-log-event-observed-timestamp/">Choose log timestamps separately for incident and collection questions</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/08/systemd-execcondition-skip-failure/">Why does ExecCondition exit 1 skip a service without marking it failed?</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

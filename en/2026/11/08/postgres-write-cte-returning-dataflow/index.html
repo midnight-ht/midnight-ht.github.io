@@ -1,0 +1,442 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why can SELECT still read old prices after a write CTE? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Use complete temporary-table SQL to compare old base values, new returned values and audit inputs, including overlapping-write limits.">
+  
+  
+    <meta name="keywords" content="RETURNING,shared snapshot,write CTE">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/08/postgres-write-cte-returning-dataflow/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/08/postgres-write-cte-returning-dataflow/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why can SELECT still read old prices after a write CTE? | Midnight blog">
+    <meta property="og:description" content="Use complete temporary-table SQL to compare old base values, new returned values and audit inputs, including overlapping-write limits.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/08/postgres-write-cte-returning-dataflow/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/08/postgres-write-cte-returning-dataflow/#webpage","url":"https://www.zyweb.vip/en/2026/11/08/postgres-write-cte-returning-dataflow/","name":"Why can SELECT still read old prices after a write CTE? | Midnight blog","description":"Use complete temporary-table SQL to compare old base values, new returned values and audit inputs, including overlapping-write limits.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/08/postgres-write-cte-returning-dataflow/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/08/postgres-write-cte-returning-dataflow/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/08/postgres-write-cte-returning-dataflow/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/08/postgres-write-cte-returning-dataflow/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/08/postgres-write-cte-returning-dataflow/","headline":"Why can SELECT still read old prices after a write CTE?","description":"Use complete temporary-table SQL to compare old base values, new returned values and audit inputs, including overlapping-write limits.","inLanguage":"en","datePublished":"2026-11-07T20:08:51.000Z","dateModified":"2026-11-07T20:08:51.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.postgresql.org/docs/18/queries-with.html"],"keywords":"PostgreSQL, CTE, Data flow"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/08/postgres-write-cte-returning-dataflow/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why can SELECT still read old prices after a write CTE?","item":"https://www.zyweb.vip/en/2026/11/08/postgres-write-cte-returning-dataflow/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/">zh-CN</option><option value="/en/2026/11/08/postgres-write-cte-returning-dataflow/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/">zh-CN</option><option value="/en/2026/11/08/postgres-write-cte-returning-dataflow/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--postgresql">PostgreSQL</span>
+      <time datetime="2026-11-07T20:08:51.000Z">2026-11-08</time>
+    </div>
+
+    <h1>Why can SELECT still read old prices after a write CTE?</h1>
+
+    
+      <p class="post-hero__summary">Use complete temporary-table SQL to compare old base values, new returned values and audit inputs, including overlapping-write limits.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-07T20:08:51.000Z">2026-11-08</time> · Estimated read 14 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/08/postgres-write-cte-returning-dataflow/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/08/postgres-write-cte-returning-dataflow/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Base-table scans and returned relations differ within one statement.</li><li>Pass modified values through RETURNING.</li><li>Zero consumed rows do not prevent a write CTE.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Updating prices in a WITH clause and selecting the base table is not the same as two sequential SQL statements. PostgreSQL 18 data-modifying CTE substatements and the main query share a snapshot. To pass values produced by the modification into the rest of that statement, read its RETURNING relation. Text appearing later does not establish sequential visibility.</p>
+<p>Suppose an admin operation adds ten to product one’s price of 100 and needs to audit the new price. The developer puts UPDATE in changed but makes the main query select the original table. It can read 100. Seeing the update succeed does not prove that the consumer selected its new value. The immediate issue is the source of data within one statement, not a rollback.</p>
+<h2 id="Which-outputs-are-available-within-the-snapshot"><a href="#Which-outputs-are-available-within-the-snapshot" class="headerlink" title="Which outputs are available within the snapshot?"></a>Which outputs are available within the snapshot?</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/queries-with.html#QUERIES-WITH-MODIFYING">Section 7.8.4 of the PostgreSQL 18 WITH documentation</a> explains that data-modifying substatements and the main query share a snapshot and cannot see one another’s changes through their target tables. RETURNING supplies the communication path. The documentation contrasts reading the base table with reading the returned relation after a price update.</p>
+<p>This does not mean a transaction can never read its own earlier writes. A subsequent ordinary SQL statement can see them. The scope here is one statement containing a data-modifying CTE. For consecutive statements, the October 20 article on <a href="/en/2026/10/20/postgres-read-committed-snapshots/">Read Committed snapshots</a> discusses consecutive statements; their order cannot be inferred from textual positions inside WITH.</p>
+<p>The complete fixture below is unexecuted and intended for a disposable environment. It creates temporary state in a transaction and rolls back. There are no sequences, external functions or triggers. Two products provide affected and unaffected rows, while source labels distinguish the two values for product one.</p>
+<pre><code class="sql">BEGIN;
+CREATE TEMP TABLE price_probe (
+  id integer PRIMARY KEY,
+  amount integer NOT NULL
+);
+INSERT INTO price_probe VALUES (1,100),(2,200);
+
+WITH changed AS (
+  UPDATE price_probe SET amount=amount+10
+  WHERE id=1
+  RETURNING id,amount
+)
+SELECT &#39;base&#39; AS source,id,amount FROM price_probe WHERE id=1
+UNION ALL
+SELECT &#39;returned&#39;,id,amount FROM changed
+ORDER BY source;
+
+SELECT id,amount FROM price_probe ORDER BY id;
+ROLLBACK;
+</code></pre>
+<p>The independent oracle is base, 1, 100 and returned, 1, 110 for the first result. The next SELECT should return product one at 110 and product two at 200. The first result contrasts two sources within a statement; the next checks visibility across statements. These are expected values, not observed client output.</p>
+<h2 id="Which-data-flow-should-feed-the-audit"><a href="#Which-data-flow-should-feed-the-audit" class="headerlink" title="Which data flow should feed the audit?"></a>Which data flow should feed the audit?</h2><p>To save this update’s new price, an audit INSERT can consume the explicit id and amount columns from changed. Rereading price_probe is not a substitute for that result. This standalone variant is also unexecuted; run it separately in disposable state rather than appending it to the prior rolled-back setup.</p>
+<pre><code class="sql">BEGIN;
+CREATE TEMP TABLE price_probe(id integer PRIMARY KEY, amount integer);
+CREATE TEMP TABLE price_audit(id integer, new_amount integer);
+INSERT INTO price_probe VALUES (1,100),(2,200);
+WITH changed AS (
+  UPDATE price_probe SET amount=amount+10 WHERE id=1
+  RETURNING id,amount
+)
+INSERT INTO price_audit(id,new_amount)
+SELECT id,amount FROM changed;
+SELECT id,new_amount FROM price_audit ORDER BY id;
+ROLLBACK;
+</code></pre>
+<p>The audit oracle contains one row: product one, new price 110. Product two must not produce an audit row. Changing the update predicate to id=99 makes changed empty, so the audit receives no input. Whether that means not found, conflict or an allowed no-op is a business decision. Do not manufacture a successful audit row from an old application object.</p>
+<p>This establishes a value handoff within a database statement. The October 16 article on <a href="/en/2026/10/16/postgres-returning-commit-boundary/">RETURNING and commit boundaries</a> explains why returned rows do not by themselves establish that an explicit transaction committed. An audit insert also does not prove external delivery. The SQL provides no cross-system atomicity guarantee.</p>
+<h2 id="Can-textual-order-sequence-two-changes-to-the-same-row"><a href="#Can-textual-order-sequence-two-changes-to-the-same-row" class="headerlink" title="Can textual order sequence two changes to the same row?"></a>Can textual order sequence two changes to the same row?</h2><p>The documentation says the actual update order is unpredictable, and attempting to modify the same row twice in one statement is unsupported. Avoid overlapping writes in sibling CTEs or between a CTE and the main statement. Naming them first and second makes the text easier to read without adding an execution guarantee.</p>
+<p>If the business requires a second modification based on an earlier change, separately executed statements within an explicit transaction can make that sequence visible. Concurrency and constraints still need treatment, but the design no longer relies on unsupported same-statement duplicate modification. If one expression can calculate the final value, a single modification may be simpler.</p>
+<p>Do not invent a fixed winner for an overlapping-write example and then treat a matching run as proof. The negative case should identify and reject the overlapping design, not search for a plan that happens to choose the desired outcome. Review each write’s target identity and predicate to find potentially intersecting row sets.</p>
+<p>The October 21 discussion of <a href="/en/2026/10/21/postgres-cte-materialization-plan/">CTE materialization</a> covers optimization of ordinary side-effect-free SELECTs. MATERIALIZED and NOT MATERIALIZED do not turn write CTEs into an imperative script. Use the rules for data-modifying statements here.</p>
+<p>Make the zero-consumer expectation a complete fixture. After the main query returns no rows, the next statement should still return product one at 110. Reinitialize and change only the update predicate to id=99; the next statement should retain 100. These controls distinguish no consumption from no matching target. A test driver must not skip the subsequent check merely because the first result is empty. The outcomes remain unexecuted expectations.</p>
+<pre><code class="sql">BEGIN;
+CREATE TEMP TABLE zero_consumer(id integer PRIMARY KEY, amount integer);
+INSERT INTO zero_consumer VALUES (1,100);
+WITH changed AS (
+  UPDATE zero_consumer SET amount=amount+10 WHERE id=1
+  RETURNING id,amount
+)
+SELECT id,amount FROM changed WHERE false;
+SELECT id,amount FROM zero_consumer ORDER BY id;
+ROLLBACK;
+</code></pre>
+<h2 id="Will-the-update-run-if-the-outer-query-never-consumes-changed"><a href="#Will-the-update-run-if-the-outer-query-never-consumes-changed" class="headerlink" title="Will the update run if the outer query never consumes changed?"></a>Will the update run if the outer query never consumes changed?</h2><p>Yes. A data-modifying CTE executes once to completion regardless of consumption of its returned rows. An outer LIMIT zero or zero-row result must not be treated as a guard against the internal write.</p>
+<p>A proposed negative test initializes the price to 100, uses an UPDATE CTE and gives the main SELECT a WHERE false condition. Even with zero returned rows, the next statement should read 110. This has not been executed and belongs in an isolated database. Acceptance should retain separate oracles for the base-table source, returned relation, next statement, zero affected rows and zero consumed rows. Each check addresses a distinct misconception instead of attaching a single “transaction correct” label to the query.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/queries-with.html" rel="noopener">PostgreSQL 18 — 7.8 WITH Queries, 7.8.4 Data-Modifying Statements</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--postgresql" href="/en/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--cte" href="/en/tags/CTE/">CTE</a>
+          
+            <a class="tag tag--data-flow" href="/en/tags/Data-flow/">Data flow</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F08%2Fpostgres-write-cte-returning-dataflow%2F&text=Why%20can%20SELECT%20still%20read%20old%20prices%20after%20a%20write%20CTE%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F08%2Fpostgres-write-cte-returning-dataflow%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20can%20SELECT%20still%20read%20old%20prices%20after%20a%20write%20CTE%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F08%2Fpostgres-write-cte-returning-dataflow%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/08/protobuf-presence-zero-update/">
+              <span>Previous Post</span>
+              <strong>Why did setting quota to zero have no effect? Check Protobuf presence</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/08/postgres-collation-refresh-rebuild-proof/">
+              <span>Next Post</span>
+              <strong>Does a vanished collation warning mean old indexes are repaired?</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Which-outputs-are-available-within-the-snapshot">Which outputs are available within the snapshot?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Which-data-flow-should-feed-the-audit">Which data flow should feed the audit?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Can-textual-order-sequence-two-changes-to-the-same-row">Can textual order sequence two changes to the same row?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Will-the-update-run-if-the-outer-query-never-consumes-changed">Will the update run if the outer query never consumes changed?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>258</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/08/postgres-collation-refresh-rebuild-proof/">Does a vanished collation warning mean old indexes are repaired?</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/08/postgres-logical-cutover-inventory/">Validate logical migration through rows, schema, and the next write</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/07/postgres-date-bin-origin-stride/">Why do two fifteen-minute date_bin queries disagree?</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

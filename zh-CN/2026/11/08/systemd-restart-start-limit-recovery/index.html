@@ -1,0 +1,413 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>启动限流窗口过了，systemd不一定会再自动重启 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="解释systemd重启政策、启动限流与新触发的交集，给出三次有界启动单元，并区分清计数、进程运行和业务就绪。">
+  
+  
+    <meta name="keywords" content="StartLimitBurst,Restart=always,reset-failed">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/08/systemd-restart-start-limit-recovery/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/08/systemd-restart-start-limit-recovery/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/08/systemd-restart-start-limit-recovery/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/08/systemd-restart-start-limit-recovery/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="启动限流窗口过了，systemd不一定会再自动重启 | Midnight blog">
+    <meta property="og:description" content="解释systemd重启政策、启动限流与新触发的交集，给出三次有界启动单元，并区分清计数、进程运行和业务就绪。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/08/systemd-restart-start-limit-recovery/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/08/systemd-restart-start-limit-recovery/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/08/systemd-restart-start-limit-recovery/","name":"启动限流窗口过了，systemd不一定会再自动重启 | Midnight blog","description":"解释systemd重启政策、启动限流与新触发的交集，给出三次有界启动单元，并区分清计数、进程运行和业务就绪。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/08/systemd-restart-start-limit-recovery/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/08/systemd-restart-start-limit-recovery/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/08/systemd-restart-start-limit-recovery/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/08/systemd-restart-start-limit-recovery/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/08/systemd-restart-start-limit-recovery/","headline":"启动限流窗口过了，systemd不一定会再自动重启","description":"解释systemd重启政策、启动限流与新触发的交集，给出三次有界启动单元，并区分清计数、进程运行和业务就绪。","inLanguage":"zh-CN","datePublished":"2026-11-07T20:08:51.000Z","dateModified":"2026-11-07T20:08:51.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html","https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html"],"keywords":"systemd, 运维, 恢复"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/08/systemd-restart-start-limit-recovery/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"启动限流窗口过了，systemd不一定会再自动重启","item":"https://www.zyweb.vip/zh-CN/2026/11/08/systemd-restart-start-limit-recovery/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/08/systemd-restart-start-limit-recovery/" selected>zh-CN</option><option value="/en/2026/11/08/systemd-restart-start-limit-recovery/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/08/systemd-restart-start-limit-recovery/" selected>zh-CN</option><option value="/en/2026/11/08/systemd-restart-start-limit-recovery/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--systemd">systemd</span>
+      <time datetime="2026-11-07T20:08:51.000Z">2026-11-08</time>
+    </div>
+
+    <h1>启动限流窗口过了，systemd不一定会再自动重启</h1>
+
+    
+      <p class="post-hero__summary">解释systemd重启政策、启动限流与新触发的交集，给出三次有界启动单元，并区分清计数、进程运行和业务就绪。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-07T20:08:51.000Z">2026-11-08</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/08/systemd-restart-start-limit-recovery/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/08/systemd-restart-start-limit-recovery/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>Restart=always仍受单元启动预算约束，手工启动也计入该限制。</li><li>窗口结束不单独产生新的自动启动请求。</li><li>清计数、启动成功与业务就绪分别需要证据。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>服务因启动限流停下来，等窗口过去不会单独产生一次新的启动请求。后续人工、timer 或 socket 触发可再启动，但必须先处理持续失败的原因。Restart=always 描述重启政策，不能把启动预算和新的触发来源一并省略。</p>
+<h2 id="always-仍然要经过启动限流"><a href="#always-仍然要经过启动限流" class="headerlink" title="always 仍然要经过启动限流"></a>always 仍然要经过启动限流</h2><p><a target="_blank" rel="noopener" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html#Restart=">systemd.service 的 Restart 条款</a>明确说明，服务重启受单元的启动速率限制约束。此次于二〇二六年十一月八日核对的 latest 手册页面标识 systemd 262，不表示读者主机已经具有相同版本或全部选项。排查应保存管理器版本、有效单元及 drop-in，不能只看仓库里的原始文件。</p>
+<p>重启政策先判断退出原因是否需要再次尝试，单元限流再约束新启动能否获准。二者可以同时正确：主进程确实以失败状态退出，Restart 也要求重启，但下一次启动已经超过当前窗口预算。因此，看见进程没有回来，不能立即推断 Restart 配置没有加载，更不能把 always 理解为不受限制的无限循环。</p>
+<p><a target="_blank" rel="noopener" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html#StartLimitIntervalSec=interval">systemd.unit 的 StartLimit 条款</a>还说明，限制适用于各种启动，包括手工启动，不只由 Restart 发起的尝试。值班时反复执行启动，也可能继续遭到同一道门槛。默认窗口与次数可来自管理器配置；单元又能显式设置，必须核对实际生效值，不能把网上某个默认数字当成本机事实。</p>
+<h2 id="窗口结束只是允许条件变化"><a href="#窗口结束只是允许条件变化" class="headerlink" title="窗口结束只是允许条件变化"></a>窗口结束只是允许条件变化</h2><p>手册指出，配置 Restart 的单元一旦达到启动限制，便不再继续尝试自动重启；窗口过去之后，后来的人工、timer 或 socket 触发仍可以启动。这里的“后来可以”不是管理器已经排好一个窗口到期的启动任务。若再没有任何触发源，等待本身不等于出现下一次尝试。</p>
+<p>这一区别会决定告警是否有人接手。假设依赖故障使进程短时间连续退出，服务最终触顶停下；依赖随后恢复，但服务没有新启动。只监控依赖变绿，会漏掉应用仍未运行的状态。应同时保留停止自动重试的单元信号与恢复责任，让接手者知道需要确认根因、选择触发并验证业务，而不是把“再等等”当作恢复计划。</p>
+<p>也不要反过来看到一次人工启动成功，就宣布限流设置已被移除。窗口可能已经结束，失败状态或计数也可能被清理，单元垃圾回收还可能影响计数保留。诊断记录要绑定同一单元的引用与运行历史，解释这次为什么允许，而不是根据一次结果重写所有生命周期规则。</p>
+<h2 id="一份三次启动的有界教学单元"><a href="#一份三次启动的有界教学单元" class="headerlink" title="一份三次启动的有界教学单元"></a>一份三次启动的有界教学单元</h2><p>下面的单元未安装、未启动。它只让本地 Python 打印一个标记并以一退出，不连接服务或改业务数据；需要隔离 Linux 环境，且 <code>/usr/bin/python3</code> 存在。当前工作环境没有因此新增单元或改变服务状态。</p>
+<pre><code class="ini">[Unit]
+Description=Bounded restart teaching fixture
+StartLimitIntervalSec=60s
+StartLimitBurst=3
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -c &quot;print(&#39;ATTEMPT&#39;, flush=True); raise SystemExit(1)&quot;
+Restart=always
+RestartSec=1s
+</code></pre>
+<p>三次失败都发生在六十秒窗口内，是这组演算的明确前提；如果主机调度、启动等待或其他事件使它不成立，就不能仍套用次数预期。还要求没有其他手工启动、timer、socket 触发，没有改变退出解释的覆盖项，也没有把该单元卸载后重新计算历史。示例不包含 Install 段，不负责开机启用。</p>
+<p>独立预期是在这份有界输入下观察三次真实 ExecStart 标记，之后新的启动受限，自动尝试停止。检查应关联每次启动身份、退出状态、单元状态和原始 journal，不能只数终端里有几行相同文字。日志也可能受采集政策影响；标记数不足时，需要先解释证据是否完整，不把缺失日志直接当成启动没有发生。</p>
+<p>达到限制以后，保留足够覆盖窗口结束的观察区间，但不额外发启动请求。要检查的是没有仅因时间过去就产生第四次启动，而不是要求某个字段永远保持同一个字符串。真实的 Result、ActiveState 与重启相关计数应原样保存。本文没有执行，也不预填 NRestarts 的显示值，因为把排程请求与实际进入主命令混计，会让一个数字掩盖不同事件。</p>
+<p>随后另设恢复阶段：先把退出原因改成教学环境中可解释的正常长运行程序，再按计划等待预算恢复或清计数，显式请求启动。保存这次请求和实际进程证据，最后用它真正承担的业务探针验证。这个阶段必须与原始故意失败组分开记录，不能只留下最后一次成功，抹去最初触顶的事实。</p>
+<h2 id="清计数为什么不能修复持续退出"><a href="#清计数为什么不能修复持续退出" class="headerlink" title="清计数为什么不能修复持续退出"></a>清计数为什么不能修复持续退出</h2><p>如果程序仍然立即退出，反复 reset-failed 加 start 只会重开一轮失败。它可以暂时让计数与状态看起来干净，却不会恢复缺失配置、文件权限或不可用依赖。把窗口调长、把次数调大或设为零禁用该限流，也需要容量与故障政策依据；这些选项存在，不代表它们都是适合现场的修复。</p>
+<p>另一种误判是直接用 systemctl stop 制造异常退出测试。Restart 对管理器发起的停止有例外，手工停服务不能简单等价于主进程自行失败。本篇教学程序主动返回一，就是为了把退出输入写清。实际故障调查还应核对 SuccessExitStatus、RestartPreventExitStatus 等设置，确认某个退出值在当前单元里被怎样解释。</p>
+<p>条件检查也需要分别看。<a href="/zh-CN/2026/11/08/systemd-execcondition-skip-failure/">ExecCondition 的退出讨论</a>处理的是条件命令允许继续、跳过或失败的协议。unit 条件检查与 ExecCondition 不能混成一项；手册关于条件未满足不计入启动限制的说明，不应凭名称相近就套到所有准备脚本。这里示例直接让主程序失败，没有依赖这种类比。</p>
+<h2 id="reset-failed-返回成功，就代表服务恢复了吗？"><a href="#reset-failed-返回成功，就代表服务恢复了吗？" class="headerlink" title="reset-failed 返回成功，就代表服务恢复了吗？"></a>reset-failed 返回成功，就代表服务恢复了吗？</h2><p>不代表。它可清理失败状态与启动计数，但服务仍要有新的启动和业务就绪证据；原退出原因还在时，清计数只会允许下一轮失败。</p>
+<p>手册明确说明 reset-failed 会清空服务的启动速率计数。报告应把这项管理动作、随后的实际启动和最终业务结果分别列出。新进程存在，也可能仍在准备或等待依赖；本站的<a href="/zh-CN/2026/11/05/systemd-notify-startup-readiness/">就绪通知讨论</a>关注何时可以承诺启动完成，不能由清理标记替它签收。</p>
+<p>拟议验收保留有效配置、管理器版本、每次失败、触顶时点、等待区间、修复内容与新触发身份。这样才能区分预算未恢复、没有触发、启动又失败以及进程已运行但业务未就绪。本文没有执行服务恢复或给出生产可用结论；先查清为什么停止尝试，再安排能被观察到的一次恢复，而不是把时间过去当作已有人完成处置。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html" rel="noopener">systemd.service</a></li><li><a target="_blank" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html" rel="noopener">systemd.unit</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--systemd" href="/zh-CN/tags/systemd/">systemd</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E8%BF%90%E7%BB%B4/">运维</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%81%A2%E5%A4%8D/">恢复</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F08%2Fsystemd-restart-start-limit-recovery%2F&text=%E5%90%AF%E5%8A%A8%E9%99%90%E6%B5%81%E7%AA%97%E5%8F%A3%E8%BF%87%E4%BA%86%EF%BC%8Csystemd%E4%B8%8D%E4%B8%80%E5%AE%9A%E4%BC%9A%E5%86%8D%E8%87%AA%E5%8A%A8%E9%87%8D%E5%90%AF" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F08%2Fsystemd-restart-start-limit-recovery%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E5%90%AF%E5%8A%A8%E9%99%90%E6%B5%81%E7%AA%97%E5%8F%A3%E8%BF%87%E4%BA%86%EF%BC%8Csystemd%E4%B8%8D%E4%B8%80%E5%AE%9A%E4%BC%9A%E5%86%8D%E8%87%AA%E5%8A%A8%E9%87%8D%E5%90%AF&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F08%2Fsystemd-restart-start-limit-recovery%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/08/tls-early-data-replay-425/">
+              <span>上一篇</span>
+              <strong>启用TLS 0-RTT前，先把425与业务副作用接起来</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/08/react-key-editor-draft-reset/">
+              <span>下一篇</span>
+              <strong>记录切换了，React 编辑框为什么还留着上一条草稿？</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#always-仍然要经过启动限流">always 仍然要经过启动限流</a>
+          
+            <a class="toc-link toc-link--h2" href="#窗口结束只是允许条件变化">窗口结束只是允许条件变化</a>
+          
+            <a class="toc-link toc-link--h2" href="#一份三次启动的有界教学单元">一份三次启动的有界教学单元</a>
+          
+            <a class="toc-link toc-link--h2" href="#清计数为什么不能修复持续退出">清计数为什么不能修复持续退出</a>
+          
+            <a class="toc-link toc-link--h2" href="#reset-failed-返回成功，就代表服务恢复了吗？">reset-failed 返回成功，就代表服务恢复了吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>258</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/08/systemd-execcondition-skip-failure/">ExecCondition 返回 1，systemd 为什么没把服务判失败？</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/07/systemd-timer-persistent-missed-runs/">systemd Persistent timer 会逐次补齐停机漏掉的任务吗？</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/">轮换后新日志为空，先看写者还握着哪个文件</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

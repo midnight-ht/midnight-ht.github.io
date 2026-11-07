@@ -1,0 +1,453 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>A Go parent test function can return before its test tree finishes | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Distinguish parent-function return from test-tree completion with complete expected-failure and expected-success controls, including Setenv’s process-wide limit.">
+  
+  
+    <meta name="keywords" content="t.Cleanup,t.Parallel,defer">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/08/go-parallel-subtest-cleanup/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/08/go-parallel-subtest-cleanup/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/08/go-parallel-subtest-cleanup/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/08/go-parallel-subtest-cleanup/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="A Go parent test function can return before its test tree finishes | Midnight blog">
+    <meta property="og:description" content="Distinguish parent-function return from test-tree completion with complete expected-failure and expected-success controls, including Setenv’s process-wide limit.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/08/go-parallel-subtest-cleanup/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/08/go-parallel-subtest-cleanup/#webpage","url":"https://www.zyweb.vip/en/2026/11/08/go-parallel-subtest-cleanup/","name":"A Go parent test function can return before its test tree finishes | Midnight blog","description":"Distinguish parent-function return from test-tree completion with complete expected-failure and expected-success controls, including Setenv’s process-wide limit.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/08/go-parallel-subtest-cleanup/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/08/go-parallel-subtest-cleanup/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/08/go-parallel-subtest-cleanup/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/08/go-parallel-subtest-cleanup/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/08/go-parallel-subtest-cleanup/","headline":"A Go parent test function can return before its test tree finishes","description":"Distinguish parent-function return from test-tree completion with complete expected-failure and expected-success controls, including Setenv’s process-wide limit.","inLanguage":"en","datePublished":"2026-11-07T20:08:51.000Z","dateModified":"2026-11-07T20:08:51.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://pkg.go.dev/testing","https://go.dev/blog/subtests","https://go.dev/ref/spec","https://pkg.go.dev/sync/atomic"],"keywords":"Go, Parallel tests, Cleanup"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/08/go-parallel-subtest-cleanup/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"A Go parent test function can return before its test tree finishes","item":"https://www.zyweb.vip/en/2026/11/08/go-parallel-subtest-cleanup/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/08/go-parallel-subtest-cleanup/">zh-CN</option><option value="/en/2026/11/08/go-parallel-subtest-cleanup/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/08/go-parallel-subtest-cleanup/">zh-CN</option><option value="/en/2026/11/08/go-parallel-subtest-cleanup/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--go">Go</span>
+      <time datetime="2026-11-07T20:08:51.000Z">2026-11-08</time>
+    </div>
+
+    <h1>A Go parent test function can return before its test tree finishes</h1>
+
+    
+      <p class="post-hero__summary">Distinguish parent-function return from test-tree completion with complete expected-failure and expected-success controls, including Setenv’s process-wide limit.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-07T20:08:51.000Z">2026-11-08</time> · Estimated read 18 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/08/go-parallel-subtest-cleanup/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/08/go-parallel-subtest-cleanup/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Direct Run can return when the child calls Parallel, before resource use is complete.</li><li>Parent Cleanup waits for the test and all children; defer follows function return.</li><li>Process-wide state remains shared; Setenv still excludes parallel ancestors.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>A Go parent test function can return while its parallel children still await resumption. Defer follows that function boundary; parent t.Cleanup follows completion of the test and its children. Shared resources need the latter lifetime when children still use them. A returned t.Run call alone does not establish that every child has finished its work.</p>
+<h2 id="Function-return-and-test-completion-are-different-boundaries"><a href="#Function-return-and-test-completion-are-different-boundaries" class="headerlink" title="Function return and test completion are different boundaries"></a>Function return and test completion are different boundaries</h2><p><a target="_blank" rel="noopener" href="https://go.dev/ref/spec#Defer_statements">The Go specification’s defer section</a> binds deferred calls to the surrounding function’s return, rather than a test tree managed by a framework. The inspected specification identifies language version go1.27, dated 26 May 2026. Read that language rule alongside testing’s scheduling contract; a function named Test does not automatically wait for every child before returning.</p>
+<p><a target="_blank" rel="noopener" href="https://go.dev/blog/subtests">The official subtest explanation</a> says a subtest calling Parallel suspends until its calling parent test function returns. A test itself completes only after its function returns and all subtests finish. The article was published on 3 October 2016. This discussion uses its scheduling explanation without importing unrelated historical loop-variable code. The parent function returns first and the child continues afterward, allowing the parent’s defer to close a resource too early.</p>
+<p><a target="_blank" rel="noopener" href="https://pkg.go.dev/testing">The testing Run and Cleanup documentation</a> supplies the precise waiting condition. Run blocks until its child function returns or calls Parallel. In the latter case, the child’s business assertions need not have finished. Registered cleanup functions run after the current test and all its subtests complete, in last-added, first-called order. The checked package page identifies go1.27.3, published on 20 October 2026, and warns that it is not the module’s latest version. This is not an inspection of the local toolchain.</p>
+<h2 id="Keep-the-same-resource-use-requirement-in-both-controls"><a href="#Keep-the-same-resource-use-requirement-in-both-controls" class="headerlink" title="Keep the same resource-use requirement in both controls"></a>Keep the same resource-use requirement in both controls</h2><p>The complete teaching project below is unexecuted. Local atomic flags represent a resource’s closed state; no file, network connection or database is created. The two named paths share one open-resource assertion. Their only cleanup-policy difference is parent defer versus parent registration; the defer path deliberately violates the requirement and should fail. Changing its assertion to accept an already closed resource would not repair the lifecycle.</p>
+<pre><code class="text">// go.mod
+module example.test/cleanupdemo
+
+go 1.19
+</code></pre>
+<pre><code class="go">// cleanup_test.go
+package cleanupdemo
+
+import (
+    &quot;sync/atomic&quot;
+    &quot;testing&quot;
+)
+
+func TestResourceLifetime(t *testing.T) {
+    cases := []struct {
+        name       string
+        useCleanup bool
+    }{
+        {&quot;defer&quot;, false},
+        {&quot;cleanup&quot;, true},
+    }
+    for _, tc := range cases {
+        tc := tc // capture for the declared Go 1.19 language version
+        t.Run(tc.name, func(parent *testing.T) {
+            var closed, used atomic.Bool
+            closeResource := func() {
+                closed.Store(true)
+            }
+            if tc.useCleanup {
+                parent.Cleanup(func() {
+                    if !used.Load() {
+                        parent.Error(&quot;child never used resource&quot;)
+                    }
+                    closeResource()
+                })
+            } else {
+                defer closeResource()
+            }
+            parent.Run(&quot;child&quot;, func(child *testing.T) {
+                child.Parallel()
+                if closed.Load() {
+                    child.Error(&quot;resource closed before child used it&quot;)
+                }
+                used.Store(true)
+            })
+        })
+    }
+}
+</code></pre>
+<p>The table names the two paths with name and useCleanup. Capturing tc before the closure preserves the intended iteration under the module’s Go 1.19 language version. The outer case callback does not call Parallel, so its Run waits for that case’s children before the next row. The inner parent.Run can return when its child calls Parallel. closeResource retains the actual atomic Store; both paths share the same open check, and the good parent cleanup still checks used.</p>
+<p>The example needs a Go version supporting atomic.Bool. <a target="_blank" rel="noopener" href="https://pkg.go.dev/sync/atomic#Bool">Its official type documentation</a> marks it as added in 1.19, with false as its zero value, and says it must not be copied after first use. Each case retains its own variables without copying used atomic values. The cleanup method itself was introduced in 1.14; the example’s use of a 1.19 type does not change that API’s introduction version.</p>
+<p>Save the files as go.mod and cleanup_test.go in one isolated directory, then run the candidate commands separately, selecting the top-level test, case and child by slash-separated patterns. No output is supplied as execution evidence. Preserve each actual command’s exit result immediately rather than substituting the success of a later directory listing. Running the whole project together should still fail because the first case is deliberately negative; that does not establish that the second case never ran.</p>
+<pre><code class="sh">go test -count=1 -run &#39;^TestResourceLifetime$/^defer$/^child$&#39; -v
+go test -count=1 -run &#39;^TestResourceLifetime$/^cleanup$/^child$&#39; -v
+</code></pre>
+<p>The independent expectation for the first command is failure: after Parallel resumes, the child reads closed as true and reports a failed open-resource requirement. The second should pass: the child reads false and marks the resource used; parent Cleanup then checks used and closes it. Both outcomes follow from one business requirement and the scheduling rules, rather than being inferred from current output. They do not establish real connection closure, file durability or freedom from all concurrency defects.</p>
+<h2 id="A-four-step-order-without-sleeps"><a href="#A-four-step-order-without-sleeps" class="headerlink" title="A four-step order without sleeps"></a>A four-step order without sleeps</h2><p>In the first case, the child pauses at Parallel and the direct Run can return. The parent reaches its end, and defer sets the closed flag. Only afterward does the child resume its read and assertion. Adding a short sleep to let the child “finish first” would obscure a lifecycle error as a machine-speed problem.</p>
+<p>In the second case, the child pauses at the same point, but returning from the parent function does not immediately run parent Cleanup. The framework still waits for the child. After the child checks openness and sets used, cleanup begins. Checking used makes premature cleanup or a missing use step visible; merely not noticing a close is insufficient. Atomic flags avoid adding an unrelated shared-boolean data race to the illustration. They do not make arbitrary real resources safe by converting them into atomic state.</p>
+<p>Also identify which t owns the registration. A parent resource shared by siblings cannot be assigned the lifetime of an arbitrary shorter-lived child without further reasoning. List acquisition, all users and the final use boundary before registering cleanup on the node that covers them.</p>
+<h2 id="Where-is-defer-still-appropriate"><a href="#Where-is-defer-still-appropriate" class="headerlink" title="Where is defer still appropriate?"></a>Where is defer still appropriate?</h2><p>Defer remains suitable for a resource whose use ends with its function. Another valid structure places parallel children inside a group subtest that does not itself call Parallel. The official example’s outer Run waits for those descendants before returning, allowing teardown outside the group. That differs from directly running a child that calls Parallel. Neither case supports an unconditional slogan that Run always waits.</p>
+<p>For a genuinely parent-owned resource, parent Cleanup often expresses the intended lifetime directly without requiring readers to reconstruct a grouping premise. It controls timing, not external deletion, authorization or duplicate-close contracts. The discussion of <a href="/en/2026/10/25/pytest-yield-fixture-setup-failure/">setup failure before yield</a> covers a different interval: a resource exists before cleanup responsibility is established. Here both already exist, but the parent function’s lifetime is shorter than its parallel child’s use.</p>
+<h2 id="Does-registering-cleanup-permit-t-Setenv-in-a-parallel-test"><a href="#Does-registering-cleanup-permit-t-Setenv-in-a-parallel-test" class="headerlink" title="Does registering cleanup permit t.Setenv in a parallel test?"></a>Does registering cleanup permit t.Setenv in a parallel test?</h2><p>No. Setenv affects the whole process and is prohibited in parallel tests or tests with parallel ancestors. Registered cleanup controls restoration timing, not process-global isolation; use a separate process, explicit configuration or a different parallel scope as appropriate.</p>
+<p>This also rules out the assumption that eventual restoration makes concurrent mutations harmless. Before restoration, two users may still read the same process state. A correct teardown does not eliminate interference during use. Nesting another function does not remove a parallel ancestor; inspect the actual test tree. <a href="/en/2026/10/11/pytest-fixture-isolation/">Fixture isolation</a> relates to lifetime but needs a distinct state-sharing check.</p>
+<p>Acceptance should retain the toolchain version, module file, complete source, both isolated commands and actual exit results. Real-resource integration additionally needs acquisition, usage, close-error and residual-state checks. A passing atomic-flag fixture cannot establish successful business-resource cleanup. This project has not been compiled or run; its deliverable is an expected-failure example, an expected-success control and the scheduling explanation that distinguishes them.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://pkg.go.dev/testing" rel="noopener">testing package - testing - Go Packages</a></li><li><a target="_blank" href="https://go.dev/blog/subtests" rel="noopener">Using Subtests and Sub-benchmarks - The Go Programming Language</a></li><li><a target="_blank" href="https://go.dev/ref/spec" rel="noopener">The Go Programming Language Specification - The Go Programming Language</a></li><li><a target="_blank" href="https://pkg.go.dev/sync/atomic" rel="noopener">sync/atomic — Bool type, addedGo1.19, zero value and copying restriction</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--go" href="/en/tags/Go/">Go</a>
+          
+            <a class="tag tag--parallel-tests" href="/en/tags/Parallel-tests/">Parallel tests</a>
+          
+            <a class="tag tag--cleanup" href="/en/tags/Cleanup/">Cleanup</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--quality" href="/en/categories/Quality/">Quality</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F08%2Fgo-parallel-subtest-cleanup%2F&text=A%20Go%20parent%20test%20function%20can%20return%20before%20its%20test%20tree%20finishes" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F08%2Fgo-parallel-subtest-cleanup%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=A%20Go%20parent%20test%20function%20can%20return%20before%20its%20test%20tree%20finishes&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F08%2Fgo-parallel-subtest-cleanup%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/08/iframe-sandbox-same-origin-escape/">
+              <span>Previous Post</span>
+              <strong>Why can a preview escape while its iframe still has sandbox?</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/08/experiment-srm-before-lift/">
+              <span>Next Post</span>
+              <strong>Conversion rose, but why did a 50/50 test become 60/40?</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Function-return-and-test-completion-are-different-boundaries">Function return and test completion are different boundaries</a>
+          
+            <a class="toc-link toc-link--h2" href="#Keep-the-same-resource-use-requirement-in-both-controls">Keep the same resource-use requirement in both controls</a>
+          
+            <a class="toc-link toc-link--h2" href="#A-four-step-order-without-sleeps">A four-step order without sleeps</a>
+          
+            <a class="toc-link toc-link--h2" href="#Where-is-defer-still-appropriate">Where is defer still appropriate?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Does-registering-cleanup-permit-t-Setenv-in-a-parallel-test">Does registering cleanup permit t.Setenv in a parallel test?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>258</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/08/dom-removeeventlistener-capture-identity/">Cleanup ran, so why does the old widget still receive events?</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/08/avro-reader-default-replay-meaning/">Is a default-filled field in an old Avro event an original fact?</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/08/bloom-positive-exact-verification/">Can a positive Bloom filter result reject a username?</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

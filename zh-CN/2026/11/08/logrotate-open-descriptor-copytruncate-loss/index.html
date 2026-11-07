@@ -1,0 +1,441 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>轮换后新日志为空，先看写者还握着哪个文件 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用本地文件顺序演算解释轮换后仍写旧文件，以及copytruncate窗口的记录丢失；不把示例当成真实logrotate运行。">
+  
+  
+    <meta name="keywords" content="文件描述符,copytruncate,日志重开">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/08/logrotate-open-descriptor-copytruncate-loss/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="轮换后新日志为空，先看写者还握着哪个文件 | Midnight blog">
+    <meta property="og:description" content="用本地文件顺序演算解释轮换后仍写旧文件，以及copytruncate窗口的记录丢失；不把示例当成真实logrotate运行。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/","name":"轮换后新日志为空，先看写者还握着哪个文件 | Midnight blog","description":"用本地文件顺序演算解释轮换后仍写旧文件，以及copytruncate窗口的记录丢失；不把示例当成真实logrotate运行。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/","headline":"轮换后新日志为空，先看写者还握着哪个文件","description":"用本地文件顺序演算解释轮换后仍写旧文件，以及copytruncate窗口的记录丢失；不把示例当成真实logrotate运行。","inLanguage":"zh-CN","datePublished":"2026-11-07T20:08:51.000Z","dateModified":"2026-11-07T20:08:51.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://raw.githubusercontent.com/logrotate/logrotate/dcf2239d28b94f56c6375f7bad44a3dded7924eb/logrotate.8.in","https://man7.org/linux/man-pages/man2/rename.2.html"],"keywords":"logrotate, 日志, 运维"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"轮换后新日志为空，先看写者还握着哪个文件","item":"https://www.zyweb.vip/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/" selected>zh-CN</option><option value="/en/2026/11/08/logrotate-open-descriptor-copytruncate-loss/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/" selected>zh-CN</option><option value="/en/2026/11/08/logrotate-open-descriptor-copytruncate-loss/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--logrotate">logrotate</span>
+      <time datetime="2026-11-07T20:08:51.000Z">2026-11-08</time>
+    </div>
+
+    <h1>轮换后新日志为空，先看写者还握着哪个文件</h1>
+
+    
+      <p class="post-hero__summary">用本地文件顺序演算解释轮换后仍写旧文件，以及copytruncate窗口的记录丢失；不把示例当成真实logrotate运行。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-07T20:08:51.000Z">2026-11-08</time> · 预计阅读 8 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/08/logrotate-open-descriptor-copytruncate-loss/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/08/logrotate-open-descriptor-copytruncate-loss/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>重命名与创建新路径不会改变已有打开描述符。</li><li>copytruncate复制到截断之间的新增记录可能丢失，create此时无效。</li><li>轮换验收要核对应用重开、文件内容与采集结果。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>把 app.log 改名再创建同名文件，不会让已打开的写者自动换文件。轮换要同时安排写者重开，否则它可能继续写进旧文件。看到新日志为空，先核对进程实际持有的文件，再判断是没有产生日志，还是日志仍写在另一个对象上。</p>
+<h2 id="名字变了，打开的文件没有跟着换"><a href="#名字变了，打开的文件没有跟着换" class="headerlink" title="名字变了，打开的文件没有跟着换"></a>名字变了，打开的文件没有跟着换</h2><p><a target="_blank" rel="noopener" href="https://man7.org/linux/man-pages/man2/rename.2.html">Linux rename 手册</a>说明，重命名不会改变已经打开的文件描述符。此次页面属于 Linux man-pages 6.19，手册日期为二〇二六年二月八日，网页渲染于九月九日。这里使用本地 POSIX 文件语义分析，不把网络文件系统的失败结果或其他操作系统默认行为一并当作已验证。</p>
+<p>应用打开 app.log 后持有一个文件描述符。轮换程序把这个名字改为 app.log.1，再用 app.log 创建新文件，目录里现在有两个名字和两个文件对象；应用原来的描述符仍指向原对象。它继续追加的内容就进入被改名的文件。检查者只读新名字时，可能误以为应用停止记录，实际上旧文件还在增长。</p>
+<p><a target="_blank" rel="noopener" href="https://raw.githubusercontent.com/logrotate/logrotate/dcf2239d28b94f56c6375f7bad44a3dded7924eb/logrotate.8.in">logrotate 上游手册源</a>规定，create 在轮换后、postrotate 脚本前创建同名新文件。本篇固定到二〇二六年三月四日的该文件提交；它仍是含版本占位符的上游源，不代表某台主机安装的具体发行版。创建完成只证明新路径已准备好，不能证明应用已关闭旧描述符并打开新路径。</p>
+<h2 id="先用固定顺序看清文件内容"><a href="#先用固定顺序看清文件内容" class="headerlink" title="先用固定顺序看清文件内容"></a>先用固定顺序看清文件内容</h2><p>下面的完整 Python 示例未执行。它使用标准库，在自动清理的独立临时目录内演算两种顺序，不调用 logrotate，不给真实进程发信号，也不写生产日志。第一段展示重命名与重开，第二段人为把一条记录放在复制和截断之间，避免依赖偶然的并发时机。</p>
+<pre><code class="python">from pathlib import Path
+from tempfile import TemporaryDirectory
+import shutil
+
+def emit(stream, record):
+    stream.write(record + &quot;\n&quot;)
+    stream.flush()
+
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    active = root / &quot;app.log&quot;
+    rotated = root / &quot;app.log.1&quot;
+
+    def state():
+        return tuple(path.read_text() for path in (rotated, active))
+
+    observed = {}
+    with active.open(&quot;a&quot;) as writer:
+        emit(writer, &quot;A&quot;)
+        active.rename(rotated)
+        active.write_text(&quot;&quot;)
+        emit(writer, &quot;B&quot;)
+    observed[&quot;renamed&quot;] = state()
+    with active.open(&quot;a&quot;) as reopened:
+        emit(reopened, &quot;C&quot;)
+    observed[&quot;reopened&quot;] = state()
+
+    active.write_text(&quot;A\n&quot;)
+    shutil.copyfile(active, rotated)
+    with active.open(&quot;a&quot;) as late_writer:
+        emit(late_writer, &quot;B&quot;)
+    with active.open(&quot;w&quot;):
+        pass
+    observed[&quot;truncated&quot;] = state()
+    assert observed == {
+        &quot;renamed&quot;: (&quot;A\nB\n&quot;, &quot;&quot;),
+        &quot;reopened&quot;: (&quot;A\nB\n&quot;, &quot;C\n&quot;),
+        &quot;truncated&quot;: (&quot;A\n&quot;, &quot;&quot;),
+    }
+</code></pre>
+<p>候选命令是在独立目录将文件保存为 rotation_probe.py 后运行 <code>python3 rotation_probe.py</code>，同时保留解释器版本和真实退出状态。没有执行回执时，不能把代码里的 assert 写成已经通过。这个例子没有模拟服务重开接口；关闭第一个 writer 再打开 active，只是明确展示重开动作本身改变了后续写入对象。</p>
+<p>emit 把一条记录的追加与 flush 放在一起；state 按“旧文件、新文件”读取完整快照，observed 按 renamed、reopened、truncated 标出三个检查点，再与预先写定的三组内容比较。最后用 w 模式打开并关闭原文件，明确表示截断，不省略任何丢失步骤。第一段的独立预期在执行前就能确定：旧文件应含 A 和 B，新文件在重开前为空，重开后只有 C。理由是 B 仍通过原描述符写入，C 才使用新路径打开。若只检查最终两个文件都存在，就没有检验写者究竟换过没有；若两个文件的内容恰好一样，也可能是测试准备或路径选错，必须保留输入顺序。</p>
+<p>第二段先复制只有 A 的文件，随后追加 B，最后把原文件截为空。副本只有 A，原文件为空，B 两边都不存在。这里的丢失是人为确定的顺序演算，不是对某台服务器丢了多少条日志的测量，也不是一次真正的并发压力实验。它提供一个反例：复制成功与截断成功可以同时成立，却仍丢掉两者之间的新增记录。</p>
+<h2 id="copytruncate-换掉了哪一项协调"><a href="#copytruncate-换掉了哪一项协调" class="headerlink" title="copytruncate 换掉了哪一项协调"></a>copytruncate 换掉了哪一项协调</h2><p>上游手册说明，copytruncate 在复制后原地把原文件截为零，适合不能通知关闭日志文件的程序；它也明确警告，复制与截断之间存在一个很短的时间片，部分日志可能丢失。使用它时 create 不起作用，因为原文件留在原处。不要把两项同时出现理解为“既保留描述符，又获得一次新文件切换”。</p>
+<p>它解决的是写者继续持有原文件时怎样释放部分文件内容，不是无损协调协议。窗口实际多长、在特定负载下是否观测到丢失，需要真实环境测量；“很短”不等于业务允许丢一条。对于诊断日志，可接受性取决于排障要求；对于必须证明订单状态的记录，则不应只靠这份可能丢失的文件承担唯一事实来源。</p>
+<p>另一条路线是重命名、创建，然后使用应用明确支持的重开合同。有的服务有专用命令或信号，有的没有。不能把 HUP 当作所有应用通用的重开按钮：它可能没有对应处理，也可能触发退出或其他行为。应该先查应用版本文档，确认命令作用于哪个进程、什么时候完成，以及失败如何返回，再把它接到轮换流程。</p>
+<h2 id="文件权限改好，就能让已有写者换到新文件吗？"><a href="#文件权限改好，就能让已有写者换到新文件吗？" class="headerlink" title="文件权限改好，就能让已有写者换到新文件吗？"></a>文件权限改好，就能让已有写者换到新文件吗？</h2><p>不会自动换。权限关系影响下一次打开能否成功，已有描述符仍指向原文件；必须同时核对实际重开动作及其失败结果。</p>
+<p>这增加了一个容易漏掉的失败分支：postrotate 已通知应用，应用却因为新文件的属主或权限无法打开它。轮换脚本结束，不代表写者已经切换。应同时观察新文件的实际权限、应用对重开请求的结果和后续唯一序号落在哪个文件；别把再次放宽权限后的成功，反写成最初轮换从未出错。</p>
+<p>如果应用继续写旧文件，立即压缩或移走那份文件也需要审查。日志采集器可能正在读取旧描述符，保留策略与应用重开完成时点要协调。本文不提供通用压缩等待秒数，也不根据文件名推断哪些数据可以删除。先确定真实写者与读取者都完成交接，再决定后续保留动作。</p>
+<h2 id="轮换验收需要把写入身份接起来"><a href="#轮换验收需要把写入身份接起来" class="headerlink" title="轮换验收需要把写入身份接起来"></a>轮换验收需要把写入身份接起来</h2><p>拟议的隔离验收给每条日志带本轮标识和递增序号，分别保留轮换前、轮换中、重开后的有界输入。观察路径、文件对象身份、进程打开描述符与两份文件内容，并记录轮换程序和重开动作各自的退出结果。只查看 app.log 的大小下降，不能区分正确轮换、仍写旧文件和直接丢失数据。</p>
+<p>还应确认采集端是否读到了这些记录。文件中存在不等于查询端可见；反过来，查询缺失也未必发生在轮换窗口。<a href="/zh-CN/2026/11/05/journald-rate-limit-missing-events/">journald 的窗口限流讨论</a>处理另一种入口丢弃，<a href="/zh-CN/2026/10/16/docker-log-driver-existing-container/">Docker 日志驱动讨论</a>处理运行实例采用哪份配置。它们的诊断结论不能直接互换。</p>
+<p>最终选择取决于应用能否可靠重开、记录是否允许丢失，以及交接是否能被观察。支持重开时先评估协调路径；不支持时，明确接受 copytruncate 的窗口或更换输出方式，而不是把方便写成无损保证。本篇没有执行 logrotate、变更生产配置或证明日志链路完整；先让路径、描述符和每条测试记录的去向对应，再宣告轮换确实完成了写者交接。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://raw.githubusercontent.com/logrotate/logrotate/dcf2239d28b94f56c6375f7bad44a3dded7924eb/logrotate.8.in" rel="noopener">logrotate(8) upstream manual source at dcf2239d28b9</a></li><li><a target="_blank" href="https://man7.org/linux/man-pages/man2/rename.2.html" rel="noopener">rename(2) — Linux man-pages6.19,2026-02-08</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--logrotate" href="/zh-CN/tags/logrotate/">logrotate</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%97%A5%E5%BF%97/">日志</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E8%BF%90%E7%BB%B4/">运维</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F08%2Flogrotate-open-descriptor-copytruncate-loss%2F&text=%E8%BD%AE%E6%8D%A2%E5%90%8E%E6%96%B0%E6%97%A5%E5%BF%97%E4%B8%BA%E7%A9%BA%EF%BC%8C%E5%85%88%E7%9C%8B%E5%86%99%E8%80%85%E8%BF%98%E6%8F%A1%E7%9D%80%E5%93%AA%E4%B8%AA%E6%96%87%E4%BB%B6" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F08%2Flogrotate-open-descriptor-copytruncate-loss%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E8%BD%AE%E6%8D%A2%E5%90%8E%E6%96%B0%E6%97%A5%E5%BF%97%E4%B8%BA%E7%A9%BA%EF%BC%8C%E5%85%88%E7%9C%8B%E5%86%99%E8%80%85%E8%BF%98%E6%8F%A1%E7%9D%80%E5%93%AA%E4%B8%AA%E6%96%87%E4%BB%B6&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F08%2Flogrotate-open-descriptor-copytruncate-loss%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/08/oauth-refresh-rotation-reuse-family/">
+              <span>上一篇</span>
+              <strong>旧刷新令牌已经失效，为什么还要撤销新的？</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/08/json-patch-array-coordinate-sequence/">
+              <span>下一篇</span>
+              <strong>勾选B和D，JSON Patch为什么删掉了B和E？</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#名字变了，打开的文件没有跟着换">名字变了，打开的文件没有跟着换</a>
+          
+            <a class="toc-link toc-link--h2" href="#先用固定顺序看清文件内容">先用固定顺序看清文件内容</a>
+          
+            <a class="toc-link toc-link--h2" href="#copytruncate-换掉了哪一项协调">copytruncate 换掉了哪一项协调</a>
+          
+            <a class="toc-link toc-link--h2" href="#文件权限改好，就能让已有写者换到新文件吗？">文件权限改好，就能让已有写者换到新文件吗？</a>
+          
+            <a class="toc-link toc-link--h2" href="#轮换验收需要把写入身份接起来">轮换验收需要把写入身份接起来</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>258</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/08/systemd-restart-start-limit-recovery/">启动限流窗口过了，systemd不一定会再自动重启</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/08/otel-log-event-observed-timestamp/">为事件调查和采集排障分别选日志时间</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/08/systemd-execcondition-skip-failure/">ExecCondition 返回 1，systemd 为什么没把服务判失败？</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

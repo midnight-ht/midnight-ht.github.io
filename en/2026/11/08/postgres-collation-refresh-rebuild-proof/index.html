@@ -1,0 +1,428 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Does a vanished collation warning mean old indexes are repaired? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Use a two-index ledger and read-only catalog queries to distinguish a vanished warning, restored dependencies and workload validation.">
+  
+  
+    <meta name="keywords" content="REFRESH VERSION,ordering dependencies,REINDEX">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/08/postgres-collation-refresh-rebuild-proof/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/08/postgres-collation-refresh-rebuild-proof/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/08/postgres-collation-refresh-rebuild-proof/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/08/postgres-collation-refresh-rebuild-proof/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Does a vanished collation warning mean old indexes are repaired? | Midnight blog">
+    <meta property="og:description" content="Use a two-index ledger and read-only catalog queries to distinguish a vanished warning, restored dependencies and workload validation.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/08/postgres-collation-refresh-rebuild-proof/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/08/postgres-collation-refresh-rebuild-proof/#webpage","url":"https://www.zyweb.vip/en/2026/11/08/postgres-collation-refresh-rebuild-proof/","name":"Does a vanished collation warning mean old indexes are repaired? | Midnight blog","description":"Use a two-index ledger and read-only catalog queries to distinguish a vanished warning, restored dependencies and workload validation.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/08/postgres-collation-refresh-rebuild-proof/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/08/postgres-collation-refresh-rebuild-proof/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/08/postgres-collation-refresh-rebuild-proof/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/08/postgres-collation-refresh-rebuild-proof/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/08/postgres-collation-refresh-rebuild-proof/","headline":"Does a vanished collation warning mean old indexes are repaired?","description":"Use a two-index ledger and read-only catalog queries to distinguish a vanished warning, restored dependencies and workload validation.","inLanguage":"en","datePublished":"2026-11-07T20:08:51.000Z","dateModified":"2026-11-07T20:08:51.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.postgresql.org/docs/18/sql-altercollation.html"],"keywords":"PostgreSQL, Collation, Upgrade acceptance"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/08/postgres-collation-refresh-rebuild-proof/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Does a vanished collation warning mean old indexes are repaired?","item":"https://www.zyweb.vip/en/2026/11/08/postgres-collation-refresh-rebuild-proof/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/08/postgres-collation-refresh-rebuild-proof/">zh-CN</option><option value="/en/2026/11/08/postgres-collation-refresh-rebuild-proof/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/08/postgres-collation-refresh-rebuild-proof/">zh-CN</option><option value="/en/2026/11/08/postgres-collation-refresh-rebuild-proof/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--postgresql">PostgreSQL</span>
+      <time datetime="2026-11-07T20:08:51.000Z">2026-11-08</time>
+    </div>
+
+    <h1>Does a vanished collation warning mean old indexes are repaired?</h1>
+
+    
+      <p class="post-hero__summary">Use a two-index ledger and read-only catalog queries to distinguish a vanished warning, restored dependencies and workload validation.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-07T20:08:51.000Z">2026-11-08</time> · Estimated read 13 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/08/postgres-collation-refresh-rebuild-proof/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/08/postgres-collation-refresh-rebuild-proof/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Version refresh does not verify rebuilding.</li><li>Keep restoration evidence for each affected object.</li><li>Version proxies do not exclude distribution backports.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>REFRESH VERSION can silence a collation warning without checking whether dependent objects were rebuilt under the new rules. After an OS or ICU upgrade, identify the changed rules and affected objects, restore those objects, and then acknowledge the version. A vanished warning is metadata evidence, not sufficient evidence that an old index is repaired.</p>
+<p>Suppose a maintenance window ends with a version-mismatch warning for a named collation. An operator runs the refresh command, sees no warning on the next query, and closes the upgrade. The missing work can be the recovery of structures organized under the old comparison rules. This discussion follows PostgreSQL 18 documentation; no OS upgrade, REINDEX or ALTER has been executed.</p>
+<h2 id="Why-can-recorded-versions-and-stored-structures-diverge"><a href="#Why-can-recorded-versions-and-stored-structures-diverge" class="headerlink" title="Why can recorded versions and stored structures diverge?"></a>Why can recorded versions and stored structures diverge?</h2><p>The <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-altercollation.html">PostgreSQL 18 ALTER COLLATION documentation</a> explains that the provider version is recorded when a collation is created and checked when it is used. A change in collation definitions can invalidate ordering assumptions in stored objects, including indexes. Existing structures are not automatically rebuilt on every comparison.</p>
+<p>The prescribed sequence directs maintainers to rebuild all affected dependent objects, for example with REINDEX, before refreshing the version. Refresh updates the catalog but does not check that rebuilding was completed correctly. Command success, matching catalog versions and restored structures therefore require separate evidence. A single green status hides which step was actually completed.</p>
+<p>Conversely, an OS upgrade alone does not prove that every ordering relation changed. Retain the actual system package, provider library and version identities and use their changes and the dependency inventory to determine scope. Without exact environments, inventing a pair of characters whose ordering supposedly reversed is not a valid check.</p>
+<h2 id="How-do-two-indexes-form-a-recovery-ledger"><a href="#How-do-two-indexes-form-a-recovery-ledger" class="headerlink" title="How do two indexes form a recovery ledger?"></a>How do two indexes form a recovery ledger?</h2><p>Consider a hypothetical app.name_sort collation recorded as v-old while the runtime reports v-new. customer_name_idx depends on it; customer_email_idx uses C instead. These version labels represent no specific ICU release. Determine actual dependencies rather than assuming that indexes on the same table share the affected named rule.</p>
+<table>
+<thead>
+<tr>
+<th>Object</th>
+<th>Dependency in this example</th>
+<th>What does refresh alone establish?</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>customer_name_idx</td>
+<td>app.name_sort</td>
+<td>No rebuild or validation receipt</td>
+</tr>
+<tr>
+<td>customer_email_idx</td>
+<td>C</td>
+<td>No direct inclusion in the first named dependency set</td>
+</tr>
+</tbody></table>
+<p>The independent expectation is that refreshing can remove the warning while leaving the first object’s rebuild evidence empty. Whether the second object is affected by some other system change needs its own scope analysis. Acceptance requires a restoration and check record for every affected object, rather than a green icon beside every index regardless of what happened.</p>
+<p>This unexecuted read-only inventory places versions and direct dependencies on the same row, making receipts easier to associate with their rule. The schema distinguishes same-name objects. LEFT JOIN retains a collation with no direct dependency; the dependency-type condition belongs in ON, because placing it in WHERE would discard those rows. Actual rows and counts are unknown.</p>
+<pre><code class="sql">SELECT n.nspname AS schema_name, c.oid, c.collname,
+       c.collprovider, c.collversion,
+       pg_collation_actual_version(c.oid) AS actual_version,
+       pg_describe_object(d.classid, d.objid, d.objsubid) AS dependent_object
+FROM pg_collation AS c
+JOIN pg_namespace AS n ON n.oid = c.collnamespace
+LEFT JOIN pg_depend AS d
+  ON d.refclassid = &#39;pg_collation&#39;::regclass
+ AND d.refobjid = c.oid
+WHERE c.collname = &#39;name_sort&#39;
+ORDER BY schema_name, dependent_object;
+</code></pre>
+<p>For an actual operation, select the intended schema and identity and restrict the inventory to the approved scope. Catalog queries start a ledger; they are not automatic recovery tools. Extensions, default collations and special dependencies still require examination. The documentation describes an analogous database-default refresh command. One named-collation dependency query does not establish coverage of every database-default effect.</p>
+<h2 id="What-evidence-should-recovery-retain"><a href="#What-evidence-should-recovery-retain" class="headerlink" title="What evidence should recovery retain?"></a>What evidence should recovery retain?</h2><p>A ledger can keep before-and-after provider identities, the reason each object is affected, the restoration action, its result and workload checks. Recovery can mean returning to the intended provider or rebuilding under the new one. The upgrade objective, available window and actual dependencies determine that choice. Neither route justifies declaring recovery complete from a catalog update alone.</p>
+<p>Rebuilding also needs a plan. The October 9 article on <a href="/en/2026/10/09/postgres-concurrent-index/">concurrent index construction</a> explains waiting, resource cost and failure states. This discussion supplies no environment-independent REINDEX script. Choose execution procedures from the actual version’s command restrictions, object types and maintenance conditions.</p>
+<p>Validation can cover representative ordering queries, relevant equality or uniqueness constraints, and business reads and writes. Preserve statements, parameter classes and the provider version so the checks address this change. Seeing an index in a plan proves that the optimizer used it; a valid flag alone is not independent proof of comparison correctness. If the new rules make previously distinct values conflict, resolve that against the actual identity policy rather than hiding it with refreshed metadata.</p>
+<p>The October 16 discussion of <a href="/en/2026/10/16/intl-collator-order-policy/">multilingual ordering policy</a> separates display order from identity. An upgrade adds a temporal distinction: stored structures may reflect old rules while new comparisons use the new library. Acceptance must explain how those states became consistent again.</p>
+<h2 id="Can-matching-version-strings-eliminate-the-need-to-inspect-collation-changes"><a href="#Can-matching-version-strings-eliminate-the-need-to-inspect-collation-changes" class="headerlink" title="Can matching version strings eliminate the need to inspect collation changes?"></a>Can matching version strings eliminate the need to inspect collation changes?</h2><p>No guarantee follows from that alone. For the libc provider, the note explains that glibc versions are a proxy, and distributions can backport collation changes. Retain actual library and package identities in upgrade evidence. This is a limitation of that provider’s version proxy, not an assertion that version information is useless.</p>
+<p>A completion record should identify the rules examined, objects requiring recovery, receipts that cover them and the evidence preceding version acknowledgement. Keep unexecuted inventory or recovery work explicitly pending. This example has no live catalog output or rebuild receipt; it provides a way to distinguish a removed warning from repaired objects.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-altercollation.html" rel="noopener">PostgreSQL 18 — ALTER COLLATION</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--postgresql" href="/en/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--collation" href="/en/tags/Collation/">Collation</a>
+          
+            <a class="tag tag--upgrade-acceptance" href="/en/tags/Upgrade-acceptance/">Upgrade acceptance</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F08%2Fpostgres-collation-refresh-rebuild-proof%2F&text=Does%20a%20vanished%20collation%20warning%20mean%20old%20indexes%20are%20repaired%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F08%2Fpostgres-collation-refresh-rebuild-proof%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Does%20a%20vanished%20collation%20warning%20mean%20old%20indexes%20are%20repaired%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F08%2Fpostgres-collation-refresh-rebuild-proof%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/08/postgres-write-cte-returning-dataflow/">
+              <span>Previous Post</span>
+              <strong>Why can SELECT still read old prices after a write CTE?</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/08/orset-concurrent-removal-business-rule/">
+              <span>Next Post</span>
+              <strong>A removed set member returns: should a concurrent add win?</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Why-can-recorded-versions-and-stored-structures-diverge">Why can recorded versions and stored structures diverge?</a>
+          
+            <a class="toc-link toc-link--h2" href="#How-do-two-indexes-form-a-recovery-ledger">How do two indexes form a recovery ledger?</a>
+          
+            <a class="toc-link toc-link--h2" href="#What-evidence-should-recovery-retain">What evidence should recovery retain?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Can-matching-version-strings-eliminate-the-need-to-inspect-collation-changes">Can matching version strings eliminate the need to inspect collation changes?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>258</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/08/postgres-write-cte-returning-dataflow/">Why can SELECT still read old prices after a write CTE?</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/08/postgres-logical-cutover-inventory/">Validate logical migration through rows, schema, and the next write</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/07/postgres-date-bin-origin-stride/">Why do two fifteen-minute date_bin queries disagree?</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

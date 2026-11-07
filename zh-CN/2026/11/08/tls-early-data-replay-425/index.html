@@ -1,0 +1,420 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>启用TLS 0-RTT前，先把425与业务副作用接起来 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="把TLS早期数据的拒绝时点、HTTP425重试条件与独立业务计数对应；POST仅作隔离拒绝测试的负向注入。">
+  
+  
+    <meta name="keywords" content="TLS早期数据,425 Too Early,重放风险">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/08/tls-early-data-replay-425/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/08/tls-early-data-replay-425/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/08/tls-early-data-replay-425/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/08/tls-early-data-replay-425/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="启用TLS 0-RTT前，先把425与业务副作用接起来 | Midnight blog">
+    <meta property="og:description" content="把TLS早期数据的拒绝时点、HTTP425重试条件与独立业务计数对应；POST仅作隔离拒绝测试的负向注入。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/08/tls-early-data-replay-425/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/08/tls-early-data-replay-425/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/08/tls-early-data-replay-425/","name":"启用TLS 0-RTT前，先把425与业务副作用接起来 | Midnight blog","description":"把TLS早期数据的拒绝时点、HTTP425重试条件与独立业务计数对应；POST仅作隔离拒绝测试的负向注入。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/08/tls-early-data-replay-425/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/08/tls-early-data-replay-425/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/08/tls-early-data-replay-425/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/08/tls-early-data-replay-425/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/08/tls-early-data-replay-425/","headline":"启用TLS 0-RTT前，先把425与业务副作用接起来","description":"把TLS早期数据的拒绝时点、HTTP425重试条件与独立业务计数对应；POST仅作隔离拒绝测试的负向注入。","inLanguage":"zh-CN","datePublished":"2026-11-07T20:08:51.000Z","dateModified":"2026-11-07T20:08:51.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.rfc-editor.org/rfc/rfc8446.txt","https://www.rfc-editor.org/rfc/rfc8470.txt"],"keywords":"TLS, HTTP, 安全"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/08/tls-early-data-replay-425/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"启用TLS 0-RTT前，先把425与业务副作用接起来","item":"https://www.zyweb.vip/zh-CN/2026/11/08/tls-early-data-replay-425/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/08/tls-early-data-replay-425/" selected>zh-CN</option><option value="/en/2026/11/08/tls-early-data-replay-425/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/08/tls-early-data-replay-425/" selected>zh-CN</option><option value="/en/2026/11/08/tls-early-data-replay-425/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--tls">TLS</span>
+      <time datetime="2026-11-07T20:08:51.000Z">2026-11-08</time>
+    </div>
+
+    <h1>启用TLS 0-RTT前，先把425与业务副作用接起来</h1>
+
+    
+      <p class="post-hero__summary">把TLS早期数据的拒绝时点、HTTP425重试条件与独立业务计数对应；POST仅作隔离拒绝测试的负向注入。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-07T20:08:51.000Z">2026-11-08</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/08/tls-early-data-replay-425/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/08/tls-early-data-replay-425/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>早期数据的加密不提供应用请求不可重放保证。</li><li>425重试不得再次使用早期数据，拒绝决定应先于业务副作用。</li><li>端到端验证需要受信代理事实与持久状态，手填头部不等于TLS实测。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>对不能接受重放风险的早期请求，服务器可用 425 拒绝处理。客户端重试必须退出早期数据路径；拒绝之前也不能先产生业务副作用。启用 TLS 1.3 的 0-RTT，需要把握手阶段、代理信号与业务结果一起验收，不能只看连接使用了加密。</p>
+<h2 id="加密过的请求仍可能被再次使用"><a href="#加密过的请求仍可能被再次使用" class="headerlink" title="加密过的请求仍可能被再次使用"></a>加密过的请求仍可能被再次使用</h2><p><a target="_blank" rel="noopener" href="https://www.rfc-editor.org/rfc/rfc8446.html#section-8">TLS 1.3 的重放条款</a>说明早期数据具有不同于普通应用数据的重放风险。攻击者不必解开正文，就可能复制早期数据到其他接收实例；客户端重试还可能与节点差异组合，造成重复处理。规范要求客户端只发送它认为可安全重放的早期数据，并要求服务端采取相应防护。这里核对二〇一八年八月的 RFC 8446，没有捕获、复制或发送真实 TLS 流量。</p>
+<p>这项风险不意味着证书验证失去意义。证书、加密、完整性与早期数据是否只能执行一次，各自回答不同问题。一条请求内容没有被修改，也不代表它没有再次到达；一个节点记住自己已接收的握手，也不证明其他节点共享了同一份记录。本站的<a href="/zh-CN/2026/11/07/openssl-s-client-verification-boundaries/">TLS 诊断验证讨论</a>关注链、名字与退出结果，本题限定为握手前后请求的重放接受政策。</p>
+<p>RFC 8446 还说明，即使最终状态上的幂等成立，大量重放仍可能消耗资源或形成其他攻击。比如只读报表不会增加订单，却可以反复占用查询预算。不能把“写入去重了”升级为“任何数量的早期重放都能接受”。节点数量、票据状态共享与业务成本属于部署评估；本文不根据协议名称给出通用启用比例。</p>
+<h2 id="425-要发生在业务处理之前"><a href="#425-要发生在业务处理之前" class="headerlink" title="425 要发生在业务处理之前"></a>425 要发生在业务处理之前</h2><p><a target="_blank" rel="noopener" href="https://www.rfc-editor.org/rfc/rfc8470.html#section-5.2">HTTP 早期数据规范</a>把 425 定义为服务端不愿承担处理可能重放请求的风险。使用早期数据的客户端收到它后需要重试，而重试不得再次放进早期数据。它不是普通超时的另一种写法，也不表示业务已经处理完成，只等客户端再确认。</p>
+<p>服务端若先扣减额度再返回 425，客户端按合同重试后可能再次扣减。响应码看上去正确，副作用顺序却已经违反设计目标。处理器必须在业务动作之前区分两种情况：对当前接收连接上的早期数据，可按规范选择等待该连接握手；但请求若带有 Early-Data: 1，表示先前一跳使用过早期数据，等待源站这一跳握手不能让它变得安全。同一份 RFC 8470 第五点一节要求，这种带标记且不能安全处理的请求必须用 425 拒绝。哪一层作决定，要按网关和源站的实际分工核对；只在应用日志里打印“早期请求已拒绝”，不能证明它在写入之前发生。</p>
+<p>规范还限制发送 425 的前提。服务器不能假设任意客户端都知道怎样重试；通常应在请求确实来自早期数据，或含有 <code>Early-Data: 1</code> 时采用这项响应。中间代理需要保留和传递相关事实。收到一个公网客户端自行填写的请求头，不等于网关已经观察到实际 TLS 阶段，更不应让它直接决定业务权限。</p>
+<h2 id="一份拒绝策略的负向账本"><a href="#一份拒绝策略的负向账本" class="headerlink" title="一份拒绝策略的负向账本"></a>一份拒绝策略的负向账本</h2><p>下面是未执行的隔离测试计划。测试者控制教学网关与计数资源，确认入站确实经过早期数据；或者在处理器单元测试中，通过受控接口注入可信的早期状态。后一种办法只验证处理器政策，不能称为端到端 TLS 实验。示例计数从零开始，不涉及真实交易。</p>
+<p>其中的 POST 是服务器拒绝策略的负向注入，不是建议普通客户端在缺少其他信息时发送不安全方法的早期数据。同一份 RFC 8470 第四节的客户端条款规定，缺少其他信息时，可发送安全方法，而不得把不安全或安全性未知的方法放进早期数据。实际构造协议测试还需要获准的隔离工具与明确额外条件，不能复制为生产客户端默认行为。</p>
+<table>
+<thead>
+<tr>
+<th>输入与政策</th>
+<th>预先写定的结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>教学 POST 增加计数；注入早期状态；端点禁止早期处理</td>
+<td>返回 425，持久计数仍为零</td>
+</tr>
+<tr>
+<td>同一业务意图在握手后提交，正常授权满足</td>
+<td>普通接受响应，持久计数变为一</td>
+</tr>
+<tr>
+<td>在另一入口再次注入早期副本，拒绝政策一致</td>
+<td>返回 425，持久计数仍为一</td>
+</tr>
+</tbody></table>
+<p>这些数值来自“只有第二行允许进入业务写入”的合同，不是运行日志。测试要在每一行之后通过独立读取核对持久计数，并保存响应与输入身份。若第一行之后计数已变成一，即使第三行的最终数量看似正确，也不能掩盖拒绝前写入。各组最好使用独立资源复测，防止上一轮残留让错误实现碰巧符合下一行预期。</p>
+<p>故意破坏的版本可以把计数更新移到早期状态判断之前。预期第一行马上暴露副作用，而不是等到正式流量里看到重复再回推原因。这种反例检验的是测试能否发现顺序错误，不是在演示如何构造真实重放攻击。没有协议工具回执、网关协商记录与资源读数，就必须保留“未执行”。</p>
+<h2 id="代理没有标记早期状态怎么办"><a href="#代理没有标记早期状态怎么办" class="headerlink" title="代理没有标记早期状态怎么办"></a>代理没有标记早期状态怎么办</h2><p>源站无法凭连接到自己的那一跳判断浏览器到边缘的一跳发生过什么。边缘完成握手以后再转发，请求仍可能先前已在早期阶段被接纳。部署应明确由哪个受信节点知道这个事实，怎样带到决策点，以及客户端自带的同名字段如何处理。这里不能把增加一个字符串头部当成已建立可信链。</p>
+<p>验收至少关联入口协商状态、代理经过的各跳、源站的接受决定、客户端重试阶段以及持久业务结果。只看源站返回 425，可能只验证了一个手工构造的头；只看客户端最终拿到成功，又可能漏掉拒绝前已写入的第一轮。实际部署若在网关直接禁止早期数据，也要确认限制确实作用于本次域名和入口，而不是只修改另一份配置文件。</p>
+<h2 id="只允许-GET-使用早期数据就够了吗？"><a href="#只允许-GET-使用早期数据就够了吗？" class="headerlink" title="只允许 GET 使用早期数据就够了吗？"></a>只允许 GET 使用早期数据就够了吗？</h2><p>还要核对端点真实语义与成本。GET 若偷偷写状态，本就破坏安全方法合同；昂贵查询即使不改变最终值，也可能被重放放大成本。选择时既看方法，也看这条业务操作能否接受重复及其资源代价。</p>
+<p>这一追问不要求把每次访问日志都去重。诊断日志记录多次访问，与重复创建订单的后果不同；团队需要明确什么变化算业务副作用、哪些额外工作可容忍，再决定是否启用。即使请求在普通握手后重试，网络中断仍会产生结果未知，业务自己的<a href="/zh-CN/2026/10/09/api-retry-idempotency/">幂等与查询合同</a>依然需要存在。</p>
+<p>可以先对不能接受重放的入口关闭早期数据，再为确切适用的只读请求单独评估。等待仅适用于能够等待当前接收连接握手的情形；先前一跳的 Early-Data 标记若表明请求不能安全处理，就必须拒绝，不能靠源站等待消除风险。不要拿一次成功连接或一张 425 截图宣布整条链路安全。本文交付的是接受与拒绝条件、独立业务预期和观察方案，没有网关上线、客户端兼容或故障注入的通过结论。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.rfc-editor.org/rfc/rfc8446.txt" rel="noopener">The Transport Layer Security (TLS) Protocol Version1.3 — RFC8446</a></li><li><a target="_blank" href="https://www.rfc-editor.org/rfc/rfc8470.txt" rel="noopener">Using Early Data in HTTP — RFC8470</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--tls" href="/zh-CN/tags/TLS/">TLS</a>
+          
+            <a class="tag tag--http" href="/zh-CN/tags/HTTP/">HTTP</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%AE%89%E5%85%A8/">安全</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--quality" href="/zh-CN/categories/Quality/">Quality</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F08%2Ftls-early-data-replay-425%2F&text=%E5%90%AF%E7%94%A8TLS%200-RTT%E5%89%8D%EF%BC%8C%E5%85%88%E6%8A%8A425%E4%B8%8E%E4%B8%9A%E5%8A%A1%E5%89%AF%E4%BD%9C%E7%94%A8%E6%8E%A5%E8%B5%B7%E6%9D%A5" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F08%2Ftls-early-data-replay-425%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E5%90%AF%E7%94%A8TLS%200-RTT%E5%89%8D%EF%BC%8C%E5%85%88%E6%8A%8A425%E4%B8%8E%E4%B8%9A%E5%8A%A1%E5%89%AF%E4%BD%9C%E7%94%A8%E6%8E%A5%E8%B5%B7%E6%9D%A5&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F08%2Ftls-early-data-replay-425%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/08/usability-comparison-order-carryover/">
+              <span>上一篇</span>
+              <strong>新版任务更快，还是用户刚在旧版学会了规则？</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/08/systemd-restart-start-limit-recovery/">
+              <span>下一篇</span>
+              <strong>启动限流窗口过了，systemd不一定会再自动重启</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#加密过的请求仍可能被再次使用">加密过的请求仍可能被再次使用</a>
+          
+            <a class="toc-link toc-link--h2" href="#425-要发生在业务处理之前">425 要发生在业务处理之前</a>
+          
+            <a class="toc-link toc-link--h2" href="#一份拒绝策略的负向账本">一份拒绝策略的负向账本</a>
+          
+            <a class="toc-link toc-link--h2" href="#代理没有标记早期状态怎么办">代理没有标记早期状态怎么办</a>
+          
+            <a class="toc-link toc-link--h2" href="#只允许-GET-使用早期数据就够了吗？">只允许 GET 使用早期数据就够了吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>258</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/08/iframe-sandbox-same-origin-escape/">预览页仍写着sandbox，为什么子页能解除限制？</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/08/oauth-refresh-rotation-reuse-family/">旧刷新令牌已经失效，为什么还要撤销新的？</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/07/openssl-s-client-verification-boundaries/">OpenSSL s_client 握手成功，为什么证书验证仍可能失败？</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
