@@ -1,0 +1,432 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Validate logical migration through rows, schema, and the next write | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="PostgreSQL 18 logical replication does not cover DDL, sequence state or large objects. A complete read-only inventory and independent numeric cases separate read-subscriber evidence from write-cutover readiness.">
+  
+  
+    <meta name="keywords" content="logical replication,sequence state,write cutover">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/08/postgres-logical-cutover-inventory/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/08/postgres-logical-cutover-inventory/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/08/postgres-logical-cutover-inventory/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/08/postgres-logical-cutover-inventory/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Validate logical migration through rows, schema, and the next write | Midnight blog">
+    <meta property="og:description" content="PostgreSQL 18 logical replication does not cover DDL, sequence state or large objects. A complete read-only inventory and independent numeric cases separate read-subscriber evidence from write-cutover readiness.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/08/postgres-logical-cutover-inventory/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/08/postgres-logical-cutover-inventory/#webpage","url":"https://www.zyweb.vip/en/2026/11/08/postgres-logical-cutover-inventory/","name":"Validate logical migration through rows, schema, and the next write | Midnight blog","description":"PostgreSQL 18 logical replication does not cover DDL, sequence state or large objects. A complete read-only inventory and independent numeric cases separate read-subscriber evidence from write-cutover readiness.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/08/postgres-logical-cutover-inventory/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/08/postgres-logical-cutover-inventory/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/08/postgres-logical-cutover-inventory/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/08/postgres-logical-cutover-inventory/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/08/postgres-logical-cutover-inventory/","headline":"Validate logical migration through rows, schema, and the next write","description":"PostgreSQL 18 logical replication does not cover DDL, sequence state or large objects. A complete read-only inventory and independent numeric cases separate read-subscriber evidence from write-cutover readiness.","inLanguage":"en","datePublished":"2026-11-07T19:03:39.000Z","dateModified":"2026-11-07T19:03:39.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.postgresql.org/docs/18/logical-replication-restrictions.html","https://www.postgresql.org/docs/18/view-pg-sequences.html","https://raw.githubusercontent.com/postgres/postgres/REL_18_STABLE/doc/src/sgml/catalogs.sgml","https://www.postgresql.org/docs/18/catalog-pg-largeobject-metadata.html"],"keywords":"PostgreSQL, Logical replication, Migration acceptance"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/08/postgres-logical-cutover-inventory/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Validate logical migration through rows, schema, and the next write","item":"https://www.zyweb.vip/en/2026/11/08/postgres-logical-cutover-inventory/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/08/postgres-logical-cutover-inventory/">zh-CN</option><option value="/en/2026/11/08/postgres-logical-cutover-inventory/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/08/postgres-logical-cutover-inventory/">zh-CN</option><option value="/en/2026/11/08/postgres-logical-cutover-inventory/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--postgresql">PostgreSQL</span>
+      <time datetime="2026-11-07T19:03:39.000Z">2026-11-08</time>
+    </div>
+
+    <h1>Validate logical migration through rows, schema, and the next write</h1>
+
+    
+      <p class="post-hero__summary">PostgreSQL 18 logical replication does not cover DDL, sequence state or large objects. A complete read-only inventory and independent numeric cases separate read-subscriber evidence from write-cutover readiness.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-07T19:03:39.000Z">2026-11-08</time> · Estimated read 17 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/08/postgres-logical-cutover-inventory/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/08/postgres-logical-cutover-inventory/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Replicated identity values do not synchronize their sequence allocator.</li><li>DDL and large objects need checks outside logical row replication.</li><li>Read-only inventory and matching row counts do not certify writable cutover.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Caught-up table rows do not establish that a PostgreSQL logical subscriber can take over writes. Validate schema, identifier allocation and objects outside replication separately; a zero-lag signal does not cover all three.</p>
+<p>Suppose both databases contain order IDs 1 and 100 with matching row counts, but the first new order on the destination conflicts. One possible explanation is that identity column values replicated while the destination&#39;s sequence state did not. This article uses PostgreSQL 18 documentation. No publication or subscription was created, traffic switched or sequence modified.</p>
+<h2 id="Replicated-values-do-not-carry-their-allocator-39-s-state"><a href="#Replicated-values-do-not-carry-their-allocator-39-s-state" class="headerlink" title="Replicated values do not carry their allocator&#39;s state"></a>Replicated values do not carry their allocator&#39;s state</h2><p>The <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/logical-replication-restrictions.html">PostgreSQL 18 logical-replication restrictions</a> explicitly distinguish serial or identity values stored in rows from the sequence itself. Row values replicate; sequence state does not. This is typically unimportant for a read-only subscriber, but a writable switchover needs appropriate sequence updates. A row containing 100 cannot certify that the next local allocation will exceed 100.</p>
+<p>Do not turn that into a universal max(id)+1 reset recipe. Sequences can have different increments, caching, cycling, previously allocated values and other consumers. If the old database still accepts writes, a computed boundary can immediately become stale. The positive-integer example demonstrates insufficient evidence; it is not an online reset script for every sequence.</p>
+<p>The <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/view-pg-sequences.html">version-18 pg_sequences reference</a> also explains that last_value is the last sequence value written to disk and can exceed the last value handed out when caching is used. NULL can mean the sequence has not been read, that the observer lacks the necessary privilege, or an unlogged sequence on a standby under the documented condition. Neither NULL nor last_value alone is a universal next-allocation oracle.</p>
+<h2 id="Schema-changes-have-a-separate-handoff"><a href="#Schema-changes-have-a-separate-handoff" class="headerlink" title="Schema changes have a separate handoff"></a>Schema changes have a separate handoff</h2><p>The restriction document says DDL and schema changes do not replicate. If new publisher data does not fit the subscriber&#39;s schema, application of replication errors until that schema is updated. Applying additive changes to the subscriber first can often avoid the gap. That is not a universal instruction to reverse the order of every DDL operation.</p>
+<p>For example, a publisher changes from id alone to id plus note while the subscriber still has only id. Previously caught-up rows cannot certify that subsequent changes with the new structure will apply. Record both schema versions, rollout order and recovery after an apply error rather than comparing a single row count. The <a href="/en/2026/10/21/postgres-not-valid-validation-window/">staged-constraint article</a> concerns scanning and validation within a database; it does not establish synchronized structures across two databases.</p>
+<p>Large objects require another inventory. PostgreSQL explicitly excludes them from logical replication. A regular table column containing an object identifier can arrive without proving that the object&#39;s contents migrated. Large object here means the specific PostgreSQL object facility, not every large text or bytea value. “Large fields do not replicate” would be a different and incorrect claim.</p>
+<h2 id="What-a-read-only-inventory-can-establish"><a href="#What-a-read-only-inventory-can-establish" class="headerlink" title="What a read-only inventory can establish"></a>What a read-only inventory can establish</h2><p>This complete SQL has not been executed. Its read-only transaction performs no nextval, setval or schema change. editorial_example is a deliberately chosen teaching-schema placeholder, not a discovered application schema. Check permissions, database identity and connection before interpreting any results.</p>
+<pre><code class="sql">-- Unexecuted PostgreSQL18 read-only inventory. No sequence allocation/reset.
+-- Restrict to a schema explicitly selected for the exercise; change name deliberately.
+BEGIN READ ONLY;
+SELECT current_database(), current_setting(&#39;server_version&#39;);
+SELECT schemaname, sequencename, sequenceowner, start_value, increment_by,
+       min_value, max_value, cycle, cache_size, last_value
+FROM pg_catalog.pg_sequences
+WHERE schemaname = &#39;editorial_example&#39;
+ORDER BY sequencename;
+SELECT c.relname, a.attname, a.attnum, a.attidentity,
+       pg_catalog.format_type(a.atttypid, a.atttypmod) AS column_type
+FROM pg_catalog.pg_attribute a
+JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = &#39;editorial_example&#39;
+  AND c.relkind IN (&#39;r&#39;,&#39;p&#39;) AND a.attnum &gt; 0 AND NOT a.attisdropped
+ORDER BY c.relname, a.attnum;
+SELECT count(*) AS large_objects_seen FROM pg_catalog.pg_largeobject_metadata;
+-- An illustrative VALUES case; this does not assert a live sequence next value.
+WITH cases(label, rows_equal, allocated_next_candidate, max_id) AS (
+ VALUES (&#39;caught_up_but_unsafe&#39;, true, 1::bigint, 100::bigint),
+        (&#39;candidate_only&#39;, true, 101::bigint, 100::bigint)
+)
+SELECT label, rows_equal,
+       allocated_next_candidate &gt; max_id AS clears_this_numeric_example
+FROM cases ORDER BY label;
+-- Expected: candidate_only true/true; caught_up_but_unsafe true/false.
+-- Even candidate_only is NOT a full cutover certificate: increments, writer fencing,
+-- cached allocations, cycles, permissions and application behavior remain unverified.
+COMMIT;
+</code></pre>
+<p>The first part lists sequence properties, column definitions and large-object metadata count. The <a target="_blank" rel="noopener" href="https://raw.githubusercontent.com/postgres/postgres/REL_18_STABLE/doc/src/sgml/catalogs.sgml">official version-18 pg_attribute source</a> says ordinary columns have positive attnum values and dropped columns can retain catalog entries, so the query excludes system and dropped columns. Type and identity information help compare structures, but these queries do not cover every grant, extension, function or dependency. They cannot certify a whole-database migration.</p>
+<p>The <a target="_blank" rel="noopener" href="https://raw.githubusercontent.com/postgres/postgres/REL_18_STABLE/doc/src/sgml/catalogs.sgml">pg_largeobject_metadata definition in that official catalog source</a> distinguishes metadata from actual content. Matching metadata counts do not prove matching bytes or references. Interpret last_value with its permission and caching qualifications too. An inventory identifies further checks; a count is not a completeness certificate.</p>
+<p>The VALUES section supplies two independent hypothetical cases. caught_up_but_unsafe has equal rows but candidate 1 does not exceed maximum ID 100, so its numeric check is false. candidate_only supplies 101 and passes that comparison without satisfying every cutover condition. The expected results are specified in comments. They are neither observed replication output nor predictions of a real sequence.</p>
+<h2 id="Write-authority-needs-its-own-completion-point"><a href="#Write-authority-needs-its-own-completion-point" class="headerlink" title="Write authority needs its own completion point"></a>Write authority needs its own completion point</h2><p>A write cutover needs a plan to fence old writers before final replication, allocator handling and application routing are accepted. Include background tasks and other sequence consumers; disabling a frontend button is insufficient. Execution, interruption duration and reversal depend on the target system, not on these read-only queries.</p>
+<p>Choose representative application paths from the inventory of identity columns, independent sequences, structural changes and large-object dependencies. Retain instance, database, application version and authorized write scope. Verify that the application writes to the new authority and reads back related content while old paths no longer create conflicting facts. If both databases receive writes, returning to the old connection address requires an additional data-handling plan.</p>
+<p>The <a href="/en/2026/11/01/postgres-unlogged-crash-replication/">UNLOGGED standby-content article</a> concerns logging and standby contents, whereas this question concerns ordinary tables&#39; logical-replication contract. The <a href="/en/2026/10/15/postgres-sequence-gap/">sequence-gap article</a> describes values not reclaimed after rollback; that differs from sequence state being outside logical replication altogether.</p>
+<h2 id="Must-sequence-state-be-synchronized-for-a-permanently-read-only-subscriber"><a href="#Must-sequence-state-be-synchronized-for-a-permanently-read-only-subscriber" class="headerlink" title="Must sequence state be synchronized for a permanently read-only subscriber?"></a>Must sequence state be synchronized for a permanently read-only subscriber?</h2><p>It is typically irrelevant when no local path allocates sequence values, a qualification retained by the official restrictions. A future write cutover or background writer changes the condition and requires explicit planning. Past read-only use does not certify future writable readiness.</p>
+<p>A proposed exercise uses two isolated version-18 instances, replicates identity rows and inspects row values separately from actual sequence state. Test additive-schema order in a controlled case. After explicitly fencing old writes, follow an approved allocator plan and verify an authorized application write with its related content. Neither the SQL nor these exercises was run here. No zero-downtime, complete-copy or successful-cutover claim follows. Approval needs evidence for each dependency, not a replication-lag number that once displayed zero.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/logical-replication-restrictions.html" rel="noopener">PostgreSQL: Documentation: 18: 29.8. Restrictions</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/view-pg-sequences.html" rel="noopener">PostgreSQL: Documentation: 18: 53.24. pg_sequences</a></li><li><a target="_blank" href="https://raw.githubusercontent.com/postgres/postgres/REL_18_STABLE/doc/src/sgml/catalogs.sgml" rel="noopener">PostgreSQL REL_18_STABLE System Catalogs (catalogs.sgml)</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/catalog-pg-largeobject-metadata.html" rel="noopener">PostgreSQL: Documentation: 18: 52.31. pg_largeobject_metadata</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--postgresql" href="/en/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--logical-replication" href="/en/tags/Logical-replication/">Logical replication</a>
+          
+            <a class="tag tag--migration-acceptance" href="/en/tags/Migration-acceptance/">Migration acceptance</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--delivery" href="/en/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F08%2Fpostgres-logical-cutover-inventory%2F&text=Validate%20logical%20migration%20through%20rows%2C%20schema%2C%20and%20the%20next%20write" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F08%2Fpostgres-logical-cutover-inventory%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Validate%20logical%20migration%20through%20rows%2C%20schema%2C%20and%20the%20next%20write&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F08%2Fpostgres-logical-cutover-inventory%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/08/promql-bool-alert-presence/">
+              <span>Previous Post</span>
+              <strong>Why can a PromQL result of zero still activate an alert?</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/08/otel-log-event-observed-timestamp/">
+              <span>Next Post</span>
+              <strong>Choose log timestamps separately for incident and collection questions</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Replicated-values-do-not-carry-their-allocator-39-s-state">Replicated values do not carry their allocator&amp;#39;s state</a>
+          
+            <a class="toc-link toc-link--h2" href="#Schema-changes-have-a-separate-handoff">Schema changes have a separate handoff</a>
+          
+            <a class="toc-link toc-link--h2" href="#What-a-read-only-inventory-can-establish">What a read-only inventory can establish</a>
+          
+            <a class="toc-link toc-link--h2" href="#Write-authority-needs-its-own-completion-point">Write authority needs its own completion point</a>
+          
+            <a class="toc-link toc-link--h2" href="#Must-sequence-state-be-synchronized-for-a-permanently-read-only-subscriber">Must sequence state be synchronized for a permanently read-only subscriber?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>258</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/07/postgres-date-bin-origin-stride/">Why do two fifteen-minute date_bin queries disagree?</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/07/postgres-jsonb-set-missing-parents/">Why does jsonb_set leave a missing nested field unchanged?</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/05/postgres-last-value-window-frame/">Why PostgreSQL last_value does not automatically mean the last row in a partition</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

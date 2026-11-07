@@ -1,0 +1,428 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Choose the out-of-memory outcome before mixing cache and authoritative state | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Choose where Redis caches and authoritative records belong by their eviction or write-rejection consequences, with explicit allkeys, volatile and noeviction eligibility examples.">
+  
+  
+    <meta name="keywords" content="maxmemory,noeviction,volatile-lru">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/08/redis-eviction-authoritative-state/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/08/redis-eviction-authoritative-state/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/08/redis-eviction-authoritative-state/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/08/redis-eviction-authoritative-state/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Choose the out-of-memory outcome before mixing cache and authoritative state | Midnight blog">
+    <meta property="og:description" content="Choose where Redis caches and authoritative records belong by their eviction or write-rejection consequences, with explicit allkeys, volatile and noeviction eligibility examples.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/08/redis-eviction-authoritative-state/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/08/redis-eviction-authoritative-state/#webpage","url":"https://www.zyweb.vip/en/2026/11/08/redis-eviction-authoritative-state/","name":"Choose the out-of-memory outcome before mixing cache and authoritative state | Midnight blog","description":"Choose where Redis caches and authoritative records belong by their eviction or write-rejection consequences, with explicit allkeys, volatile and noeviction eligibility examples.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/08/redis-eviction-authoritative-state/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/08/redis-eviction-authoritative-state/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/08/redis-eviction-authoritative-state/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/08/redis-eviction-authoritative-state/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/08/redis-eviction-authoritative-state/","headline":"Choose the out-of-memory outcome before mixing cache and authoritative state","description":"Choose where Redis caches and authoritative records belong by their eviction or write-rejection consequences, with explicit allkeys, volatile and noeviction eligibility examples.","inLanguage":"en","datePublished":"2026-11-07T19:03:39.000Z","dateModified":"2026-11-07T19:03:39.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://redis.io/docs/latest/develop/reference/eviction/"],"keywords":"Redis, Cache design, Capacity management"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/08/redis-eviction-authoritative-state/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Choose the out-of-memory outcome before mixing cache and authoritative state","item":"https://www.zyweb.vip/en/2026/11/08/redis-eviction-authoritative-state/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/08/redis-eviction-authoritative-state/">zh-CN</option><option value="/en/2026/11/08/redis-eviction-authoritative-state/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/08/redis-eviction-authoritative-state/">zh-CN</option><option value="/en/2026/11/08/redis-eviction-authoritative-state/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--redis">Redis</span>
+      <time datetime="2026-11-07T19:03:39.000Z">2026-11-08</time>
+    </div>
+
+    <h1>Choose the out-of-memory outcome before mixing cache and authoritative state</h1>
+
+    
+      <p class="post-hero__summary">Choose where Redis caches and authoritative records belong by their eviction or write-rejection consequences, with explicit allkeys, volatile and noeviction eligibility examples.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-07T19:03:39.000Z">2026-11-08</time> · Estimated read 15 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/08/redis-eviction-authoritative-state/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/08/redis-eviction-authoritative-state/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>TTL does not guarantee retention until its deadline under memory pressure.</li><li>Volatile policies can still select important expiring records.</li><li>Avoiding eviction requires handling rejected writes rather than reporting false acceptance.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Before mixing caches and sole business records in one Redis instance, decide what may disappear and which writes may fail when memory is exhausted. TTL is not a minimum-retention guarantee. Choosing noeviction does not add capacity; it changes some memory pressure into write errors.</p>
+<p>Suppose an instance stores report caches, accepted-task records and duplicate-charge identifiers. A developer gives caches a one-minute TTL and deduplication records a one-day TTL, assuming the latter remain available for at least a day. An eviction policy that selects expiring keys invalidates that assumption. This analysis follows the current official Key eviction guide. No Redis connection, memory-pressure experiment or charge was performed.</p>
+<h2 id="Expiration-and-capacity-eviction-are-different-causes-of-absence"><a href="#Expiration-and-capacity-eviction-are-different-causes-of-absence" class="headerlink" title="Expiration and capacity eviction are different causes of absence"></a>Expiration and capacity eviction are different causes of absence</h2><p>The <a target="_blank" rel="noopener" href="https://redis.io/docs/latest/develop/reference/eviction/">Redis key-eviction guide</a> explains that memory exceeding maxmemory triggers the selected eviction policy. Expiration governs what happens at a deadline; eviction selects data that can disappear earlier under capacity pressure. Correctly preserving a TTL during an update does not remove the second mechanism.</p>
+<p>The November 5, 2026 article on <a href="/en/2026/11/05/redis-set-expire-ttl-replacement/">SET and TTL replacement</a> addresses commands that preserve or change a deadline. Here the TTL is assumed correct. Fixing KEEPTTL in a wrapper does not change the instance&#39;s eviction policy.</p>
+<p>Allkeys-lru considers all keys, including a task record with no expiration. Volatile-lru selects keys with an expiration, so the one-day deduplication record remains eligible. Keeping a permanent task key outside that candidate set does not guarantee unlimited successful writes. Once that eligible set is empty, volatile policies behave like noeviction according to the guide.</p>
+<p>Eligibility is not an exact prediction of the next victim. The documented LRU algorithm uses approximate sampling. Do not derive a fixed deletion order from three keys or claim repeated reads make an important key untouchable. First determine whether losing each class means recomputation, an authoritative lookup or loss of a unique business fact.</p>
+<h2 id="Check-policy-against-three-different-data-roles"><a href="#Check-policy-against-three-different-data-roles" class="headerlink" title="Check policy against three different data roles"></a>Check policy against three different data roles</h2><p>This complete Python 3 candidate-set example has not been executed. It neither implements Redis memory accounting nor simulates LRU. TTL values indicate whether expiration exists; they do not represent time elapsed on this machine. Independent expected sets describe allkeys, volatile and noeviction eligibility.</p>
+<pre><code class="python">&quot;&quot;&quot;Unexecuted policy eligibility illustration. No Redis connection.
+It does not predict approximateLRU choice or emulate memory accounting.
+&quot;&quot;&quot;
+keys = {&#39;cache:report&#39;: 60, &#39;task:accepted&#39;: None, &#39;dedup:charge&#39;: 86400}
+def eligible(policy, key_ttls):
+    if policy == &#39;allkeys-lru&#39;:
+        return set(key_ttls)
+    if policy == &#39;volatile-lru&#39;:
+        return {k for k, ttl in key_ttls.items() if ttl is not None}
+    if policy == &#39;noeviction&#39;:
+        return set()
+    raise ValueError(&#39;Unsupported teaching policy&#39;)
+expected = {
+ &#39;allkeys-lru&#39;: {&#39;cache:report&#39;, &#39;task:accepted&#39;, &#39;dedup:charge&#39;},
+ &#39;volatile-lru&#39;: {&#39;cache:report&#39;, &#39;dedup:charge&#39;},
+ &#39;noeviction&#39;: set(),
+}
+if __name__ == &#39;__main__&#39;:
+    for policy, oracle in expected.items():
+        assert eligible(policy, keys) == oracle
+        print(policy, sorted(oracle))
+    # No eligible victim does not imply successful new-data writes.
+</code></pre>
+<p>The consequences matter more than the sets. cache:report can be rebuilt from a durable source and its loss might cost another query. If task:accepted is the sole acceptance receipt, losing it can make an accepted task untraceable. If dedup:charge is the only duplicate guard, an old request arriving after its removal can be mistaken for a new intent. This charge scenario is a hypothetical risk, not an incident report about a payment system.</p>
+<p>Volatile-lru appears to protect the permanent task key while still making the expiring deduplication record eligible. Making that record permanent creates another question: what happens when eligible candidates are exhausted and a new write fails? A name such as cache and the existence of a TTL cannot establish reconstructability. Identify the reliable source and what callers see while rebuilding.</p>
+<h2 id="Noeviction-transfers-responsibility-to-the-write-path"><a href="#Noeviction-transfers-responsibility-to-the-write-path" class="headerlink" title="Noeviction transfers responsibility to the write path"></a>Noeviction transfers responsibility to the write path</h2><p>The guide says noeviction does not evict keys, but commands trying to cache new data return errors; commands that only read existing data continue. Applications choosing it must inspect write outcomes. Catching the error and still returning “task accepted” converts an observable capacity failure into a missing business record.</p>
+<p>This is not a recommendation to place everything in one noeviction instance. Report caches can still compete with task acceptance for capacity. The guide suggests separate instances for caches and persistent keys where possible. That separates policy and budgets without automatically providing backups, recovery or business authority. Choose separation according to failure consequences and operational cost.</p>
+<p>In this example, a more direct design keeps task acceptance and deduplication authority in storage meeting their commit requirements. Redis may accelerate lookups, but a miss must not independently prove that a task was never accepted or that a request is new. External operations still need their own identity and lookup contracts. The question here is specifically whether a capacity policy may remove the only record, rather than a general persistence tutorial.</p>
+<p>Memory budgeting also needs more than the host&#39;s installed RAM. The guide explains that some replication and AOF buffers are excluded from the eviction comparison; INFO memory exposes mem_not_counted_for_evict. Maxmemory is therefore not a hard ceiling on every byte in the process. Buffer, client and environment headroom require actual observation. No unmeasured sizing percentage is supplied here.</p>
+<h2 id="Does-an-unchanged-evicted-keys-counter-prove-that-a-key-expired"><a href="#Does-an-unchanged-evicted-keys-counter-prove-that-a-key-expired" class="headerlink" title="Does an unchanged evicted_keys counter prove that a key expired?"></a>Does an unchanged evicted_keys counter prove that a key expired?</h2><p>No. Explicit deletion, replacement, a namespace mistake or querying a different instance can also explain absence. Investigate expired_keys, the actual write path and instance identity together. An aggregate cumulative counter is not a causal history for one missing key.</p>
+<p>Start with read-only observations. These redis-cli commands were not executed and do not change a shared instance&#39;s global configuration. Supply connection settings through the authorized environment rather than putting credentials in the article or logs.</p>
+<pre><code class="text">redis-cli CONFIG GET maxmemory
+redis-cli CONFIG GET maxmemory-policy
+redis-cli INFO memory
+redis-cli INFO stats
+redis-cli INFO commandstats
+</code></pre>
+<p>Record an observation window, compare eviction, expiration and command-rejection changes, and verify which instance the application actually uses. A pressure test belongs in a disposable instance with retained server version and configuration. Check reconstructable cache misses, propagation of rejected critical writes and the caller&#39;s lookup route. No such experiment was run here.</p>
+<p>The <a href="/en/2026/11/01/postgres-unlogged-crash-replication/">UNLOGGED reconstructability article</a> concerns another failure condition. This decision concerns capacity during operation: evictable keys need an acceptable absence path, and a non-evicting instance needs an understandable write-rejection path. Increasing a TTL alone cannot supply either business promise.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://redis.io/docs/latest/develop/reference/eviction/" rel="noopener">Key eviction | Docs</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--redis" href="/en/tags/Redis/">Redis</a>
+          
+            <a class="tag tag--cache-design" href="/en/tags/Cache-design/">Cache design</a>
+          
+            <a class="tag tag--capacity-management" href="/en/tags/Capacity-management/">Capacity management</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F08%2Fredis-eviction-authoritative-state%2F&text=Choose%20the%20out-of-memory%20outcome%20before%20mixing%20cache%20and%20authoritative%20state" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F08%2Fredis-eviction-authoritative-state%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Choose%20the%20out-of-memory%20outcome%20before%20mixing%20cache%20and%20authoritative%20state&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F08%2Fredis-eviction-authoritative-state%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/08/saga-compensation-business-outcomes/">
+              <span>Previous Post</span>
+              <strong>Record Saga compensation outcomes beyond the failure arrow</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/08/rabbitmq-routing-return-confirm-contract/">
+              <span>Next Post</span>
+              <strong>RabbitMQ acknowledged the publish. Why is the queue empty?</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Expiration-and-capacity-eviction-are-different-causes-of-absence">Expiration and capacity eviction are different causes of absence</a>
+          
+            <a class="toc-link toc-link--h2" href="#Check-policy-against-three-different-data-roles">Check policy against three different data roles</a>
+          
+            <a class="toc-link toc-link--h2" href="#Noeviction-transfers-responsibility-to-the-write-path">Noeviction transfers responsibility to the write path</a>
+          
+            <a class="toc-link toc-link--h2" href="#Does-an-unchanged-evicted-keys-counter-prove-that-a-key-expired">Does an unchanged evicted_keys counter prove that a key expired?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>258</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/05/redis-scan-full-iteration-contract/">Why an empty Redis SCAN batch does not finish an iteration</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/05/redis-set-expire-ttl-replacement/">Why a Redis cache update can remove its expiration</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/08/api-resource-name-reference-scope/">Separate resource identity from its access URL</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

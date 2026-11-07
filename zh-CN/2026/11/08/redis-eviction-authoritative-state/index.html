@@ -1,0 +1,428 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>缓存和业务真相共用Redis前，先安排内存耗尽的结果 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="从Redis内存耗尽时的驱逐或拒写结果选择缓存与业务权威的放置，比较allkeys、volatile、noeviction的候选范围及可观察证据。">
+  
+  
+    <meta name="keywords" content="maxmemory,noeviction,volatile-lru">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/08/redis-eviction-authoritative-state/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/08/redis-eviction-authoritative-state/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/08/redis-eviction-authoritative-state/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/08/redis-eviction-authoritative-state/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="缓存和业务真相共用Redis前，先安排内存耗尽的结果 | Midnight blog">
+    <meta property="og:description" content="从Redis内存耗尽时的驱逐或拒写结果选择缓存与业务权威的放置，比较allkeys、volatile、noeviction的候选范围及可观察证据。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/08/redis-eviction-authoritative-state/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/08/redis-eviction-authoritative-state/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/08/redis-eviction-authoritative-state/","name":"缓存和业务真相共用Redis前，先安排内存耗尽的结果 | Midnight blog","description":"从Redis内存耗尽时的驱逐或拒写结果选择缓存与业务权威的放置，比较allkeys、volatile、noeviction的候选范围及可观察证据。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/08/redis-eviction-authoritative-state/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/08/redis-eviction-authoritative-state/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/08/redis-eviction-authoritative-state/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/08/redis-eviction-authoritative-state/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/08/redis-eviction-authoritative-state/","headline":"缓存和业务真相共用Redis前，先安排内存耗尽的结果","description":"从Redis内存耗尽时的驱逐或拒写结果选择缓存与业务权威的放置，比较allkeys、volatile、noeviction的候选范围及可观察证据。","inLanguage":"zh-CN","datePublished":"2026-11-07T19:03:39.000Z","dateModified":"2026-11-07T19:03:39.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://redis.io/docs/latest/develop/reference/eviction/"],"keywords":"Redis, 缓存设计, 容量管理"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/08/redis-eviction-authoritative-state/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"缓存和业务真相共用Redis前，先安排内存耗尽的结果","item":"https://www.zyweb.vip/zh-CN/2026/11/08/redis-eviction-authoritative-state/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/08/redis-eviction-authoritative-state/" selected>zh-CN</option><option value="/en/2026/11/08/redis-eviction-authoritative-state/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/08/redis-eviction-authoritative-state/" selected>zh-CN</option><option value="/en/2026/11/08/redis-eviction-authoritative-state/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--redis">Redis</span>
+      <time datetime="2026-11-07T19:03:39.000Z">2026-11-08</time>
+    </div>
+
+    <h1>缓存和业务真相共用Redis前，先安排内存耗尽的结果</h1>
+
+    
+      <p class="post-hero__summary">从Redis内存耗尽时的驱逐或拒写结果选择缓存与业务权威的放置，比较allkeys、volatile、noeviction的候选范围及可观察证据。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-07T19:03:39.000Z">2026-11-08</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/08/redis-eviction-authoritative-state/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/08/redis-eviction-authoritative-state/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>TTL不保证键在内存压力下至少保留到截止。</li><li>volatile策略仍可能选择带期限的关键记录。</li><li>避免驱逐后还需处理写入拒绝，不能把异常吞成受理成功。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>把缓存和业务唯一记录放进同一个 Redis 实例之前，要先决定内存耗尽时允许丢什么、允许哪次写入失败。TTL 不是最低保留保证；改成 noeviction 也不会增加容量，而是把部分压力转成写入错误。</p>
+<p>假设一个实例同时保存报表缓存、已受理任务，以及用于识别重复扣款的记录。开发者给缓存设置一分钟期限，给去重记录设置一天期限，认为后者至少能保留一天。若策略允许驱逐带期限的键，这个假设就不成立。以下按当前官方 Key eviction 指南分析容量策略，没有连接 Redis、制造内存压力或实际扣款。</p>
+<h2 id="先区分到期与容量驱逐"><a href="#先区分到期与容量驱逐" class="headerlink" title="先区分到期与容量驱逐"></a>先区分到期与容量驱逐</h2><p><a target="_blank" rel="noopener" href="https://redis.io/docs/latest/develop/reference/eviction/">Redis 键驱逐指南</a>说明，当用于比较的数据内存超过 maxmemory 时，服务器根据配置的策略驱逐键。到期回答的是期限到达后怎样处理，驱逐回答的是容量压力下哪些键可以提前移除。即使写入时正确保留了 TTL，第二套机制仍可能让键先消失。</p>
+<p>本站二〇二六年十一月五日的<a href="/zh-CN/2026/11/05/redis-set-expire-ttl-replacement/">SET 与 TTL 替换规则</a>处理的是更新命令怎样保留或改变期限。本篇假设期限本身没有写错，仍要讨论容量策略。只修封装函数的 KEEPTTL，不会改变实例选择淘汰哪些键的规则。</p>
+<p>allkeys-lru 的候选范围包括所有键，不会因为一个任务键没有期限就自动保护它。volatile-lru 只从带期限的键中选择，因此本例的一天去重记录也可能属于候选。永久任务记录不在这个候选集，并不代表整个实例会一直允许新写入；官方指出，volatile 系列没有符合条件的键时，行为类似 noeviction。</p>
+<p>这里必须把“属于候选”与“确定下一个被删”分开。指南解释 LRU 使用近似采样，不应根据一小组键的顺序写出固定淘汰预测。给某个业务键多读几次，也不能成为它绝不会被驱逐的证明。选择策略之前，先确认失去每种键会导致重新计算、暂时查库，还是不可恢复地失去业务事实。</p>
+<h2 id="三个键，检验策略与数据角色是否相容"><a href="#三个键，检验策略与数据角色是否相容" class="headerlink" title="三个键，检验策略与数据角色是否相容"></a>三个键，检验策略与数据角色是否相容</h2><p>下面是完整、未执行的 Python 3 候选集合例子。它不实现 Redis 的内存核算，也不模拟 LRU。三个 TTL 仅表示是否有期限，不表示本机经过这些秒数；预期集合独立写出，以检查 allkeys、volatile 和 noeviction 的候选范围。</p>
+<pre><code class="python">&quot;&quot;&quot;Unexecuted policy eligibility illustration. No Redis connection.
+It does not predict approximateLRU choice or emulate memory accounting.
+&quot;&quot;&quot;
+keys = {&#39;cache:report&#39;: 60, &#39;task:accepted&#39;: None, &#39;dedup:charge&#39;: 86400}
+def eligible(policy, key_ttls):
+    if policy == &#39;allkeys-lru&#39;:
+        return set(key_ttls)
+    if policy == &#39;volatile-lru&#39;:
+        return {k for k, ttl in key_ttls.items() if ttl is not None}
+    if policy == &#39;noeviction&#39;:
+        return set()
+    raise ValueError(&#39;Unsupported teaching policy&#39;)
+expected = {
+ &#39;allkeys-lru&#39;: {&#39;cache:report&#39;, &#39;task:accepted&#39;, &#39;dedup:charge&#39;},
+ &#39;volatile-lru&#39;: {&#39;cache:report&#39;, &#39;dedup:charge&#39;},
+ &#39;noeviction&#39;: set(),
+}
+if __name__ == &#39;__main__&#39;:
+    for policy, oracle in expected.items():
+        assert eligible(policy, keys) == oracle
+        print(policy, sorted(oracle))
+    # No eligible victim does not imply successful new-data writes.
+</code></pre>
+<p>结果的业务含义比集合本身更重要。cache:report 可以从持久来源重建，丢失可能只是一次额外查询。task:accepted 若是唯一受理回执，丢失可能让用户无法查到已经接受的任务。dedup:charge 若是唯一重复识别依据，丢失后旧请求再次到达，可能被当成新意图。这个扣款例子是假设风险，不是对某个支付系统的事故报告。</p>
+<p>volatile-lru 看起来把永久任务记录保护起来了，却仍把带一天 TTL 的去重记录放进淘汰候选。若开发者只是把这个键改成永久，又必须面对候选耗尽后新写入失败的处理。数据是否可重建，不能由“这个键叫缓存”或“已经设置了过期”来决定；要指出可靠来源及重建期间调用方的状态。</p>
+<h2 id="noeviction-把风险转移到写入路径"><a href="#noeviction-把风险转移到写入路径" class="headerlink" title="noeviction 把风险转移到写入路径"></a>noeviction 把风险转移到写入路径</h2><p>官方指南说，noeviction 不驱逐键，但尝试缓存新数据的命令会收到错误，只读取已有数据的命令仍可工作。由此选择它时，应用必须检查写入结果。后台捕获异常后仍返回“任务已受理”，会让一个明确可见的容量错误变成业务记录缺失。</p>
+<p>这不是建议把全部状态都放进一个 noeviction 实例。若报表缓存挤占容量导致受理记录写不进，两个数据角色仍在竞争同一份资源。指南建议在可能时把缓存与持久键分到不同实例；这样可以分开策略及容量预算，但不会自动建立备份、故障恢复或业务权威。是否拆实例，应按失败后果和操作成本决定。</p>
+<p>本例更直接的设计选择，是让任务受理与去重的权威记录由满足相应提交要求的持久层保存；Redis 可以辅助查询，但 miss 时不能擅自推出“任务从未受理”或“这一定是新请求”。如果去重同时涉及外部系统，还需其自己的身份与查询合同。这里不重做一份通用持久化教程，关注的是容量策略是否允许这个唯一记录消失。</p>
+<p>内存预算也不能只填主机物理内存大小。指南说明，复制或 AOF 使用的一些缓冲不计入触发驱逐的比较值；INFO memory 中的 mem_not_counted_for_evict 可用于观察。于是 maxmemory 不是整个进程永不超过的硬上限，留给缓冲、客户端和运行环境的余量需要真实观测，本文没有给一个未经测量的百分比。</p>
+<h2 id="evicted-keys-没有增加，就能证明键一定过期了吗？"><a href="#evicted-keys-没有增加，就能证明键一定过期了吗？" class="headerlink" title="evicted_keys 没有增加，就能证明键一定过期了吗？"></a>evicted_keys 没有增加，就能证明键一定过期了吗？</h2><p>不能。显式删除、值替换、命名空间错误或连到了另一个实例，也会造成查不到。应结合 expired_keys、实际写入路径与实例身份调查；累计计数不是每条键的因果记录，不能给某个缺失键自动贴上“已过期”的标签。</p>
+<p>可以先做只读核对，下面这些 redis-cli 命令没有在本文执行，也不修改共享实例的全局设置。连接参数应由使用者按授权环境提供，不把凭据写进文章或日志。</p>
+<pre><code class="text">redis-cli CONFIG GET maxmemory
+redis-cli CONFIG GET maxmemory-policy
+redis-cli INFO memory
+redis-cli INFO stats
+redis-cli INFO commandstats
+</code></pre>
+<p>观察时记录时间窗口，再比较驱逐、到期及命令拒绝的变化，同时核对应用实际读写的是哪个实例。若需要验证压力路径，应另建可丢弃实例，明确服务端版本与配置，分别观察缓存可重建、关键写入报错是否传回，以及调用方是否保留查询入口；本文没有运行这组实验。</p>
+<p><a href="/zh-CN/2026/11/01/postgres-unlogged-crash-replication/">UNLOGGED 的可重建数据边界</a>讨论另一种失效条件。本篇的结论落在运行中的容量选择：允许驱逐的键应有可接受的缺失路径，拒绝驱逐的实例应有可解释的拒写路径。没有这两种结果合同，延长 TTL 只是改变一个数字，不能替业务保存承诺。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://redis.io/docs/latest/develop/reference/eviction/" rel="noopener">Key eviction | Docs</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--redis" href="/zh-CN/tags/Redis/">Redis</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E7%BC%93%E5%AD%98%E8%AE%BE%E8%AE%A1/">缓存设计</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%AE%B9%E9%87%8F%E7%AE%A1%E7%90%86/">容量管理</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F08%2Fredis-eviction-authoritative-state%2F&text=%E7%BC%93%E5%AD%98%E5%92%8C%E4%B8%9A%E5%8A%A1%E7%9C%9F%E7%9B%B8%E5%85%B1%E7%94%A8Redis%E5%89%8D%EF%BC%8C%E5%85%88%E5%AE%89%E6%8E%92%E5%86%85%E5%AD%98%E8%80%97%E5%B0%BD%E7%9A%84%E7%BB%93%E6%9E%9C" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F08%2Fredis-eviction-authoritative-state%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E7%BC%93%E5%AD%98%E5%92%8C%E4%B8%9A%E5%8A%A1%E7%9C%9F%E7%9B%B8%E5%85%B1%E7%94%A8Redis%E5%89%8D%EF%BC%8C%E5%85%88%E5%AE%89%E6%8E%92%E5%86%85%E5%AD%98%E8%80%97%E5%B0%BD%E7%9A%84%E7%BB%93%E6%9E%9C&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F08%2Fredis-eviction-authoritative-state%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/08/saga-compensation-business-outcomes/">
+              <span>上一篇</span>
+              <strong>给Saga安排补偿结果，而不只画一条失败箭头</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/08/rabbitmq-routing-return-confirm-contract/">
+              <span>下一篇</span>
+              <strong>RabbitMQ已ACK，消息为什么没有进入队列？</strong>
+              <small>2026-11-08</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#先区分到期与容量驱逐">先区分到期与容量驱逐</a>
+          
+            <a class="toc-link toc-link--h2" href="#三个键，检验策略与数据角色是否相容">三个键，检验策略与数据角色是否相容</a>
+          
+            <a class="toc-link toc-link--h2" href="#noeviction-把风险转移到写入路径">noeviction 把风险转移到写入路径</a>
+          
+            <a class="toc-link toc-link--h2" href="#evicted-keys-没有增加，就能证明键一定过期了吗？">evicted_keys 没有增加，就能证明键一定过期了吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>258</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/redis-scan-full-iteration-contract/">Redis SCAN 返回空数组，遍历为什么还不能结束？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/redis-set-expire-ttl-replacement/">Redis 更新缓存后，过期时间为什么消失？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/08/api-resource-name-reference-scope/">把资源身份与访问URL分开，接口换版本时少一份歧义</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
