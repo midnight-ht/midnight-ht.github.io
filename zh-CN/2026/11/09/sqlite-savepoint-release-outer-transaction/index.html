@@ -1,0 +1,429 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>SQLite RELEASE 已成功，数据为什么仍被外层回滚？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="对照 BEGIN 内释放与最外层保存点释放，解释 SQLite 事务所有权、最终回滚和 ROLLBACK TO 保留标记的边界。">
+  
+  
+    <meta name="keywords" content="RELEASE,外层事务,ROLLBACK TO">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/09/sqlite-savepoint-release-outer-transaction/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/09/sqlite-savepoint-release-outer-transaction/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/09/sqlite-savepoint-release-outer-transaction/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/09/sqlite-savepoint-release-outer-transaction/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="SQLite RELEASE 已成功，数据为什么仍被外层回滚？ | Midnight blog">
+    <meta property="og:description" content="对照 BEGIN 内释放与最外层保存点释放，解释 SQLite 事务所有权、最终回滚和 ROLLBACK TO 保留标记的边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/09/sqlite-savepoint-release-outer-transaction/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/09/sqlite-savepoint-release-outer-transaction/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/09/sqlite-savepoint-release-outer-transaction/","name":"SQLite RELEASE 已成功，数据为什么仍被外层回滚？ | Midnight blog","description":"对照 BEGIN 内释放与最外层保存点释放，解释 SQLite 事务所有权、最终回滚和 ROLLBACK TO 保留标记的边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/09/sqlite-savepoint-release-outer-transaction/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/09/sqlite-savepoint-release-outer-transaction/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/09/sqlite-savepoint-release-outer-transaction/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/09/sqlite-savepoint-release-outer-transaction/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/09/sqlite-savepoint-release-outer-transaction/","headline":"SQLite RELEASE 已成功，数据为什么仍被外层回滚？","description":"对照 BEGIN 内释放与最外层保存点释放，解释 SQLite 事务所有权、最终回滚和 ROLLBACK TO 保留标记的边界。","inLanguage":"zh-CN","datePublished":"2026-11-08T20:04:07.000Z","dateModified":"2026-11-08T20:04:07.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.sqlite.org/lang_savepoint.html"],"keywords":"SQLite, 事务, 保存点"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/09/sqlite-savepoint-release-outer-transaction/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"SQLite RELEASE 已成功，数据为什么仍被外层回滚？","item":"https://www.zyweb.vip/zh-CN/2026/11/09/sqlite-savepoint-release-outer-transaction/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/09/sqlite-savepoint-release-outer-transaction/" selected>zh-CN</option><option value="/en/2026/11/09/sqlite-savepoint-release-outer-transaction/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/09/sqlite-savepoint-release-outer-transaction/" selected>zh-CN</option><option value="/en/2026/11/09/sqlite-savepoint-release-outer-transaction/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--sqlite">SQLite</span>
+      <time datetime="2026-11-08T20:04:07.000Z">2026-11-09</time>
+    </div>
+
+    <h1>SQLite RELEASE 已成功，数据为什么仍被外层回滚？</h1>
+
+    
+      <p class="post-hero__summary">对照 BEGIN 内释放与最外层保存点释放，解释 SQLite 事务所有权、最终回滚和 ROLLBACK TO 保留标记的边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-08T20:04:07.000Z">2026-11-09</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/09/sqlite-savepoint-release-outer-transaction/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/09/sqlite-savepoint-release-outer-transaction/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>内层RELEASE的改动仍受外层回滚影响。</li><li>释放最外层保存点、使事务栈为空时会提交。</li><li>ROLLBACK TO保留目标标记，不能等同普通ROLLBACK。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>内层 RELEASE 只撤掉保存点标记，改动仍属于外层事务。用它作为“已保存”回执，会早于真正提交。在 SQLite 中，必须先知道该保存点外面还有没有事务，再判断 RELEASE 的成功究竟完成了哪一层工作。</p>
+<p>假设一个导入子函数负责写入一条记录，调用者把多条记录包在同一个事务中。子函数建立保存点、插入、释放后返回成功；最后另一条记录失败，调用者回滚整批。先前那条记录随之消失，符合事务规则。需要修正的可能是子函数返回状态的解释，而不是数据库保存点没有生效。</p>
+<h2 id="谁建立了最外层范围？"><a href="#谁建立了最外层范围？" class="headerlink" title="谁建立了最外层范围？"></a>谁建立了最外层范围？</h2><p>SQLite 的 Savepoints 文档把保存点描述为可嵌套的命名事务范围。SAVEPOINT 可以在 BEGIN 之内，也可以独立开始。后者若处在最外层，会建立一笔延迟事务。命令文本相同，起始栈不同，结束时的含义也可能不同。</p>
+<p>内层 RELEASE 移除相应标记，把改动留在父事务中；之后父事务的提交或回滚仍作用于这些改动。最外层 RELEASE 如果使事务栈为空，则会提交。因而“RELEASE 总是提交”和“RELEASE 永远不提交”都不准确，必须附上它释放的层级。</p>
+<p><a target="_blank" rel="noopener" href="https://www.sqlite.org/lang_savepoint.html">SQLite Savepoints 原文</a>第二节解释内层释放与外层回滚，第三节列出栈规则。本文只讨论 SQLite 显式 SQL 的范围，不把其他数据库或某个 ORM 的同名方法自动当成相同行为；框架是否真的发送这些 SQL，需要另行观察。</p>
+<h2 id="两条只差外层范围的轨迹"><a href="#两条只差外层范围的轨迹" class="headerlink" title="两条只差外层范围的轨迹"></a>两条只差外层范围的轨迹</h2><p>下面的 Python 代码创建一个内存数据库，设置 isolation_level 为 None，以显式 SQL 控制事务，避免宿主默认行为替示例决定边界。建表先完成，两个用例独立从空表开始。phase 函数只依次执行列表中的显式语句，再同时打印状态与行；代码没有 executescript，也不打开业务文件。</p>
+<pre><code class="python">import sqlite3
+c = sqlite3.connect(&#39;:memory:&#39;, isolation_level=None)
+c.execute(&#39;CREATE TABLE items(id INTEGER PRIMARY KEY)&#39;)
+
+def phase(label, statements):
+    for statement in statements:
+        c.execute(statement)
+    rows = c.execute(&#39;SELECT id FROM items&#39;).fetchall()
+    print(label, &#39;active&#39;, c.in_transaction, &#39;rows&#39;, rows)
+
+phase(&#39;A release&#39;, [
+    &#39;BEGIN&#39;, &#39;SAVEPOINT unit&#39;,
+    &#39;INSERT INTO items VALUES (1)&#39;, &#39;RELEASE unit&#39;,
+])
+phase(&#39;A rollback&#39;, [&#39;ROLLBACK&#39;])
+phase(&#39;B release&#39;, [
+    &#39;SAVEPOINT unit&#39;, &#39;INSERT INTO items VALUES (2)&#39;, &#39;RELEASE unit&#39;,
+])
+print(&#39;SQLite&#39;, sqlite3.sqlite_version)
+</code></pre>
+<p>第一组预期在 RELEASE 后仍处于事务中，普通 ROLLBACK 后表为空。第二组没有外层 BEGIN，释放最外层保存点后不再处于事务中，表里保留编号二。第一组中的“释放成功”没有欺骗调用者，它只是完成了比调用者最终提交更小的一项操作。</p>
+<p>把第二组误说成也不会提交，会形成另一种危险：调用方可能以为还能在稍后撤销这条记录。验收必须同时保留两组，确认同一个子函数独立调用与放进外层事务时分别怎么结束。只测试嵌套情况，会让错误的普遍否定看起来成立。</p>
+<p>观察事务状态有助于解释范围，但最终行仍须核对。应用从连接池取到另一条连接后，检查的可能已不是原来的内存数据库或事务。示例刻意全程使用同一个连接；迁入应用时，应保留连接归属和调用栈的证据，而不是把打印过一次状态当成所有入口已验证。</p>
+<h2 id="子函数应该返回哪一种成功？"><a href="#子函数应该返回哪一种成功？" class="headerlink" title="子函数应该返回哪一种成功？"></a>子函数应该返回哪一种成功？</h2><p>如果子函数加入调用者事务，它可以报告本段 SQL 与保存点管理完成，但不应对用户宣布整笔业务已提交。调用者在最外层提交确认后，才能给出相应数据库结果。若需要跨函数返回阶段状态，可以明确区分本段完成、等待外层提交与最终失败，避免一个布尔值承担相互不同的承诺。</p>
+<p>子函数也不能为了“保证写入”随手 COMMIT。SQLite 的 COMMIT 结束整个事务范围，这会越过调用者的所有权，让原本计划整批回滚的后续逻辑失去保护。事务责任应在 API 设计里说明：函数是独立管理事务，还是只加入现有事务。是否允许两种模式，都要给出可检验的入口。</p>
+<p>异常路径同样需要范围。内层一条写入出错后，调用方是拒绝整批，还是仅撤销本段并继续，属于业务选择。保存点提供局部控制，不决定导入是否允许部分成功；结果报告也不能把“未抛异常”直接合计成已持久成功的行数。</p>
+<p>站内的<a href="/zh-CN/2026/10/11/postgres-savepoint-partial-import/">部分导入结果说明</a>讨论如何向用户描述记录身份和最终结果，使用的是 PostgreSQL 场景。本题则用 SQLite 的两种 RELEASE 起点来确认函数究竟有没有提交，不能拿一个数据库的执行记录替另一个数据库验收。</p>
+<h2 id="ROLLBACK-TO-后，要重新建立保存点吗？"><a href="#ROLLBACK-TO-后，要重新建立保存点吗？" class="headerlink" title="ROLLBACK TO 后，要重新建立保存点吗？"></a>ROLLBACK TO 后，要重新建立保存点吗？</h2><p>不必。这项追问增加第三条轨迹，区别于主例的普通外层回滚：BEGIN 后建立 unit，插入编号三，再执行 ROLLBACK TO unit。回滚返回到保存点之后的状态，但 unit 标记仍保留，所以可以继续插入编号四，再次回滚到 unit，而不必重新 SAVEPOINT。</p>
+<pre><code class="sql">BEGIN;
+SAVEPOINT unit;
+INSERT INTO items VALUES (3);
+ROLLBACK TO unit;
+INSERT INTO items VALUES (4);
+ROLLBACK TO unit;
+RELEASE unit;
+COMMIT;
+</code></pre>
+<p>在空表上独立运行，预期三和四都没有留下，最后 RELEASE 移除该标记，COMMIT 结束剩余外层事务。不要把 ROLLBACK TO 的成功理解为整个事务已经退出，也不要把它与不带 TO 的 ROLLBACK 互换；两者对栈和后续操作的影响不同。</p>
+<p>保存点名字还应便于追踪。SQLite 允许名字重复，按规则查找最近的匹配范围；嵌套函数共用一个泛化名字，会让维护者难以凭日志判断命中了哪一层。采用明确且可定位的命名，是工程建议，不是额外的数据库隔离保证。不能通过日志名字好看就推断事务所有权正确。</p>
+<p>这些用例检验的是单连接显式 SQL 与最终行状态，不检验断电后的介质耐久、连接池重试或用户界面的终态提示。发布验收应保存引擎版本、两组外层范围、内层释放后的状态和最后提交或回滚的结果。先让“成功”指明自己是哪一步，再让调用者根据真正的最外层结局报告业务状态。</p>
+<p>本次归档运行使用 Python 三点十一点十五与 SQLite 三点五三点一：A 释放后仍在事务中，回滚后零行；B 释放后退出事务并保留编号二。追问中的两次回到同一标记也已在清空表后独立运行，三和四均未留下；这只验证本地单连接路径。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.sqlite.org/lang_savepoint.html" rel="noopener">Savepoints</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--sqlite" href="/zh-CN/tags/SQLite/">SQLite</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E4%BA%8B%E5%8A%A1/">事务</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E4%BF%9D%E5%AD%98%E7%82%B9/">保存点</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F09%2Fsqlite-savepoint-release-outer-transaction%2F&text=SQLite%20RELEASE%20%E5%B7%B2%E6%88%90%E5%8A%9F%EF%BC%8C%E6%95%B0%E6%8D%AE%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E8%A2%AB%E5%A4%96%E5%B1%82%E5%9B%9E%E6%BB%9A%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F09%2Fsqlite-savepoint-release-outer-transaction%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=SQLite%20RELEASE%20%E5%B7%B2%E6%88%90%E5%8A%9F%EF%BC%8C%E6%95%B0%E6%8D%AE%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E8%A2%AB%E5%A4%96%E5%B1%82%E5%9B%9E%E6%BB%9A%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F09%2Fsqlite-savepoint-release-outer-transaction%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/09/sqlite-strict-any-coercion/">
+              <span>上一篇</span>
+              <strong>导入编号少了前导零：先比较两种 SQLite ANY</strong>
+              <small>2026-11-09</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/09/redis-multi-exec-command-errors/">
+              <span>下一篇</span>
+              <strong>EXEC 报了 WRONGTYPE，另外两条 Redis 写入为何仍在？</strong>
+              <small>2026-11-09</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#谁建立了最外层范围？">谁建立了最外层范围？</a>
+          
+            <a class="toc-link toc-link--h2" href="#两条只差外层范围的轨迹">两条只差外层范围的轨迹</a>
+          
+            <a class="toc-link toc-link--h2" href="#子函数应该返回哪一种成功？">子函数应该返回哪一种成功？</a>
+          
+            <a class="toc-link toc-link--h2" href="#ROLLBACK-TO-后，要重新建立保存点吗？">ROLLBACK TO 后，要重新建立保存点吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>257</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>211</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/sqlite-busy-timeout-connection-budget/">SQLite 配了五秒 busy_timeout，为什么写入仍失败？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/09/redis-multi-exec-command-errors/">EXEC 报了 WRONGTYPE，另外两条 Redis 写入为何仍在？</a></h3>
+          <p>2026-11-09</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/09/sqlite-strict-any-coercion/">导入编号少了前导零：先比较两种 SQLite ANY</a></h3>
+          <p>2026-11-09</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

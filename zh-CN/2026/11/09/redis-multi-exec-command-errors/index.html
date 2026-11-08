@@ -1,0 +1,414 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>EXEC 报了 WRONGTYPE，另外两条 Redis 写入为何仍在？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="区分 Redis 事务排队错误、执行期 WRONGTYPE 与 WATCH 中止，用逐项回复和最终键状态决定重试边界。">
+  
+  
+    <meta name="keywords" content="MULTI EXEC,WRONGTYPE,WATCH">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/09/redis-multi-exec-command-errors/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/09/redis-multi-exec-command-errors/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/09/redis-multi-exec-command-errors/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/09/redis-multi-exec-command-errors/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="EXEC 报了 WRONGTYPE，另外两条 Redis 写入为何仍在？ | Midnight blog">
+    <meta property="og:description" content="区分 Redis 事务排队错误、执行期 WRONGTYPE 与 WATCH 中止，用逐项回复和最终键状态决定重试边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/09/redis-multi-exec-command-errors/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/09/redis-multi-exec-command-errors/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/09/redis-multi-exec-command-errors/","name":"EXEC 报了 WRONGTYPE，另外两条 Redis 写入为何仍在？ | Midnight blog","description":"区分 Redis 事务排队错误、执行期 WRONGTYPE 与 WATCH 中止，用逐项回复和最终键状态决定重试边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/09/redis-multi-exec-command-errors/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/09/redis-multi-exec-command-errors/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/09/redis-multi-exec-command-errors/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/09/redis-multi-exec-command-errors/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/09/redis-multi-exec-command-errors/","headline":"EXEC 报了 WRONGTYPE，另外两条 Redis 写入为何仍在？","description":"区分 Redis 事务排队错误、执行期 WRONGTYPE 与 WATCH 中止，用逐项回复和最终键状态决定重试边界。","inLanguage":"zh-CN","datePublished":"2026-11-08T20:04:07.000Z","dateModified":"2026-11-08T20:04:07.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://redis.io/docs/latest/develop/using-commands/transactions/"],"keywords":"Redis, 事务, 错误处理"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/09/redis-multi-exec-command-errors/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"EXEC 报了 WRONGTYPE，另外两条 Redis 写入为何仍在？","item":"https://www.zyweb.vip/zh-CN/2026/11/09/redis-multi-exec-command-errors/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/09/redis-multi-exec-command-errors/" selected>zh-CN</option><option value="/en/2026/11/09/redis-multi-exec-command-errors/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/09/redis-multi-exec-command-errors/" selected>zh-CN</option><option value="/en/2026/11/09/redis-multi-exec-command-errors/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--redis">Redis</span>
+      <time datetime="2026-11-08T20:04:07.000Z">2026-11-09</time>
+    </div>
+
+    <h1>EXEC 报了 WRONGTYPE，另外两条 Redis 写入为何仍在？</h1>
+
+    
+      <p class="post-hero__summary">区分 Redis 事务排队错误、执行期 WRONGTYPE 与 WATCH 中止，用逐项回复和最终键状态决定重试边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-08T20:04:07.000Z">2026-11-09</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/09/redis-multi-exec-command-errors/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/09/redis-multi-exec-command-errors/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>执行期命令错误不会阻止其他已排队命令执行。</li><li>排队错误与运行时错误需要独立输入和预期。</li><li>WATCH冲突中止队列，不能与逐命令错误合并处理。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Redis EXEC 内某条命令执行失败，不会自动回滚已经执行的其他命令，也不会停止后续命令。先区分错误发生在排队还是执行：排队时发现的命令错误，和执行时才发现键类型不对，可能让整组命令得到不同结局。</p>
+<p>设想应用把三次 Redis 操作包进 MULTI 与 EXEC，客户端最后抛了一个异常，业务层便把整个请求重试。若中间那条只是 WRONGTYPE，前后两条可能都已执行。重试若含计数增加，就可能把第一次已经成功的效果再做一次；异常被捕获，不代表所有键恢复原样。这是故障设计场景，没有调用真实业务实例。</p>
+<h2 id="QUEUED-只表示入队"><a href="#QUEUED-只表示入队" class="headerlink" title="QUEUED 只表示入队"></a>QUEUED 只表示入队</h2><p>官方 Transactions 文档说明，MULTI 进入排队状态，命令随后返回 QUEUED，直到 EXEC 才执行。EXEC 的结果按发出顺序列出每条命令的回复。因此，判断整笔操作不能只看最后一个函数有没有返回；还要知道客户端怎样把这些回复暴露给业务代码。</p>
+<p>Redis 保证事务中的命令按顺序执行，其他客户端不会插入其中。这项隔离执行保证不等于出错回滚。官方明确不提供事务回滚；一条命令执行失败时，队列里的其他命令仍继续处理。若从 SQL 事务经验出发，必须把这两个承诺拆开评审。</p>
+<p><a target="_blank" rel="noopener" href="https://redis.io/docs/latest/develop/using-commands/transactions/">Redis 事务原文</a>区分排队前后两类错误。本文按核对时的官方页面解释，其中排队错误令 EXEC 拒绝整笔执行的行为标为自二点六点五版本开始。项目的服务端版本和客户端错误表示仍需现场确认，不能只凭工具库函数名判断。</p>
+<h2 id="把错误放在两次写入之间"><a href="#把错误放在两次写入之间" class="headerlink" title="把错误放在两次写入之间"></a>把错误放在两次写入之间</h2><p>下面是未执行的 redis-cli 会话命令，只适用于自己新建的可丢弃本地实例。把前缀替换成此次练习独有的值；不要在共享实例覆盖同名业务键。本文没有发现可用的本地 Redis 服务端与命令行工具，因此不把这些输入和预期写成运行记录。</p>
+<pre><code class="text">MULTI
+SET article_demo_unique:a text
+LPOP article_demo_unique:a
+SET article_demo_unique:b done
+EXEC
+GET article_demo_unique:a
+GET article_demo_unique:b
+</code></pre>
+<p>三条命令的语法都能排队。执行时，第一条建立字符串键，第二条却把它作为列表弹出，预期收到 WRONGTYPE；第三条仍应写入另一个键。按官方语义，EXEC 的逐项结果应为成功、类型错误、成功，最终第一个键仍是 text，第二个键是 done。</p>
+<p>这里选择 SET 而不是扣减库存，是为了让最终值容易核对，不意味着普通业务重试总是安全。若前后改成非幂等计数，再因中间错误全组重试，第一次成功的计数可能重复。处理策略应根据每条命令的效果设计，不能把“事务失败”当成一个没有细节的布尔值。</p>
+<p>把失败放在中间还有验收意义：只测试最后一条失败，看不出 Redis 是否停止后续命令；只测试第一条失败，也不容易辨别先前成功效果。完整夹心样例同时观察前面的写入、错误本身和后面的写入，才能说明执行策略。</p>
+<h2 id="排队错误要另跑一组"><a href="#排队错误要另跑一组" class="headerlink" title="排队错误要另跑一组"></a>排队错误要另跑一组</h2><p>重建一个不同的测试键，故意给 INCR 多传参数。这个错误无需等键的运行时类型就可识别，所以不属于上一组的 WRONGTYPE 路径。</p>
+<pre><code class="text">MULTI
+SET article_demo_unique:c pending
+INCR article_demo_unique:c extra
+EXEC
+GET article_demo_unique:c
+</code></pre>
+<p>对具备上述现代行为的 Redis，预期错误命令不被正常加入队列，EXEC 拒绝执行这笔事务，先前排队的 SET 也不落到键状态中，最后 c 不存在。不能把上一组“其他命令会继续”机械套在这里；两组错误发生的阶段不同。</p>
+<p>验收记录应保留每条入队回复、EXEC 整体回复或错误，以及最终键值。若客户端在第一处错误就提前抛异常，还需说明它有没有发送 EXEC，连接是否仍处于事务上下文，后续调用是否正确清理。库的异常类型和返回结构属于实际依赖行为，需要测试，不由 Redis 协议说明代替。</p>
+<p>DISCARD 可以丢弃尚未执行的队列，让连接离开事务状态；它不是对已经执行的 EXEC 撤销写入。应用不能在捕获 EXEC 的运行时错误后追加 DISCARD，就把恢复标记为完成。此前命令的结果要按实际状态处置，必要的补偿也要有自己的可重试身份。</p>
+<p>站内的<a href="/zh-CN/2026/11/05/redis-set-expire-ttl-replacement/">SET 与期限替换</a>解释一条写值命令怎样处理过期时间。把多个命令包在事务里，并不会把每条命令自己的语义改掉；类型、期限、条件结果仍须逐项理解。</p>
+<h2 id="WATCH-冲突也是这种部分错误吗？"><a href="#WATCH-冲突也是这种部分错误吗？" class="headerlink" title="WATCH 冲突也是这种部分错误吗？"></a>WATCH 冲突也是这种部分错误吗？</h2><p>不是。这项追问增加执行前的乐观条件：先 WATCH 一个键，再由另一个客户端修改它，然后尝试 EXEC。官方规定，这种被监视键改变的冲突会让整个事务中止，不执行队列，并以空回复通知调用者；它不是包含 WRONGTYPE 的逐命令结果数组。</p>
+<p>要验证该条件，需两个独立连接：甲监视并读取，乙修改同一个练习键，甲再提交先前准备的队列。预期应检查队列中的写入没有发生，再读取新状态决定是否重试。重试是重新读取条件后的新尝试，不是无条件重发旧队列；也不要把空回复当成没有待执行工作。</p>
+<p>这里没有运行双连接用例。客户端可能把空回复映为不同语言值，工程验收应检查实际库版本的表示，再和执行错误分支分别覆盖。把两者都转换成同一个“失败后全量重试”，会丢掉是否发生过写入这一项关键信息。</p>
+<p>隔离、条件中止、单命令错误、持久化和外部交付是不同检查对象。若业务需要一组状态严格全有或全无，应从数据设计和失败路径重新评审，不能仅靠 MULTI 名字作保证。先保存每条回复与最终键状态，再决定哪些操作可重试、哪些需要查询或补偿；没有运行证据的部分继续标为待验证。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://redis.io/docs/latest/develop/using-commands/transactions/" rel="noopener">Transactions | Docs</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--redis" href="/zh-CN/tags/Redis/">Redis</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E4%BA%8B%E5%8A%A1/">事务</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86/">错误处理</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F09%2Fredis-multi-exec-command-errors%2F&text=EXEC%20%E6%8A%A5%E4%BA%86%20WRONGTYPE%EF%BC%8C%E5%8F%A6%E5%A4%96%E4%B8%A4%E6%9D%A1%20Redis%20%E5%86%99%E5%85%A5%E4%B8%BA%E4%BD%95%E4%BB%8D%E5%9C%A8%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F09%2Fredis-multi-exec-command-errors%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=EXEC%20%E6%8A%A5%E4%BA%86%20WRONGTYPE%EF%BC%8C%E5%8F%A6%E5%A4%96%E4%B8%A4%E6%9D%A1%20Redis%20%E5%86%99%E5%85%A5%E4%B8%BA%E4%BD%95%E4%BB%8D%E5%9C%A8%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F09%2Fredis-multi-exec-command-errors%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/09/sqlite-savepoint-release-outer-transaction/">
+              <span>上一篇</span>
+              <strong>SQLite RELEASE 已成功，数据为什么仍被外层回滚？</strong>
+              <small>2026-11-09</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/09/python-unittest-subtest-exception-scope/">
+              <span>下一篇</span>
+              <strong>subTest块内断言失败，为什么下一条没有执行</strong>
+              <small>2026-11-09</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#QUEUED-只表示入队">QUEUED 只表示入队</a>
+          
+            <a class="toc-link toc-link--h2" href="#把错误放在两次写入之间">把错误放在两次写入之间</a>
+          
+            <a class="toc-link toc-link--h2" href="#排队错误要另跑一组">排队错误要另跑一组</a>
+          
+            <a class="toc-link toc-link--h2" href="#WATCH-冲突也是这种部分错误吗？">WATCH 冲突也是这种部分错误吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>257</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>211</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/09/sqlite-savepoint-release-outer-transaction/">SQLite RELEASE 已成功，数据为什么仍被外层回滚？</a></h3>
+          <p>2026-11-09</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/08/redis-eviction-authoritative-state/">缓存和业务真相共用Redis前，先安排内存耗尽的结果</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/redis-scan-full-iteration-contract/">Redis SCAN 返回空数组，遍历为什么还不能结束？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

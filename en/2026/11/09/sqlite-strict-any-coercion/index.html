@@ -1,0 +1,412 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why did a SQLite ANY column lose the leading zeroes? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Compare numeric text in ordinary and STRICT ANY columns, inspect storage class and spelling, and distinguish new-input preservation from historical identity recovery.">
+  
+  
+    <meta name="keywords" content="STRICT ANY,typeof,leading zeroes">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/09/sqlite-strict-any-coercion/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/09/sqlite-strict-any-coercion/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/09/sqlite-strict-any-coercion/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/09/sqlite-strict-any-coercion/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why did a SQLite ANY column lose the leading zeroes? | Midnight blog">
+    <meta property="og:description" content="Compare numeric text in ordinary and STRICT ANY columns, inspect storage class and spelling, and distinguish new-input preservation from historical identity recovery.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/09/sqlite-strict-any-coercion/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/09/sqlite-strict-any-coercion/#webpage","url":"https://www.zyweb.vip/en/2026/11/09/sqlite-strict-any-coercion/","name":"Why did a SQLite ANY column lose the leading zeroes? | Midnight blog","description":"Compare numeric text in ordinary and STRICT ANY columns, inspect storage class and spelling, and distinguish new-input preservation from historical identity recovery.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/09/sqlite-strict-any-coercion/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/09/sqlite-strict-any-coercion/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/09/sqlite-strict-any-coercion/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/09/sqlite-strict-any-coercion/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/09/sqlite-strict-any-coercion/","headline":"Why did a SQLite ANY column lose the leading zeroes?","description":"Compare numeric text in ordinary and STRICT ANY columns, inspect storage class and spelling, and distinguish new-input preservation from historical identity recovery.","inLanguage":"en","datePublished":"2026-11-08T20:04:07.000Z","dateModified":"2026-11-08T20:04:07.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.sqlite.org/stricttables.html","https://www.sqlite.org/lang_select.html"],"keywords":"SQLite, Data types, Import validation"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/09/sqlite-strict-any-coercion/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why did a SQLite ANY column lose the leading zeroes?","item":"https://www.zyweb.vip/en/2026/11/09/sqlite-strict-any-coercion/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/09/sqlite-strict-any-coercion/">zh-CN</option><option value="/en/2026/11/09/sqlite-strict-any-coercion/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/09/sqlite-strict-any-coercion/">zh-CN</option><option value="/en/2026/11/09/sqlite-strict-any-coercion/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--sqlite">SQLite</span>
+      <time datetime="2026-11-08T20:04:07.000Z">2026-11-09</time>
+    </div>
+
+    <h1>Why did a SQLite ANY column lose the leading zeroes?</h1>
+
+    
+      <p class="post-hero__summary">Compare numeric text in ordinary and STRICT ANY columns, inspect storage class and spelling, and distinguish new-input preservation from historical identity recovery.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-08T20:04:07.000Z">2026-11-09</time> · Estimated read 13 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/09/sqlite-strict-any-coercion/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/09/sqlite-strict-any-coercion/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>STRICT ANY preserves the supplied storage class; ordinary ANY can convert numeric text.</li><li>A strict table cannot recover spelling lost before binding.</li><li>Historical reconstruction needs source evidence and collision checks.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>If the application supplies 000742 as text but reads back 742, compare the table option before blaming the display layer. SQLite preserves the supplied value and storage class in a STRICT ANY column. An ANY column in an ordinary table can instead convert numeric-looking text to a number.</p>
+<p>Imagine an external catalog using six-character identifiers. The importer checks only that inserts succeed. A later export reveals that leading zeroes disappeared. Padding the output might hide the mismatch while assigning the wrong spelling to an identifier. First locate the conversion; this is a hypothetical import, not a reported production incident.</p>
+<h2 id="Inspect-the-binding-before-the-table"><a href="#Inspect-the-binding-before-the-table" class="headerlink" title="Inspect the binding before the table"></a>Inspect the binding before the table</h2><p>SQLite introduced per-table STRICT mode in version 3.37.0. The official STRICT Tables documentation explicitly contrasts the two meanings of ANY: the strict version preserves its input without affinity conversion, while the ordinary version attempts numeric conversion for suitable strings.</p>
+<p>Preservation begins with the value SQLite receives. If application code has already converted the identifier to integer 742, the strict column receives an integer. It cannot recover six original characters. Keep the actual binding type, table definition and stored type in the diagnostic record. Logging only the final displayed number loses the location of the change.</p>
+<p><a target="_blank" rel="noopener" href="https://www.sqlite.org/stricttables.html">The official STRICT Tables documentation</a> establishes these rules. It does not recommend ANY for every identifier. Whether a business field must contain text is a separate contract, preferably established before an importer starts converting it.</p>
+<h2 id="Compare-identical-inputs"><a href="#Compare-identical-inputs" class="headerlink" title="Compare identical inputs"></a>Compare identical inputs</h2><p>This Python example uses a new in-memory database, parameter binding and three input classes. It opens no business file. The query explicitly orders these teaching rows by rowid. The typeof result identifies the storage class; quote makes the difference between numeric and textual values visible.</p>
+<pre><code class="python">import sqlite3
+c = sqlite3.connect(&#39;:memory:&#39;)
+c.execute(&#39;CREATE TABLE strict_values(v ANY) STRICT&#39;)
+c.execute(&#39;CREATE TABLE ordinary_values(v ANY)&#39;)
+values = [(&#39;000742&#39;,), (742,), (&#39;part-742&#39;,)]
+for table in (&#39;strict_values&#39;, &#39;ordinary_values&#39;):
+    c.executemany(f&#39;INSERT INTO {table}(v) VALUES (?)&#39;, values)
+    print(table, c.execute(
+        f&#39;SELECT typeof(v), quote(v) FROM {table} ORDER BY rowid&#39;
+    ).fetchall())
+print(&#39;SQLite&#39;, sqlite3.sqlite_version)
+</code></pre>
+<p>These are ordinary rowid teaching tables. Ordering makes each output position correspond to its input in this fresh example. Without ORDER BY, SQLite does not guarantee the order of a multirow result; the <a target="_blank" rel="noopener" href="https://www.sqlite.org/lang_select.html#orderby">SELECT ordering documentation</a> states that limit. A real importer should carry a stable input identity rather than treat this teaching rowid as a business identifier.</p>
+<p>The documented expectation is text &#39;000742&#39; in the first row of the strict table, but integer 742 in the ordinary table. The original integer remains an integer in both. The non-numeric text remains text in both. These outputs describe different preservation contracts; they do not establish that either table validates the business identifier.</p>
+<p>A display-only test can miss the difference. A driver might stringify every result, or a template might format both as numbers. Inspect the raw database output before checking the driver and interface. If the API promises a string, also check that the outgoing JSON contains a string.</p>
+<p>For a negative case, bind int(&#39;000742&#39;). Both tables now receive an integer, and the strict table must not be expected to recover its earlier spelling. Separately test ANY NOT NULL with a null value: accepting mixed storage classes does not cancel a non-null constraint.</p>
+<h2 id="Preservation-is-not-identifier-validation"><a href="#Preservation-is-not-identifier-validation" class="headerlink" title="Preservation is not identifier validation"></a>Preservation is not identifier validation</h2><p>Other typed columns in STRICT tables can still perform lossless conversions. STRICT is therefore not a universal reject-any-conversion switch. ANY intentionally permits mixed storage classes. That may suit a raw import area, while character rules, length, source identity and uniqueness require their own decisions.</p>
+<p>For a text-only identifier, a TEXT column with an explicit input contract may communicate intent better. TEXT alone does not validate every format rule. If mixed types are intentional, the reader and exporter must preserve their distinctions rather than turning everything into strings.</p>
+<p>Check the engine linked into the actual application. A system CLI, Python runtime and mobile application may embed different versions. A successful table creation in one proves nothing about another package. Read the engine version on the actual connection and verify the relevant path there.</p>
+<p>The site&#39;s <a href="/en/2026/10/15/json-integer-precision/">JSON integer-precision article</a> covers another kind of information loss. Here the number can fit comfortably within the integer range and still lose its original spelling. Numeric precision and leading-zero preservation need separate checks.</p>
+<h2 id="Will-moving-to-STRICT-recover-old-zeroes"><a href="#Will-moving-to-STRICT-recover-old-zeroes" class="headerlink" title="Will moving to STRICT recover old zeroes?"></a>Will moving to STRICT recover old zeroes?</h2><p>No. Historical strings 000742 and 742 may both have become integer 742. A new table option cannot determine which spelling belonged to each old row. Padding every value to six characters may silently change a legitimate identity.</p>
+<p>An engineering recovery plan needs an authoritative source-to-target mapping. A documented fixed-length rule can help only after confirming its scope across historical sources and periods. Check collisions, conflicting mappings and rows without enough evidence. Leave ambiguous rows unresolved rather than guessing their spelling.</p>
+<p>Validate historical reconstruction separately from new writes. The former needs source evidence and mapping checks; the latter needs the identical-input matrix and storage-class results. A successful insert into the new table establishes its input behavior, not the correctness of reconstructed history.</p>
+<p>The archived local run used Python 3.11.15 with SQLite 3.53.1 in memory. The three-input matrix, pre-converted integer and NOT NULL rejection matched expectations. This covers only those local inputs, not the application importer or another device.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.sqlite.org/stricttables.html" rel="noopener">STRICT Tables</a></li><li><a target="_blank" href="https://www.sqlite.org/lang_select.html" rel="noopener">SQLite SELECT — §4 The ORDER BY clause</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--sqlite" href="/en/tags/SQLite/">SQLite</a>
+          
+            <a class="tag tag--data-types" href="/en/tags/Data-types/">Data types</a>
+          
+            <a class="tag tag--import-validation" href="/en/tags/Import-validation/">Import validation</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F09%2Fsqlite-strict-any-coercion%2F&text=Why%20did%20a%20SQLite%20ANY%20column%20lose%20the%20leading%20zeroes%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F09%2Fsqlite-strict-any-coercion%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20did%20a%20SQLite%20ANY%20column%20lose%20the%20leading%20zeroes%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F09%2Fsqlite-strict-any-coercion%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/09/systemd-workingdirectory-exec-path/">
+              <span>Previous Post</span>
+              <strong>Why ./worker fails despite a configured WorkingDirectory</strong>
+              <small>2026-11-09</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/09/sqlite-savepoint-release-outer-transaction/">
+              <span>Next Post</span>
+              <strong>Why did an outer rollback undo a successful SQLite RELEASE?</strong>
+              <small>2026-11-09</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Inspect-the-binding-before-the-table">Inspect the binding before the table</a>
+          
+            <a class="toc-link toc-link--h2" href="#Compare-identical-inputs">Compare identical inputs</a>
+          
+            <a class="toc-link toc-link--h2" href="#Preservation-is-not-identifier-validation">Preservation is not identifier validation</a>
+          
+            <a class="toc-link toc-link--h2" href="#Will-moving-to-STRICT-recover-old-zeroes">Will moving to STRICT recover old zeroes?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>257</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>211</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/09/sqlite-savepoint-release-outer-transaction/">Why did an outer rollback undo a successful SQLite RELEASE?</a></h3>
+          <p>2026-11-09</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/01/python-sqlite-executemany-returning-discard/">Why does Python sqlite3 executemany discard INSERT RETURNING rows?</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/30/python-sqlite-executescript-precommit/">Why does an earlier Python SQLite write survive a failed script and rollback?</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

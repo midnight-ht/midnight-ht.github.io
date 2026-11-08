@@ -1,0 +1,408 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Kafka position 到了 103，为什么三条业务还没做完？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="以单分区三条记录推导拉取、业务完成与提交恢复位点，比较提前提交跳过、提交前重放和并发处理缺口。">
+  
+  
+    <meta name="keywords" content="consumer position,committed offset,手动提交">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/09/kafka-consumer-position-committed-offset/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/09/kafka-consumer-position-committed-offset/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/09/kafka-consumer-position-committed-offset/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/09/kafka-consumer-position-committed-offset/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Kafka position 到了 103，为什么三条业务还没做完？ | Midnight blog">
+    <meta property="og:description" content="以单分区三条记录推导拉取、业务完成与提交恢复位点，比较提前提交跳过、提交前重放和并发处理缺口。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/09/kafka-consumer-position-committed-offset/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/09/kafka-consumer-position-committed-offset/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/09/kafka-consumer-position-committed-offset/","name":"Kafka position 到了 103，为什么三条业务还没做完？ | Midnight blog","description":"以单分区三条记录推导拉取、业务完成与提交恢复位点，比较提前提交跳过、提交前重放和并发处理缺口。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/09/kafka-consumer-position-committed-offset/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/09/kafka-consumer-position-committed-offset/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/09/kafka-consumer-position-committed-offset/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/09/kafka-consumer-position-committed-offset/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/09/kafka-consumer-position-committed-offset/","headline":"Kafka position 到了 103，为什么三条业务还没做完？","description":"以单分区三条记录推导拉取、业务完成与提交恢复位点，比较提前提交跳过、提交前重放和并发处理缺口。","inLanguage":"zh-CN","datePublished":"2026-11-08T20:04:07.000Z","dateModified":"2026-11-08T20:04:07.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://kafka.apache.org/41/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html"],"keywords":"Kafka, 消息消费, 故障恢复"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/09/kafka-consumer-position-committed-offset/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Kafka position 到了 103，为什么三条业务还没做完？","item":"https://www.zyweb.vip/zh-CN/2026/11/09/kafka-consumer-position-committed-offset/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/09/kafka-consumer-position-committed-offset/" selected>zh-CN</option><option value="/en/2026/11/09/kafka-consumer-position-committed-offset/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/09/kafka-consumer-position-committed-offset/" selected>zh-CN</option><option value="/en/2026/11/09/kafka-consumer-position-committed-offset/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--kafka">Kafka</span>
+      <time datetime="2026-11-08T20:04:07.000Z">2026-11-09</time>
+    </div>
+
+    <h1>Kafka position 到了 103，为什么三条业务还没做完？</h1>
+
+    
+      <p class="post-hero__summary">以单分区三条记录推导拉取、业务完成与提交恢复位点，比较提前提交跳过、提交前重放和并发处理缺口。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-08T20:04:07.000Z">2026-11-09</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/09/kafka-consumer-position-committed-offset/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/09/kafka-consumer-position-committed-offset/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>poll推进position不证明外部业务已完成。</li><li>处理后提交仍存在效果成功而位点未更新的重放窗口。</li><li>并行完成不能让恢复位置跨过未完成缺口。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>poll 把一批记录交给程序后，消费位置可以已经前进；业务逐条处理与提交恢复位点是后面的两个动作。Kafka position 到了一百零三，不能据此宣布一百到一百零二的外部业务都完成，也不能推断组的已提交位点已经更新。</p>
+<p>假设消费者一次取回三条订单事件，监控记录位置明显前移，业务库却只写入第一条。若把位置当成完成数量，仪表盘可能显示已消费，重启后又重复处理；若为了追平位置马上提交，还可能在后续崩溃时跳过未完成记录。需要先把拉取、处理和恢复入口三份事实分开。</p>
+<h2 id="一个分区里的三个进度"><a href="#一个分区里的三个进度" class="headerlink" title="一个分区里的三个进度"></a>一个分区里的三个进度</h2><p>Apache Kafka Java 客户端四点一系列的 KafkaConsumer 文档区分 position 与 committed position。前者是下一条将交给消费者的记录位置，收到 poll 返回的消息时会自动前进；后者是已存储、供故障后恢复的位点。这里核对的文档页标明 clients 四点一点二 API，不把它笼统称作所有客户端版本的当前实现。</p>
+<p>第三个进度由应用负责：哪些业务副作用已按自己的持久化合同完成。Kafka 客户端不能仅凭把记录交给程序，就知道数据库插入、邮件或其他服务动作是否成功。提交位点也需要按业务选择时机，文档里的手动提交示例先完成处理，再提交相应恢复位置。</p>
+<p><a target="_blank" rel="noopener" href="https://kafka.apache.org/41/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html">KafkaConsumer 官方 API</a>的 Offsets and Consumer Position 与 Manual Offset Control 两节支持这些区别。本文没有搭建 broker、运行 Java 消费者或访问外部业务库；后面的数值是一条标明假设的时间线，不是实测日志。</p>
+<p>“消费了多少”也不是一个不加范围就能回答的问题。位点属于分区，不同分区上的同一个数字没有全局先后关系；实际记录的 offset 还可能有间隙。下面刻意采用一个分区、三个连续存在的记录，只为让每次恢复起点容易推导，不能把连续性当作生产前提。</p>
+<h2 id="三条记录，两个退出位置"><a href="#三条记录，两个退出位置" class="headerlink" title="三条记录，两个退出位置"></a>三条记录，两个退出位置</h2><p>设消费组 g 在分区 p 已提交一百，下次从一百这个恢复位置继续；该分区实际存在 offset 为一百、一百零一、一百零二的记录。关闭自动提交，主流程按顺序、同步处理。一次 poll 返回三条之后，position 可为一百零三，业务还可以一条都没完成。</p>
+<pre><code class="text">partition p, group g
+before poll: committed = 100
+poll returns: [100, 101, 102]
+after poll: position = 103, committed = 100
+process 100: external write confirmed
+stop before processing 101
+restart from committed = 100
+</code></pre>
+<p>这条轨迹中，一百已经产生外部效果，却没有新的提交，重启后它可以再被交付。消费者必须考虑该记录再次进入业务代码时怎么办。若写入支持稳定身份去重，可以查已有结果；若是不可重复的外部动作，则需要该系统自己的查询或幂等合同，不能从手动提交直接得到“外部恰好一次”。</p>
+<p>相反，在 poll 后立即提交一百零三，再于处理一百零一前退出，组的常规恢复会从提交位置继续，未完成记录就可能被跳过。这里并不是 Kafka 忘了已交付的记录，而是应用主动把恢复入口放到了业务完成范围之后。把提交提前可以减少重放，却也改变了丢失未处理工作的风险。</p>
+<p>成功轨迹应另写：三条业务按序完成，随后提交一百零三并确认提交成功。该数值代表下一条待处理位置，不是“最后处理的一条是第一百零三”。本例采用明确存在的连续记录来解释，实际代码应使用适当的下一位点 API 或已核对的恢复位置，不能对任意批次一概猜数字。</p>
+<h2 id="手动提交只让决定更明确"><a href="#手动提交只让决定更明确" class="headerlink" title="手动提交只让决定更明确"></a>手动提交只让决定更明确</h2><p>在文档的逐分区示例中，应用处理该分区记录后，使用本批次提供的 nextOffsets 对应值提交。选择显式位置时，应核对记录属于哪个分区、哪些已完成，以及提交结果是否成功。无参数提交与提交一张显式分区映射的保护范围，也要按实际 API 调用理解。</p>
+<p>提交抛错不能被日志里的“处理结束”覆盖。业务写入成功与位点确认是不同结果，提交失败后恢复可能带来重复；如果处理失败，又不应为让监控好看而直接提交整批。错误记录应保留分区、记录身份、业务写入状态和提交尝试的范围，避免一行笼统的失败日志无法重建顺序。</p>
+<p>进程在外部成功和提交之间中断，是这份设计必须承担的窗口。把两条调用写得紧邻，不会让它们共享一次原子提交；关闭自动提交也只是让应用控制位置，不会自动为外部库加事务。站内的<a href="/zh-CN/2026/10/09/postgres-transaction-outbox/">事务发件箱交接</a>讨论另一侧的数据库与发送责任，本题是在消费者端观察外部效果和恢复位点的间隔。</p>
+<p>重放测试不能只断言代码又收到了消息，还应观察外部效果是否重复、重复如何识别、调用者能否查到最终状态。若测试只使用内存列表充当业务库，就只能证明那段程序的顺序，不能证明真实存储的持久化和幂等约束。本文没有执行这些检查，也不报告交付次数。</p>
+<h2 id="一百零二先完成，一百零一没完成，能提交一百零三吗？"><a href="#一百零二先完成，一百零一没完成，能提交一百零三吗？" class="headerlink" title="一百零二先完成，一百零一没完成，能提交一百零三吗？"></a>一百零二先完成，一百零一没完成，能提交一百零三吗？</h2><p>不能让恢复位置跨过尚未完成的一百零一。这里才引入主例没有的条件：同一分区的记录交给多个工作者并行处理，一百和一百零二都完成，一百零一仍在执行。poll 的位置已经前进，不说明中间这个缺口可以被忽略。</p>
+<p>一种工程思路是按分区维护连续完成前缀，只有缺口补齐后才把可提交范围向前推进。它是应用状态管理建议，不是 Kafka 为任意线程模型自动实现的业务完成标记。工作者完成、所有权变化和提交的先后还要有一致协调，否则旧工作者晚到的结果可能影响新的分配。</p>
+<p>rebalance 时谁负责等待、停止或接管未完成工作，也必须明示。不能仅把几个异步任务的最大 offset 当成完成前缀；实际 offset 有间隙，又不能要求每个整数都出现。这需要基于真实交付序列和分区归属设计，本篇不提供一份未经运行的通用并发消费者。</p>
+<p>拟议验收先保持单分区同步主例，覆盖处理前提交的跳过风险、处理后提交前退出的重放、全部处理后提交成功三条路径，再单独加入并行缺口和分区再分配。记录每次 position、committed 与业务完成身份；只有三者各有证据，监控上的前进才不会被误读成业务已经完成。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://kafka.apache.org/41/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html" rel="noopener">KafkaConsumer (clients 4.1.2 API)</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--kafka" href="/zh-CN/tags/Kafka/">Kafka</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%B6%88%E6%81%AF%E6%B6%88%E8%B4%B9/">消息消费</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%95%85%E9%9A%9C%E6%81%A2%E5%A4%8D/">故障恢复</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F09%2Fkafka-consumer-position-committed-offset%2F&text=Kafka%20position%20%E5%88%B0%E4%BA%86%20103%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%89%E6%9D%A1%E4%B8%9A%E5%8A%A1%E8%BF%98%E6%B2%A1%E5%81%9A%E5%AE%8C%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F09%2Fkafka-consumer-position-committed-offset%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Kafka%20position%20%E5%88%B0%E4%BA%86%20103%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%89%E6%9D%A1%E4%B8%9A%E5%8A%A1%E8%BF%98%E6%B2%A1%E5%81%9A%E5%AE%8C%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F09%2Fkafka-consumer-position-committed-offset%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/09/openapi-parameter-style-explode/">
+              <span>上一篇</span>
+              <strong>同一数组查询参数，为什么客户端发重复键而服务端等逗号？</strong>
+              <small>2026-11-09</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/09/json-merge-patch-null-removes-member/">
+              <span>下一篇</span>
+              <strong>Merge Patch 传了 null，为什么字段被删了？</strong>
+              <small>2026-11-09</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#一个分区里的三个进度">一个分区里的三个进度</a>
+          
+            <a class="toc-link toc-link--h2" href="#三条记录，两个退出位置">三条记录，两个退出位置</a>
+          
+            <a class="toc-link toc-link--h2" href="#手动提交只让决定更明确">手动提交只让决定更明确</a>
+          
+            <a class="toc-link toc-link--h2" href="#一百零二先完成，一百零一没完成，能提交一百零三吗？">一百零二先完成，一百零一没完成，能提交一百零三吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>257</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>211</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/09/actions-matrix-fail-fast-experimental/">实验项允许失败，为什么矩阵其他任务仍被取消</a></h3>
+          <p>2026-11-09</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/09/csp-multiple-policies-intersection/">多发一条CSP，不能覆盖原来的拒绝</a></h3>
+          <p>2026-11-09</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/09/css-grid-auto-fill-auto-fit/">Grid只有两张卡片，空列为什么还占着宽度？</a></h3>
+          <p>2026-11-09</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

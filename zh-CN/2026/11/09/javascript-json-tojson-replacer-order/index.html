@@ -1,0 +1,438 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>replacer为什么拿不到原字段？先查toJSON的调用顺序 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="沿SerializeJSONProperty核对toJSON与函数replacer先后、根空键和holder，用两个完整未执行探针区分原输入与替换对象入口。">
+  
+  
+    <meta name="keywords" content="toJSON,replacer,SerializeJSONProperty">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/09/javascript-json-tojson-replacer-order/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/09/javascript-json-tojson-replacer-order/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/09/javascript-json-tojson-replacer-order/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/09/javascript-json-tojson-replacer-order/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="replacer为什么拿不到原字段？先查toJSON的调用顺序 | Midnight blog">
+    <meta property="og:description" content="沿SerializeJSONProperty核对toJSON与函数replacer先后、根空键和holder，用两个完整未执行探针区分原输入与替换对象入口。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/09/javascript-json-tojson-replacer-order/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/09/javascript-json-tojson-replacer-order/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/09/javascript-json-tojson-replacer-order/","name":"replacer为什么拿不到原字段？先查toJSON的调用顺序 | Midnight blog","description":"沿SerializeJSONProperty核对toJSON与函数replacer先后、根空键和holder，用两个完整未执行探针区分原输入与替换对象入口。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/09/javascript-json-tojson-replacer-order/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/09/javascript-json-tojson-replacer-order/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/09/javascript-json-tojson-replacer-order/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/09/javascript-json-tojson-replacer-order/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/09/javascript-json-tojson-replacer-order/","headline":"replacer为什么拿不到原字段？先查toJSON的调用顺序","description":"沿SerializeJSONProperty核对toJSON与函数replacer先后、根空键和holder，用两个完整未执行探针区分原输入与替换对象入口。","inLanguage":"zh-CN","datePublished":"2026-11-08T20:04:07.000Z","dateModified":"2026-11-08T20:04:07.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://tc39.es/ecma262/multipage/structured-data.html"],"keywords":"JavaScript, JSON"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/09/javascript-json-tojson-replacer-order/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"replacer为什么拿不到原字段？先查toJSON的调用顺序","item":"https://www.zyweb.vip/zh-CN/2026/11/09/javascript-json-tojson-replacer-order/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/09/javascript-json-tojson-replacer-order/" selected>zh-CN</option><option value="/en/2026/11/09/javascript-json-tojson-replacer-order/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/09/javascript-json-tojson-replacer-order/" selected>zh-CN</option><option value="/en/2026/11/09/javascript-json-tojson-replacer-order/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--javascript">JavaScript</span>
+      <time datetime="2026-11-08T20:04:07.000Z">2026-11-09</time>
+    </div>
+
+    <h1>replacer为什么拿不到原字段？先查toJSON的调用顺序</h1>
+
+    
+      <p class="post-hero__summary">沿SerializeJSONProperty核对toJSON与函数replacer先后、根空键和holder，用两个完整未执行探针区分原输入与替换对象入口。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-08T20:04:07.000Z">2026-11-09</time> · 预计阅读 8 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/09/javascript-json-tojson-replacer-order/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/09/javascript-json-tojson-replacer-order/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>可调用toJSON先于同一属性的函数replacer执行。</li><li>toJSON的this与replacer的holder绑定不同，根还有空键包装。</li><li>返回对象不会让同一属性步骤重跑已结束的toJSON阶段。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>导出时 replacer 没有看到对象上的原字段，可能不是遍历漏了：该值的 toJSON 已经先返回了另一份表示。函数 replacer 接到的是这个阶段的值，而不保证是最初对象。排查字段改写时，应记录回调顺序、当前 key 与 holder，再决定把检查放在哪个阶段。</p>
+<p><a target="_blank" rel="noopener" href="https://tc39.es/ecma262/multipage/structured-data.html#sec-serializejsonproperty">ECMAScript 当前草案的 SerializeJSONProperty</a>给出明确顺序：读取 holder[key]，必要时调用可调用的 toJSON，然后调用函数 replacer。核对的是二〇二六年十一月九日取得的 ECMAScript 2027 草案快照，章节为 §25.5.4.2；本稿不把草案年份写成本地运行时已经实现了全部新功能。</p>
+<h2 id="replacer-看到的对象为什么换了形状？"><a href="#replacer-看到的对象为什么换了形状？" class="headerlink" title="replacer 看到的对象为什么换了形状？"></a>replacer 看到的对象为什么换了形状？</h2><p>设想导出一个账单摘要对象，内存中有 publicName 与 internalNote，类自己的 toJSON 只返回 label。外层 replacer 若根据 publicName 是否存在来识别类型，就可能识别失败；不是 JSON 随机丢了一个字段，而是识别发生在另一份表示上。字段名相似不代表两个阶段面对同一对象。</p>
+<p>toJSON 收到当前属性 key，以被转换值作为 this。函数 replacer 则收到 key 和转换后的 value，以持有这个属性的 holder 作为 this。两种 this 的责任不同：前者让对象决定自己的导出表示，后者让遍历回调知道该值来自哪一层。箭头函数没有自己的 this，若想观察 holder，示例应使用普通函数。</p>
+<p>根值还有一层包装。JSON.stringify 先把根值放到一个新包装对象的空字符串键下，再启动相同算法。因此最先看到的 replacer key 通常是空字符串，并非漏掉了名字；真正的用户对象也可能有空字符串属性，所以仅凭 key===&#39;&#39; 不足以在所有情况下断定这是根调用。需要额外记录是否第一次或明确保存根位置。</p>
+<p>下面是未执行的完整 Node.js ESM 教学程序。它不访问网络、数据库或真实账单；publicName 与 internalNote 都是假设字段。预期由算法先写定，再用断言检查回调轨迹和最终文本，不把序列化输出反过来当作自己的正确性标准。</p>
+<pre><code class="js">import assert from &#39;node:assert/strict&#39;;
+const trace = [];
+const item = {
+  publicName: &#39;Demo&#39;,
+  internalNote: &#39;teaching only&#39;,
+  toJSON(key) {
+    trace.push([&#39;toJSON&#39;, key, this === item]);
+    return { label: this.publicName };
+  }
+};
+const root = { item };
+const text = JSON.stringify(root, function (key, value) {
+  trace.push([&#39;replacer&#39;, key,
+    key === &#39;item&#39; ? value.label : typeof value,
+    key === &#39;item&#39; ? this === root : null]);
+  return value;
+});
+assert.equal(text, &#39;{&quot;item&quot;:{&quot;label&quot;:&quot;Demo&quot;}}&#39;);
+assert.deepEqual(trace, [
+  [&#39;replacer&#39;, &#39;&#39;, &#39;object&#39;, null],
+  [&#39;toJSON&#39;, &#39;item&#39;, true],
+  [&#39;replacer&#39;, &#39;item&#39;, &#39;Demo&#39;, true],
+  [&#39;replacer&#39;, &#39;label&#39;, &#39;string&#39;, null]
+]);
+console.log(text, trace);
+</code></pre>
+<p>对这个输入，根 replacer 先运行，因为外层 root 没有可调用的 toJSON。随后处理 item：先调用 item.toJSON，才把其返回对象交给 item 对应的 replacer，之后递归处理 label。原 item 上的 internalNote 没有进入返回对象，不能期望后续按这份返回对象遍历时再次看到它。</p>
+<p>第一份探针还可以分开核对根回调与 item 回调的 holder：前者对应包装对象，后者才对应 root。即使返回对象碰巧仍含相同文字，身份断言也能区分这两层，不能只比较内容是否相等。若把普通回调改成箭头函数，key 参数仍可能正确，this 却不再按这份调用规则取得 holder；因此测试应分别保留属性路径、值和身份三项预期，而不是只看最终字符串。</p>
+<p>不要用 JSON.stringify 待检查对象来制作每一步日志，否则日志本身可能再次调用 toJSON，让轨迹混入额外执行。上例只记录布尔值、key 和简单文本，最终输出的 trace 不包含原对象。浏览器控制台的可展开对象也未必是当时值的静态快照，观察工具应避免改变或模糊被观察的过程。</p>
+<h2 id="想检查原字段，应该把判断放在哪里？"><a href="#想检查原字段，应该把判断放在哪里？" class="headerlink" title="想检查原字段，应该把判断放在哪里？"></a>想检查原字段，应该把判断放在哪里？</h2><p>如果业务要求原对象必须有某字段，应在 stringify 之前执行独立检查，或明确控制对象提供的转换合同。后置回调适合检查它实际收到的表示；把它当成所有输入的第一道原对象审查，会使对象自己的转换有机会先改变结构。这个结论不是建议绕过验证，而是要求验证者清楚自己能看到哪些信息。</p>
+<p>返回原始类型也会改变后续观察。toJSON 若返回一个字符串，该值随后交给 replacer，之后不会按原对象属性继续遍历。replacer 仍可有意返回另一份值，但那是新的转换规则；应分别保存原输入、toJSON 返回值、replacer 返回值及最终 JSON，避免把几个阶段统称“导出对象”。</p>
+<p>这也不是任意对象的无副作用克隆。读取属性、获取 toJSON 和调用函数都可能有可观察行为；教学对象的方法非常简单，不代表真实类、代理对象或访问器都如此。若输入来自不受控对象，不能因最终拿到字符串就推断此前没有执行代码。这里不提供通用安全过滤器，也没有做恶意对象测试。</p>
+<h2 id="replacer-返回的新对象有-toJSON，会立即再调用一次吗？"><a href="#replacer-返回的新对象有-toJSON，会立即再调用一次吗？" class="headerlink" title="replacer 返回的新对象有 toJSON，会立即再调用一次吗？"></a>replacer 返回的新对象有 toJSON，会立即再调用一次吗？</h2><p>同一次属性处理不会倒回已完成的 toJSON 阶段。算法先完成那一步，再执行 replacer，之后根据返回值的类型继续序列化。若 replacer 返回对象，进入对象处理；其子属性的值会各自运行属性算法，但不等于对这个返回对象本身重新启动同一轮 toJSON。</p>
+<p>下面另一个未执行的完整程序让根 replacer 返回带 toJSON 的新对象。纸面预期是 keep 留下、方法调用计数为零；若把同一对象直接作为最初根值，才会先走它自身的 toJSON。两个入口不同，应分别断言，不用“有这个方法”推断调用时点。</p>
+<pre><code class="js">import assert from &#39;node:assert/strict&#39;;
+let called = 0;
+const replacement = {
+  keep: 1,
+  toJSON() { called++; return &#39;converted&#39;; }
+};
+let first = true;
+const text = JSON.stringify({ original: 1 }, function (key, value) {
+  if (first) { first = false; return replacement; }
+  return value;
+});
+assert.equal(text, &#39;{&quot;keep&quot;:1}&#39;);
+assert.equal(called, 0);
+assert.equal(JSON.stringify(replacement), &#39;&quot;converted&quot;&#39;);
+assert.equal(called, 1);
+console.log(&#39;different entry stages checked&#39;);
+</code></pre>
+<p>函数属性未形成 JSON 成员，是这个对象遍历后的结果，不意味着运行器先执行它再删除。若替换对象的某个子值另有 toJSON，处理该子值时又有自己的转换阶段；因此“不会立即重跑”必须限定到同一个属性操作，不能扩成整棵树再也不会调用任何 toJSON。</p>
+<p>待执行验证应固定 Node 版本，分别保存两个脚本、标准输出、退出码与断言结果。再把项目实际的类、序列化封装与调用入口放入同类轨迹，不从普通对象探针外推整个 SDK。本文没有运行这些代码；实际项目仍要核对最终发送文本与接收方合同。</p>
+<p><a href="/zh-CN/2026/10/17/json-stringify-undefined-fields/">undefined 与清空语义</a>讨论表示穿过接口后意味着什么。本题限定回调先后与观察对象身份：先找出哪个阶段换了值，再选择该阶段能够履行的验证，而不是要求后面的回调重新看见已经消失的原结构。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://tc39.es/ecma262/multipage/structured-data.html" rel="noopener">ECMAScript 2027 draft §25.5.4 JSON.stringify</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--javascript" href="/zh-CN/tags/JavaScript/">JavaScript</a>
+          
+            <a class="tag tag--json" href="/zh-CN/tags/JSON/">JSON</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F09%2Fjavascript-json-tojson-replacer-order%2F&text=replacer%E4%B8%BA%E4%BB%80%E4%B9%88%E6%8B%BF%E4%B8%8D%E5%88%B0%E5%8E%9F%E5%AD%97%E6%AE%B5%EF%BC%9F%E5%85%88%E6%9F%A5toJSON%E7%9A%84%E8%B0%83%E7%94%A8%E9%A1%BA%E5%BA%8F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F09%2Fjavascript-json-tojson-replacer-order%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=replacer%E4%B8%BA%E4%BB%80%E4%B9%88%E6%8B%BF%E4%B8%8D%E5%88%B0%E5%8E%9F%E5%AD%97%E6%AE%B5%EF%BC%9F%E5%85%88%E6%9F%A5toJSON%E7%9A%84%E8%B0%83%E7%94%A8%E9%A1%BA%E5%BA%8F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F09%2Fjavascript-json-tojson-replacer-order%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/09/json-duplicate-member-interoperability/">
+              <span>上一篇</span>
+              <strong>在 Python JSON 变成字典前拒绝重复成员</strong>
+              <small>2026-11-09</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/09/html-inert-focus-interaction/">
+              <span>下一篇</span>
+              <strong>浮层打开后Tab仍进背景：怎样用inert隔离整块区域？</strong>
+              <small>2026-11-09</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#replacer-看到的对象为什么换了形状？">replacer 看到的对象为什么换了形状？</a>
+          
+            <a class="toc-link toc-link--h2" href="#想检查原字段，应该把判断放在哪里？">想检查原字段，应该把判断放在哪里？</a>
+          
+            <a class="toc-link toc-link--h2" href="#replacer-返回的新对象有-toJSON，会立即再调用一次吗？">replacer 返回的新对象有 toJSON，会立即再调用一次吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>257</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>211</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/09/dom-requestanimationframe-elapsed-progress/">换了高刷新率屏幕后，逐帧加2px的动画为什么更快？</a></h3>
+          <p>2026-11-09</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/09/json-duplicate-member-interoperability/">在 Python JSON 变成字典前拒绝重复成员</a></h3>
+          <p>2026-11-09</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/08/dom-removeeventlistener-capture-identity/">removeEventListener 已经运行，为什么旧组件还收到事件？</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
