@@ -1,0 +1,408 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>SQL 最后转了 numeric，比例为什么还是零？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用除法前后类型和独立数值预期定位整数截断，区分小数计算、零分母政策与最终显示精度。">
+  
+  
+    <meta name="keywords" content="integer division,numeric,CAST位置">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/10/postgres-integer-division-cast-position/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/10/postgres-integer-division-cast-position/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/10/postgres-integer-division-cast-position/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/10/postgres-integer-division-cast-position/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="SQL 最后转了 numeric，比例为什么还是零？ | Midnight blog">
+    <meta property="og:description" content="用除法前后类型和独立数值预期定位整数截断，区分小数计算、零分母政策与最终显示精度。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/10/postgres-integer-division-cast-position/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/10/postgres-integer-division-cast-position/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/10/postgres-integer-division-cast-position/","name":"SQL 最后转了 numeric，比例为什么还是零？ | Midnight blog","description":"用除法前后类型和独立数值预期定位整数截断，区分小数计算、零分母政策与最终显示精度。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/10/postgres-integer-division-cast-position/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/10/postgres-integer-division-cast-position/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/10/postgres-integer-division-cast-position/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/10/postgres-integer-division-cast-position/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/10/postgres-integer-division-cast-position/","headline":"SQL 最后转了 numeric，比例为什么还是零？","description":"用除法前后类型和独立数值预期定位整数截断，区分小数计算、零分母政策与最终显示精度。","inLanguage":"zh-CN","datePublished":"2026-11-09T20:06:46.000Z","dateModified":"2026-11-09T20:06:46.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/functions-math.html","https://www.postgresql.org/docs/18/sql-expressions.html","https://www.postgresql.org/docs/18/functions-conditional.html","https://www.postgresql.org/docs/18/datatype-numeric.html"],"keywords":"PostgreSQL, SQL, 数值类型"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/10/postgres-integer-division-cast-position/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"SQL 最后转了 numeric，比例为什么还是零？","item":"https://www.zyweb.vip/zh-CN/2026/11/10/postgres-integer-division-cast-position/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/10/postgres-integer-division-cast-position/" selected>zh-CN</option><option value="/en/2026/11/10/postgres-integer-division-cast-position/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/10/postgres-integer-division-cast-position/" selected>zh-CN</option><option value="/en/2026/11/10/postgres-integer-division-cast-position/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--postgresql">PostgreSQL</span>
+      <time datetime="2026-11-09T20:06:46.000Z">2026-11-10</time>
+    </div>
+
+    <h1>SQL 最后转了 numeric，比例为什么还是零？</h1>
+
+    
+      <p class="post-hero__summary">用除法前后类型和独立数值预期定位整数截断，区分小数计算、零分母政策与最终显示精度。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-09T20:06:46.000Z">2026-11-10</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/10/postgres-integer-division-cast-position/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/10/postgres-integer-division-cast-position/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>整数除法向零截断，后置CAST不能恢复分数。</li><li>需要小数时先转换操作数，再决定scale和单位。</li><li>零分母、负数和绑定参数类型应分别验收。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>把整数除法的结果再转成 numeric，不能找回已经截掉的小数。PostgreSQL 18 中，整数操作数相除会向零截断；需要小数比例时，应在除法发生前转换一个操作数。最终列的类型是 numeric，只能证明最后的结果经过转换，不能证明内部运算保留了分数。</p>
+<p>假设一份报表有一次成功、四次尝试，业务期望比例为四分之一。SQL 写成 <code>(successes / attempts)::numeric</code>，结果仍为零，页面格式化后可能显示零点零零。把显示位数增加到六位没有帮助，因为问题发生在除法表达式内，而不是页面少显示了几位。先看信息在哪一步丢失，再选择输出格式。</p>
+<h2 id="把转换放在表达式的哪一层"><a href="#把转换放在表达式的哪一层" class="headerlink" title="把转换放在表达式的哪一层"></a>把转换放在表达式的哪一层</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-math.html">PostgreSQL 18 数学运算符表</a>明确列出整数除法向零截断，并给出正负数示例。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-expressions.html#SQL-SYNTAX-TYPE-CASTS">类型转换章节</a>则区分对已知类型表达式的转换与给字符串常量指定类型。本题是已有整数表达式的值转换，不是重新解释一份原始分数字符串。</p>
+<p><code>(1 / 4)::numeric</code> 的括号先形成整数除法表达式，其结果为零，外层再把这个零转换成 numeric。相反，<code>1::numeric / 4</code> 让除法面对 numeric 操作数，不能再按两个整数的除法规则理解。<code>1 / 4::numeric</code> 在这个简单例子中也能提前改变操作数；代码评审应看转换落在谁身上，而不是只搜索整行有没有 numeric。</p>
+<p>这也解释了为什么把外层结果存进 numeric 列仍可能留下错误。目标列可以接收一个合法的零，它没有足够信息判断你原本想算四分之一。数据类型约束与业务数值正确是两项验收；没有报错，只说明当前表达式能够被计算和保存。</p>
+<h2 id="先写数值预期，再运行类型探针"><a href="#先写数值预期，再运行类型探针" class="headerlink" title="先写数值预期，再运行类型探针"></a>先写数值预期，再运行类型探针</h2><p>下面是未执行的完整教学查询，不读取业务表。NULLIF 用于让分母为零的那一行得到空结果，便于把其余样本放在一张表中比较；这不是替产品决定零次尝试应该怎样展示。</p>
+<pre><code class="sql">WITH sample(a, b) AS (
+  VALUES (1, 4), (-5, 2), (0, 3), (3, 0)
+)
+SELECT a, b,
+       (a / NULLIF(b, 0))::numeric AS late_cast,
+       a::numeric / NULLIF(b, 0) AS early_cast,
+       pg_typeof(a / NULLIF(b, 0)) AS division_type,
+       pg_typeof(a::numeric / NULLIF(b, 0)) AS promoted_type
+FROM sample;
+</code></pre>
+<p>独立预期是：一除以四，late_cast 为零，early_cast 为四分之一；负五除以二，前者为负二，后者为负二点五；零除以三两路都是零；三除以零这一行，两路由于分母转换为空而返回 NULL。division_type 应为 integer，promoted_type 应为 numeric。这里的值与类型均是规则推演，尚未执行，不是数据库输出摘录。</p>
+<p>负数样本不能删除。向零截断与向负无穷取整不同，负二点五向零截断为负二，而 floor 意义下向下取整是负三。若团队用“整数除法向下取整”描述报表规则，正数样本可能全部通过，冲销或退款引入负数后才暴露歧义。先写业务选择的方向，不能把语言里的模糊说法当成数据库合同。</p>
+<p>另开一条无保护的 <code>SELECT 3 / 0;</code> 作为拒绝探针，预期为除零错误，不与上面 NULLIF 分支混写成“PostgreSQL 除以零就返回空”。条件表达式文档定义 NULLIF 在两值相等时返回空。它是查询主动选择的处理路径；如果零次尝试应显示“不适用”，下游也要保留这层区别，不能自动把空值补成真实的零成功率。</p>
+<h2 id="小数计算与输出精度还要分开"><a href="#小数计算与输出精度还要分开" class="headerlink" title="小数计算与输出精度还要分开"></a>小数计算与输出精度还要分开</h2><p>提前转换解决的是当前除法使用哪种数值运算，不会替你选择最终精度。numeric 类型说明区分 precision 和 scale，并说明存入受限 scale 的列时会舍入。四分之一容易精确表示，不代表三分之一可以用有限位小数无损展示，更不能从这个示例推出所有数值运算都精确无限。</p>
+<p>如果报表要百分比，先定义存储的是比例还是乘一百后的百分数，再决定何处舍入。一个接口返回零点二五，另一个把它当作百分之零点二五，虽然都用了 numeric，业务仍差了一个单位。验收表应同时写原始计数、比例单位、输出类型和允许显示误差；把这些信息只放在前端格式化函数里，会让导出和其他消费者继续猜测。</p>
+<p>选择整数运算也可以合理。例如业务明确只发放完整批次，余量留待下一次处理，就可能需要截断。但应保留被除数、除数和余量的含义，而不是因为旧代码碰巧返回整数便把它确认为规则。本站<a href="https://www.zyweb.vip/zh-CN/2026/10/27/postgres-union-unknown-type-resolution/">UNION 的类型解析时点</a>讨论另一种外层转换来得太晚的情况；那里可能根本无法解析，本题则是表达式能执行，结果却已损失分数。</p>
+<p>还有一种反例，能检查修复是否只停在类型上。假设两组数据分别是一成功四尝试、九成功十尝试，业务要求所有尝试合并后的成功率。独立分子是十，分母是十四，目标为七分之五。若先算每组比例再简单平均，得到的是零点五七五；两条路径即使都提前转成小数，也没有在算同一项指标。这是手工推导，未执行聚合查询。</p>
+<p>因此，转换修好以后，验收还应保留原始分子、分母与组合规则。两组等权平均适合每组具有同样业务权重的定义，按总尝试合并则给每次尝试同样权重；不能靠哪个值更顺眼决定。先让指标负责人选定口径，再验证转换放在对应算术之前。否则开发者可能修掉了整数截断，却用一份合法小数掩盖另一种计算错误。</p>
+<h2 id="常量查询正确，绑定参数后为什么不同？"><a href="#常量查询正确，绑定参数后为什么不同？" class="headerlink" title="常量查询正确，绑定参数后为什么不同？"></a>常量查询正确，绑定参数后为什么不同？</h2><p>绑定参数给问题增加了实际输入类型。字面量探针只能证明那些字面量下的规则，不能代替驱动将参数声明成什么类型的证据。保存驱动版本、完整 SQL 和参数类型；在同一个连接与相同绑定方式下检查 pg_typeof，再比较数值结果，而不是仅比较打印出来的字符串。</p>
+<p>若一边绑定整数、另一边绑定 numeric，运算符选择条件已经改变。应由查询或接口明确数值合同，不依赖调用方偶然传来带小数点的文本。先让一除以四、负五除以二和零分母三类预期都对应明确处理，再确认页面如何显示；这能把算错、政策未定和格式不同分成可定位的问题。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-math.html" rel="noopener">PostgreSQL: Documentation: 18: 9.3. Mathematical Functions and Operators</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-expressions.html" rel="noopener">PostgreSQL: Documentation: 18: 4.2. Value Expressions</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-conditional.html" rel="noopener">PostgreSQL: Documentation: 18: 9.18. Conditional Expressions</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/datatype-numeric.html" rel="noopener">PostgreSQL: Documentation: 18: 8.1. Numeric Types</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--sql" href="/zh-CN/tags/SQL/">SQL</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%95%B0%E5%80%BC%E7%B1%BB%E5%9E%8B/">数值类型</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F10%2Fpostgres-integer-division-cast-position%2F&text=SQL%20%E6%9C%80%E5%90%8E%E8%BD%AC%E4%BA%86%20numeric%EF%BC%8C%E6%AF%94%E4%BE%8B%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E6%98%AF%E9%9B%B6%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F10%2Fpostgres-integer-division-cast-position%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=SQL%20%E6%9C%80%E5%90%8E%E8%BD%AC%E4%BA%86%20numeric%EF%BC%8C%E6%AF%94%E4%BE%8B%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E6%98%AF%E9%9B%B6%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F10%2Fpostgres-integer-division-cast-position%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/10/postgres-lag-default-missing-row-not-null-value/">
+              <span>上一篇</span>
+              <strong>lag 已经写了默认值 0，为什么仍返回 NULL？</strong>
+              <small>2026-11-10</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/10/postgres-index-only-visibility-map/">
+              <span>下一篇</span>
+              <strong>覆盖索引建好了，Heap Fetches 为什么仍不是零？</strong>
+              <small>2026-11-10</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#把转换放在表达式的哪一层">把转换放在表达式的哪一层</a>
+          
+            <a class="toc-link toc-link--h2" href="#先写数值预期，再运行类型探针">先写数值预期，再运行类型探针</a>
+          
+            <a class="toc-link toc-link--h2" href="#小数计算与输出精度还要分开">小数计算与输出精度还要分开</a>
+          
+            <a class="toc-link toc-link--h2" href="#常量查询正确，绑定参数后为什么不同？">常量查询正确，绑定参数后为什么不同？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>256</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/09/postgres-lateral-left-join-empty/">最近订单子查询为空，客户为什么一起消失？</a></h3>
+          <p>2026-11-09</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/05/postgres-last-value-window-frame/">PostgreSQL last_value 为什么没有返回分组最后一条？</a></h3>
+          <p>2026-11-05</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/18/postgres-left-join-filter-location/">LEFT JOIN加上IS NULL，为什么仍救不回这位客户？</a></h3>
+          <p>2026-10-18</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

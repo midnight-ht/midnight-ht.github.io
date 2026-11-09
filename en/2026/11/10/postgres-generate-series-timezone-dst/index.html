@@ -1,0 +1,415 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why can daily PostgreSQL series points be 25 hours apart? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Compare calendar-day and 24-hour series across a documented historical transition using separate local-date and UTC-time oracles.">
+  
+  
+    <meta name="keywords" content="generate_series timezone,DST,calendar day versus 24 hours">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/10/postgres-generate-series-timezone-dst/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/10/postgres-generate-series-timezone-dst/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/10/postgres-generate-series-timezone-dst/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/10/postgres-generate-series-timezone-dst/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why can daily PostgreSQL series points be 25 hours apart? | Midnight blog">
+    <meta property="og:description" content="Compare calendar-day and 24-hour series across a documented historical transition using separate local-date and UTC-time oracles.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/10/postgres-generate-series-timezone-dst/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/10/postgres-generate-series-timezone-dst/#webpage","url":"https://www.zyweb.vip/en/2026/11/10/postgres-generate-series-timezone-dst/","name":"Why can daily PostgreSQL series points be 25 hours apart? | Midnight blog","description":"Compare calendar-day and 24-hour series across a documented historical transition using separate local-date and UTC-time oracles.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/10/postgres-generate-series-timezone-dst/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/10/postgres-generate-series-timezone-dst/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/10/postgres-generate-series-timezone-dst/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/10/postgres-generate-series-timezone-dst/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/10/postgres-generate-series-timezone-dst/","headline":"Why can daily PostgreSQL series points be 25 hours apart?","description":"Compare calendar-day and 24-hour series across a documented historical transition using separate local-date and UTC-time oracles.","inLanguage":"en","datePublished":"2026-11-09T20:06:46.000Z","dateModified":"2026-11-09T20:06:46.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.postgresql.org/docs/18/functions-srf.html","https://www.postgresql.org/docs/18/functions-datetime.html"],"keywords":"PostgreSQL, Time series, Time zones"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/10/postgres-generate-series-timezone-dst/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why can daily PostgreSQL series points be 25 hours apart?","item":"https://www.zyweb.vip/en/2026/11/10/postgres-generate-series-timezone-dst/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/10/postgres-generate-series-timezone-dst/">zh-CN</option><option value="/en/2026/11/10/postgres-generate-series-timezone-dst/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/10/postgres-generate-series-timezone-dst/">zh-CN</option><option value="/en/2026/11/10/postgres-generate-series-timezone-dst/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--postgresql">PostgreSQL</span>
+      <time datetime="2026-11-09T20:06:46.000Z">2026-11-10</time>
+    </div>
+
+    <h1>Why can daily PostgreSQL series points be 25 hours apart?</h1>
+
+    
+      <p class="post-hero__summary">Compare calendar-day and 24-hour series across a documented historical transition using separate local-date and UTC-time oracles.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-09T20:06:46.000Z">2026-11-10</time> · Estimated read 12 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/10/postgres-generate-series-timezone-dst/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/10/postgres-generate-series-timezone-dst/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Consecutive local dates need not be 24 hours apart.</li><li>Record generation zone, display zone, step, and endpoints separately.</li><li>Derive an independent local-date vector for a 24-hour comparison.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>A timestamptz series advancing by local calendar days need not have 24-hour gaps between instants. PostgreSQL 18 can generate the series using a named time zone’s clock and daylight-saving adjustments. Across a fall-back transition, consecutive local midnights can be 25 hours apart without a missing local date.</p>
+<p>Suppose a regional report needs a row for every date, including dates without events. An engineer sees an extra hour between UTC values and proposes inserting another point. First decide whether the report requires consecutive local dates or fixed-duration samples. Adding a fixed-duration point to an already complete calendar series can duplicate a local bucket.</p>
+<h2 id="Record-generation-and-display-zones-separately"><a href="#Record-generation-and-display-zones-separately" class="headerlink" title="Record generation and display zones separately"></a>Record generation and display zones separately</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-srf.html">PostgreSQL 18’s set-returning function table</a> includes an optional timezone argument for the timestamptz overload. It controls time-of-day and DST calculations; without it, the session TimeZone is used. The example fixes UTC display and passes America/New_York explicitly so generation semantics are not hidden in a connection default.</p>
+<p>Changing display does not remove an explicit generation zone. Conversely, omitting the fourth argument and changing the session setting can change more than formatting: it changes the rules the generator uses. Preserve input types, explicit endpoint offsets, step, generation zone, and display environment.</p>
+<p>The site’s <a href="https://www.zyweb.vip/en/2026/10/31/postgres-at-time-zone-type-direction/">AT TIME ZONE type-direction article</a> distinguishes instants from local clock values. Here projection into New York supplies a separate local-date check. The timestamp-without-time-zone overload is different; do not mechanically append a fourth argument to every call named generate_series.</p>
+<h2 id="Check-dates-and-elapsed-time-independently"><a href="#Check-dates-and-elapsed-time-independently" class="headerlink" title="Check dates and elapsed time independently"></a>Check dates and elapsed time independently</h2><p>This complete query has not been executed. The historical 2001 New York boundary follows the period used in the official example. It is not a prediction of future time-zone policy or validation of deployed time-zone data.</p>
+<pre><code class="sql">SET TIME ZONE &#39;UTC&#39;;
+WITH s AS (
+  SELECT generate_series(
+    timestamptz &#39;2001-10-27 00:00-04&#39;,
+    timestamptz &#39;2001-10-30 00:00-05&#39;,
+    interval &#39;1 day&#39;,
+    &#39;America/New_York&#39;
+  ) AS t
+)
+SELECT t,
+       t AT TIME ZONE &#39;America/New_York&#39; AS local_clock,
+       extract(epoch FROM t - lag(t) OVER (ORDER BY t)) AS elapsed_seconds
+FROM s
+ORDER BY t;
+</code></pre>
+<p>The independent local oracle contains October 27, 28, 29, and 30, all at midnight. The UTC oracle is October 27 at 04:00, October 28 at 04:00, October 29 at 05:00, and October 30 at 05:00. Expected successive differences are NULL, 86,400, 90,000, and 86,400 seconds. The first point has no predecessor; do not fill its difference with one day merely for convenience.</p>
+<p>The date vector checks calendar coverage. The differences check elapsed duration. Requiring every gap to equal 86,400 would reject the intended calendar series. Checking only four rows is also inadequate: four rows could contain a duplicated date and omit another.</p>
+<h2 id="Derive-a-new-oracle-for-a-24-hour-step"><a href="#Derive-a-new-oracle-for-a-24-hour-step" class="headerlink" title="Derive a new oracle for a 24-hour step"></a>Derive a new oracle for a 24-hour step</h2><p>The <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-datetime.html">date/time arithmetic documentation</a> distinguishes an interval’s day field, which advances the local date while preserving clock time, from its microseconds field, which adds literal elapsed time. Change only the step above to <code>interval &#39;24 hours&#39;</code>.</p>
+<p>This comparison is unexecuted too. Its independent UTC oracle is October 27, 28, 29, and 30 at 04:00, exactly 24 hours apart. Projected into New York, those values are October 27 at 00:00, October 28 at 00:00, October 28 at 23:00, and October 29 at 23:00. October 28 appears twice; October 30 midnight is not a generated point. Reusing the first query’s local-date expectations would be wrong.</p>
+<p>The endpoint remains October 30 at 00:00-05, or 05:00 UTC. The final fixed-duration point is at 04:00 UTC, still within the bound; the next point exceeds it. An endpoint bounds generation but need not lie on every step’s grid. Identical endpoints do not imply identical local dates after changing the step.</p>
+<h2 id="Choose-the-calendar-contract-before-filling-gaps"><a href="#Choose-the-calendar-contract-before-filling-gaps" class="headerlink" title="Choose the calendar contract before filling gaps"></a>Choose the calendar contract before filling gaps</h2><p>For a report settled by regional calendar dates, derive boundaries using that region’s rules before joining events. For fixed-duration sampling, specify the duration grid and anchor and accept changing local clock values. A generator does not decide business day ownership or prevent an event at a shared boundary from being counted twice by a later join.</p>
+<p>The site’s <a href="https://www.zyweb.vip/en/2026/10/10/timestamps-recurring-intent/">timestamp and recurring-intent article</a> covers the stored schedule model. This article checks one finite series, not a complete scheduler. Future rules, holidays, and nonexistent or ambiguous local times require additional policies. One historical midnight example cannot validate every region or appointment.</p>
+<p>A real run should archive the PostgreSQL version, deployed time-zone data source, full query, both oracles, and row-level differences. Establish semantics before investigating join performance. No database was connected and no production throughput was measured here.</p>
+<h2 id="Should-an-empty-series-first-be-blamed-on-DST"><a href="#Should-an-empty-series-first-be-blamed-on-DST" class="headerlink" title="Should an empty series first be blamed on DST?"></a>Should an empty series first be blamed on DST?</h2><p>Check inputs and direction first. The function documentation specifies zero rows for positive steps with start greater than stop, negative steps with the opposite mismatch, and null inputs. A zero step is an error. These conditions add a no-candidate branch, unlike the four-row example with unequal durations.</p>
+<p>Retain endpoint values and types and test direction mismatch, null parameters, and a zero step separately. Do not package all of them as a successful empty report: an empty result may be allowed or may reveal an omitted upstream endpoint. Establish that points should exist before applying the local-date and UTC-time oracles to calendar boundaries.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-srf.html" rel="noopener">PostgreSQL: Documentation: 18: 9.26. Set Returning Functions</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-datetime.html" rel="noopener">PostgreSQL: Documentation: 18: 9.9. Date/Time Functions and Operators</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--postgresql" href="/en/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--time-series" href="/en/tags/Time-series/">Time series</a>
+          
+            <a class="tag tag--time-zones" href="/en/tags/Time-zones/">Time zones</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F10%2Fpostgres-generate-series-timezone-dst%2F&text=Why%20can%20daily%20PostgreSQL%20series%20points%20be%2025%20hours%20apart%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F10%2Fpostgres-generate-series-timezone-dst%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20can%20daily%20PostgreSQL%20series%20points%20be%2025%20hours%20apart%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F10%2Fpostgres-generate-series-timezone-dst%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/10/postgres-index-only-visibility-map/">
+              <span>Previous Post</span>
+              <strong>Why does an Index Only Scan still fetch heap rows?</strong>
+              <small>2026-11-10</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/10/postgres-fk-setnull-column-subset/">
+              <span>Next Post</span>
+              <strong>Why does deleting an author try to null tenant_id too?</strong>
+              <small>2026-11-10</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Record-generation-and-display-zones-separately">Record generation and display zones separately</a>
+          
+            <a class="toc-link toc-link--h2" href="#Check-dates-and-elapsed-time-independently">Check dates and elapsed time independently</a>
+          
+            <a class="toc-link toc-link--h2" href="#Derive-a-new-oracle-for-a-24-hour-step">Derive a new oracle for a 24-hour step</a>
+          
+            <a class="toc-link toc-link--h2" href="#Choose-the-calendar-contract-before-filling-gaps">Choose the calendar contract before filling gaps</a>
+          
+            <a class="toc-link toc-link--h2" href="#Should-an-empty-series-first-be-blamed-on-DST">Should an empty series first be blamed on DST?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>256</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>128</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/10/postgres-fk-setnull-column-subset/">Why does deleting an author try to null tenant_id too?</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/10/postgres-index-only-visibility-map/">Why does an Index Only Scan still fetch heap rows?</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/10/postgres-integer-division-cast-position/">Why is the SQL ratio zero after casting it to numeric?</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

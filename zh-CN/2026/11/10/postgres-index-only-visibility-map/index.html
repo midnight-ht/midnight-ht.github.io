@@ -1,0 +1,419 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>覆盖索引建好了，Heap Fetches 为什么仍不是零？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="区分索引覆盖资格与MVCC可见性，用拟议计划采集判断Heap Fetches，而不是继续盲目增加INCLUDE列。">
+  
+  
+    <meta name="keywords" content="Index Only Scan,visibility map,Heap Fetches">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/10/postgres-index-only-visibility-map/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/10/postgres-index-only-visibility-map/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/10/postgres-index-only-visibility-map/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/10/postgres-index-only-visibility-map/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="覆盖索引建好了，Heap Fetches 为什么仍不是零？ | Midnight blog">
+    <meta property="og:description" content="区分索引覆盖资格与MVCC可见性，用拟议计划采集判断Heap Fetches，而不是继续盲目增加INCLUDE列。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/10/postgres-index-only-visibility-map/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/10/postgres-index-only-visibility-map/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/10/postgres-index-only-visibility-map/","name":"覆盖索引建好了，Heap Fetches 为什么仍不是零？ | Midnight blog","description":"区分索引覆盖资格与MVCC可见性，用拟议计划采集判断Heap Fetches，而不是继续盲目增加INCLUDE列。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/10/postgres-index-only-visibility-map/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/10/postgres-index-only-visibility-map/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/10/postgres-index-only-visibility-map/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/10/postgres-index-only-visibility-map/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/10/postgres-index-only-visibility-map/","headline":"覆盖索引建好了，Heap Fetches 为什么仍不是零？","description":"区分索引覆盖资格与MVCC可见性，用拟议计划采集判断Heap Fetches，而不是继续盲目增加INCLUDE列。","inLanguage":"zh-CN","datePublished":"2026-11-09T20:06:46.000Z","dateModified":"2026-11-09T20:06:46.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/indexes-index-only-scans.html","https://www.postgresql.org/docs/18/sql-vacuum.html"],"keywords":"PostgreSQL, 索引, 查询计划"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/10/postgres-index-only-visibility-map/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"覆盖索引建好了，Heap Fetches 为什么仍不是零？","item":"https://www.zyweb.vip/zh-CN/2026/11/10/postgres-index-only-visibility-map/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/10/postgres-index-only-visibility-map/" selected>zh-CN</option><option value="/en/2026/11/10/postgres-index-only-visibility-map/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/10/postgres-index-only-visibility-map/" selected>zh-CN</option><option value="/en/2026/11/10/postgres-index-only-visibility-map/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--postgresql">PostgreSQL</span>
+      <time datetime="2026-11-09T20:06:46.000Z">2026-11-10</time>
+    </div>
+
+    <h1>覆盖索引建好了，Heap Fetches 为什么仍不是零？</h1>
+
+    
+      <p class="post-hero__summary">区分索引覆盖资格与MVCC可见性，用拟议计划采集判断Heap Fetches，而不是继续盲目增加INCLUDE列。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-09T20:06:46.000Z">2026-11-10</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/10/postgres-index-only-visibility-map/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/10/postgres-index-only-visibility-map/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>覆盖所有查询列只是索引只读扫描的基本资格。</li><li>可见性映射无法确认候选行时仍需访问堆。</li><li>比较真实计划与结果集合，不承诺零Heap Fetches或固定提速。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Index Only Scan 并不保证每个候选行都不访问堆。索引能提供查询所需的列，只解决取值来源；PostgreSQL 仍要判断该行对当前 MVCC 快照是否可见。执行器查看对应堆页的可见性映射，不能由映射确认时，就要访问堆。因此，计划里出现非零 Heap Fetches，不足以说明覆盖索引失效。</p>
+<p>假设订单查询只读取客户编号与金额，团队已经把金额放进 INCLUDE。计划节点也叫 Index Only Scan，排查者却因为看到 Heap Fetches，准备再建一个包含更多列的索引。先停在这里：新增的列能否改变可见性证据？如果不能，这次修改可能只增加存储与写入维护，读查询仍要做原来的检查。</p>
+<h2 id="覆盖资格与可见性不是同一扇门"><a href="#覆盖资格与可见性不是同一扇门" class="headerlink" title="覆盖资格与可见性不是同一扇门"></a>覆盖资格与可见性不是同一扇门</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/indexes-index-only-scans.html">PostgreSQL 18 的索引只读扫描说明</a>列出两个基本条件：索引类型支持这种扫描，以及查询引用的列都能由索引提供。B-tree 支持；不能因为某种索引也叫索引，就推断它保存了可返回的完整原值。表达式索引和部分索引还存在另外的规划条件，本例先用普通列的 B-tree。</p>
+<p>通过这两个条件，表示从索引取值在物理上可行，却还没有完成快照可见性判断。文档说明，可见性信息并不保存在索引项里。可见性映射按堆页保存信息；对应位设置时，扫描可以借此确认候选行可见，避免进一步访问堆。位没有设置，就需要访问堆项判断。一个页上有多条记录，也不能把这张映射想象成每个索引列各有一个开关。</p>
+<p>因此，要区分“查询能不能采用这种访问方法”和“这次采用后省掉多少堆访问”。前者涉及列与索引能力，后者还取决于有关堆页的状态。节点名称描述访问方法，Heap Fetches 描述这次执行实际发生的检查；二者同时出现并不矛盾。也不能把这个计数直接写成磁盘物理读次数，内存缓存和输入输出是另一个观测层。</p>
+<h2 id="给同一条查询保留三份记录"><a href="#给同一条查询保留三份记录" class="headerlink" title="给同一条查询保留三份记录"></a>给同一条查询保留三份记录</h2><p>下面是未执行的教学脚本，只适用于自己创建的隔离空库。它会创建表和索引，并真实执行查询；这里没有数据库运行记录，也不承诺这份小数据一定被优化器选成 Index Only Scan。</p>
+<pre><code class="sql">CREATE TABLE editorial_orders (
+  id integer PRIMARY KEY,
+  customer_id integer,
+  total numeric
+);
+INSERT INTO editorial_orders
+SELECT n, n % 2, n::numeric FROM generate_series(1, 10000) AS n;
+CREATE INDEX editorial_orders_cover
+  ON editorial_orders(customer_id) INCLUDE(total);
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT total FROM editorial_orders WHERE customer_id = 1;
+
+-- VACUUM 必须在事务块外单独执行。
+VACUUM (ANALYZE) editorial_orders;
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT total FROM editorial_orders WHERE customer_id = 1;
+
+UPDATE editorial_orders SET total = total + 1 WHERE id = 1;
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT total FROM editorial_orders WHERE customer_id = 1;
+</code></pre>
+<p>独立的数据预期先写出来：第一次和第二次查询都应返回奇数编号对应的五千个金额；第三次仍返回五千行，只把编号一对应的金额从一变成二。查询没有排序，验收应比较多重集合，不能拿打印顺序当业务顺序。这个数据预期与计划选择无关，不能因为看到想要的节点就省去结果检查。</p>
+<p>三次计划分别保留版本、完整 SQL、节点、Heap Fetches、BUFFERS、采集时间和表变更条件。如果没有选择目标节点，先如实记录，再分析表规模、选择率与成本，不通过关闭其他扫描方式制造“自然采用”的证据。若选了该节点，可对照映射机制解释实际计数；不能提前把 VACUUM 后零次回堆、更新后必定多少次写进断言。</p>
+<p>VACUUM 在这个实验中提供可比较的维护时点，不是一条任何环境都能立刻消除回堆的指令。活动事务、并发修改和实际页面状态需要现场证据。脚本没有证明这些条件，更没有证明生产查询提速。尤其不要让迁移工具把 VACUUM 和建表命令一起包进事务后，再把执行失败误判为索引语义问题。</p>
+<h2 id="再加载荷，先问它解决哪种缺口"><a href="#再加载荷，先问它解决哪种缺口" class="headerlink" title="再加载荷，先问它解决哪种缺口"></a>再加载荷，先问它解决哪种缺口</h2><p>一个直接反例是查询改为返回未被覆盖的 id。此时缺少的确实是取值列，应该重新核对覆盖资格；它与原来所有列都可取、却还要验证可见性的情况不同。排查记录先写清缺的是值还是证明，再决定修改索引还是调查表状态。</p>
+<p>INCLUDE 列不是搜索键。文档还提醒，宽载荷会复制表数据、扩大索引，超过索引项允许大小甚至可能导致插入失败。若这个表持续频繁修改，加入更多载荷仍可能无法避免堆访问。因此，索引评审应同时讨论代表性读取与写入负担，不宜只把“全部字段放进索引”作为验收目标。</p>
+<p>本站的<a href="https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/">EXPLAIN 证据检查</a>讨论估算行数与真实执行成本。本题在其后增加一项判断：计划方法可用，不等于每次执行都满足省堆条件。保存可比参数、数据变化和结果集合，比只截取节点名称更能帮助下一位排查者复现。</p>
+<p>另保留一组命中范围变化的对照：在同一教学表上，把客户等于一改为客户属于零或一。独立结果预期从五千行变成一万行，不能仍用原来的行数验收。两组参数返回的数据规模不同，优化器选择不同方法也可能合理；应分别保留计划，而不是只比较节点名字是否一致。这里没有运行任一参数版本。</p>
+<p>这组比较还能防止把一次维护前后的差异错归给索引：如果维护前只查一个客户，维护后却查全部客户，变的不只有堆页状态。测试报告应把参数及期望集合放在同一行，先拒绝这种条件不等的对比，再讨论计数变化。能够复述查询条件与数据规模，是使用计划证据的前提，不需要预先给任何一种扫描判好坏。</p>
+<h2 id="零行的扫描能证明堆页全部可见吗？"><a href="#零行的扫描能证明堆页全部可见吗？" class="headerlink" title="零行的扫描能证明堆页全部可见吗？"></a>零行的扫描能证明堆页全部可见吗？</h2><p>不能。若过滤条件没有找到候选索引项，相关执行记录没有替其他堆页做可见性证明。零次 Heap Fetches 可能只是没有候选行，不能据此宣布整个表都已适合避免回堆。这里新增的条件是命中集合为空，不是把前面的映射规则再说一遍。</p>
+<p>补一组确实命中业务代表范围的查询，并先确认预期行数，再解释计数；保留空命中样本作为对照也有用。最终交付应能回答本次查询从索引取到了哪些值、对哪些候选行需要检查、实际返回了什么。只有这些证据对齐，才有理由判断下一项修改是否值得做。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/indexes-index-only-scans.html" rel="noopener">PostgreSQL: Documentation: 18: 11.9. Index-Only Scans and Covering Indexes</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-vacuum.html" rel="noopener">PostgreSQL: Documentation: 18: VACUUM</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E7%B4%A2%E5%BC%95/">索引</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%9F%A5%E8%AF%A2%E8%AE%A1%E5%88%92/">查询计划</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F10%2Fpostgres-index-only-visibility-map%2F&text=%E8%A6%86%E7%9B%96%E7%B4%A2%E5%BC%95%E5%BB%BA%E5%A5%BD%E4%BA%86%EF%BC%8CHeap%20Fetches%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E4%B8%8D%E6%98%AF%E9%9B%B6%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F10%2Fpostgres-index-only-visibility-map%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E8%A6%86%E7%9B%96%E7%B4%A2%E5%BC%95%E5%BB%BA%E5%A5%BD%E4%BA%86%EF%BC%8CHeap%20Fetches%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E4%B8%8D%E6%98%AF%E9%9B%B6%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F10%2Fpostgres-index-only-visibility-map%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/10/postgres-integer-division-cast-position/">
+              <span>上一篇</span>
+              <strong>SQL 最后转了 numeric，比例为什么还是零？</strong>
+              <small>2026-11-10</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/10/postgres-generate-series-timezone-dst/">
+              <span>下一篇</span>
+              <strong>按一天生成的 PostgreSQL 序列，为什么隔了25小时？</strong>
+              <small>2026-11-10</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#覆盖资格与可见性不是同一扇门">覆盖资格与可见性不是同一扇门</a>
+          
+            <a class="toc-link toc-link--h2" href="#给同一条查询保留三份记录">给同一条查询保留三份记录</a>
+          
+            <a class="toc-link toc-link--h2" href="#再加载荷，先问它解决哪种缺口">再加载荷，先问它解决哪种缺口</a>
+          
+            <a class="toc-link toc-link--h2" href="#零行的扫描能证明堆页全部可见吗？">零行的扫描能证明堆页全部可见吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>256</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/10/postgres-fk-setnull-column-subset/">删除作者只想清空 author_id，为什么 tenant_id 也被设成 NULL？</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/10/postgres-generate-series-timezone-dst/">按一天生成的 PostgreSQL 序列，为什么隔了25小时？</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/10/postgres-integer-division-cast-position/">SQL 最后转了 numeric，比例为什么还是零？</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,438 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>job.lock 还在，不代表 Linux flock 仍被占用 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用 Linux 本地文件系统的描述符对照解释 flock 释放时点、dup 引用与后台继承，明确网络文件系统边界。">
+  
+  
+    <meta name="keywords" content="Linux flock,文件描述符,锁生命周期">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/10/linux-flock-descriptor-lifetime/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="job.lock 还在，不代表 Linux flock 仍被占用 | Midnight blog">
+    <meta property="og:description" content="用 Linux 本地文件系统的描述符对照解释 flock 释放时点、dup 引用与后台继承，明确网络文件系统边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/","name":"job.lock 还在，不代表 Linux flock 仍被占用 | Midnight blog","description":"用 Linux 本地文件系统的描述符对照解释 flock 释放时点、dup 引用与后台继承，明确网络文件系统边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/","headline":"job.lock 还在，不代表 Linux flock 仍被占用","description":"用 Linux 本地文件系统的描述符对照解释 flock 释放时点、dup 引用与后台继承，明确网络文件系统边界。","inLanguage":"zh-CN","datePublished":"2026-11-09T20:06:46.000Z","dateModified":"2026-11-09T20:06:46.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://man7.org/linux/man-pages/man2/flock.2.html","https://man7.org/linux/man-pages/man2/open.2.html"],"keywords":"Linux flock, Delivery"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"job.lock 还在，不代表 Linux flock 仍被占用","item":"https://www.zyweb.vip/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/" selected>zh-CN</option><option value="/en/2026/11/10/linux-flock-descriptor-lifetime/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/" selected>zh-CN</option><option value="/en/2026/11/10/linux-flock-descriptor-lifetime/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--linux-flock">Linux flock</span>
+      <time datetime="2026-11-09T20:06:46.000Z">2026-11-10</time>
+    </div>
+
+    <h1>job.lock 还在，不代表 Linux flock 仍被占用</h1>
+
+    
+      <p class="post-hero__summary">用 Linux 本地文件系统的描述符对照解释 flock 释放时点、dup 引用与后台继承，明确网络文件系统边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-09T20:06:46.000Z">2026-11-10</time> · 预计阅读 8 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/10/linux-flock-descriptor-lifetime/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>flock 关联打开文件描述，文件存在不能判断锁状态。</li><li>dup 共享锁，独立 open 才构成所需竞争。</li><li>最后关闭、显式解锁和路径清理是不同动作。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>job.lock 仍在，不代表 Linux flock 仍被占用。锁关联的是打开文件描述，释放不要求删除路径；最后一个相关文件描述符关闭以后，文件可以继续存在，而下一次独立打开已经能够取得锁。判断锁状态，应让独立竞争者尝试获锁，不能只看目录里有没有一个文件名。</p>
+<h2 id="文件名、打开描述和编号不是同一层"><a href="#文件名、打开描述和编号不是同一层" class="headerlink" title="文件名、打开描述和编号不是同一层"></a>文件名、打开描述和编号不是同一层</h2><p><a target="_blank" rel="noopener" href="https://man7.org/linux/man-pages/man2/flock.2.html">Linux flock 手册</a>说明，锁关联 open file description。这里把它称为“打开文件描述”，而进程里那个小整数 fd 是引用它的文件描述符。dup 得到另一个整数，却仍引用同一份打开描述；fork 继承的相关描述符也会引用同一把锁。数字不同，不代表竞争对象独立。</p>
+<p>这一区别直接影响清理时点。假设 fd1 获得排他锁，然后 dup 成 fd2，关闭 fd1 并不是最后一次关闭，fd2 还在维持引用。另一次 open 得到的 fd3 才是独立竞争者，可能被这把锁拒绝，即使它们都属于同一个进程。用 dup 出来的编号测试“自己能否再次获锁”，没有构成想要的竞争实验。</p>
+<p>文件名只负责查找对象。本站的<a href="/zh-CN/2026/11/07/node-fs-watch-replaced-inode/">文件监听与替换文章</a>已经说明，同一路径可以指向另一个 inode；flock 又增加了打开描述及其引用的生命周期。监控若仅检查 job.lock 存在，就无法区分从未加锁、仍在持有、已经释放三个状态。一条没有区分力的信号，不应承担是否允许执行下一轮任务的决定。</p>
+<h2 id="在-Linux-自有临时目录做描述符对照"><a href="#在-Linux-自有临时目录做描述符对照" class="headerlink" title="在 Linux 自有临时目录做描述符对照"></a>在 Linux 自有临时目录做描述符对照</h2><p>以下是未执行的完整 Python 教学程序，只针对 Linux 本地文件系统的 flock 语义。本站宿主是 macOS，没有把在此运行视为 Linux 认证，也没有运行下面程序。保存为 lock_probe.py，准备 Linux 与 Python 标准库，在独立环境拟运行 <code>python3 lock_probe.py</code>。不要把路径替换为真实任务的锁文件。</p>
+<pre><code class="python">import fcntl
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+if not sys.platform.startswith(&quot;linux&quot;):
+    raise SystemExit(&quot;this fixture requires Linux&quot;)
+
+with tempfile.TemporaryDirectory(prefix=&quot;flock-probe-&quot;) as directory:
+    path = Path(directory) / &quot;job.lock&quot;
+    descriptors = []
+    exclusive = fcntl.LOCK_EX | fcntl.LOCK_NB
+    try:
+        first = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+        descriptors.append(first)
+        fcntl.flock(first, exclusive)
+        duplicate = os.dup(first)
+        descriptors.append(duplicate)
+        contender = os.open(path, os.O_RDWR)
+        descriptors.append(contender)
+
+        def expect_blocked():
+            try:
+                fcntl.flock(contender, exclusive)
+            except BlockingIOError:
+                return
+            raise AssertionError(&quot;independent open unexpectedly acquired lock&quot;)
+
+        expect_blocked()
+        os.close(first)
+        descriptors.remove(first)
+        expect_blocked()
+        os.close(duplicate)
+        descriptors.remove(duplicate)
+        fcntl.flock(contender, exclusive)
+        assert path.exists()
+        print(&quot;acquired after last related close; path remains&quot;)
+    finally:
+        for descriptor in descriptors:
+            os.close(descriptor)
+</code></pre>
+<p>程序的独立预期来自排他合同：最初独立 open 不应获锁；关闭 first 后仍不应获锁；关闭 duplicate 后才可获锁；路径在最终时刻仍存在。这样把“文件留下”和“锁还在”放在同一轮中检验，而不是用两次不同运行的截图拼成结论。成功输出只描述这几个条件，不表示真实作业已经防止并发。</p>
+<p>异常也需要准确处理。程序只把 BlockingIOError 当预期竞争拒绝，其他异常保留为失败。权限错误、描述符无效或文件系统不支持，不应一律捕获后写成“第二个进程被锁住”。非阻塞选项避免实验无限等待，但不提供超时重试政策。真实业务是跳过、排队还是失败，应由任务合同另行选择。</p>
+<h2 id="为什么不把删除文件当作解锁协议"><a href="#为什么不把删除文件当作解锁协议" class="headerlink" title="为什么不把删除文件当作解锁协议"></a>为什么不把删除文件当作解锁协议</h2><p>释放有明确动作：对共享这把锁的相关描述符执行 LOCK_UN，或者关闭全部相关引用。删除路径不在这份释放条件中。由此可以作出一项对象身份推论：如果持有者还打开着旧对象，另一个参与者删除名字并重建同路径，后来者可能打开的是新对象，双方不再竞争同一个文件。文件名恢复一致，并不能让旧锁自动搬家。</p>
+<p>因此正常的互斥约定应让参与者使用稳定的公共对象，让持有描述符的范围覆盖整个受保护动作。实验结束后删除自有临时目录，只是清理本次素材；它不是为生产锁推荐一种轮流删除重建的算法。若确需回收锁文件路径，应先明确所有潜在参与者的生命周期和对象身份，不能从某个文件看起来陈旧推断已经无人使用。</p>
+<p>显式 LOCK_UN 也有一个与关闭不同的效果：任一共享描述符可以释放这把锁，即使另一个重复描述符仍开着。若某个库收到 fd 的副本并随手解锁，其他持有者可能失去预期保护。评审应跟踪谁有权解除锁，而不仅是谁最终关闭资源。上面的对照特意使用最后关闭路线，以便隔离这个时点。</p>
+<h2 id="父进程退出后，后台子进程会把锁留住吗？"><a href="#父进程退出后，后台子进程会把锁留住吗？" class="headerlink" title="父进程退出后，后台子进程会把锁留住吗？"></a>父进程退出后，后台子进程会把锁留住吗？</h2><p>可能，条件是子进程仍保留相关打开描述的引用。fork 后父进程退出，只关闭了父进程自己的描述符；不能从父 PID 消失推断所有引用已关闭。这是对子进程生命周期的新追问，主例只有一个进程里的 dup，没有覆盖这种任务组织方式。</p>
+<p>跨 exec 的描述符还受 FD_CLOEXEC 或 O_CLOEXEC 影响。<a target="_blank" rel="noopener" href="https://man7.org/linux/man-pages/man2/open.2.html">open 手册</a>说明了关闭执行标志；语言运行库也可能主动把新 fd 设为不可继承。因此不能笼统断言所有后台执行都保留锁，或者所有 exec 都自动释放锁。应记录实际创建方式、继承设置和进程关系，再用独立竞争者验证。</p>
+<p>互斥的真正要求还包括受保护动作何时结束。假设主程序拿锁后启动一个写文件子任务，随后自己关闭全部引用，却没有等待子任务完成。下一轮独立竞争者可以合法获锁，而前一轮写入仍在继续。这不是锁提前违反合同，而是程序把锁的范围画短了。应让持有者等待完整动作，或者把相关引用及其关闭责任明确交给实际执行者，不能只把启动子进程当作完成。</p>
+<p>反方向也有成本：子进程不再需要保护，却因意外继承一直保留引用，会让后续竞争持续被拒绝。看到锁还在时，应沿进程关系核对描述符，而不是立即删除路径。记录可以只包含 PID、文件身份、打开来源和关闭时点，不需要打印受保护文件内容；如果权限不足以观察其他进程，就保留未知，不虚构一份“没有持有者”的结论。</p>
+<p>最后关闭路线与显式释放路线最好分开验证。上面的脚本只检查前者；若另加一项 LOCK_UN 对照，应让 duplicate 仍然打开时释放，再观察 contender 是否获锁。这样独立证明“引用仍在但保护已解除”的另一种状态。两条路径的结果都不能仅凭文件存在推断，也不能用其中一条通过替另一条签收。</p>
+<p>最后还要限定合作范围。Linux 本地 flock 通常是协作锁，不使用它的写入者可以绕过约定。手册对 NFS、SMB 和历史内核版本另有说明，不能把本地结果外推到远端共享存储；某些 SMB 条件还会改变协作性。真正的验证记录应包含内核、Python、挂载类型、脚本哈希、标准输出与即时退出值。先确认所有任务竞争的是同一对象，再让锁的持有范围对应完整动作。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://man7.org/linux/man-pages/man2/flock.2.html" rel="noopener">flock(2) - Linux manual page</a></li><li><a target="_blank" href="https://man7.org/linux/man-pages/man2/open.2.html" rel="noopener">open(2) - Linux manual page</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--linux-flock" href="/zh-CN/tags/Linux-flock/">Linux flock</a>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F10%2Flinux-flock-descriptor-lifetime%2F&text=job.lock%20%E8%BF%98%E5%9C%A8%EF%BC%8C%E4%B8%8D%E4%BB%A3%E8%A1%A8%20Linux%20flock%20%E4%BB%8D%E8%A2%AB%E5%8D%A0%E7%94%A8" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F10%2Flinux-flock-descriptor-lifetime%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=job.lock%20%E8%BF%98%E5%9C%A8%EF%BC%8C%E4%B8%8D%E4%BB%A3%E8%A1%A8%20Linux%20flock%20%E4%BB%8D%E8%A2%AB%E5%8D%A0%E7%94%A8&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F10%2Flinux-flock-descriptor-lifetime%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/10/postgres-fk-setnull-column-subset/">
+              <span>上一篇</span>
+              <strong>删除作者只想清空 author_id，为什么 tenant_id 也被设成 NULL？</strong>
+              <small>2026-11-10</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/10/json-pointer-escape-root-token/">
+              <span>下一篇</span>
+              <strong>JSON Pointer 的 /~01 为什么不是在找斜杠键？</strong>
+              <small>2026-11-10</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#文件名、打开描述和编号不是同一层">文件名、打开描述和编号不是同一层</a>
+          
+            <a class="toc-link toc-link--h2" href="#在-Linux-自有临时目录做描述符对照">在 Linux 自有临时目录做描述符对照</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么不把删除文件当作解锁协议">为什么不把删除文件当作解锁协议</a>
+          
+            <a class="toc-link toc-link--h2" href="#父进程退出后，后台子进程会把锁留住吗？">父进程退出后，后台子进程会把锁留住吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>256</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/10/cmake-cache-normal-variable-shadow/">缓存改成 prod，CMake 为什么还读到 local？</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/10/docker-workdir-inherited-relative-path/">用两个基镜像检查 Dockerfile 的目录合同</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/10/scrum-done-review-release-gate/">Sprint Review不替代DoD，也不是发布闸门</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

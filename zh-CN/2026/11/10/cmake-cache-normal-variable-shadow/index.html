@@ -1,0 +1,420 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>缓存改成 prod，CMake 为什么还读到 local？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="区分 CMake 普通变量与缓存的查找顺序、空值、unset 和 CMP0126，避免把遮蔽误诊为缓存未刷新。">
+  
+  
+    <meta name="keywords" content="CMake 缓存,普通变量,CMP0126">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/10/cmake-cache-normal-variable-shadow/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/10/cmake-cache-normal-variable-shadow/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/10/cmake-cache-normal-variable-shadow/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/10/cmake-cache-normal-variable-shadow/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="缓存改成 prod，CMake 为什么还读到 local？ | Midnight blog">
+    <meta property="og:description" content="区分 CMake 普通变量与缓存的查找顺序、空值、unset 和 CMP0126，避免把遮蔽误诊为缓存未刷新。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/10/cmake-cache-normal-variable-shadow/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/10/cmake-cache-normal-variable-shadow/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/10/cmake-cache-normal-variable-shadow/","name":"缓存改成 prod，CMake 为什么还读到 local？ | Midnight blog","description":"区分 CMake 普通变量与缓存的查找顺序、空值、unset 和 CMP0126，避免把遮蔽误诊为缓存未刷新。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/10/cmake-cache-normal-variable-shadow/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/10/cmake-cache-normal-variable-shadow/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/10/cmake-cache-normal-variable-shadow/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/10/cmake-cache-normal-variable-shadow/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/10/cmake-cache-normal-variable-shadow/","headline":"缓存改成 prod，CMake 为什么还读到 local？","description":"区分 CMake 普通变量与缓存的查找顺序、空值、unset 和 CMP0126，避免把遮蔽误诊为缓存未刷新。","inLanguage":"zh-CN","datePublished":"2026-11-09T20:06:46.000Z","dateModified":"2026-11-09T20:06:46.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://cmake.org/cmake/help/v3.31/command/set.html","https://cmake.org/cmake/help/v3.31/policy/CMP0126.html","https://cmake.org/cmake/help/v3.31/manual/cmake-language.7.html"],"keywords":"CMake 缓存, Delivery"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/10/cmake-cache-normal-variable-shadow/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"缓存改成 prod，CMake 为什么还读到 local？","item":"https://www.zyweb.vip/zh-CN/2026/11/10/cmake-cache-normal-variable-shadow/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/10/cmake-cache-normal-variable-shadow/" selected>zh-CN</option><option value="/en/2026/11/10/cmake-cache-normal-variable-shadow/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/10/cmake-cache-normal-variable-shadow/" selected>zh-CN</option><option value="/en/2026/11/10/cmake-cache-normal-variable-shadow/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--cmake">CMake 缓存</span>
+      <time datetime="2026-11-09T20:06:46.000Z">2026-11-10</time>
+    </div>
+
+    <h1>缓存改成 prod，CMake 为什么还读到 local？</h1>
+
+    
+      <p class="post-hero__summary">区分 CMake 普通变量与缓存的查找顺序、空值、unset 和 CMP0126，避免把遮蔽误诊为缓存未刷新。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-09T20:06:46.000Z">2026-11-10</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/10/cmake-cache-normal-variable-shadow/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/10/cmake-cache-normal-variable-shadow/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>普通引用先查普通变量，再回退缓存。</li><li>空绑定与 unset 的效果不同，FORCE 也受政策条件约束。</li><li>脚本内存缓存演示不能代替真实构建树验收。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>CMake 缓存已更新，普通引用仍可能读到旧的普通变量。<code>${MODE}</code> 先查当前可见的普通绑定，找不到才查同名缓存；<code>$CACHE{MODE}</code> 则直接查缓存。先把这两个值并排显示，再决定该修改哪一层，不要把每一次旧值都归因于缓存没刷新。</p>
+<h2 id="两层值同时存在，并不矛盾"><a href="#两层值同时存在，并不矛盾" class="headerlink" title="两层值同时存在，并不矛盾"></a>两层值同时存在，并不矛盾</h2><p><a target="_blank" rel="noopener" href="https://cmake.org/cmake/help/v3.31/command/set.html">CMake 3.31 的 set 文档</a>说明了这条查找顺序。假设缓存 MODE 是 staging，当前普通变量 MODE 是 local，普通引用得到 local 完全符合规则。即使缓存刚被改成 prod，普通绑定仍可能遮住它。两份观察指向不同的存储层，不需要靠反复删除构建目录来让它们看起来一致。</p>
+<p>这和<a href="/zh-CN/2026/11/07/cmake-generator-build-configuration/">生成器配置文章</a>不是同一个问题。多配置生成器可能不使用 CMAKE_BUILD_TYPE 决定本次构建；这里即便使用一个毫无特殊含义的 MODE，查找也会先命中普通变量。先确认读的是哪份值，再讨论这个变量是否被某个生成器采用，才能避免把读取层和消费层的问题混到一起。</p>
+<p>对需要保留用户配置的项目，缓存通常是一条输入边界。目录脚本又设置同名普通值，可能是有意的局部覆盖，也可能是遗留调试代码。删除缓存只能移除其中一层，不能解释局部覆盖为何存在。如果新一轮配置又执行那行普通赋值，界面里的缓存与日志里的值仍会不同。</p>
+<h2 id="一份脚本观察四次读取"><a href="#一份脚本观察四次读取" class="headerlink" title="一份脚本观察四次读取"></a>一份脚本观察四次读取</h2><p>下面是未执行的完整脚本，依据读取时标注为 CMake 3.31.12 的固定版本文档。使用三点二十一作为最低版本，并显式选择 CMP0126 NEW。保存为 shadow.cmake，在自有目录拟运行 <code>cmake -P shadow.cmake</code>。脚本模式只演示本次进程中的缓存条目，不生成构建系统，也不声称写入或更新真实的 CMakeCache.txt。</p>
+<pre><code class="cmake">cmake_minimum_required(VERSION 3.21)
+cmake_policy(SET CMP0126 NEW)
+
+function(check_pair expected_normal expected_cache)
+  if(NOT &quot;${MODE}&quot; STREQUAL &quot;${expected_normal}&quot;)
+    message(FATAL_ERROR &quot;normal mismatch: &#39;${MODE}&#39;&quot;)
+  endif()
+  if(NOT &quot;$CACHE{MODE}&quot; STREQUAL &quot;${expected_cache}&quot;)
+    message(FATAL_ERROR &quot;cache mismatch: &#39;$CACHE{MODE}&#39;&quot;)
+  endif()
+  message(STATUS &quot;normal=&#39;${MODE}&#39; cache=&#39;$CACHE{MODE}&#39;&quot;)
+endfunction()
+
+set(MODE staging CACHE STRING &quot;probe mode&quot; FORCE)
+set(MODE local)
+check_pair(local staging)
+set(MODE prod CACHE STRING &quot;probe mode&quot; FORCE)
+check_pair(local prod)
+set(MODE &quot;&quot;)
+check_pair(&quot;&quot; prod)
+unset(MODE)
+check_pair(prod prod)
+</code></pre>
+<p>四组独立预期分别是 local/staging、local/prod、空字符串/prod、prod/prod。它们来自已声明的查找规则，不是先看打印结果，再把结果填回断言。检查函数遇到不符即 FATAL_ERROR，避免一份始终退出成功的日志程序伪装成验证。函数读取调用时可见的 MODE，却不修改它；实际运行前仍应确认本机版本与命令路径。</p>
+<p>第二次读取最容易暴露误修：FORCE 已经把缓存改成 prod，普通引用却仍是 local。此时继续 FORCE 没有增加新的诊断信息。第三次和第四次则区分两种“清理”：设空留下一个已定义的普通变量，空值会遮住缓存；unset 创建未设置的绑定，使普通查找继续使用缓存。需要刻意保持空值时，不能把 unset 当作等价缩写。</p>
+<h2 id="FORCE-控制写入，不控制优先级"><a href="#FORCE-控制写入，不控制优先级" class="headerlink" title="FORCE 控制写入，不控制优先级"></a>FORCE 控制写入，不控制优先级</h2><p>set 的 CACHE 形式默认不覆盖既有缓存条目，FORCE 用来允许覆盖。这一政策保护用户可配置的输入，但不是普通变量查找开关。<a target="_blank" rel="noopener" href="https://cmake.org/cmake/help/v3.31/policy/CMP0126.html">CMP0126 文档</a>进一步限定：NEW 行为不会因设置缓存而移除同名普通变量；OLD 在缓存不存在、原条目没有类型，或者使用 FORCE、INTERNAL 等列明条件下，可能移除普通绑定。</p>
+<p>因此不能只写一句“FORCE 永远不影响普通变量”，也不能靠当前程序版本猜项目已经采用 NEW。最低版本声明、显式政策以及子项目配置都可能参与行为选择。本例把政策写出，目的是隔离查找问题，不是在要求所有旧工程立刻升级政策。迁移旧项目时应先保留旧行为记录，检查哪些局部覆盖曾依赖原政策被移除，再决定变化范围。</p>
+<p>另一个反例是把所有 CACHE 赋值都改为 FORCE，以求每次日志一致。这样可能覆盖用户通过配置界面或命令行提供的选择。若项目意图只是设默认值，应让默认值保持默认；若项目需要不可修改的内部状态，应明确说明职责。不要因为一条读取遮蔽，就顺手把输入所有权也改掉。</p>
+<h2 id="函数里-unset-后，外层普通变量也消失了吗？"><a href="#函数里-unset-后，外层普通变量也消失了吗？" class="headerlink" title="函数里 unset 后，外层普通变量也消失了吗？"></a>函数里 unset 后，外层普通变量也消失了吗？</h2><p>不会因此消失。<a target="_blank" rel="noopener" href="https://cmake.org/cmake/help/v3.31/manual/cmake-language.7.html#variables">cmake-language 的函数作用域条款</a>说明，函数中的 set 或 unset 建立本作用域的绑定，供函数及其嵌套调用使用，函数返回后不保留。本题的新条件是“函数返回之后”，不能用脚本顶层 unset 的结果替它回答。</p>
+<p>例如外层普通 MODE 是 local，缓存是 prod。函数内执行 unset(MODE)，函数内普通引用可以读取 prod；函数返回后，外层仍可读取 local。这应作为单独的前、内、后三点对照。若使用 PARENT_SCOPE，又是在明确修改上一层，不能混称为同一项局部清理。目录作用域还会从父目录复制初始绑定，不能想当然地把它当动态回到父文件逐行查找。</p>
+<p>实际排查可先记录变量名、当前文件与函数、普通值、显式缓存值、政策状态。日志若包含秘密配置，应改用不暴露内容的诊断，不整份输出缓存。本例 MODE 只是无秘密的教学值。找到遮蔽位置以后，按合同决定保留局部覆盖、保留空值屏障，或移除绑定让缓存可见。</p>
+<p>查找正确以后，还需问消费者是否真的使用这份值。假设日志已经读到 prod，但生成文件的分支在更早时点用 local 做过决定，那么更晚的 message 只能证明更晚的读取。应把赋值、条件判断和产生输出的顺序放在同一份跟踪中，找出哪一时刻的值参与决定。修改读取位置之后，也要检查目标配置或生成文件是否随之变化，不能只以一行诊断日志宣布构建行为已经修好。</p>
+<p>命令行输入的类型同样可能影响旧政策。文档明确区分有值但没有类型的缓存条目，以及带类型的条目；这也是为什么复现场景应保存完整的 -D 参数，而不能只抄一个最终字符串。若真实项目要诊断持久缓存，应在独立构建树用自己的配置命令重复，记录写入前后的条目类型和实际消费位置。这里的脚本故意不承担那份构建树实验。</p>
+<p>选择清理方式前可以先列出期望的失败状态：用户未提供值时是否用默认，用户提供空值时是否允许，局部覆盖是否应在函数退出后结束。三种要求不相同，不能靠统一 unset 得到答案。先决定空值是否具有领域含义，再把赋值和回退写成可检查的条件；即使脚本对照通过，也只证明这些条件下的查找关系。</p>
+<p><a href="/zh-CN/2026/11/08/cmake-glob-configure-depends-membership/">源码成员文章</a>要求检查最终哪些文件进入构建图；本题要求检查最终哪层值进入表达式。两者都不能由“配置命令没报错”代替验收。本文没有运行脚本或配置真实工程；后续验证应保存脚本哈希、CMake 版本、完整输出及即时退出值，并把脚本内存演示与真实构建树验证分开。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://cmake.org/cmake/help/v3.31/command/set.html" rel="noopener">set — CMake 3.31.12 Documentation</a></li><li><a target="_blank" href="https://cmake.org/cmake/help/v3.31/policy/CMP0126.html" rel="noopener">CMP0126 — CMake 3.31.12 Documentation</a></li><li><a target="_blank" href="https://cmake.org/cmake/help/v3.31/manual/cmake-language.7.html" rel="noopener">cmake-language(7) — CMake 3.31.12 Documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--cmake" href="/zh-CN/tags/CMake-%E7%BC%93%E5%AD%98/">CMake 缓存</a>
+          
+            <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F10%2Fcmake-cache-normal-variable-shadow%2F&text=%E7%BC%93%E5%AD%98%E6%94%B9%E6%88%90%20prod%EF%BC%8CCMake%20%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E8%AF%BB%E5%88%B0%20local%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F10%2Fcmake-cache-normal-variable-shadow%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E7%BC%93%E5%AD%98%E6%94%B9%E6%88%90%20prod%EF%BC%8CCMake%20%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E8%AF%BB%E5%88%B0%20local%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F10%2Fcmake-cache-normal-variable-shadow%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/10/css-display-contents-box-tree/">
+              <span>上一篇</span>
+              <strong>用一页样本检查display:contents的布局、选择器和事件</strong>
+              <small>2026-11-10</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/10/abortsignal-any-reason-already-aborted/">
+              <span>下一篇</span>
+              <strong>AbortSignal.any 的 reason：DOM 规则与 Node v24.21.0 对照</strong>
+              <small>2026-11-10</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#两层值同时存在，并不矛盾">两层值同时存在，并不矛盾</a>
+          
+            <a class="toc-link toc-link--h2" href="#一份脚本观察四次读取">一份脚本观察四次读取</a>
+          
+            <a class="toc-link toc-link--h2" href="#FORCE-控制写入，不控制优先级">FORCE 控制写入，不控制优先级</a>
+          
+            <a class="toc-link toc-link--h2" href="#函数里-unset-后，外层普通变量也消失了吗？">函数里 unset 后，外层普通变量也消失了吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>256</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/10/docker-workdir-inherited-relative-path/">用两个基镜像检查 Dockerfile 的目录合同</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/">job.lock 还在，不代表 Linux flock 仍被占用</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/10/scrum-done-review-release-gate/">Sprint Review不替代DoD，也不是发布闸门</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

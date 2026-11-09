@@ -1,0 +1,419 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why does an Index Only Scan still fetch heap rows? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Separate index coverage from snapshot visibility before changing INCLUDE columns or interpreting heap-fetch counts.">
+  
+  
+    <meta name="keywords" content="Index Only Scan,visibility map,Heap Fetches">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/10/postgres-index-only-visibility-map/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/10/postgres-index-only-visibility-map/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/10/postgres-index-only-visibility-map/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/10/postgres-index-only-visibility-map/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why does an Index Only Scan still fetch heap rows? | Midnight blog">
+    <meta property="og:description" content="Separate index coverage from snapshot visibility before changing INCLUDE columns or interpreting heap-fetch counts.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/10/postgres-index-only-visibility-map/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/10/postgres-index-only-visibility-map/#webpage","url":"https://www.zyweb.vip/en/2026/11/10/postgres-index-only-visibility-map/","name":"Why does an Index Only Scan still fetch heap rows? | Midnight blog","description":"Separate index coverage from snapshot visibility before changing INCLUDE columns or interpreting heap-fetch counts.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/10/postgres-index-only-visibility-map/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/10/postgres-index-only-visibility-map/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/10/postgres-index-only-visibility-map/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/10/postgres-index-only-visibility-map/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/10/postgres-index-only-visibility-map/","headline":"Why does an Index Only Scan still fetch heap rows?","description":"Separate index coverage from snapshot visibility before changing INCLUDE columns or interpreting heap-fetch counts.","inLanguage":"en","datePublished":"2026-11-09T20:06:46.000Z","dateModified":"2026-11-09T20:06:46.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.postgresql.org/docs/18/indexes-index-only-scans.html","https://www.postgresql.org/docs/18/sql-vacuum.html"],"keywords":"PostgreSQL, Indexes, Query plans"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/10/postgres-index-only-visibility-map/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why does an Index Only Scan still fetch heap rows?","item":"https://www.zyweb.vip/en/2026/11/10/postgres-index-only-visibility-map/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/10/postgres-index-only-visibility-map/">zh-CN</option><option value="/en/2026/11/10/postgres-index-only-visibility-map/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/10/postgres-index-only-visibility-map/">zh-CN</option><option value="/en/2026/11/10/postgres-index-only-visibility-map/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--postgresql">PostgreSQL</span>
+      <time datetime="2026-11-09T20:06:46.000Z">2026-11-10</time>
+    </div>
+
+    <h1>Why does an Index Only Scan still fetch heap rows?</h1>
+
+    
+      <p class="post-hero__summary">Separate index coverage from snapshot visibility before changing INCLUDE columns or interpreting heap-fetch counts.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-09T20:06:46.000Z">2026-11-10</time> · Estimated read 13 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/10/postgres-index-only-visibility-map/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/10/postgres-index-only-visibility-map/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Coverage establishes eligibility, not snapshot visibility.</li><li>An unset visibility-map bit can require a heap visit.</li><li>Compare observed plans and result sets without promising zero heap fetches.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>An Index Only Scan does not promise that every candidate row avoids the heap. An index may supply all the required values while PostgreSQL still needs to establish visibility to the current MVCC snapshot. The executor consults the visibility map for the corresponding heap page and visits the heap when that map cannot establish visibility. Nonzero Heap Fetches therefore do not, by themselves, show that a covering index is broken.</p>
+<p>Suppose an order query reads a customer identifier and an amount, with the amount already included in a covering index. Its plan says Index Only Scan, but an engineer sees heap fetches and proposes another, wider index. Ask what the extra columns would change. Supplying another value does not supply the missing visibility evidence.</p>
+<h2 id="Two-separate-requirements"><a href="#Two-separate-requirements" class="headerlink" title="Two separate requirements"></a>Two separate requirements</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/indexes-index-only-scans.html">PostgreSQL 18’s index-only scan documentation</a> first requires a supporting index type and a query whose referenced columns are available from the index. B-tree supports this access method. Other index types cannot simply be assumed to preserve returnable original values. Expression and partial indexes introduce further planning conditions; this example uses ordinary B-tree columns.</p>
+<p>Meeting those requirements makes an index-only scan physically possible. It does not settle snapshot visibility, which is not stored in index entries. The visibility map records information per heap page. A set bit lets the scan establish visibility without visiting the heap tuple; an unset bit requires a heap visit to check it. This is not a separate visibility flag for every included column.</p>
+<p>Keep eligibility separate from the work avoided during a particular execution. The plan node identifies an access method; Heap Fetches records heap checks made by that execution. Neither is a direct count of physical disk reads. Buffer residency and actual I/O require their own observations.</p>
+<h2 id="Plan-three-captures-without-promising-their-plans"><a href="#Plan-three-captures-without-promising-their-plans" class="headerlink" title="Plan three captures, without promising their plans"></a>Plan three captures, without promising their plans</h2><p>The following illustrative SQL has not been executed. Use an isolated database you own. It creates objects and EXPLAIN ANALYZE executes the query. The optimizer is not required to choose the desired node for this small dataset.</p>
+<pre><code class="sql">CREATE TABLE editorial_orders (
+  id integer PRIMARY KEY,
+  customer_id integer,
+  total numeric
+);
+INSERT INTO editorial_orders
+SELECT n, n % 2, n::numeric FROM generate_series(1, 10000) AS n;
+CREATE INDEX editorial_orders_cover
+  ON editorial_orders(customer_id) INCLUDE(total);
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT total FROM editorial_orders WHERE customer_id = 1;
+
+-- Run VACUUM separately, outside a transaction block.
+VACUUM (ANALYZE) editorial_orders;
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT total FROM editorial_orders WHERE customer_id = 1;
+
+UPDATE editorial_orders SET total = total + 1 WHERE id = 1;
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT total FROM editorial_orders WHERE customer_id = 1;
+</code></pre>
+<p>Specify the data oracle before inspecting the plan: the first two queries should return the 5,000 amounts belonging to odd identifiers. The third still returns 5,000 rows, with identifier one’s amount changed from one to two. Compare multisets because the query has no ordering. The desired node name cannot substitute for a result check.</p>
+<p>For each capture retain the server version, complete SQL, chosen nodes, Heap Fetches, buffers, collection time, and intervening modifications. If the optimizer chooses another access method, preserve that result and investigate scale, selectivity, and cost. Disabling alternatives would not prove that the optimizer naturally prefers the index.</p>
+<p>If an Index Only Scan is selected, interpret its actual counts against the visibility mechanism. Do not predeclare zero fetches after VACUUM or a particular count after UPDATE. Here VACUUM supplies a maintenance comparison point, not a universal command for eliminating heap visits. Active transactions, concurrent changes, and page state need evidence from the actual environment. A migration tool must also keep VACUUM outside its transaction wrapper.</p>
+<h2 id="Decide-whether-the-missing-ingredient-is-a-value-or-visibility"><a href="#Decide-whether-the-missing-ingredient-is-a-value-or-visibility" class="headerlink" title="Decide whether the missing ingredient is a value or visibility"></a>Decide whether the missing ingredient is a value or visibility</h2><p>Change the query to return the uncovered id column and the coverage requirement changes. That is a genuine missing-value problem. It differs from a query whose values are already available but whose candidate rows still need visibility checks. Record which gap exists before proposing another index.</p>
+<p>INCLUDE columns are payload, not search keys. The documentation warns that wide payload duplicates table data, enlarges the index, and can exceed index-tuple size limits, causing insertion failure. Frequent changes can also undermine the opportunity to avoid heap access. Review write maintenance alongside representative reads rather than treating a complete copy of the table as the goal.</p>
+<p>The site’s <a href="https://www.zyweb.vip/en/2026/10/09/postgres-explain-evidence/">EXPLAIN evidence guide</a> covers estimates and execution costs. This question adds a narrower distinction: an available access method does not establish that each execution avoids heap checks. Comparable parameters, modifications, and result sets provide more evidence than a cropped node name.</p>
+<p>Keep a second, explicitly different parameter range: change customer_id = 1 to customer_id IN (0, 1) on this teaching table. Its independent result oracle is 10,000 rows instead of 5,000. The optimizer may reasonably choose a different access method; preserve each plan rather than requiring matching node names. Neither parameter version was executed here.</p>
+<p>This also catches an invalid maintenance comparison. A capture for one customer before maintenance and all customers afterward changes both table state and the requested set. Put parameters and expected results beside each capture, reject that unequal comparison, and only then interpret the counters. Plan evidence needs a reproducible query contract, not a predetermined favorite scan.</p>
+<h2 id="Does-a-zero-row-scan-establish-visibility-for-the-whole-table"><a href="#Does-a-zero-row-scan-establish-visibility-for-the-whole-table" class="headerlink" title="Does a zero-row scan establish visibility for the whole table?"></a>Does a zero-row scan establish visibility for the whole table?</h2><p>No. With no candidate index entries, the execution has not established visibility for unrelated heap pages. Zero Heap Fetches may merely accompany an empty candidate set. It cannot demonstrate that the whole table is ready for heap-free reads.</p>
+<p>Add a representative matching query, specify its expected rows first, and then interpret its counts. Keep the empty case as a useful control. A reviewable result states which values came from the index, which candidates required further checking, and what the query returned. It does not claim a production speedup from an unexecuted script.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/indexes-index-only-scans.html" rel="noopener">PostgreSQL: Documentation: 18: 11.9. Index-Only Scans and Covering Indexes</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-vacuum.html" rel="noopener">PostgreSQL: Documentation: 18: VACUUM</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--postgresql" href="/en/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--indexes" href="/en/tags/Indexes/">Indexes</a>
+          
+            <a class="tag tag--query-plans" href="/en/tags/Query-plans/">Query plans</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F10%2Fpostgres-index-only-visibility-map%2F&text=Why%20does%20an%20Index%20Only%20Scan%20still%20fetch%20heap%20rows%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F10%2Fpostgres-index-only-visibility-map%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20does%20an%20Index%20Only%20Scan%20still%20fetch%20heap%20rows%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F10%2Fpostgres-index-only-visibility-map%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/10/postgres-integer-division-cast-position/">
+              <span>Previous Post</span>
+              <strong>Why is the SQL ratio zero after casting it to numeric?</strong>
+              <small>2026-11-10</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/10/postgres-generate-series-timezone-dst/">
+              <span>Next Post</span>
+              <strong>Why can daily PostgreSQL series points be 25 hours apart?</strong>
+              <small>2026-11-10</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Two-separate-requirements">Two separate requirements</a>
+          
+            <a class="toc-link toc-link--h2" href="#Plan-three-captures-without-promising-their-plans">Plan three captures, without promising their plans</a>
+          
+            <a class="toc-link toc-link--h2" href="#Decide-whether-the-missing-ingredient-is-a-value-or-visibility">Decide whether the missing ingredient is a value or visibility</a>
+          
+            <a class="toc-link toc-link--h2" href="#Does-a-zero-row-scan-establish-visibility-for-the-whole-table">Does a zero-row scan establish visibility for the whole table?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>256</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>128</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/10/postgres-fk-setnull-column-subset/">Why does deleting an author try to null tenant_id too?</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/10/postgres-generate-series-timezone-dst/">Why can daily PostgreSQL series points be 25 hours apart?</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/10/postgres-integer-division-cast-position/">Why is the SQL ratio zero after casting it to numeric?</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

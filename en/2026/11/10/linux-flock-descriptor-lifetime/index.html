@@ -1,0 +1,438 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>An existing job.lock does not mean Linux flock is still held | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Trace Linux local-filesystem flock through duplicate references, independent opens, last close, and child inheritance without certifying network storage.">
+  
+  
+    <meta name="keywords" content="Linux flock,file descriptors,lock lifetime">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/10/linux-flock-descriptor-lifetime/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/10/linux-flock-descriptor-lifetime/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="An existing job.lock does not mean Linux flock is still held | Midnight blog">
+    <meta property="og:description" content="Trace Linux local-filesystem flock through duplicate references, independent opens, last close, and child inheritance without certifying network storage.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/10/linux-flock-descriptor-lifetime/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/10/linux-flock-descriptor-lifetime/#webpage","url":"https://www.zyweb.vip/en/2026/11/10/linux-flock-descriptor-lifetime/","name":"An existing job.lock does not mean Linux flock is still held | Midnight blog","description":"Trace Linux local-filesystem flock through duplicate references, independent opens, last close, and child inheritance without certifying network storage.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/10/linux-flock-descriptor-lifetime/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/10/linux-flock-descriptor-lifetime/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/10/linux-flock-descriptor-lifetime/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/10/linux-flock-descriptor-lifetime/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/10/linux-flock-descriptor-lifetime/","headline":"An existing job.lock does not mean Linux flock is still held","description":"Trace Linux local-filesystem flock through duplicate references, independent opens, last close, and child inheritance without certifying network storage.","inLanguage":"en","datePublished":"2026-11-09T20:06:46.000Z","dateModified":"2026-11-09T20:06:46.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://man7.org/linux/man-pages/man2/flock.2.html","https://man7.org/linux/man-pages/man2/open.2.html"],"keywords":"Linux flock, Delivery"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/10/linux-flock-descriptor-lifetime/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"An existing job.lock does not mean Linux flock is still held","item":"https://www.zyweb.vip/en/2026/11/10/linux-flock-descriptor-lifetime/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/">zh-CN</option><option value="/en/2026/11/10/linux-flock-descriptor-lifetime/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/">zh-CN</option><option value="/en/2026/11/10/linux-flock-descriptor-lifetime/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--linux-flock">Linux flock</span>
+      <time datetime="2026-11-09T20:06:46.000Z">2026-11-10</time>
+    </div>
+
+    <h1>An existing job.lock does not mean Linux flock is still held</h1>
+
+    
+      <p class="post-hero__summary">Trace Linux local-filesystem flock through duplicate references, independent opens, last close, and child inheritance without certifying network storage.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-09T20:06:46.000Z">2026-11-10</time> · Estimated read 14 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/10/linux-flock-descriptor-lifetime/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/10/linux-flock-descriptor-lifetime/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>flock belongs to an open file description, not path existence.</li><li>dup shares a lock; an independent open supplies contention.</li><li>Last close, explicit unlock, and path cleanup are different operations.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>An existing job.lock does not establish that Linux flock is still held. The lock belongs to an open file description, and releasing it does not require deleting the path. After the last related descriptor closes, the file can remain while a fresh open acquires the lock. Use an independent contender to inspect contention, not a directory listing.</p>
+<h2 id="Separate-the-name-open-description-and-descriptor-number"><a href="#Separate-the-name-open-description-and-descriptor-number" class="headerlink" title="Separate the name, open description, and descriptor number"></a>Separate the name, open description, and descriptor number</h2><p>The <a target="_blank" rel="noopener" href="https://man7.org/linux/man-pages/man2/flock.2.html">Linux flock manual</a> associates the lock with an open file description. A process’s small integer fd refers to that description. dup returns another number referring to the same description and lock; related descriptors inherited through fork share it too.</p>
+<p>If fd1 holds a lock and fd2 is its duplicate, closing fd1 is not the last close. An independently opened fd3 can still be rejected, even within the same process. Retesting through a duplicate does not create an independent competitor.</p>
+<p>The <a href="/en/2026/11/07/node-fs-watch-replaced-inode/">file-watching article</a> explains how a name can point to a replacement inode. flock adds another lifetime: the open description and its references. A path-existence check cannot distinguish never locked, currently held, and already released. It cannot decide whether another job may proceed.</p>
+<h2 id="A-descriptor-comparison-in-an-owned-Linux-directory"><a href="#A-descriptor-comparison-in-an-owned-Linux-directory" class="headerlink" title="A descriptor comparison in an owned Linux directory"></a>A descriptor comparison in an owned Linux directory</h2><p>This complete teaching program is unexecuted and targets Linux local-filesystem flock semantics. The current host is macOS; running it there would not certify Linux behavior. Save lock_probe.py and use the proposed <code>python3 lock_probe.py</code> in a prepared Linux environment. Do not substitute a production lock path.</p>
+<pre><code class="python">import fcntl
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+if not sys.platform.startswith(&quot;linux&quot;):
+    raise SystemExit(&quot;this fixture requires Linux&quot;)
+
+with tempfile.TemporaryDirectory(prefix=&quot;flock-probe-&quot;) as directory:
+    path = Path(directory) / &quot;job.lock&quot;
+    descriptors = []
+    exclusive = fcntl.LOCK_EX | fcntl.LOCK_NB
+    try:
+        first = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+        descriptors.append(first)
+        fcntl.flock(first, exclusive)
+        duplicate = os.dup(first)
+        descriptors.append(duplicate)
+        contender = os.open(path, os.O_RDWR)
+        descriptors.append(contender)
+
+        def expect_blocked():
+            try:
+                fcntl.flock(contender, exclusive)
+            except BlockingIOError:
+                return
+            raise AssertionError(&quot;independent open unexpectedly acquired lock&quot;)
+
+        expect_blocked()
+        os.close(first)
+        descriptors.remove(first)
+        expect_blocked()
+        os.close(duplicate)
+        descriptors.remove(duplicate)
+        fcntl.flock(contender, exclusive)
+        assert path.exists()
+        print(&quot;acquired after last related close; path remains&quot;)
+    finally:
+        for descriptor in descriptors:
+            os.close(descriptor)
+</code></pre>
+<p>The independent exclusion contract supplies the oracle: the contender must fail initially, still fail after first closes, then acquire after duplicate closes. The path must still exist. All observations belong to one run. The final message would establish these conditions, not concurrency safety for a real scheduled job.</p>
+<p>Only BlockingIOError is accepted as expected contention. Permission failures, invalid descriptors, and unsupported filesystems must remain failures. Nonblocking acquisition avoids an indefinite demonstration wait; it does not choose whether a real job should skip, queue, or fail.</p>
+<h2 id="Deletion-is-not-an-unlock-protocol"><a href="#Deletion-is-not-an-unlock-protocol" class="headerlink" title="Deletion is not an unlock protocol"></a>Deletion is not an unlock protocol</h2><p>Release follows an explicit LOCK_UN on a related descriptor or closing every related reference. Unlinking the path is not one of those conditions. An object-identity inference follows: a holder can retain the old opened object while another participant recreates the same path and opens a different object. They then no longer contend on the same file. Equal path text does not transfer the old lock.</p>
+<p>Use a stable shared object and keep the holding descriptor around the whole protected action. Removing this fixture’s owned temporary directory is cleanup, not a production algorithm of repeatedly deleting and recreating lock files. Reclaiming a shared path requires an explicit participant-lifecycle arrangement.</p>
+<p>LOCK_UN also differs from closing one reference: any descriptor sharing the lock can release it even while another duplicate remains open. A library given such a descriptor can therefore affect the protection. Track authority to unlock as well as resource cleanup. The fixture deliberately tests last-close release instead.</p>
+<h2 id="Can-a-background-child-keep-the-lock-after-its-parent-exits"><a href="#Can-a-background-child-keep-the-lock-after-its-parent-exits" class="headerlink" title="Can a background child keep the lock after its parent exits?"></a>Can a background child keep the lock after its parent exits?</h2><p>Yes, if it retains a related open-description reference. Parent exit closes the parent’s descriptors, not every child reference inherited through fork. A disappeared parent PID does not establish last-close release. This is a new process-lifetime condition beyond the single-process dup example.</p>
+<p>Across exec, FD_CLOEXEC or O_CLOEXEC matters. The <a target="_blank" rel="noopener" href="https://man7.org/linux/man-pages/man2/open.2.html">open reference</a> documents close-on-exec flags, and language runtimes may set descriptors non-inheritable. Neither “every background child retains it” nor “every exec releases it” is adequate. Record creation and inheritance settings, then use an independent contender.</p>
+<p>The protected action has its own completion boundary. A parent can acquire the lock, launch a writer child, close its references, and exit without waiting. Another contender may legitimately acquire while the first writer still runs. The lock has not violated its lifetime rule; the application held it for too little of the action. Wait for completion or explicitly assign ownership and close responsibility to the actual executor.</p>
+<p>The opposite failure is accidental inheritance after protection is no longer needed, delaying later work. Inspect the process and descriptor relationship rather than deleting the path. PID, object identity, open origin, and close time can explain the lifetime without exposing protected contents. Insufficient visibility remains unknown.</p>
+<p>Test explicit LOCK_UN separately from last close. Keep a duplicate open, release through one shared descriptor, then try the independent contender. That adds the state “references remain but protection was explicitly removed.” Neither path can be inferred from file existence or certified by the other test.</p>
+<p>Finally, local Linux flock is generally advisory: a writer not participating in the protocol can ignore it. The manual documents different NFS, SMB, and historical-kernel behavior, including SMB conditions that change advisory semantics. Preserve kernel, Python, mount type, script hash, stdout, and immediate exit status. A local result does not certify remote shared storage. Establish a common object before relying on the lock’s lifetime to cover the action.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://man7.org/linux/man-pages/man2/flock.2.html" rel="noopener">flock(2) - Linux manual page</a></li><li><a target="_blank" href="https://man7.org/linux/man-pages/man2/open.2.html" rel="noopener">open(2) - Linux manual page</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--linux-flock" href="/en/tags/Linux-flock/">Linux flock</a>
+          
+            <a class="tag tag--delivery" href="/en/tags/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--delivery" href="/en/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F10%2Flinux-flock-descriptor-lifetime%2F&text=An%20existing%20job.lock%20does%20not%20mean%20Linux%20flock%20is%20still%20held" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F10%2Flinux-flock-descriptor-lifetime%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=An%20existing%20job.lock%20does%20not%20mean%20Linux%20flock%20is%20still%20held&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F10%2Flinux-flock-descriptor-lifetime%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/10/postgres-fk-setnull-column-subset/">
+              <span>Previous Post</span>
+              <strong>Why does deleting an author try to null tenant_id too?</strong>
+              <small>2026-11-10</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/10/json-pointer-escape-root-token/">
+              <span>Next Post</span>
+              <strong>Why does /~01 not select the slash-named member?</strong>
+              <small>2026-11-10</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Separate-the-name-open-description-and-descriptor-number">Separate the name, open description, and descriptor number</a>
+          
+            <a class="toc-link toc-link--h2" href="#A-descriptor-comparison-in-an-owned-Linux-directory">A descriptor comparison in an owned Linux directory</a>
+          
+            <a class="toc-link toc-link--h2" href="#Deletion-is-not-an-unlock-protocol">Deletion is not an unlock protocol</a>
+          
+            <a class="toc-link toc-link--h2" href="#Can-a-background-child-keep-the-lock-after-its-parent-exits">Can a background child keep the lock after its parent exits?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>256</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>128</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/10/cmake-cache-normal-variable-shadow/">Why can a normal CMake reference stay old after the cache changes?</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/10/docker-workdir-inherited-relative-path/">Test a Dockerfile path contract with two controlled base directories</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/10/gnu-make-oneshell-recipe-process/">Fix a make cd by choosing the scope of shared shell state</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
