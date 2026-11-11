@@ -1,0 +1,443 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Pod 已 Ready，Deployment 为什么还没把它算作可用？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="通过一次就绪中断和一轮零秒对照，核对 Deployment 何时开始计入可用副本。">
+  
+  
+    <meta name="keywords" content="minReadySeconds,availableReplicas">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/12/kubernetes-deployment-min-ready-seconds/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/12/kubernetes-deployment-min-ready-seconds/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/12/kubernetes-deployment-min-ready-seconds/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/12/kubernetes-deployment-min-ready-seconds/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Pod 已 Ready，Deployment 为什么还没把它算作可用？ | Midnight blog">
+    <meta property="og:description" content="通过一次就绪中断和一轮零秒对照，核对 Deployment 何时开始计入可用副本。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/12/kubernetes-deployment-min-ready-seconds/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/12/kubernetes-deployment-min-ready-seconds/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/12/kubernetes-deployment-min-ready-seconds/","name":"Pod 已 Ready，Deployment 为什么还没把它算作可用？ | Midnight blog","description":"通过一次就绪中断和一轮零秒对照，核对 Deployment 何时开始计入可用副本。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/12/kubernetes-deployment-min-ready-seconds/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/12/kubernetes-deployment-min-ready-seconds/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/12/kubernetes-deployment-min-ready-seconds/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/12/kubernetes-deployment-min-ready-seconds/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/12/kubernetes-deployment-min-ready-seconds/","headline":"Pod 已 Ready，Deployment 为什么还没把它算作可用？","description":"通过一次就绪中断和一轮零秒对照，核对 Deployment 何时开始计入可用副本。","inLanguage":"zh-CN","datePublished":"2026-11-11T19:35:42.000Z","dateModified":"2026-11-11T19:35:42.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://kubernetes.io/docs/concepts/workloads/controllers/deployment/"],"keywords":"Kubernetes, 发布验收"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/12/kubernetes-deployment-min-ready-seconds/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Pod 已 Ready，Deployment 为什么还没把它算作可用？","item":"https://www.zyweb.vip/zh-CN/2026/11/12/kubernetes-deployment-min-ready-seconds/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/12/kubernetes-deployment-min-ready-seconds/" selected>zh-CN</option><option value="/en/2026/11/12/kubernetes-deployment-min-ready-seconds/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/12/kubernetes-deployment-min-ready-seconds/" selected>zh-CN</option><option value="/en/2026/11/12/kubernetes-deployment-min-ready-seconds/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--kubernetes">Kubernetes</span>
+      <time datetime="2026-11-11T19:35:42.000Z">2026-11-12</time>
+    </div>
+
+    <h1>Pod 已 Ready，Deployment 为什么还没把它算作可用？</h1>
+
+    
+      <p class="post-hero__summary">通过一次就绪中断和一轮零秒对照，核对 Deployment 何时开始计入可用副本。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-11T19:35:42.000Z">2026-11-12</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/12/kubernetes-deployment-min-ready-seconds/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/12/kubernetes-deployment-min-ready-seconds/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>就绪副本和可用副本分别读取。</li><li>中断后按最近一次就绪转换重新计时。</li><li>用 Pod UID 和 Deployment 代次对齐记录。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>同一个新 Pod 已显示 Ready，Deployment 的可用副本数却还没增加。先检查持续就绪窗口。</p>
+<p>发布窗口里先后看到两个状态很正常。新容器的就绪探针通过后，可以在 Pod 上读到 Ready；Deployment 用另一套条件判断副本是否达到可用。要解释两者为什么在同一时刻不一致，需要把观察的 Pod 对上这一次的 ReplicaSet，再把状态转换按时间排好。只抄两行不同时间的状态，很容易把换代或控制器观察延迟也算进就绪等待时间。</p>
+<p>Deployment 的 <code>minReadySeconds</code> 是一个 Pod 在任何容器不发生崩溃的情况下保持就绪、并达到可用资格所需的最短秒数。默认值是零。状态字段 <code>readyReplicas</code> 统计满足 Ready 的受管 Pod，<code>availableReplicas</code> 则还要求达到可用条件。比如设为二十秒时，新 Pod 刚变 Ready，可以先增加就绪计数；它还需要稳定地走完窗口，才有资格增加可用计数。 <a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#min-ready-seconds">Deployment 文档</a></p>
+<h3 id="记录三次条件变化"><a href="#记录三次条件变化" class="headerlink" title="记录三次条件变化"></a>记录三次条件变化</h3><p>这份配置供隔离的测试集群使用。一份模板、一个副本和一个由文件控制的就绪探针，让观察结果不需要依赖应用流量。容器启动以后保持运行。文件存在时探针成功，文件消失时探针失败。例子未连接集群执行，下文时间是状态推演。</p>
+<pre><code class="yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: readiness-window-demo
+spec:
+  replicas: 1
+  minReadySeconds: 20
+  selector:
+    matchLabels:
+      app: readiness-window-demo
+  template:
+    metadata:
+      labels:
+        app: readiness-window-demo
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.36.1
+          command: [&quot;sleep&quot;, &quot;3600&quot;]
+          readinessProbe:
+            exec:
+              command: [&quot;test&quot;, &quot;-f&quot;, &quot;/tmp/ready&quot;]
+            periodSeconds: 1
+            failureThreshold: 1
+</code></pre>
+<p>在专用命名空间应用这份清单后，记下唯一 Pod 的名称及 UID。用 <code>kubectl exec POD -- touch /tmp/ready</code> 创建文件。第一次观测到 Pod 的 Ready 条件为真后，在二十秒尚未走完时执行 <code>kubectl exec POD -- rm /tmp/ready</code>，等待探针报告 Ready 为假。确认这次下降已经被记录，再创建一次文件。若操作时首个窗口已经过完，可以重新建立这次演练的初始状态，再做一次早于窗口结束的删除。整轮保留同一个 UID，同时核对容器的重启计数。探针调用和控制器调谐各有自己的时机，时间从实际读到的状态转换算起。</p>
+<table>
+<thead>
+<tr>
+<th>相对时刻</th>
+<th>同一 Pod 的 Ready</th>
+<th>计入可用的资格</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>第 10 秒</td>
+<td>首次变为真</td>
+<td>从这里开始等待</td>
+</tr>
+<tr>
+<td>第 15 秒</td>
+<td>变为假</td>
+<td>前五秒不能带进下一段</td>
+</tr>
+<tr>
+<td>第 22 秒</td>
+<td>再次变为真</td>
+<td>重新开始等待</td>
+</tr>
+<tr>
+<td>第 42 秒</td>
+<td>若一直为真且容器未崩溃</td>
+<td>最早满足窗口</td>
+</tr>
+</tbody></table>
+<p>例如有人在第二十五秒看到 Pod 又是 Ready，便从第一次变真的第十秒往后算。这种算法会给出第三十秒可以达标的错误预期。此时最近一次连续就绪只有八秒，前后两段状态中间有一次实实在在的中断。表中的第四十二秒是满足条件的最早时刻，Deployment 何时显示新的计数还取决于控制器的观察进度。验收应保存计数首次变化的时间和各自的状态对象，而不是把一秒钟的时间差直接判成失败。</p>
+<p>把这份时间轴用在真正的滚动发布时，读者容易遇到一种反过来的情形。发布开始前旧版本已经有一个可用副本，新版本刚出现第一个就绪的 Pod，可用副本总数依然是一。只看这一行，甚至无法判断这个一来自旧版本还是新版本。先到新旧 ReplicaSet 分别找 Pod 所有者，再把刚才的状态记录和对应的 Pod 对起来。示例刻意从空的环境建立单副本，时间轴推演不需要假定控制器会在某个时点删除旧副本。</p>
+<p>也要分清手工控制探针的动作和最终用于计时的证据。在终端执行创建文件，只是允许下一次探针检查通过；记录里还缺少 Pod Ready 变为真的那个时刻。删除文件后也一样，若没有等到条件变假就立刻把文件建回来，有机会整段操作都落在两次探针执行之间。一次看似做过中断的测试因此仍能保持 Ready，看到原来的窗口继续走完也完全说得通。复查时把命令发生时间和条件转换时间分两列，读者可以用这两列确认演练确实碰到了想要检查的状态。</p>
+<h3 id="让对照组也用同一种证据"><a href="#让对照组也用同一种证据" class="headerlink" title="让对照组也用同一种证据"></a>让对照组也用同一种证据</h3><p>记录 Pod 时，可以用 <code>kubectl get pod POD -o yaml</code> 查看 Ready 条件中的 <code>status</code> 和 <code>lastTransitionTime</code>。这个字段只保留最近一次转换，因此要在每次变化后立即存一份，或者提前启动监视。Deployment 侧读 <code>kubectl get deployment readiness-window-demo -o yaml</code>，保留两项副本计数以及 <code>status.observedGeneration</code>。检查它已经观察到这一次清单的代次。若演练中出现两个 Pod，应先按拥有者引用确认来源，再解释总数。字段没出现时也把原始输出留住，避免把缺失字段误记成读到了某个明确的数字。提交发布验收结果时，可以附上同一个 Pod 的首次就绪、就绪下降和第二次就绪三份记录，再放入第一次看到可用计数增加的 Deployment 状态。后来的人能够用条件变化复算窗口，而无须相信观察者凭印象写下的等待秒数。</p>
+<p>另开一轮，把窗口设为零并用一个新建的相同单副本测试环境重复探针操作。第一次就绪后无需再等那二十秒，计数仍可能在控制器下一次处理时才更新。这个对照更容易区分配置窗口与观察延迟。面对实际发布，若新 Pod 已连续就绪并超出所设窗口，接下来要看对象代次、所属 ReplicaSet 和控制器事件。若 Pod 的 Ready 一直为假，可以先查看<a href="/zh-CN/2026/10/18/kubernetes-readiness-gates-unknown/">就绪门条件为何仍是未知</a>。这套演练收集的是控制器状态，流量何时到达应用需要另外的端点或请求记录。</p>
+<h3 id="可用窗口设成三十秒，进度期限也能写三十秒吗？"><a href="#可用窗口设成三十秒，进度期限也能写三十秒吗？" class="headerlink" title="可用窗口设成三十秒，进度期限也能写三十秒吗？"></a>可用窗口设成三十秒，进度期限也能写三十秒吗？</h3><p><code>progressDeadlineSeconds</code> 必须大于 <code>minReadySeconds</code>，相等不符合字段约束。若希望保留三十秒窗口，要为调度、容器启动和就绪等待留出更长的发布进度期限。超过期限时，控制器可以在 Deployment 状态中报告 <code>ProgressDeadlineExceeded</code>，并继续重试。操作方要用这个条件决定下一步如何处理这次发布，同时回到对应 Pod 的事件和就绪记录查找进度停在哪里。 <a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#progress-deadline-seconds">Deployment 进度期限</a></p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://kubernetes.io/docs/concepts/workloads/controllers/deployment/" rel="noopener">Deployments | Kubernetes</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--kubernetes" href="/zh-CN/tags/Kubernetes/">Kubernetes</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%8F%91%E5%B8%83%E9%AA%8C%E6%94%B6/">发布验收</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F12%2Fkubernetes-deployment-min-ready-seconds%2F&text=Pod%20%E5%B7%B2%20Ready%EF%BC%8CDeployment%20%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E6%B2%A1%E6%8A%8A%E5%AE%83%E7%AE%97%E4%BD%9C%E5%8F%AF%E7%94%A8%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F12%2Fkubernetes-deployment-min-ready-seconds%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Pod%20%E5%B7%B2%20Ready%EF%BC%8CDeployment%20%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E6%B2%A1%E6%8A%8A%E5%AE%83%E7%AE%97%E4%BD%9C%E5%8F%AF%E7%94%A8%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F12%2Fkubernetes-deployment-min-ready-seconds%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/">
+              <span>上一篇</span>
+              <strong>GROUP BY 只写了主键，为什么还能选出名称？</strong>
+              <small>2026-11-12</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/12/http-prefer-return-response-contract/">
+              <span>下一篇</span>
+              <strong>发了 Prefer: return=minimal，客户端为什么还要准备读响应？</strong>
+              <small>2026-11-12</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h3" href="#记录三次条件变化">记录三次条件变化</a>
+          
+            <a class="toc-link toc-link--h3" href="#让对照组也用同一种证据">让对照组也用同一种证据</a>
+          
+            <a class="toc-link toc-link--h3" href="#可用窗口设成三十秒，进度期限也能写三十秒吗？">可用窗口设成三十秒，进度期限也能写三十秒吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>257</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/kubernetes-nonpreempting-priority-queue/">Kubernetes preemptionPolicy Never，为什么仍排在低优先级Pod前？</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/kubernetes-readonly-root-volume-boundary/">Kubernetes根文件系统只读，挂载目录为什么仍可写？</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/kubernetes-limitrange-default-admission/">清单没写CPU请求，Pod为什么自己多出requests？</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,410 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>字面量用得到部分索引，绑定状态后为什么不行？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="对照 PostgreSQL 预备语句的通用和定制计划，核对状态谓词、部分索引资格和实际选中的路径。">
+  
+  
+    <meta name="keywords" content="partial index,plan_cache_mode,PREPARE">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/12/postgres-partial-index-generic-plan-predicate/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/12/postgres-partial-index-generic-plan-predicate/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/12/postgres-partial-index-generic-plan-predicate/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/12/postgres-partial-index-generic-plan-predicate/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="字面量用得到部分索引，绑定状态后为什么不行？ | Midnight blog">
+    <meta property="og:description" content="对照 PostgreSQL 预备语句的通用和定制计划，核对状态谓词、部分索引资格和实际选中的路径。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/12/postgres-partial-index-generic-plan-predicate/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/12/postgres-partial-index-generic-plan-predicate/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/12/postgres-partial-index-generic-plan-predicate/","name":"字面量用得到部分索引，绑定状态后为什么不行？ | Midnight blog","description":"对照 PostgreSQL 预备语句的通用和定制计划，核对状态谓词、部分索引资格和实际选中的路径。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/12/postgres-partial-index-generic-plan-predicate/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/12/postgres-partial-index-generic-plan-predicate/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/12/postgres-partial-index-generic-plan-predicate/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/12/postgres-partial-index-generic-plan-predicate/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/12/postgres-partial-index-generic-plan-predicate/","headline":"字面量用得到部分索引，绑定状态后为什么不行？","description":"对照 PostgreSQL 预备语句的通用和定制计划，核对状态谓词、部分索引资格和实际选中的路径。","inLanguage":"zh-CN","datePublished":"2026-11-11T19:35:42.000Z","dateModified":"2026-11-11T19:35:42.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/indexes-partial.html","https://www.postgresql.org/docs/18/sql-prepare.html"],"keywords":"PostgreSQL, SQL, Indexes"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/12/postgres-partial-index-generic-plan-predicate/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"字面量用得到部分索引，绑定状态后为什么不行？","item":"https://www.zyweb.vip/zh-CN/2026/11/12/postgres-partial-index-generic-plan-predicate/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/12/postgres-partial-index-generic-plan-predicate/" selected>zh-CN</option><option value="/en/2026/11/12/postgres-partial-index-generic-plan-predicate/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/12/postgres-partial-index-generic-plan-predicate/" selected>zh-CN</option><option value="/en/2026/11/12/postgres-partial-index-generic-plan-predicate/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--postgresql">PostgreSQL</span>
+      <time datetime="2026-11-11T19:35:42.000Z">2026-11-12</time>
+    </div>
+
+    <h1>字面量用得到部分索引，绑定状态后为什么不行？</h1>
+
+    
+      <p class="post-hero__summary">对照 PostgreSQL 预备语句的通用和定制计划，核对状态谓词、部分索引资格和实际选中的路径。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-11T19:35:42.000Z">2026-11-12</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/12/postgres-partial-index-generic-plan-predicate/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/12/postgres-partial-index-generic-plan-predicate/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>通用计划不能按这次的状态实参证明部分索引谓词。</li><li>定制计划可以利用实际参数；最终路径仍取决于成本。</li><li>只固定业务状态的专用查询仍可以绑定负责人。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>同一条待办查询传入 pending 时，两次执行都可以返回相同的任务，计划却可能不同。定制计划可以根据这次传入的值判断部分索引是否够用；通用计划需要覆盖调用方随后传入其他状态的情况。</p>
+<p>假设后台有个任务页面，用户可以在待办和已完成之间切换。数据库只给待办任务建立了部分索引，以免索引还收录大量已经完成的记录。排查时有人把日志里的参数替换成字面量，发现这条改写可以使用索引，随后又拿着原来的预备语句看到顺序扫描。两份计划的输入条件需要先还原。字面量查询提供了一个固定谓词；原接口的查询有可能重用一份必须对所有状态都有效的计划。</p>
+<h2 id="先用三条记录约束两次执行"><a href="#先用三条记录约束两次执行" class="headerlink" title="先用三条记录约束两次执行"></a>先用三条记录约束两次执行</h2><p>下面的 SQL 没有执行。建表和 PREPARE 只需在测试会话里做一次。固定相同的任务记录和同一组实参，只在各自事务内改变计划模式。EXPLAIN 负责查看计划；独立的 EXECUTE 给出结果，避免计划展示代替行值验收。</p>
+<pre><code class="sql">CREATE TEMP TABLE plan_jobs (id int, status text, owner int);
+INSERT INTO plan_jobs VALUES (1, &#39;pending&#39;, 8), (2, &#39;done&#39;, 8), (3, &#39;pending&#39;, 9);
+CREATE INDEX plan_jobs_pending_owner ON plan_jobs (owner) WHERE status = &#39;pending&#39;;
+
+PREPARE list_jobs (text, int) AS
+SELECT id FROM plan_jobs WHERE status = $1 AND owner = $2;
+
+BEGIN;
+SET LOCAL plan_cache_mode = force_generic_plan;
+EXPLAIN (COSTS OFF) EXECUTE list_jobs (&#39;pending&#39;, 8);
+EXECUTE list_jobs (&#39;pending&#39;, 8);
+COMMIT;
+
+BEGIN;
+SET LOCAL plan_cache_mode = force_custom_plan;
+EXPLAIN (COSTS OFF) EXECUTE list_jobs (&#39;pending&#39;, 8);
+EXECUTE list_jobs (&#39;pending&#39;, 8);
+COMMIT;
+</code></pre>
+<p>两次执行的预期都只返回任务一。任务二虽然归属相同的人，但状态已经完成。任务三虽然待办，但归属另一人。先分别核对这两个排除项，才能确认两种模式比较的是同一个查询。若驱动对每条 SQL 分别换连接，预备语句和事务本地设置可能无法落在同一会话；先用固定数据库会话做对照。</p>
+<p>通用计划需要同时适用于状态为 done 的一次调用。那次应返回任务二，而待办部分索引根本没有这条记录，因此规划时不能把这个状态参数当成 pending 来证明索引覆盖全部候选。定制计划把这次的实际状态代入查询，pending 可以满足索引谓词。即使如此，在三行样本上顺序扫描也可能是更便宜的选项。索引具备使用资格和计划最终选用它是两个判断，不能用一次顺序扫描同时证明两者。规则见 <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/indexes-partial.html">PostgreSQL 18 部分索引</a> 和 <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-prepare.html">PREPARE</a>。</p>
+<h2 id="怎么读两份计划"><a href="#怎么读两份计划" class="headerlink" title="怎么读两份计划"></a>怎么读两份计划</h2><p>在 EXPLAIN EXECUTE 输出里，通用计划仍显示参数符号；定制计划会代入实际参数值。先找计划过滤条件或索引条件，再看扫描的对象。看到待办字面量可以说明定制计划拥有这次的状态值，看到目标索引名才说明它实际选择了那个索引。一次诊断可以保留两个输出，不必通过改变成本设置去强迫索引出现。</p>
+<p>这组样本的职责是对照谓词和行值。扩大到代表性数据量时，再分别测量各状态、归属分布和不同计划的耗时。假如生产表上待办比例很高，甚至某些负责人拥有大量待办，定制计划即使识别了部分谓词，也可能因访问太多记录而选择别的路径。遇到这种结果要保留真实计划和参数频率，避免从三行样本推导生产响应时间。站内的<a href="/zh-CN/2026/11/10/postgres-index-only-visibility-map/">覆盖索引与可见性</a>讨论已经选定索引后为何仍可能访问堆，属于另一处验收点。</p>
+<p>若产品必须让用户自由选择状态，可以保留预备语句并以真实的状态分布评估通用和定制计划。还可以比较完整索引的写入和空间成本，确认它是否服务同一接口的其他状态。为了孤立本例的问题，只在事务本地强制一种计划。测试结束后再把设置交给原会话配置，不把这个诊断手段当成全局上线参数。在应用里复查时，先记录驱动究竟提交哪份 SQL、是否在服务端建立可重用的预备语句，以及 EXPLAIN 在哪个连接执行。两个页面碰巧共用一份日志格式，并不能证明它们实际重用了同一计划。</p>
+<p>数据库迁移也可能留下看起来相似的索引。采样前从实际实例取得索引定义，把索引谓词与预备语句的 WHERE 条件并排记录。如果实际谓词还要求任务未归档，当前查询就必须另外满足未归档这一条。只看到名称中有 pending，不能推断两个条件相同。遇到条件等价但写法复杂的情况，先用与实际谓词相同的简单表达式做隔离样本，再逐段恢复生产写法，观察在哪一步失去可识别的关系。这里的三条记录没有归档列，不能用来判定那套新谓词。</p>
+<p>计划排查记录可以分成两张表。一张按实参保存预期和实际任务编号，覆盖待办、已完成、另一个负责人，以及没有记录的人。另一张按同一组实参记录会话、计划模式、估算行数、扫描节点和实际使用的索引。先从第一张排除业务结果差异，再解释第二张中的访问路径差异。任何采样如果同时改了参数和计划模式，都要补上原值对照，才能判断变化来自哪里。</p>
+<h2 id="如果只绑定负责人，状态写成固定字面量呢？"><a href="#如果只绑定负责人，状态写成固定字面量呢？" class="headerlink" title="如果只绑定负责人，状态写成固定字面量呢？"></a>如果只绑定负责人，状态写成固定字面量呢？</h2><p>假设后来有个独立待办接口，从产品上就没有切换状态的功能。可以单独预备 SELECT id FROM plan_jobs WHERE status = &#39;pending&#39; AND owner = $1，并继续绑定用户提供的负责人值。即使走通用计划，已写明的状态仍能满足索引谓词，负责人参数只改变这个范围内要找谁。验收给负责人八传参，期望任务一，再给负责人九传参，期望任务三。这个对照也未执行；两种负责人即使得到预期行，计划仍可能依据成本选择顺序扫描。原接口仍需要接受 done，这条专用查询只适合独立的待办入口。绑定外部输入的方式保持原样，固定状态来自预先定义的 SQL 文本。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/indexes-partial.html" rel="noopener">PostgreSQL: Documentation: 18: 11.8. Partial Indexes</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-prepare.html" rel="noopener">PostgreSQL: Documentation: 18: PREPARE</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--sql" href="/zh-CN/tags/SQL/">SQL</a>
+          
+            <a class="tag tag--indexes" href="/zh-CN/tags/Indexes/">Indexes</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F12%2Fpostgres-partial-index-generic-plan-predicate%2F&text=%E5%AD%97%E9%9D%A2%E9%87%8F%E7%94%A8%E5%BE%97%E5%88%B0%E9%83%A8%E5%88%86%E7%B4%A2%E5%BC%95%EF%BC%8C%E7%BB%91%E5%AE%9A%E7%8A%B6%E6%80%81%E5%90%8E%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E8%A1%8C%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F12%2Fpostgres-partial-index-generic-plan-predicate%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E5%AD%97%E9%9D%A2%E9%87%8F%E7%94%A8%E5%BE%97%E5%88%B0%E9%83%A8%E5%88%86%E7%B4%A2%E5%BC%95%EF%BC%8C%E7%BB%91%E5%AE%9A%E7%8A%B6%E6%80%81%E5%90%8E%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E8%A1%8C%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F12%2Fpostgres-partial-index-generic-plan-predicate%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/12/promise-withresolvers-settlement-owner/">
+              <span>上一篇</span>
+              <strong>用 withResolvers 封装回调时，谁能结算？</strong>
+              <small>2026-11-12</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/">
+              <span>下一篇</span>
+              <strong>GROUP BY 只写了主键，为什么还能选出名称？</strong>
+              <small>2026-11-12</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#先用三条记录约束两次执行">先用三条记录约束两次执行</a>
+          
+            <a class="toc-link toc-link--h2" href="#怎么读两份计划">怎么读两份计划</a>
+          
+            <a class="toc-link toc-link--h2" href="#如果只绑定负责人，状态写成固定字面量呢？">如果只绑定负责人，状态写成固定字面量呢？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>257</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/">GROUP BY 只写了主键，为什么还能选出名称？</a></h3>
+          <p>2026-11-12</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/10/postgres-integer-division-cast-position/">SQL 最后转了 numeric，比例为什么还是零？</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/09/postgres-lateral-left-join-empty/">最近订单子查询为空，客户为什么一起消失？</a></h3>
+          <p>2026-11-09</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

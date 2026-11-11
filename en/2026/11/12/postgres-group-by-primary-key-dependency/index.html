@@ -1,0 +1,404 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why can PostgreSQL select a name grouped only by primary key? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Compare primary-key and unique-key grouping in PostgreSQL, then use two customers with the same name to verify the report grain.">
+  
+  
+    <meta name="keywords" content="GROUP BY,primary key,functional dependency">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/12/postgres-group-by-primary-key-dependency/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/12/postgres-group-by-primary-key-dependency/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why can PostgreSQL select a name grouped only by primary key? | Midnight blog">
+    <meta property="og:description" content="Compare primary-key and unique-key grouping in PostgreSQL, then use two customers with the same name to verify the report grain.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/12/postgres-group-by-primary-key-dependency/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/12/postgres-group-by-primary-key-dependency/#webpage","url":"https://www.zyweb.vip/en/2026/11/12/postgres-group-by-primary-key-dependency/","name":"Why can PostgreSQL select a name grouped only by primary key? | Midnight blog","description":"Compare primary-key and unique-key grouping in PostgreSQL, then use two customers with the same name to verify the report grain.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/12/postgres-group-by-primary-key-dependency/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/12/postgres-group-by-primary-key-dependency/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/12/postgres-group-by-primary-key-dependency/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/12/postgres-group-by-primary-key-dependency/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/12/postgres-group-by-primary-key-dependency/","headline":"Why can PostgreSQL select a name grouped only by primary key?","description":"Compare primary-key and unique-key grouping in PostgreSQL, then use two customers with the same name to verify the report grain.","inLanguage":"en","datePublished":"2026-11-11T19:35:42.000Z","dateModified":"2026-11-11T19:35:42.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.postgresql.org/docs/18/sql-select.html"],"keywords":"PostgreSQL, SQL, Reporting"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/12/postgres-group-by-primary-key-dependency/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why can PostgreSQL select a name grouped only by primary key?","item":"https://www.zyweb.vip/en/2026/11/12/postgres-group-by-primary-key-dependency/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/">zh-CN</option><option value="/en/2026/11/12/postgres-group-by-primary-key-dependency/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/">zh-CN</option><option value="/en/2026/11/12/postgres-group-by-primary-key-dependency/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--postgresql">PostgreSQL</span>
+      <time datetime="2026-11-11T19:35:42.000Z">2026-11-12</time>
+    </div>
+
+    <h1>Why can PostgreSQL select a name grouped only by primary key?</h1>
+
+    
+      <p class="post-hero__summary">Compare primary-key and unique-key grouping in PostgreSQL, then use two customers with the same name to verify the report grain.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-11T19:35:42.000Z">2026-11-12</time> · Estimated read 12 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/12/postgres-group-by-primary-key-dependency/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Grouping by a primary key can establish a recognized functional dependency.</li><li>A non-null unique constraint does not substitute for the primary key here.</li><li>Check totals by customer ID to catch an accidental name-only grouping.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>An order report groups by the customer primary key and still selects the customer name in PostgreSQL. Swap the primary key declaration for UNIQUE NOT NULL and the same query shape can be rejected, even when the customer data stays identical. The difference is the functional dependency PostgreSQL recognizes.</p>
+<p>The report originally returned a customer ID and a total. Adding the name looks harmless. Two orders may produce two joined rows, but both rows point to the same customer record. Within a group defined by the customer table’s primary key, that record supplies a single name. Changing either order amount cannot alter the basis for that conclusion.</p>
+<h2 id="Run-the-same-report-against-two-declarations"><a href="#Run-the-same-report-against-two-declarations" class="headerlink" title="Run the same report against two declarations"></a>Run the same report against two declarations</h2><p>The following teaching SQL is unexecuted. It creates two temporary customer tables that differ in their key declaration. Both customers are named Lee so the name cannot stand in for their IDs.</p>
+<pre><code class="sql">CREATE TEMP TABLE report_customer (id int PRIMARY KEY, name text NOT NULL);
+CREATE TEMP TABLE report_unique_customer (id int UNIQUE NOT NULL, name text NOT NULL);
+CREATE TEMP TABLE report_order (id int NOT NULL, amount int NOT NULL);
+
+INSERT INTO report_customer VALUES (1, &#39;Lee&#39;), (2, &#39;Lee&#39;);
+INSERT INTO report_unique_customer VALUES (1, &#39;Lee&#39;), (2, &#39;Lee&#39;);
+INSERT INTO report_order VALUES (1, 2), (1, 3), (2, 7);
+
+SELECT c.id, name, sum(amount) AS total
+FROM report_customer AS c JOIN report_order USING (id)
+GROUP BY c.id
+ORDER BY c.id;
+</code></pre>
+<p>Expect (1, Lee, 5) and (2, Lee, 7) from the query as written. Substitute report_unique_customer for report_customer in the FROM clause and run it again. That version should fail analysis because the name lacks an aggregate, a grouping term, and the recognized primary-key dependency. Keep the replacement table and use GROUP BY c.id, name to recover the original two expected rows. For the name-only control, remove c.id from SELECT, use GROUP BY name, and omit ORDER BY. Expect one row (Lee, 12). If your SQL client stops after an error, submit the queries separately with the fixture intact. The expected error and both post-error result sets need independent checks.</p>
+<p>The PostgreSQL 18 SELECT reference permits an ungrouped column to depend on the grouped columns of its table when they include that table’s primary key. It also limits recognition of functional dependencies here to that case. The unique, non-null ID in the second table is enough for us to reason about the rows, but PostgreSQL does not apply that inference to this declaration. Look at the actual table definition and the source of the grouped column. The join in this fixture equates two IDs, while the GROUP BY explicitly names the customer table’s key. <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-select.html#SQL-GROUPBY">PostgreSQL 18 SELECT reference</a>.</p>
+<h2 id="Check-the-customer-grain-when-you-change-the-query"><a href="#Check-the-customer-grain-when-you-change-the-query" class="headerlink" title="Check the customer grain when you change the query"></a>Check the customer grain when you change the query</h2><p>If the report still owes its consumer one row per customer, keep the ID and group by both c.id and c.name. For this fixture, adding the name cannot split an ID because each ID has a single customer record. Compare the result by ID and amount. A test that only checks for an overall total of twelve will pass both the two-row report and the merged name-only report. Row count alone would also miss two correct totals assigned to the wrong customers.</p>
+<p>Another option is to aggregate the orders by customer_id and then join those totals to the customer table. The name is read from the joined row, outside the order aggregation. This makes it easier to inspect the order totals before looking up the display fields. Check what filters and join conditions mean after moving the aggregation. If the report covers only existing customers, preserve that condition in the final join. If it includes customers with no orders, verify the direction of the join and decide what their missing amount should look like.</p>
+<p>Inspect the rows feeding the aggregate as well. Joining two customer tags into the order input can duplicate every order for that customer. The primary key still determines the name while the reported amount can double. Use the customer with a total of five as a separate check and inspect order identity before summing, or aggregate the tags separately before bringing them into the report. SQL acceptance settles the grouping rule. The report total depends on its input rows. The related <a href="/en/2026/11/05/postgres-rollup-grouping-null-markers/">ROLLUP example</a> covers reporting levels.</p>
+<p>Keep the submitted SQL and table definition alongside an error report. A migration can preserve the same names and data while changing the key declaration. A query builder might also have introduced a derived result. Start with the direct base-table case and add the surrounding query one layer at a time. At each step, keep the total tied to the customer ID so changes in the output shape are visible.</p>
+<p>An export may carry the ID beyond the first report screen. Give the two customers the same name and different amounts, then compare the exported records as a mapping from ID to name and amount. If the screen only shows names and totals, keep an identity field available to the export or test harness. Two adjacent rows with the same label are hard to diagnose when their IDs have already been discarded.</p>
+<h2 id="What-if-the-primary-key-has-two-columns"><a href="#What-if-the-primary-key-has-two-columns" class="headerlink" title="What if the primary key has two columns?"></a>What if the primary key has two columns?</h2><p>Suppose invoices are keyed by (tenant_id, invoice_id). Two tenants have invoice seven, with a renewal note for one and a refund note for the other. A group defined by invoice number alone can contain both records. Include both key parts if the report needs one row per invoice identity. If the requirement is a cross-tenant total by invoice number, specify how to handle notes or leave them out of that output. Reuse the same invoice number in the fixture so the test exercises the new condition. This follow-up is unexecuted as well. Neither example checks what an application query builder will emit.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-select.html" rel="noopener">PostgreSQL: Documentation: 18: SELECT</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--postgresql" href="/en/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--sql" href="/en/tags/SQL/">SQL</a>
+          
+            <a class="tag tag--reporting" href="/en/tags/Reporting/">Reporting</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F12%2Fpostgres-group-by-primary-key-dependency%2F&text=Why%20can%20PostgreSQL%20select%20a%20name%20grouped%20only%20by%20primary%20key%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F12%2Fpostgres-group-by-primary-key-dependency%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20can%20PostgreSQL%20select%20a%20name%20grouped%20only%20by%20primary%20key%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F12%2Fpostgres-group-by-primary-key-dependency%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/12/postgres-partial-index-generic-plan-predicate/">
+              <span>Previous Post</span>
+              <strong>Why can a literal qualify for a partial index while a bound status cannot?</strong>
+              <small>2026-11-12</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/12/kubernetes-deployment-min-ready-seconds/">
+              <span>Next Post</span>
+              <strong>Why is a Ready Pod not yet counted as available?</strong>
+              <small>2026-11-12</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Run-the-same-report-against-two-declarations">Run the same report against two declarations</a>
+          
+            <a class="toc-link toc-link--h2" href="#Check-the-customer-grain-when-you-change-the-query">Check the customer grain when you change the query</a>
+          
+            <a class="toc-link toc-link--h2" href="#What-if-the-primary-key-has-two-columns">What if the primary key has two columns?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>257</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>128</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/12/postgres-partial-index-generic-plan-predicate/">Why can a literal qualify for a partial index while a bound status cannot?</a></h3>
+          <p>2026-11-12</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/10/postgres-integer-division-cast-position/">Why is the SQL ratio zero after casting it to numeric?</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/09/postgres-lateral-left-join-empty/">Why did the customer disappear from a latest-order query?</a></h3>
+          <p>2026-11-09</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

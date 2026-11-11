@@ -1,0 +1,402 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Redis 工作者取到任务后崩溃，任务留在哪里？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用两个 Redis 列表检查任务从领取到确认的状态，并判断工作者中断后该从哪条证据恢复。">
+  
+  
+    <meta name="keywords" content="LMOVE,LREM,processing list">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/12/redis-lmove-processing-recovery/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/12/redis-lmove-processing-recovery/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/12/redis-lmove-processing-recovery/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/12/redis-lmove-processing-recovery/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Redis 工作者取到任务后崩溃，任务留在哪里？ | Midnight blog">
+    <meta property="og:description" content="用两个 Redis 列表检查任务从领取到确认的状态，并判断工作者中断后该从哪条证据恢复。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/12/redis-lmove-processing-recovery/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/12/redis-lmove-processing-recovery/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/12/redis-lmove-processing-recovery/","name":"Redis 工作者取到任务后崩溃，任务留在哪里？ | Midnight blog","description":"用两个 Redis 列表检查任务从领取到确认的状态，并判断工作者中断后该从哪条证据恢复。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/12/redis-lmove-processing-recovery/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/12/redis-lmove-processing-recovery/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/12/redis-lmove-processing-recovery/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/12/redis-lmove-processing-recovery/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/12/redis-lmove-processing-recovery/","headline":"Redis 工作者取到任务后崩溃，任务留在哪里？","description":"用两个 Redis 列表检查任务从领取到确认的状态，并判断工作者中断后该从哪条证据恢复。","inLanguage":"zh-CN","datePublished":"2026-11-11T19:35:42.000Z","dateModified":"2026-11-11T19:35:42.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://redis.io/docs/latest/commands/lmove/"],"keywords":"Redis, Queues, Backend"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/12/redis-lmove-processing-recovery/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Redis 工作者取到任务后崩溃，任务留在哪里？","item":"https://www.zyweb.vip/zh-CN/2026/11/12/redis-lmove-processing-recovery/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/12/redis-lmove-processing-recovery/" selected>zh-CN</option><option value="/en/2026/11/12/redis-lmove-processing-recovery/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/12/redis-lmove-processing-recovery/" selected>zh-CN</option><option value="/en/2026/11/12/redis-lmove-processing-recovery/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--redis">Redis</span>
+      <time datetime="2026-11-11T19:35:42.000Z">2026-11-12</time>
+    </div>
+
+    <h1>Redis 工作者取到任务后崩溃，任务留在哪里？</h1>
+
+    
+      <p class="post-hero__summary">用两个 Redis 列表检查任务从领取到确认的状态，并判断工作者中断后该从哪条证据恢复。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-11T19:35:42.000Z">2026-11-12</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/12/redis-lmove-processing-recovery/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/12/redis-lmove-processing-recovery/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>LMOVE 在一条命令里把任务从待处理移到处理中。</li><li>业务操作完成后才能确认该领取。</li><li>列表状态相同的中断可能需要不同的业务恢复动作。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Redis 工作者弹出一条任务后崩溃，待处理列表里已经找不到这条任务。用 LMOVE 领取，Redis 在同一条命令里把任务移入处理中列表。恢复程序有了一个可检查的位置，接下来还要判断这次工作完成了没有。</p>
+<p>以生成导出文件为例。待处理列表里依次有任务甲和任务乙。工作进程领取甲，准备读取数据时退出。如果它只用 LPOP，甲已经从列表移除，检查待处理列表只能看到乙。若它用 LMOVE，甲仍可以从处理中列表查到。此时乙可供另一个工作进程领取。Redis 的移动动作回答了任务在哪里，导出文件是否已经生成需要另找证据。</p>
+<h2 id="领取前、领取后、确认后"><a href="#领取前、领取后、确认后" class="headerlink" title="领取前、领取后、确认后"></a>领取前、领取后、确认后</h2><p>下面使用 Redis Open Source 6.2 或之后的 LMOVE 命令。命令未运行，应在自有隔离实例或确保没有其他写入的测试键上验证。两个测试键起初都不存在，不复用线上队列。列表内容一律按从左到右记录，左右的位置与领取方向一起验收。</p>
+<pre><code class="text">RPUSH {move-demo}:ready job-a job-b
+LRANGE {move-demo}:ready 0 -1
+LRANGE {move-demo}:processing 0 -1
+
+LMOVE {move-demo}:ready {move-demo}:processing LEFT RIGHT
+LRANGE {move-demo}:ready 0 -1
+LRANGE {move-demo}:processing 0 -1
+
+LREM {move-demo}:processing 1 job-a
+LRANGE {move-demo}:processing 0 -1
+LRANGE {move-demo}:ready 0 -1
+</code></pre>
+<p>写入后，ready 是 [job-a, job-b]，processing 为空。LMOVE 返回 job-a；随后的两个 LRANGE 应分别得到 [job-b] 与 [job-a]。这里停下来模拟退出，不提交 LREM。恢复时应先看到甲仍在处理中，再查应用记录。如果已经由原工作者完成业务操作并正常确认，LREM 应移除一条，processing 的查询结果为空，ready 仍只有乙。不要在同一次断点对照里同时把甲重领并确认，应该从相同初态分别走中断与完成两条路径。Redis 文档描述了原子移动和完成后移除的用法。<a target="_blank" rel="noopener" href="https://redis.io/docs/latest/commands/lmove/">Redis LMOVE</a>。</p>
+<p>用两条不同的命令也可以写出先弹出再登记的代码。只要工作进程在两个命令之间退出，就会留下新的空窗。这里的 LMOVE 把移出和移入放在同一条 Redis 命令里。测试不能只看进程最终是否退出成功，应该让测试钩子停在领取返回之后、确认之前，再从另一个连接核对两个列表。这一条断言只证明 Redis 中可检查的移动状态。若客户端在回复到达之前就断开，还要从服务端已有状态或应用可持久查询的领取记录重建事实，不能只根据客户端异常推断甲仍在待处理列表。</p>
+<p>把领取回包丢失也做成一次独立测试。若服务器已经把甲移到处理中，客户端随后盲目再发同一条移动命令，下一次可能领取乙。两个动作在命令级都合法，第一次的不确定性却仍未解决。测试可以在代理丢弃第一次回复以后先查两张列表，保留原来要领取的甲和可能随后被领走的乙作为两个独立对象。如果多个工作者共用处理中列表，只按列表顺序也不能把某一项归给特定连接。需要关联领取请求与业务记录时，另外设计能查询的关联身份，再在同一次故障演练里核对它。</p>
+<h2 id="按业务状态决定重领"><a href="#按业务状态决定重领" class="headerlink" title="按业务状态决定重领"></a>按业务状态决定重领</h2><p>设想导出服务已经接受甲并创建了文件，工作进程还没向 Redis 确认就退出。只看 processing，和刚领取就退出的甲长得一样。若恢复程序直接把它交给另一位工作者，外部服务可能收到两次生成请求。业务侧可以用稳定的任务编号查询已有导出结果，或使用接受该编号的幂等写入接口。只有外部服务支持相应的查询或幂等合同，才能用该记录决定重复请求怎样处理。对照测试可以在两个地方中断，一次在调用外部服务前，另一次在服务接受后。Redis 的列表预期相同，应用恢复动作应能按外部证据区分。</p>
+<p>只把任务放进处理中列表也不会自动判定超时。恢复程序需要自己的领取时间、过期条件与重领操作，尤其要防止长任务尚在执行就被接手。可以先做一个无并发的验证，故意中断工作者，记录应用怎样识别遗留项，再检查重新放回时的位置是否符合队列规则。如果之后加入多个恢复进程，要让它们同时尝试接手同一个过期项，并检查应用只登记允许的一次新领取。这个并发控制需要另外设计；前面的命令只列出串行正常确认。</p>
+<p>Redis 实例自身故障时，还要单独验收持久化和故障切换。一个客户端看见命令成功，并不能替代重启后的列表检查。在集群环境使用两个键时，应按所用 Redis 部署的多键规则确认路由；样本的花括号使用相同标签，但本文没有验证任何集群配置。也不从这组状态断言推出跨系统的恰好一次交付。站内的 <a href="/zh-CN/2026/11/09/redis-multi-exec-command-errors/">Redis 事务执行错误</a> 涉及一组命令的错误语义，本例关心单条移动之后的恢复记录。</p>
+<h2 id="两条任务的消息正文相同，怎么确认正确的一条？"><a href="#两条任务的消息正文相同，怎么确认正确的一条？" class="headerlink" title="两条任务的消息正文相同，怎么确认正确的一条？"></a>两条任务的消息正文相同，怎么确认正确的一条？</h2><p>把不同任务写成不同的列表元素，例如为两次内容相同的导出请求分配 job-a 和 job-b，再让工作者只确认领取时收到的身份。只存相同的任务正文时，LREM 以列表元素值匹配，无法据此识别工作者完成的是哪一份。更难的情形是同一业务任务重领以后，旧工作者才恢复。仅使用相同任务编号进行确认，旧工作者可能误删新的领取。需要为不同领取分配可区分的凭据，并把确认动作绑定到当前有效凭据；若保存在独立记录里，校验和确认之间的并发边界也要验收。可以给同一任务模拟两个领取凭据，让较早的确认迟到，检查它无法移除较新的领取。本节未执行，也没有声称示例队列实现了凭据协议。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://redis.io/docs/latest/commands/lmove/" rel="noopener">LMOVE | Docs</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--redis" href="/zh-CN/tags/Redis/">Redis</a>
+          
+            <a class="tag tag--queues" href="/zh-CN/tags/Queues/">Queues</a>
+          
+            <a class="tag tag--backend" href="/zh-CN/tags/Backend/">Backend</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F12%2Fredis-lmove-processing-recovery%2F&text=Redis%20%E5%B7%A5%E4%BD%9C%E8%80%85%E5%8F%96%E5%88%B0%E4%BB%BB%E5%8A%A1%E5%90%8E%E5%B4%A9%E6%BA%83%EF%BC%8C%E4%BB%BB%E5%8A%A1%E7%95%99%E5%9C%A8%E5%93%AA%E9%87%8C%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F12%2Fredis-lmove-processing-recovery%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Redis%20%E5%B7%A5%E4%BD%9C%E8%80%85%E5%8F%96%E5%88%B0%E4%BB%BB%E5%8A%A1%E5%90%8E%E5%B4%A9%E6%BA%83%EF%BC%8C%E4%BB%BB%E5%8A%A1%E7%95%99%E5%9C%A8%E5%93%AA%E9%87%8C%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F12%2Fredis-lmove-processing-recovery%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/12/redis-zadd-gt-xx-membership/">
+              <span>上一篇</span>
+              <strong>ZADD GT 为什么给排行榜添加了新成员？</strong>
+              <small>2026-11-12</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/12/python-heapq-priority-tie-counter/">
+              <span>下一篇</span>
+              <strong>heapq 的任务优先级相同，为什么开始比较字典？</strong>
+              <small>2026-11-12</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#领取前、领取后、确认后">领取前、领取后、确认后</a>
+          
+            <a class="toc-link toc-link--h2" href="#按业务状态决定重领">按业务状态决定重领</a>
+          
+            <a class="toc-link toc-link--h2" href="#两条任务的消息正文相同，怎么确认正确的一条？">两条任务的消息正文相同，怎么确认正确的一条？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>257</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/12/go-sql-queryrow-scan-error-boundary/">Go QueryRowContext 返回了对象，为什么 Scan 才报错？</a></h3>
+          <p>2026-11-12</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/12/redis-zadd-gt-xx-membership/">ZADD GT 为什么给排行榜添加了新成员？</a></h3>
+          <p>2026-11-12</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/10/redis-hset-added-field-count/">HSET 返回 0，为什么新值已经写进去了？</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

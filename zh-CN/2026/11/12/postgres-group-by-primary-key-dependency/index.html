@@ -1,0 +1,404 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>GROUP BY 只写了主键，为什么还能选出名称？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="对照 PostgreSQL 的主键和非空唯一键分组，用两位同名客户验收名称选择与合计粒度。">
+  
+  
+    <meta name="keywords" content="GROUP BY,primary key,functional dependency">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/12/postgres-group-by-primary-key-dependency/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="GROUP BY 只写了主键，为什么还能选出名称？ | Midnight blog">
+    <meta property="og:description" content="对照 PostgreSQL 的主键和非空唯一键分组，用两位同名客户验收名称选择与合计粒度。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/","name":"GROUP BY 只写了主键，为什么还能选出名称？ | Midnight blog","description":"对照 PostgreSQL 的主键和非空唯一键分组，用两位同名客户验收名称选择与合计粒度。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/","headline":"GROUP BY 只写了主键，为什么还能选出名称？","description":"对照 PostgreSQL 的主键和非空唯一键分组，用两位同名客户验收名称选择与合计粒度。","inLanguage":"zh-CN","datePublished":"2026-11-11T19:35:42.000Z","dateModified":"2026-11-11T19:35:42.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/sql-select.html"],"keywords":"PostgreSQL, SQL, Reporting"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"GROUP BY 只写了主键，为什么还能选出名称？","item":"https://www.zyweb.vip/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/" selected>zh-CN</option><option value="/en/2026/11/12/postgres-group-by-primary-key-dependency/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/" selected>zh-CN</option><option value="/en/2026/11/12/postgres-group-by-primary-key-dependency/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--postgresql">PostgreSQL</span>
+      <time datetime="2026-11-11T19:35:42.000Z">2026-11-12</time>
+    </div>
+
+    <h1>GROUP BY 只写了主键，为什么还能选出名称？</h1>
+
+    
+      <p class="post-hero__summary">对照 PostgreSQL 的主键和非空唯一键分组，用两位同名客户验收名称选择与合计粒度。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-11T19:35:42.000Z">2026-11-12</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/12/postgres-group-by-primary-key-dependency/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>主键参与分组时，PostgreSQL 可以识别该表未分组列的函数依赖。</li><li>普通非空唯一约束不能代替这里的主键识别。</li><li>保留身份并逐条核对金额，能发现按名称意外合并。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>汇总订单时按客户主键分组，名称却能直接出现在 PostgreSQL 的结果里。把主键声明换成 UNIQUE NOT NULL，即使客户记录完全相同，同一形状的查询也会被拒绝。差别出在 PostgreSQL 认可哪一种函数依赖。</p>
+<p>报表最初只交付客户编号和金额。产品后来要求在同一行显示姓名，于是在 SELECT 里加上客户表的名称列。两笔订单连到同一位客户时，参与聚合的行确实有两条，但名称来自同一条客户记录。按客户表主键分组时，组内的所有订单指向同一位客户，客户表上的名称也因此只有一个值。这个依据写在表定义和分组列上，换两笔订单金额也不会影响它。</p>
+<h2 id="两张客户表只改一项声明"><a href="#两张客户表只改一项声明" class="headerlink" title="两张客户表只改一项声明"></a>两张客户表只改一项声明</h2><p>下方是未执行的隔离 SQL。先建两张结构相同的客户表，第二张把主键换成非空唯一约束。两位客户都叫 Lee，刻意让名称不足以区分身份。订单表按客户编号存三笔金额。</p>
+<pre><code class="sql">CREATE TEMP TABLE report_customer (id int PRIMARY KEY, name text NOT NULL);
+CREATE TEMP TABLE report_unique_customer (id int UNIQUE NOT NULL, name text NOT NULL);
+CREATE TEMP TABLE report_order (id int NOT NULL, amount int NOT NULL);
+
+INSERT INTO report_customer VALUES (1, &#39;Lee&#39;), (2, &#39;Lee&#39;);
+INSERT INTO report_unique_customer VALUES (1, &#39;Lee&#39;), (2, &#39;Lee&#39;);
+INSERT INTO report_order VALUES (1, 2), (1, 3), (2, 7);
+
+SELECT c.id, name, sum(amount) AS total
+FROM report_customer AS c JOIN report_order USING (id)
+GROUP BY c.id
+ORDER BY c.id;
+</code></pre>
+<p>原样查询预期返回 (1, Lee, 5) 与 (2, Lee, 7)。仅把 FROM 中的 report_customer 换成 report_unique_customer，重新运行这条查询，预期在语句分析时被拒绝，因为名称没有聚合、没有进入分组列，也没有满足这里认可的主键条件。保留替换后的表，改用 GROUP BY c.id, name 后预期仍返回原来的两条。最后做名称合并对照，从 SELECT 删除 c.id，改成 GROUP BY name，并删除 ORDER BY，预期得到 (Lee, 12)。若客户端在预期错误后停止提交或事务进入失败状态，要让每条查询独立运行，保留相同的样本数据。失败结果与后面两条的行值要各自验收。</p>
+<p>PostgreSQL 18 的 SELECT 文档说明，某个未分组的列可以依赖该表的分组列，前提是分组包含该表的主键。文档也专门说明 PostgreSQL 当前只在这一条件下识别此处的函数依赖。样本里非空唯一列已经足以让人推断一个编号对应一个名称，但同一个判断没有扩展到普通唯一约束。检查时对照生产表定义，确认查询中写进分组的是哪张表的键。等值关联写在订单编号和客户编号之间，也应明确选客户基表的 c.id 来复现本例。规则见 <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-select.html#SQL-GROUPBY">PostgreSQL 18 SELECT</a>。</p>
+<h2 id="给修复方案保留身份验收"><a href="#给修复方案保留身份验收" class="headerlink" title="给修复方案保留身份验收"></a>给修复方案保留身份验收</h2><p>如果交付仍是一位客户一行，保留身份编号并明确写 GROUP BY c.id, name 可以让第二种表声明下的查询通过。在本例中，编号在客户表中唯一，因此把名称一起纳入分组不会把同一编号拆成两组。设计验收时仍要逐个比较编号和金额。只比最终金额十二，会让两条客户结果与按名称合并的一条结果同时通过。只比行数也不够，两条金额可能贴到了错误的身份上。</p>
+<p>另一种写法是在订单侧先按 customer_id 计算金额，再把聚合结果按编号关联到客户表。这时客户名称从关联到的行读取，不会作为订单聚合查询中的未分组列出现。它适合报告需要先检查订单侧的合计和缺失客户编号的情况。移动聚合位置之前，把过滤和关联的条件带入对照。如果原查询只接受仍在客户表里的记录，最终内连接仍应保留这条约束。如果报告需要展示没有订单的客户，就要单独决定缺失金额的显示，并检查连接方向与空值处理。</p>
+<p>还需要对关联的输入行数设一个验证点。给同一位客户连上两条标签，再直接对订单金额求和，可能让每笔订单出现两次。此时主键仍能决定名称，金额也可能已经翻倍。这个反例可以单独用五元客户做验收，检查接入标签后每笔订单在聚合之前仍出现一次，或者把标签单独汇总后再联接。分组语法通过只能证明数据库接受这条查询，报表金额还依赖聚合输入。另一个站内例子涉及<a href="/zh-CN/2026/11/05/postgres-rollup-grouping-null-markers/">区分明细和汇总层级</a>。</p>
+<p>保存错误证据时，把最终提交的 SQL 和定义放在一起。迁移可能保留了相同的列名和数据，却换了主键声明，也可能让查询构建器引用另一层派生结果。排查先用这里的两张基表复现，随后再逐层添加视图、派生查询或报表生成逻辑。每加一层都记录原来那条合计对应哪个客户编号，避免把新层带来的字段问题和分组语法错误归到同一个原因上。</p>
+<p>编号和展示名还可能在导出后被下游使用。导出测试可给两位客户的名称都设为同一个值，并让各自的金额不同。比对时以客户编号作为映射键，读取每个键对应的名称和金额，检查键集合完整。如果界面只显示姓名和金额，也要保留能回溯身份的隐藏字段或日志。这样即使同名两行在排序后挨在一起，核对人仍然能发现哪一位客户消失了，或哪一笔合计被贴到了另一行。</p>
+<h2 id="主键由两列组成，按其中一列分组够吗？"><a href="#主键由两列组成，按其中一列分组够吗？" class="headerlink" title="主键由两列组成，按其中一列分组够吗？"></a>主键由两列组成，按其中一列分组够吗？</h2><p>假设发票表的主键是 (tenant_id, invoice_id)，甲、乙两个租户都有发票七号，一个的备注写续订，另一个的备注写退款。按发票号分组后，七号这一组可能同时含两条发票行。要保留每张发票的身份，分组应纳入主键的两部分，此时同一个发票编号可以随不同租户分别出现。如果业务要跨租户统计同号发票，就需要定义合计如何展示，并给备注另定聚合策略，或者不输出备注。验收时故意重用编号，让单租户样本中看不出来的错误在两租户条件下暴露出来。本节也是未执行推演，主例和追问都没有验证应用查询构建器的输出。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-select.html" rel="noopener">PostgreSQL: Documentation: 18: SELECT</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--sql" href="/zh-CN/tags/SQL/">SQL</a>
+          
+            <a class="tag tag--reporting" href="/zh-CN/tags/Reporting/">Reporting</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F12%2Fpostgres-group-by-primary-key-dependency%2F&text=GROUP%20BY%20%E5%8F%AA%E5%86%99%E4%BA%86%E4%B8%BB%E9%94%AE%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E8%83%BD%E9%80%89%E5%87%BA%E5%90%8D%E7%A7%B0%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F12%2Fpostgres-group-by-primary-key-dependency%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=GROUP%20BY%20%E5%8F%AA%E5%86%99%E4%BA%86%E4%B8%BB%E9%94%AE%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E8%83%BD%E9%80%89%E5%87%BA%E5%90%8D%E7%A7%B0%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F12%2Fpostgres-group-by-primary-key-dependency%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/12/postgres-partial-index-generic-plan-predicate/">
+              <span>上一篇</span>
+              <strong>字面量用得到部分索引，绑定状态后为什么不行？</strong>
+              <small>2026-11-12</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/12/kubernetes-deployment-min-ready-seconds/">
+              <span>下一篇</span>
+              <strong>Pod 已 Ready，Deployment 为什么还没把它算作可用？</strong>
+              <small>2026-11-12</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#两张客户表只改一项声明">两张客户表只改一项声明</a>
+          
+            <a class="toc-link toc-link--h2" href="#给修复方案保留身份验收">给修复方案保留身份验收</a>
+          
+            <a class="toc-link toc-link--h2" href="#主键由两列组成，按其中一列分组够吗？">主键由两列组成，按其中一列分组够吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>257</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/12/postgres-partial-index-generic-plan-predicate/">字面量用得到部分索引，绑定状态后为什么不行？</a></h3>
+          <p>2026-11-12</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/10/postgres-integer-division-cast-position/">SQL 最后转了 numeric，比例为什么还是零？</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/09/postgres-lateral-left-join-empty/">最近订单子查询为空，客户为什么一起消失？</a></h3>
+          <p>2026-11-09</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

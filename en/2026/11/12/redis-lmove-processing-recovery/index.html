@@ -1,0 +1,402 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Where does a Redis task go if its worker crashes after claiming it? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Trace the ready and processing lists through a Redis claim, worker interruption, and acknowledgment.">
+  
+  
+    <meta name="keywords" content="LMOVE,LREM,processing list">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/12/redis-lmove-processing-recovery/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/12/redis-lmove-processing-recovery/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/12/redis-lmove-processing-recovery/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/12/redis-lmove-processing-recovery/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Where does a Redis task go if its worker crashes after claiming it? | Midnight blog">
+    <meta property="og:description" content="Trace the ready and processing lists through a Redis claim, worker interruption, and acknowledgment.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/12/redis-lmove-processing-recovery/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/12/redis-lmove-processing-recovery/#webpage","url":"https://www.zyweb.vip/en/2026/11/12/redis-lmove-processing-recovery/","name":"Where does a Redis task go if its worker crashes after claiming it? | Midnight blog","description":"Trace the ready and processing lists through a Redis claim, worker interruption, and acknowledgment.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/12/redis-lmove-processing-recovery/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/12/redis-lmove-processing-recovery/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/12/redis-lmove-processing-recovery/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/12/redis-lmove-processing-recovery/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/12/redis-lmove-processing-recovery/","headline":"Where does a Redis task go if its worker crashes after claiming it?","description":"Trace the ready and processing lists through a Redis claim, worker interruption, and acknowledgment.","inLanguage":"en","datePublished":"2026-11-11T19:35:42.000Z","dateModified":"2026-11-11T19:35:42.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://redis.io/docs/latest/commands/lmove/"],"keywords":"Redis, Queues, Backend"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/12/redis-lmove-processing-recovery/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Where does a Redis task go if its worker crashes after claiming it?","item":"https://www.zyweb.vip/en/2026/11/12/redis-lmove-processing-recovery/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/12/redis-lmove-processing-recovery/">zh-CN</option><option value="/en/2026/11/12/redis-lmove-processing-recovery/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/12/redis-lmove-processing-recovery/">zh-CN</option><option value="/en/2026/11/12/redis-lmove-processing-recovery/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--redis">Redis</span>
+      <time datetime="2026-11-11T19:35:42.000Z">2026-11-12</time>
+    </div>
+
+    <h1>Where does a Redis task go if its worker crashes after claiming it?</h1>
+
+    
+      <p class="post-hero__summary">Trace the ready and processing lists through a Redis claim, worker interruption, and acknowledgment.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-11T19:35:42.000Z">2026-11-12</time> · Estimated read 10 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/12/redis-lmove-processing-recovery/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/12/redis-lmove-processing-recovery/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>LMOVE moves an entry from ready to processing in one command.</li><li>Acknowledge the claim after its work completes.</li><li>Two interruptions with the same list state can require different recovery actions.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>A Redis worker pops a job and crashes. The job has already left the ready list. If the worker claims it with LMOVE, Redis moves it into a processing list in the same command. Recovery now has a place to look, though it still needs to find out whether the work finished.</p>
+<p>Consider a queue that generates export files. Job A is first and job B is second. A worker claims A and exits just before reading the source data. If it used LPOP, a look at the ready list only finds B. If it used LMOVE, A is still visible in the processing list. Another worker can claim B. Redis can show where the job is while the export service keeps the evidence of what happened to the file.</p>
+<h2 id="Check-the-two-lists-around-claim-and-acknowledgment"><a href="#Check-the-two-lists-around-claim-and-acknowledgment" class="headerlink" title="Check the two lists around claim and acknowledgment"></a>Check the two lists around claim and acknowledgment</h2><p>LMOVE is available in Redis Open Source 6.2 and later. The following commands are unexecuted. Use a disposable instance or unused test keys with no competing writers. Both keys start out absent. Read list contents from left to right so the check covers the selected ends of both lists.</p>
+<pre><code class="text">RPUSH {move-demo}:ready job-a job-b
+LRANGE {move-demo}:ready 0 -1
+LRANGE {move-demo}:processing 0 -1
+
+LMOVE {move-demo}:ready {move-demo}:processing LEFT RIGHT
+LRANGE {move-demo}:ready 0 -1
+LRANGE {move-demo}:processing 0 -1
+
+LREM {move-demo}:processing 1 job-a
+LRANGE {move-demo}:processing 0 -1
+LRANGE {move-demo}:ready 0 -1
+</code></pre>
+<p>After the initial push, ready should contain [job-a, job-b] and processing should be empty. LMOVE should return job-a. The next two range reads should show [job-b] and [job-a]. For the interruption test, stop there and omit LREM. Recovery should find A in processing before it consults the application&#39;s records. On a separate run starting from the same state, let the worker finish and acknowledge A. LREM should remove one element and leave processing empty. Ready should still contain only B. <a target="_blank" rel="noopener" href="https://redis.io/docs/latest/commands/lmove/">Redis LMOVE</a>.</p>
+<p>A pop followed by a separate write to the processing list leaves another place for the worker to fail. LMOVE puts both list changes in one Redis command. To test the interrupted worker, pause after the claim response and before acknowledgment, then read both lists from a second connection. That assertion is about the visible Redis state. If the client disconnects before seeing a reply, inspect the server state or a durable application claim record. A client exception alone cannot tell you that A stayed in ready.</p>
+<h2 id="Decide-whether-to-run-the-job-again"><a href="#Decide-whether-to-run-the-job-again" class="headerlink" title="Decide whether to run the job again"></a>Decide whether to run the job again</h2><p>Suppose the export service accepted A and created a file before the worker died. The processing entry looks the same as it did when the worker died before calling the service. Sending A straight to another worker can generate the export twice. An application can look up the existing export by stable job ID or use a service that supports idempotent submissions under that ID. The recovery decision depends on what that service actually guarantees. Exercise two interruptions in the application, one before the external call and one after it is accepted. The list state can match while the correct recovery action differs.</p>
+<p>Processing also needs a policy for when a claim has expired. A long-running worker can still be active when another process tries to recover its job. Start with a single-worker test and record how a stale claim is recognized and where the retried job is placed. If multiple recovery workers are added, test two concurrent attempts to recover the same job and verify that the application registers only the permitted claim. The serial commands above do not implement that control.</p>
+<p>Test persistence and failover separately if the Redis instance itself can fail. A successful reply does not prove the entry will be visible after restart. In clustered Redis, check the deployment&#39;s multi-key rules for the two keys. The fixture uses a shared hash tag and does not exercise a cluster. These list observations also leave external exactly-once delivery unverified. The related <a href="/en/2026/11/09/redis-multi-exec-command-errors/">Redis transaction example</a> covers errors across command batches.</p>
+<h2 id="What-if-two-jobs-have-identical-payloads"><a href="#What-if-two-jobs-have-identical-payloads" class="headerlink" title="What if two jobs have identical payloads?"></a>What if two jobs have identical payloads?</h2><p>Give the two jobs distinguishable list values, such as job-a and job-b, even if their export requests contain the same data. Acknowledgment can then target the identity returned by the claim. If the list stores only the identical payloads, LREM matches the value and cannot establish which of the two jobs the worker completed.</p>
+<p>There is a separate problem when the same job is reclaimed and its original worker later tries to acknowledge it. An acknowledgment by job ID alone can remove the newer claim. Give claims distinct receipts and accept an acknowledgment only for the current receipt. If receipts live in a separate record, also test the concurrency boundary between checking the receipt and applying the acknowledgment. A useful fixture gives the same job two receipts and delays the earlier acknowledgment until the second is active. Expect the active claim to survive. This follow-up is unexecuted. The original list commands do not implement a receipt protocol.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://redis.io/docs/latest/commands/lmove/" rel="noopener">LMOVE | Docs</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--redis" href="/en/tags/Redis/">Redis</a>
+          
+            <a class="tag tag--queues" href="/en/tags/Queues/">Queues</a>
+          
+            <a class="tag tag--backend" href="/en/tags/Backend/">Backend</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F12%2Fredis-lmove-processing-recovery%2F&text=Where%20does%20a%20Redis%20task%20go%20if%20its%20worker%20crashes%20after%20claiming%20it%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F12%2Fredis-lmove-processing-recovery%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Where%20does%20a%20Redis%20task%20go%20if%20its%20worker%20crashes%20after%20claiming%20it%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F12%2Fredis-lmove-processing-recovery%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/12/redis-zadd-gt-xx-membership/">
+              <span>Previous Post</span>
+              <strong>Why did ZADD GT add a new leaderboard member?</strong>
+              <small>2026-11-12</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/12/python-heapq-priority-tie-counter/">
+              <span>Next Post</span>
+              <strong>Why does heapq compare dictionaries when priorities tie?</strong>
+              <small>2026-11-12</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Check-the-two-lists-around-claim-and-acknowledgment">Check the two lists around claim and acknowledgment</a>
+          
+            <a class="toc-link toc-link--h2" href="#Decide-whether-to-run-the-job-again">Decide whether to run the job again</a>
+          
+            <a class="toc-link toc-link--h2" href="#What-if-two-jobs-have-identical-payloads">What if two jobs have identical payloads?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>257</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>128</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/12/go-sql-queryrow-scan-error-boundary/">Why does Go QueryRowContext return a Row before Scan reports an error?</a></h3>
+          <p>2026-11-12</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/12/redis-zadd-gt-xx-membership/">Why did ZADD GT add a new leaderboard member?</a></h3>
+          <p>2026-11-12</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/10/redis-hset-added-field-count/">Why did HSET return 0 after updating the value?</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

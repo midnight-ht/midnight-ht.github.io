@@ -1,0 +1,417 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>SQLite 的 UNION ALL 为什么拒绝 ORDER BY lower(name)？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="核对 SQLite 复合查询排序项怎样对应结果列，用三条已执行查询核对外层排序和辅助列，并追问跨分支别名。">
+  
+  
+    <meta name="keywords" content="UNION ALL,ORDER BY,复合查询">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/12/sqlite-union-orderby-expression/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/12/sqlite-union-orderby-expression/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/12/sqlite-union-orderby-expression/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/12/sqlite-union-orderby-expression/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="SQLite 的 UNION ALL 为什么拒绝 ORDER BY lower(name)？ | Midnight blog">
+    <meta property="og:description" content="核对 SQLite 复合查询排序项怎样对应结果列，用三条已执行查询核对外层排序和辅助列，并追问跨分支别名。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/12/sqlite-union-orderby-expression/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/12/sqlite-union-orderby-expression/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/12/sqlite-union-orderby-expression/","name":"SQLite 的 UNION ALL 为什么拒绝 ORDER BY lower(name)？ | Midnight blog","description":"核对 SQLite 复合查询排序项怎样对应结果列，用三条已执行查询核对外层排序和辅助列，并追问跨分支别名。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/12/sqlite-union-orderby-expression/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/12/sqlite-union-orderby-expression/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/12/sqlite-union-orderby-expression/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/12/sqlite-union-orderby-expression/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/12/sqlite-union-orderby-expression/","headline":"SQLite 的 UNION ALL 为什么拒绝 ORDER BY lower(name)？","description":"核对 SQLite 复合查询排序项怎样对应结果列，用三条已执行查询核对外层排序和辅助列，并追问跨分支别名。","inLanguage":"zh-CN","datePublished":"2026-11-11T19:35:42.000Z","dateModified":"2026-11-11T19:35:42.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.sqlite.org/lang_select.html"],"keywords":"SQLite, SQL"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/12/sqlite-union-orderby-expression/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"SQLite 的 UNION ALL 为什么拒绝 ORDER BY lower(name)？","item":"https://www.zyweb.vip/zh-CN/2026/11/12/sqlite-union-orderby-expression/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/12/sqlite-union-orderby-expression/" selected>zh-CN</option><option value="/en/2026/11/12/sqlite-union-orderby-expression/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/12/sqlite-union-orderby-expression/" selected>zh-CN</option><option value="/en/2026/11/12/sqlite-union-orderby-expression/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--sqlite">SQLite</span>
+      <time datetime="2026-11-11T19:35:42.000Z">2026-11-12</time>
+    </div>
+
+    <h1>SQLite 的 UNION ALL 为什么拒绝 ORDER BY lower(name)？</h1>
+
+    
+      <p class="post-hero__summary">核对 SQLite 复合查询排序项怎样对应结果列，用三条已执行查询核对外层排序和辅助列，并追问跨分支别名。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-11T19:35:42.000Z">2026-11-12</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/12/sqlite-union-orderby-expression/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/12/sqlite-union-orderby-expression/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>复合查询的排序项需要对应结果列。</li><li>外层简单 SELECT 可计算排序键并保持原列形状。</li><li>跨分支同名排序别名按从左到右寻找匹配。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>SQLite 的简单 SELECT 可以直接按 lower(name) 排序。用 UNION ALL 组合多个 SELECT 后，最终 ORDER BY 的规则变了。除列序号和可解析的结果列别名外，排序表达式需要匹配某个分支的输出表达式。如果原输出只有 name，可以先完成合并，再让外层简单 SELECT 按 lower(name) 排序。</p>
+<p>设想一个本地目录把缓存条目和刚导入的条目一起显示。两个来源都只需要输出名字。维护者加上合并语句后，应用才开始报排序项找不到对应列。检查数据会发现每条名称都存在，也能在两个来源上单独调用 lower。问题不在某个名字，而是合并后排序项所在的查询层。</p>
+<h2 id="先判断排序项属于哪一层"><a href="#先判断排序项属于哪一层" class="headerlink" title="先判断排序项属于哪一层"></a>先判断排序项属于哪一层</h2><p><a target="_blank" rel="noopener" href="https://www.sqlite.org/lang_select.html#orderby">SQLite 的 SELECT 参考</a>区分简单 SELECT 与复合 SELECT。简单查询的 ORDER BY 可以使用任意表达式。复合查询把排序项解析为输出列。正整数可以指定位置，输出别名可以指定某一列，其他表达式则必须与分支中的结果表达式相同。仅把 name 放进结果，不能让对 name 的任意计算自动成为一个输出项。</p>
+<p>这意味着报错不一定能通过换函数或改数据修复。把 lower 改成 upper，或者让所有名字都已经是小写，只要排序表达式仍未匹配输出项，结构问题仍在。另一方面，如果需求只想按原名称排序，使用已输出的 name 就足够。先确认产品是否真的需要按变换后的文字排序，再决定在哪一层计算。</p>
+<p>也要保留普通排序的稳定性要求。两个名字变成同一个小写值以后，主要排序项已经打平。假如界面希望这两项顺序确定，就补充明确的第二排序项。示例选择原始名称与 BINARY 排序规则，限定为 ASCII 名称。如果真实目录使用其他字符或特定地区的排序规则，需要核对应用连接中的实际环境与产品期望。</p>
+<h2 id="把同一份输入送过三种查询"><a href="#把同一份输入送过三种查询" class="headerlink" title="把同一份输入送过三种查询"></a>把同一份输入送过三种查询</h2><p>以下教学 SQL 已在 Python 3.11.15 内置 sqlite3 的内存数据库中执行，SQLite 版本为 3.53.1。在一个自有内存数据库新建两张空表，录入固定数据。第一条 SELECT 是独立负例，测试器应捕获它的预期错误，再分别执行后面的两条；若命令行配置为遇错即停，后续语句应在保留相同表数据的条件下单独提交。不要用第一条报错来推断后面的两个正例已经验证。</p>
+<pre><code class="sql">CREATE TABLE cached(name TEXT NOT NULL);
+CREATE TABLE incoming(name TEXT NOT NULL);
+INSERT INTO cached VALUES (&#39;beta&#39;), (&#39;Alpha&#39;);
+INSERT INTO incoming VALUES (&#39;alpha&#39;);
+
+SELECT name FROM cached
+UNION ALL
+SELECT name FROM incoming
+ORDER BY lower(name);
+
+SELECT name
+FROM (
+  SELECT name FROM cached
+  UNION ALL
+  SELECT name FROM incoming
+) AS merged
+ORDER BY lower(name), name COLLATE BINARY;
+
+SELECT name, lower(name) AS sort_key FROM cached
+UNION ALL
+SELECT name, lower(name) AS sort_key FROM incoming
+ORDER BY sort_key, name COLLATE BINARY;
+</code></pre>
+<p>第一个复合查询的排序项没有匹配结果列，预期拒绝。外层版本返回单列，顺序是 Alpha、alpha、beta；前两个小写值相同，显式的第二项决定大写 A 在前。投影版本也按相同名称顺序返回，但多了 sort_key 一列，其值依次为 alpha、alpha、beta。逐行检查这两份结果，既验证排序，也验证消费者究竟收到了几个字段。</p>
+<p>两个正例服务不同的接口。导出协议只接受原来的一列时，外层 SELECT 可以保留列形状。下游确实需要审计计算出来的键时，显式投影更容易检查。两种修法都应在最终对外输出的查询层写出有效的 ORDER BY，避免让内部表的扫描次序承担显示承诺。</p>
+<p>对于 UNION 而非 UNION ALL，改变输出列也会改变参与行比较的字段。不要为了让排序通过，就擅自为每个来源添加身份列再沿用去重预期。如果排序键只是同一输出值的确定函数，重复行不一定因此分开。站内的<a href="/zh-CN/2026/10/17/postgres-union-all-duplicates/">集合合并与行身份</a>已经展开投影去重的合同。这个例子保持 UNION ALL，便于单独观察复合排序的限制。</p>
+<h2 id="让输出形状也进入验收"><a href="#让输出形状也进入验收" class="headerlink" title="让输出形状也进入验收"></a>让输出形状也进入验收</h2><p>客户端常按位置读取列。一次修复即使保留页面上的名称顺序，额外字段也可能影响 CSV、接口解码或数据绑定。测试时给两个正例各写一份列名和行值预期，不让同一张截图同时代表两种协议。如果另一个调用方只需要排序后的名称，外层查询可以继续投影单列，而不要求它理解排序键的含义。</p>
+<p>遇到驱动捕获错误后自动尝试无排序查询的接口，还要验收失败传播。可以先记录第一条语句是否返回错误，再单独执行去掉排序的合并，确认它仍保留三条输入。这组无排序检查只比较行的多重集合，不检查固定位置。若应用把备用查询的成功当作排序修复，用户可能仍然看到不确定的排列。正例应显式比较名称顺序，失败例应保留原始错误类型，两条结果各自有自己的验收入口。</p>
+<p>保存对照应包括 SQLite 版本和实际执行入口。应用嵌入的引擎、测试命令行和客户端包装层可能各自不同。先确认错误来自数据库对最终复合 SQL 的解析，再检查驱动有没有重写排序或只返回了一部分错误。归档断言只检查本节三条查询，覆盖第一条的错误类型和后两条的输出列名、行值与顺序。适配器回退与文末别名追问仍是独立预期，未运行。</p>
+<h2 id="两个分支把同一个别名用在不同输出位置，会选哪列？"><a href="#两个分支把同一个别名用在不同输出位置，会选哪列？" class="headerlink" title="两个分支把同一个别名用在不同输出位置，会选哪列？"></a>两个分支把同一个别名用在不同输出位置，会选哪列？</h2><p>SQLite 对复合查询的非整数排序项从最左分支开始查找匹配，找到后便把它作为相应结果列的别名。举个新例，左支写 SELECT 2 AS k, 1 AS b，右支写 SELECT 1 AS a, 2 AS k，再接 UNION ALL 的最终 ORDER BY k。最左分支的 k 指向第一列，故预期先出现第一列为一的行，再出现第一列为二的行。右支把第二列叫 k，并不会让同一个排序项按分支使用不同位置。</p>
+<p>实际维护时可以给每列选择唯一且一致的别名，或在外层把要排序的列名写清。加入新的分支时，核对现有排序名称与位置是否仍对应原合同。这个追问针对排序项已经找到匹配后的绑定位置，前面的失败例则根本找不到匹配。两种问题需要分别用行序和列形状验收。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.sqlite.org/lang_select.html" rel="noopener">SELECT</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--sqlite" href="/zh-CN/tags/SQLite/">SQLite</a>
+          
+            <a class="tag tag--sql" href="/zh-CN/tags/SQL/">SQL</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F12%2Fsqlite-union-orderby-expression%2F&text=SQLite%20%E7%9A%84%20UNION%20ALL%20%E4%B8%BA%E4%BB%80%E4%B9%88%E6%8B%92%E7%BB%9D%20ORDER%20BY%20lower(name)%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F12%2Fsqlite-union-orderby-expression%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=SQLite%20%E7%9A%84%20UNION%20ALL%20%E4%B8%BA%E4%BB%80%E4%B9%88%E6%8B%92%E7%BB%9D%20ORDER%20BY%20lower(name)%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F12%2Fsqlite-union-orderby-expression%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/12/systemd-notify-reload-completion/">
+              <span>上一篇</span>
+              <strong>systemctl reload 返回了，应用为什么还在用旧配置？</strong>
+              <small>2026-11-12</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/12/requirements-verification-evidence-reuse/">
+              <span>下一篇</span>
+              <strong>需求文字没改，上一版的验收证据还能用吗？</strong>
+              <small>2026-11-12</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#先判断排序项属于哪一层">先判断排序项属于哪一层</a>
+          
+            <a class="toc-link toc-link--h2" href="#把同一份输入送过三种查询">把同一份输入送过三种查询</a>
+          
+            <a class="toc-link toc-link--h2" href="#让输出形状也进入验收">让输出形状也进入验收</a>
+          
+            <a class="toc-link toc-link--h2" href="#两个分支把同一个别名用在不同输出位置，会选哪列？">两个分支把同一个别名用在不同输出位置，会选哪列？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>257</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>88</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/12/go-sql-queryrow-scan-error-boundary/">Go QueryRowContext 返回了对象，为什么 Scan 才报错？</a></h3>
+          <p>2026-11-12</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/">GROUP BY 只写了主键，为什么还能选出名称？</a></h3>
+          <p>2026-11-12</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/12/postgres-partial-index-generic-plan-predicate/">字面量用得到部分索引，绑定状态后为什么不行？</a></h3>
+          <p>2026-11-12</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
