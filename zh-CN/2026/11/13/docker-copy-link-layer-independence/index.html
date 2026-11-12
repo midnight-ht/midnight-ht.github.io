@@ -1,0 +1,412 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>基础层改了，Docker 的制品复制层还能复用吗？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="固定制品输入，比较 Docker 普通复制和 COPY --link 对前置层变化的依赖。">
+  
+  
+    <meta name="keywords" content="COPY --link,BuildKit">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/13/docker-copy-link-layer-independence/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/13/docker-copy-link-layer-independence/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/13/docker-copy-link-layer-independence/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/13/docker-copy-link-layer-independence/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="基础层改了，Docker 的制品复制层还能复用吗？ | Midnight blog">
+    <meta property="og:description" content="固定制品输入，比较 Docker 普通复制和 COPY --link 对前置层变化的依赖。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/13/docker-copy-link-layer-independence/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/13/docker-copy-link-layer-independence/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/13/docker-copy-link-layer-independence/","name":"基础层改了，Docker 的制品复制层还能复用吗？ | Midnight blog","description":"固定制品输入，比较 Docker 普通复制和 COPY --link 对前置层变化的依赖。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/13/docker-copy-link-layer-independence/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/13/docker-copy-link-layer-independence/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/13/docker-copy-link-layer-independence/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/13/docker-copy-link-layer-independence/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/13/docker-copy-link-layer-independence/","headline":"基础层改了，Docker 的制品复制层还能复用吗？","description":"固定制品输入，比较 Docker 普通复制和 COPY --link 对前置层变化的依赖。","inLanguage":"zh-CN","datePublished":"2026-11-12T19:29:59.000Z","dateModified":"2026-11-12T19:29:59.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.docker.com/reference/dockerfile/#copy---link","https://docs.docker.com/reference/dockerfile/#incompatibilities-with---linkfalse"],"keywords":"Docker, 镜像构建"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/13/docker-copy-link-layer-independence/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"基础层改了，Docker 的制品复制层还能复用吗？","item":"https://www.zyweb.vip/zh-CN/2026/11/13/docker-copy-link-layer-independence/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/13/docker-copy-link-layer-independence/" selected>zh-CN</option><option value="/en/2026/11/13/docker-copy-link-layer-independence/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/13/docker-copy-link-layer-independence/" selected>zh-CN</option><option value="/en/2026/11/13/docker-copy-link-layer-independence/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--docker">Docker</span>
+      <time datetime="2026-11-12T19:29:59.000Z">2026-11-13</time>
+    </div>
+
+    <h1>基础层改了，Docker 的制品复制层还能复用吗？</h1>
+
+    
+      <p class="post-hero__summary">固定制品输入，比较 Docker 普通复制和 COPY --link 对前置层变化的依赖。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-12T19:29:59.000Z">2026-11-13</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/13/docker-copy-link-layer-independence/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/13/docker-copy-link-layer-independence/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>独立复制层减少对前置状态的依赖。</li><li>观察缓存是否命中之外还要检查最终文件。</li><li>先确认目标路径和复制需要的前置文件系统状态。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>编译制品相同，更新运行时仍可能让普通复制步骤失去原有缓存。支持 <code>COPY --link</code> 的构建器可以把制品复制做成独立层，再和变化后的前置镜像状态组合。</p>
+<p>维护构建的同事只换了一项运行时设置，应用压缩包没有改，却发现复制步骤重新处理了同一份内容。他希望保留已构建的制品层，同时能确认最终镜像包含新的运行时。这里有两个结果需要独立检查：构建器是否用了已有层，以及镜像能不能读到应该出现的文件。缓存日志可以回答前一个问题，最终镜像文件内容才回答后一个。</p>
+<h3 id="把复制结果从前置状态中拆开"><a href="#把复制结果从前置状态中拆开" class="headerlink" title="把复制结果从前置状态中拆开"></a>把复制结果从前置状态中拆开</h3><p><a target="_blank" rel="noopener" href="https://docs.docker.com/reference/dockerfile/#copy---link">Dockerfile 的 COPY --link 文档</a>把这个选项描述为先把源文件复制进空的目标目录形成一层，再将该层叠到先前状态之上。普通复制依赖先前状态，前面的命令发生变化时，已有复制结果可能失效。独立复制减少这份依赖，构建器若有适用的缓存，就能尝试复用相同制品层。这里说的是前置状态变化没有同样的直接失效作用，缓存是否保留、是否被当前构建器看见，需要从实际构建取证。</p>
+<p>这类区别可以出现在多阶段构建。构建阶段已经产出应用，最终阶段另设运行时文件，再从前面取制品。若只换运行时，制品仍相同，复用它符合输入合同。若应用本身已经重新打包，前面的独立性不会让旧制品仍可冒充新制品。可以为两种改动分别建立对照，避免把不同缓存输入混在同一次尝试中。站内<a href="/zh-CN/2026/10/18/docker-build-cache-package-index/">包索引与安装缓存</a>讨论的是同一条安装命令何时重跑，这里关注复制结果与前置状态的依赖。</p>
+<h3 id="固定制品，改变一个前置文件"><a href="#固定制品，改变一个前置文件" class="headerlink" title="固定制品，改变一个前置文件"></a>固定制品，改变一个前置文件</h3><p>下面是完整教学 Dockerfile，未运行构建。它要求支持该选项的 BuildKit 和 Dockerfile 前端。保存到一个空上下文，再建一个内容为 <code>artifact-v1</code> 加换行的 <code>payload.txt</code>。两个最终阶段共享前置阶段，但复制语句不同。例子故意使用普通目录，输出位置一开始不存在。若基础镜像标签在两轮间移动，也会带入额外变化；可提前固定本地已解析的基础镜像摘要，或记录两轮解析结果并确认相同。</p>
+<pre><code class="dockerfile"># syntax=docker/dockerfile:1
+FROM alpine:3.22 AS earlier
+ARG BASE_MARK
+RUN printf &#39;%s\n&#39; &quot;$BASE_MARK&quot; &gt; /runtime-mark
+
+FROM earlier AS regular
+COPY payload.txt /opt/demo/payload.txt
+
+FROM earlier AS linked
+COPY --link payload.txt /opt/demo/payload.txt
+</code></pre>
+<p>在同一构建器、同一上下文和同一平台下，分别构建两个目标。先把 <code>BASE_MARK</code> 设为 old，记录构建步骤；然后改为 new，保留原有缓存，再跑同样的两个目标。完整命令如下，需在独立教学环境使用这些镜像名。</p>
+<pre><code class="sh">set -eu
+for mark in old new; do
+  for target in regular linked; do
+    docker build --progress=plain --target &quot;$target&quot; \
+      --build-arg &quot;BASE_MARK=$mark&quot; -t &quot;copy-lab:$target-$mark&quot; .
+  done
+done
+</code></pre>
+<p>循环遇到失败就退出。先保留失败目标的输出，再继续解释缓存，避免后一项成功掩盖某份镜像没构建。</p>
+<p>检查两份 new 镜像时，读取 <code>/runtime-mark</code> 和 <code>/opt/demo/payload.txt</code>。前者都应为 new，后者都应与上下文文件相同。可以在样例镜像内用 <code>cat</code> 读取，也可在自己的镜像验收方式中比较文件摘要。保留四次构建的输出和最终镜像标识，才能把某次显示已缓存的步骤对应到某份镜像。若只比较两个最终镜像的摘要，很可能看到完整镜像因前置内容更新而发生变化，无法凭此判断制品层有没有复用。</p>
+<p>预期的构建对照是普通复制受前置变化影响，独立复制在可用缓存中仍有可复用的结果。未得到缓存命中时，先确认构建是否落在同一实例、平台和输入上，并核对该步骤的日志。仅凭使用了选项就承诺每次命中不准确；两轮能输出一样的制品，也可能只是两次都重新复制。若环境已有其他构建留下的缓存，也要在记录里注明来源，免得把别处取得的结果误记成第一轮和第二轮之间的复用。</p>
+<p>再做一个负对照。保持运行时标记为 new，把制品内容换成 <code>artifact-v2</code>，重复两个目标。预期最终文件都变成 v2，即使上一步运行时层可以复用。这一格检验的是制品输入变化有没有传到最终镜像。若只看到日志说运行时已缓存，不应该把这行信息外推到制品身份。更完整的验收可以同时读取两份旧镜像，确认它们保留 old 标记和 v1 制品，再与新版本对照。四份数据给维护者一个可核对的映射，避免镜像标签被覆盖以后找不回本来要比较的对象。</p>
+<h3 id="在生产配置里只迁移能够独立的复制"><a href="#在生产配置里只迁移能够独立的复制" class="headerlink" title="在生产配置里只迁移能够独立的复制"></a>在生产配置里只迁移能够独立的复制</h3><p>若目标只是将已构建文件安装到明确的普通目录，独立复制能表达制品层的边界。迁移前先看是否还有后续命令需要从该目录读取配置、改权限或验证安装结果。这些步骤仍应保留，并在新的镜像上用目标用户运行适当的读取检查。复制层能复用不代表容器能启动，也不证明镜像仓库接收了预期版本。对制品路径和读取权限的验收，应该来自最终目标镜像。</p>
+<p>有的团队会用不同构建节点生产分支镜像。此时可以先记录当前构建器如何取得前一次的缓存，再决定要不要改变跨节点缓存策略。没有取得旧数据时，复用条件不成立。为了判断这个选项是否有收益，可以把前置变化与制品变化分别记录，而不是拿一次构建总耗时给所有环境下结论。样例没有计时、没有导入远程缓存，也没有观察仓库重组镜像的行为。</p>
+<h3 id="目标目录经过前一层的符号链接，还会跟随吗？"><a href="#目标目录经过前一层的符号链接，还会跟随吗？" class="headerlink" title="目标目录经过前一层的符号链接，还会跟随吗？"></a>目标目录经过前一层的符号链接，还会跟随吗？</h3><p><code>COPY --link</code> 不会读取先前状态来跟随目标路径上的符号链接。按手册，该模式创建的目标路径只由目录组成。假设基础镜像通过符号链接把 <code>/opt/current</code> 指向实际版本目录，把制品复制到前者时需要先判断合同要求写入哪里。若要沿用该链接，保留普通复制；若要独立复制，选择明确的物理目录并检查最终读取位置。主例使用普通路径，没有替这个新条件做验证。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.docker.com/reference/dockerfile/#copy---link" rel="noopener">Dockerfile reference — COPY --link</a></li><li><a target="_blank" href="https://docs.docker.com/reference/dockerfile/#incompatibilities-with---linkfalse" rel="noopener">Dockerfile reference — COPY --link incompatibilities</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--docker" href="/zh-CN/tags/docker/">Docker</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E9%95%9C%E5%83%8F%E6%9E%84%E5%BB%BA/">镜像构建</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F13%2Fdocker-copy-link-layer-independence%2F&text=%E5%9F%BA%E7%A1%80%E5%B1%82%E6%94%B9%E4%BA%86%EF%BC%8CDocker%20%E7%9A%84%E5%88%B6%E5%93%81%E5%A4%8D%E5%88%B6%E5%B1%82%E8%BF%98%E8%83%BD%E5%A4%8D%E7%94%A8%E5%90%97%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F13%2Fdocker-copy-link-layer-independence%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E5%9F%BA%E7%A1%80%E5%B1%82%E6%94%B9%E4%BA%86%EF%BC%8CDocker%20%E7%9A%84%E5%88%B6%E5%93%81%E5%A4%8D%E5%88%B6%E5%B1%82%E8%BF%98%E8%83%BD%E5%A4%8D%E7%94%A8%E5%90%97%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F13%2Fdocker-copy-link-layer-independence%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/13/git-merge-base-fork-point-reflog/">
+              <span>上一篇</span>
+              <strong>上游重写之后，Git 为什么多算了一笔主题提交？</strong>
+              <small>2026-11-13</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/13/cmake-defer-argument-evaluation/">
+              <span>下一篇</span>
+              <strong>CMake 延迟调用为什么读到了后改的变量？</strong>
+              <small>2026-11-13</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h3" href="#把复制结果从前置状态中拆开">把复制结果从前置状态中拆开</a>
+          
+            <a class="toc-link toc-link--h3" href="#固定制品，改变一个前置文件">固定制品，改变一个前置文件</a>
+          
+            <a class="toc-link toc-link--h3" href="#在生产配置里只迁移能够独立的复制">在生产配置里只迁移能够独立的复制</a>
+          
+            <a class="toc-link toc-link--h3" href="#目标目录经过前一层的符号链接，还会跟随吗？">目标目录经过前一层的符号链接，还会跟随吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>255</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/">Docker secret值换了，为什么认证步骤仍命中缓存？</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/docker-run-network-fetch-scope/">RUN断网，远程ADD为什么仍可能下载？</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/30/docker-healthcheck-start-period-early-success/">start-period还没过，Docker为什么已经把容器判成unhealthy？</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

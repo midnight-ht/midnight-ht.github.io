@@ -1,0 +1,403 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>CMake 延迟调用为什么读到了后改的变量？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用 CMake 配置输出核对 DEFER 的参数求值时机，以及何时需要固定登记时的值。">
+  
+  
+    <meta name="keywords" content="cmake_language DEFER,EVAL">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/13/cmake-defer-argument-evaluation/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/13/cmake-defer-argument-evaluation/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/13/cmake-defer-argument-evaluation/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/13/cmake-defer-argument-evaluation/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="CMake 延迟调用为什么读到了后改的变量？ | Midnight blog">
+    <meta property="og:description" content="用 CMake 配置输出核对 DEFER 的参数求值时机，以及何时需要固定登记时的值。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/13/cmake-defer-argument-evaluation/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/13/cmake-defer-argument-evaluation/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/13/cmake-defer-argument-evaluation/","name":"CMake 延迟调用为什么读到了后改的变量？ | Midnight blog","description":"用 CMake 配置输出核对 DEFER 的参数求值时机，以及何时需要固定登记时的值。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/13/cmake-defer-argument-evaluation/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/13/cmake-defer-argument-evaluation/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/13/cmake-defer-argument-evaluation/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/13/cmake-defer-argument-evaluation/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/13/cmake-defer-argument-evaluation/","headline":"CMake 延迟调用为什么读到了后改的变量？","description":"用 CMake 配置输出核对 DEFER 的参数求值时机，以及何时需要固定登记时的值。","inLanguage":"zh-CN","datePublished":"2026-11-12T19:29:59.000Z","dateModified":"2026-11-12T19:29:59.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://cmake.org/cmake/help/latest/command/cmake_language.html#deferring-calls","https://cmake.org/cmake/help/latest/command/cmake_language.html#deferred-call-examples"],"keywords":"CMake, 构建配置"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/13/cmake-defer-argument-evaluation/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"CMake 延迟调用为什么读到了后改的变量？","item":"https://www.zyweb.vip/zh-CN/2026/11/13/cmake-defer-argument-evaluation/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/13/cmake-defer-argument-evaluation/" selected>zh-CN</option><option value="/en/2026/11/13/cmake-defer-argument-evaluation/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/13/cmake-defer-argument-evaluation/" selected>zh-CN</option><option value="/en/2026/11/13/cmake-defer-argument-evaluation/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--cmake">CMake</span>
+      <time datetime="2026-11-12T19:29:59.000Z">2026-11-13</time>
+    </div>
+
+    <h1>CMake 延迟调用为什么读到了后改的变量？</h1>
+
+    
+      <p class="post-hero__summary">用 CMake 配置输出核对 DEFER 的参数求值时机，以及何时需要固定登记时的值。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-12T19:29:59.000Z">2026-11-13</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/13/cmake-defer-argument-evaluation/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/13/cmake-defer-argument-evaluation/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>普通变量引用会在延迟调用执行时求值。</li><li>需要旧值时应显式传入登记时固定的参数。</li><li>配置期输出与构建执行证据分开核对。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>登记时还是 first，打印出来已经是 second。CMake 的 <code>DEFER</code> 把参数里的变量引用留到调用执行时求值。要让结束时执行的动作拿到登记时的值，得显式留下那份值。</p>
+<p>设想一个构建配置维护者依次处理两组制品，准备在当前目录结束时打印第一组的标签。登记回调时标签正确，后面复用变量保存第二组，日志便把后一组的值写进第一组的记录。看到变量写在一对双引号中，容易以为它已经变成当时那段文字。普通调用的这种直觉不能直接用在 <code>cmake_language(DEFER CALL ...)</code> 上。手册把参数中引用的求值放在执行时。 <a target="_blank" rel="noopener" href="https://cmake.org/cmake/help/latest/command/cmake_language.html#deferring-calls">CMake 的 Deferring Calls</a></p>
+<h3 id="让两个回调看同一轮赋值"><a href="#让两个回调看同一轮赋值" class="headerlink" title="让两个回调看同一轮赋值"></a>让两个回调看同一轮赋值</h3><p>下面的完整配置只使用文字标签。它分别记下立即执行、普通延迟调用和登记时先生成字面量的输出。保存为一个独立目录下的 CMakeLists.txt，执行 <code>cmake -S . -B out</code>。本地使用 CMake 4.2.3 实际配置，三个标签依次为 <code>now=first</code>、<code>late=second</code>、<code>frozen=first</code>，配置命令退出为零。没有执行后续构建。DEFER 从 3.19 提供。</p>
+<pre><code class="cmake">cmake_minimum_required(VERSION 3.19)
+project(deferred NONE)
+
+set(label first)
+message(STATUS &quot;now=${label}&quot;)
+cmake_language(DEFER CALL message STATUS &quot;late=${label}&quot;)
+cmake_language(EVAL CODE &quot;
+  cmake_language(DEFER CALL message STATUS [[frozen=${label}]])
+&quot;)
+set(label second)
+</code></pre>
+<p>普通延迟调用登记了一条稍后执行的命令，并保留了变量引用。等它执行时，目录已经将标签设为 second。另一条延迟调用由 EVAL 生成。构造那段 CMake 代码的过程中，当前标签先被插入，排队的命令实际收到了 bracket 参数里的文本 <code>frozen=first</code>。括号形式让后续执行阶段按字面量处理该参数。这里使用的是受控的短标签，不能把这个写法扩展成将任意不可信内容插入 CMake 代码。 <a target="_blank" rel="noopener" href="https://cmake.org/cmake/help/latest/command/cmake_language.html#deferred-call-examples">CMake 的 Deferred Call Examples</a></p>
+<p>三个预期分担不同的检查。立即日志证明登记前的值已经准备好，普通延迟日志证明后来的赋值可以影响它，固定日志证明同一次赋值没有改掉登记时的快照。若两条延迟日志都打印 first，要进一步检查最后一次赋值是否真的在这次配置中执行。若固定日志也变成 second，查生成的延迟命令是否仍携带变量引用。仅保留整个配置的退出值，读不出哪个标签进入了回调。</p>
+<h3 id="把写死的正确值作为反例"><a href="#把写死的正确值作为反例" class="headerlink" title="把写死的正确值作为反例"></a>把写死的正确值作为反例</h3><p>例如有人把固定回调改成直接传 first。对当前样本来说，输出完全一样。这个修法不能证明脚本正确接住了登记时的输入。应另做一轮，把首次设置改成 <code>alpha</code>，保持后续值为 second。新的独立预期是立即输出 alpha，普通回调仍为 second，固定回调为 alpha。如果固定行继续打印 first，测试就抓到了写死值的实现。这个输入变更是建议的额外对照，未包含在上述本地执行中。</p>
+<p>还可用原样重跑核对是否真的在读这轮输出。命令若在独立构建目录运行，保存实际源目录和目标构建目录，以及本轮代码摘要。查看生成步骤结束前那三条输出，而不是从旧日志截取一条看起来正确的值。若项目同时有构建期的自定义命令，可给配置诊断加具体前缀；这样生成时出现一条消息，也不会被写成构建工具已经运行过该动作。本文的证据只覆盖 CMake 配置执行，不覆盖生成的构建命令或产物。</p>
+<h3 id="从回调的职责决定读取时点"><a href="#从回调的职责决定读取时点" class="headerlink" title="从回调的职责决定读取时点"></a>从回调的职责决定读取时点</h3><p>如果延迟调用负责打印目录结束时收集的总结果，执行时读值正合用途。目录中的后续逻辑可继续修改列表，末尾才需要定案。若动作对应单一登记项，例如记录当时分配给某制品的标签，就要保留登记时的输入。先给两种行为起可辨认的日志名，再写各自的独立预期。对一串登记项只检查最后一行，可能漏掉前面所有条目都被后一次赋值覆盖。</p>
+<p>把单项扩成两项时，可给每条登记记录一个固定身份，再保留期望值，例如第一个归档项对应 alpha，第二个对应 beta。配置结束前再把共用的工作变量改成 gamma。若两个记录都落成 gamma，就能说明回调仍共享后来更新的变量。若观察到 alpha 和 beta 却分别写到错的项下，问题转成登记身份配错，不能单靠固定值解决。这个对照可按整行比较身份和标签，避免只搜索日志是否出现过两个单词。它是对真实配置的拟议验收，本地样本仍只跑了上面的一组登记。</p>
+<p>检查这种多项输出时，保留两份材料也很有用。一份记录哪条命令负责登记和当时对应的项，另一份记录回调开始时读到了什么。只有在二者按同一个身份对齐时，才能说明错误发生在取值或归档。仅在回调末尾打印当前变量的值，可能找不回它原来应该归给哪个目标。</p>
+<p>项目若要保存含复杂语法的值，先考虑在登记时将其写入显式管理的数据，例如按稳定身份保存记录，再让回调读取相应项。这样可以避免把通用输入拼进可执行代码。上面的 bracket 定界只适用于固定语法的演示。值的来源、括号定界和后续读取范围都需要检查。若怀疑的是变量实际来自普通绑定还是缓存，可以看<a href="/zh-CN/2026/11/10/cmake-cache-normal-variable-shadow/">缓存已更新，普通引用为什么仍是旧值</a>。这里的两条延迟调用共享一个普通变量，差异来自两次不同的求值时点。</p>
+<h3 id="在目录里提前-return-，已经排队的调用会被跳过吗？"><a href="#在目录里提前-return-，已经排队的调用会被跳过吗？" class="headerlink" title="在目录里提前 return()，已经排队的调用会被跳过吗？"></a>在目录里提前 return()，已经排队的调用会被跳过吗？</h3><p>手册明确说明延迟调用在目录收尾时仍会执行，即使先遇到 <code>return()</code>。可以另存一份配置，把提前返回放在末尾赋值之前，保留回调登记，再比较输出。后面的 second 赋值没有机会执行，因此本例的普通延迟读取应回到 first，回调本身仍应出现。这个路径尚未执行。要避免触发后续动作，应在确定不需要时避免登记，或按手册单独安排取消，而不是依赖提前返回自然丢掉它。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://cmake.org/cmake/help/latest/command/cmake_language.html#deferring-calls" rel="noopener">cmake_language — Deferring Calls (CMake 4.5.0)</a></li><li><a target="_blank" href="https://cmake.org/cmake/help/latest/command/cmake_language.html#deferred-call-examples" rel="noopener">cmake_language — Deferred Call Examples (CMake 4.5.0)</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--cmake" href="/zh-CN/tags/CMake/">CMake</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%9E%84%E5%BB%BA%E9%85%8D%E7%BD%AE/">构建配置</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F13%2Fcmake-defer-argument-evaluation%2F&text=CMake%20%E5%BB%B6%E8%BF%9F%E8%B0%83%E7%94%A8%E4%B8%BA%E4%BB%80%E4%B9%88%E8%AF%BB%E5%88%B0%E4%BA%86%E5%90%8E%E6%94%B9%E7%9A%84%E5%8F%98%E9%87%8F%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F13%2Fcmake-defer-argument-evaluation%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=CMake%20%E5%BB%B6%E8%BF%9F%E8%B0%83%E7%94%A8%E4%B8%BA%E4%BB%80%E4%B9%88%E8%AF%BB%E5%88%B0%E4%BA%86%E5%90%8E%E6%94%B9%E7%9A%84%E5%8F%98%E9%87%8F%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F13%2Fcmake-defer-argument-evaluation%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/13/docker-copy-link-layer-independence/">
+              <span>上一篇</span>
+              <strong>基础层改了，Docker 的制品复制层还能复用吗？</strong>
+              <small>2026-11-13</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/13/array-fromasync-mapper-serial-pull/">
+              <span>下一篇</span>
+              <strong>Array.fromAsync 在等待 mapper 时，会先读取下一项吗？</strong>
+              <small>2026-11-13</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h3" href="#让两个回调看同一轮赋值">让两个回调看同一轮赋值</a>
+          
+            <a class="toc-link toc-link--h3" href="#把写死的正确值作为反例">把写死的正确值作为反例</a>
+          
+            <a class="toc-link toc-link--h3" href="#从回调的职责决定读取时点">从回调的职责决定读取时点</a>
+          
+            <a class="toc-link toc-link--h3" href="#在目录里提前-return-，已经排队的调用会被跳过吗？">在目录里提前 return()，已经排队的调用会被跳过吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>255</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/12/cmake-depfile-generated-input/">生成器读过配置，CMake 为什么还沿用旧产物？</a></h3>
+          <p>2026-11-12</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/08/cmake-glob-configure-depends-membership/">CONFIGURE_DEPENDS 解决重查，不替代源码清单的取舍</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/07/cmake-generator-build-configuration/">CMake 写了 CMAKE_BUILD_TYPE=Release，为什么还要看生成器？</a></h3>
+          <p>2026-11-07</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

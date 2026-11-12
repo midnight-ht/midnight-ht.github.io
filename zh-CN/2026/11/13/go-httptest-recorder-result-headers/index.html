@@ -1,0 +1,448 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Go 测试明明看到响应头，为什么 Result 里没有？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用 Go httptest 的写入前后对照，区分处理器可修改的头表和 Result 的响应头快照。">
+  
+  
+    <meta name="keywords" content="httptest,ResponseRecorder,HTTP headers">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/13/go-httptest-recorder-result-headers/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/13/go-httptest-recorder-result-headers/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/13/go-httptest-recorder-result-headers/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/13/go-httptest-recorder-result-headers/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Go 测试明明看到响应头，为什么 Result 里没有？ | Midnight blog">
+    <meta property="og:description" content="用 Go httptest 的写入前后对照，区分处理器可修改的头表和 Result 的响应头快照。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/13/go-httptest-recorder-result-headers/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/13/go-httptest-recorder-result-headers/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/13/go-httptest-recorder-result-headers/","name":"Go 测试明明看到响应头，为什么 Result 里没有？ | Midnight blog","description":"用 Go httptest 的写入前后对照，区分处理器可修改的头表和 Result 的响应头快照。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/13/go-httptest-recorder-result-headers/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/13/go-httptest-recorder-result-headers/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/13/go-httptest-recorder-result-headers/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/13/go-httptest-recorder-result-headers/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/13/go-httptest-recorder-result-headers/","headline":"Go 测试明明看到响应头，为什么 Result 里没有？","description":"用 Go httptest 的写入前后对照，区分处理器可修改的头表和 Result 的响应头快照。","inLanguage":"zh-CN","datePublished":"2026-11-12T19:29:59.000Z","dateModified":"2026-11-12T19:29:59.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://pkg.go.dev/net/http/httptest"],"keywords":"Go, HTTP, Testing"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/13/go-httptest-recorder-result-headers/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Go 测试明明看到响应头，为什么 Result 里没有？","item":"https://www.zyweb.vip/zh-CN/2026/11/13/go-httptest-recorder-result-headers/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/13/go-httptest-recorder-result-headers/" selected>zh-CN</option><option value="/en/2026/11/13/go-httptest-recorder-result-headers/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/13/go-httptest-recorder-result-headers/" selected>zh-CN</option><option value="/en/2026/11/13/go-httptest-recorder-result-headers/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--go">Go</span>
+      <time datetime="2026-11-12T19:29:59.000Z">2026-11-13</time>
+    </div>
+
+    <h1>Go 测试明明看到响应头，为什么 Result 里没有？</h1>
+
+    
+      <p class="post-hero__summary">用 Go httptest 的写入前后对照，区分处理器可修改的头表和 Result 的响应头快照。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-12T19:29:59.000Z">2026-11-13</time> · 预计阅读 8 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/13/go-httptest-recorder-result-headers/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/13/go-httptest-recorder-result-headers/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>Recorder 的 Header 是处理器可修改的头表。</li><li>处理器结束后用 Result 读取普通响应头快照。</li><li>需要真实传输证据时，另测经过实际服务的响应。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Go 的处理器在写正文之后才设置普通响应头时，Recorder 的可变头表可以看见新值，Result 里的响应快照却没有它。要验证处理器交付了什么，应等处理器返回，再读取 Result 的响应头。</p>
+<p>假设下载接口在生成内容后记录一个完成标记。测试直接调用处理器，检查 Recorder 头表里有 X-After，便认为客户端能收到它。浏览器请求却看不到。先把两条观察放到同一测试里，一条检查处理器当前还能修改的表，一条检查第一次写入时留下的响应快照。这样可以把处理器设置时点的问题，和代理删头、测试环境配置等其他问题分开。</p>
+<h2 id="两个观察点记录了不同时间"><a href="#两个观察点记录了不同时间" class="headerlink" title="两个观察点记录了不同时间"></a>两个观察点记录了不同时间</h2><p>ResponseRecorder 的 Header 方法实现了处理器可用的 ResponseWriter 接口。返回的头表供处理器修改。Go 的 httptest 文档要求在处理器执行结束后调用 Result。返回响应的头是在第一次写入时取的快照；如果处理器从未写入，才在调用 Result 时取快照。本文只讨论普通头，不使用尾部字段，也不借本地 Recorder 推断真实连接的表现。<a target="_blank" rel="noopener" href="https://pkg.go.dev/net/http/httptest@go1.27.4#ResponseRecorder.Result">Go net/http/httptest</a>。</p>
+<p>若报告接口先写入正文，后来才修改普通头，那么头表的当前内容仍可以更新。在同一次测试中，读取这个表只能说明最后的赋值发生了。即使状态码、正文和早期头都符合预期，它也不能替代 Result 里的晚期头断言。修复通常是把已经能确定的头移到写出前。若某个值只有整个计算结束才知道，就得选择延迟提交响应，或给客户端定义另一份合适的合同。</p>
+<h2 id="让两个处理器路径只差赋值时点"><a href="#让两个处理器路径只差赋值时点" class="headerlink" title="让两个处理器路径只差赋值时点"></a>让两个处理器路径只差赋值时点</h2><p>下方测试为未执行教学样本。把文件放在独立 Go 测试目录，可用支持 io.ReadAll 的工具链执行 go test。样本先在可用头表设置 X-Before；两个分支都写出 ok，再分别在写出前或后设置 X-After。所有输入是本地构造的请求，样本没有启动 HTTP 服务器。</p>
+<pre><code class="go">package recorderdemo
+
+import (
+    &quot;io&quot;
+    &quot;net/http&quot;
+    &quot;net/http/httptest&quot;
+    &quot;testing&quot;
+)
+
+func report(w http.ResponseWriter, r *http.Request) {
+    h := w.Header()
+    h.Set(&quot;X-Before&quot;, &quot;ready&quot;)
+    if r.URL.Path == &quot;/fixed&quot; {
+        h.Set(&quot;X-After&quot;, &quot;done&quot;)
+    }
+    _, _ = io.WriteString(w, &quot;ok&quot;)
+    if r.URL.Path != &quot;/fixed&quot; {
+        h.Set(&quot;X-After&quot;, &quot;done&quot;)
+    }
+}
+
+type observation struct {
+    status int
+    body, mutableLate, responseEarly, responseLate string
+}
+
+func TestReportHeaders(t *testing.T) {
+    for _, tc := range []struct {
+        path, sent string
+    }{{&quot;/late&quot;, &quot;&quot;}, {&quot;/fixed&quot;, &quot;done&quot;}} {
+        t.Run(tc.path[1:], func(t *testing.T) {
+            rec := httptest.NewRecorder()
+            report(rec, httptest.NewRequest(http.MethodGet, tc.path, nil))
+            res := rec.Result()
+            defer res.Body.Close()
+            body, err := io.ReadAll(res.Body)
+            if err != nil {
+                t.Fatal(err)
+            }
+            mutable, response := rec.Header(), res.Header
+            got := observation{
+                status: res.StatusCode, body: string(body),
+                mutableLate: mutable.Get(&quot;X-After&quot;),
+                responseEarly: response.Get(&quot;X-Before&quot;),
+                responseLate: response.Get(&quot;X-After&quot;),
+            }
+            want := observation{http.StatusOK, &quot;ok&quot;, &quot;done&quot;, &quot;ready&quot;, tc.sent}
+            if got != want {
+                t.Fatalf(&quot;got %+v, want %+v&quot;, got, want)
+            }
+        })
+    }
+}
+</code></pre>
+<p>预期两个子测试的状态码都为二百，正文都是 ok，X-Before 都等于 ready。两个 Recorder 的可变头表最后也都有 X-After: done。差异只出现在 Result.Header。晚赋值路径的 X-After 为空，前置赋值路径为 done。如果只保留可变表断言，两条路径都会通过，测试就失去发现这个错误的能力。正控制可以证明测试确实读了正确的头名并能看到赋值完成后的响应。</p>
+<p>这里用 Header.Get 比较有非空值的哨兵字段。如果生产合同还要求区分头缺失和头存在但值为空，应该额外检查规范化后的键是否存在，以及它有几项值。空字符串是这份教学样本对缺少哨兵的简洁表达。扩大到业务接口时还要约定同名多值的预期，避免把两次 Set 或 Add 写出的状态误判为同一个结果。</p>
+<h2 id="把断言放到消费者真正看到的对象上"><a href="#把断言放到消费者真正看到的对象上" class="headerlink" title="把断言放到消费者真正看到的对象上"></a>把断言放到消费者真正看到的对象上</h2><p>对于只关心处理器逻辑的测试，Recorder 可以把普通响应头、状态和正文的证据留在一个地方。不要对完整 Response 做深度相等比较。Go 文档允许 Result 将来填充更多字段，逐项验证实际合同更稳定。若需求还包括中间件重写，要让测试入口经过那条中间件链。进一步需要核对真实传输、客户端兼容或反向代理的处理时，应分别用真实 HTTP 连接和相应部署测试来验证。这个样本没有观察到它们。</p>
+<p>可以再加一个应用侧反例。假设接口通过同一组件处理成功与失败，错误分支可能先写错误状态，再尝试附上请求编号。只测试成功路径会让请求编号的断言看似全覆盖。对错误路径提供独立请求，核对错误状态、正文形状和编号是否进入最终头表快照。如果编号只能由统一中间件提供，就把中间件纳入测试入口。把头的设置留在最后的 defer 回调也应当按实际写入时序检查；函数收尾并没有替它抢在第一次写入之前执行。</p>
+<p>验收记录可以保存两份观测而只把其中一份用于判定网络合同。可变表帮助定位代码确实完成赋值，最终响应快照用来判断赋值是否赶上发送边界。若失败路径需要保留原始证据，应记录响应写入点和对应请求类型，随后再到服务集成层复查。并行子测试的<a href="/zh-CN/2026/11/08/go-parallel-subtest-cleanup/">测试资源寿命</a>也是一个时点问题，但这里比较的是一份响应的可变对象与快照，不能用测试结束来推断头在何时固定。</p>
+<p>如果真正的完成标记只能在导出末尾得到，可以先用小数据验证一次缓冲版本。让一条请求在生成文件前失败，另一条在数据齐备后成功。检查失败时有没有提前送出成功状态，成功时是否保留完成标记与完整正文。这个决定还涉及等待时间与内存，因此流式下载不能照搬小响应的方案。若客户端有独立的完成查询，也可以在那条接口里核对生成结果，不要求普通响应头承担生成完成后的通知。主例没有使用缓冲、流式或独立查询，这组输入只给这些选择提供验收条件。</p>
+<h2 id="处理器从未写正文，也没有调用-WriteHeader，会怎样？"><a href="#处理器从未写正文，也没有调用-WriteHeader，会怎样？" class="headerlink" title="处理器从未写正文，也没有调用 WriteHeader，会怎样？"></a>处理器从未写正文，也没有调用 WriteHeader，会怎样？</h2><p>给一个新的处理器分支只写入 X-Before 的值，随即返回，明确不调用 Write、WriteHeader 或 Flush。文档规定这样的分支会在调用 Result 时取头快照。用独立的 Recorder 验收应得到 ready，正文为空。不要在同一个 Recorder 上先执行写正文的路径再执行空分支，也不要在处理器仍在执行时提早调用 Result。这个追问是未执行的边界测试，它没有声称真实 HTTP 服务的空响应行为已经验证。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://pkg.go.dev/net/http/httptest" rel="noopener">httptest package - net/http/httptest - Go Packages</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--go" href="/zh-CN/tags/Go/">Go</a>
+          
+            <a class="tag tag--http" href="/zh-CN/tags/HTTP/">HTTP</a>
+          
+            <a class="tag tag--testing" href="/zh-CN/tags/Testing/">Testing</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--quality" href="/zh-CN/categories/Quality/">Quality</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F13%2Fgo-httptest-recorder-result-headers%2F&text=Go%20%E6%B5%8B%E8%AF%95%E6%98%8E%E6%98%8E%E7%9C%8B%E5%88%B0%E5%93%8D%E5%BA%94%E5%A4%B4%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%20Result%20%E9%87%8C%E6%B2%A1%E6%9C%89%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F13%2Fgo-httptest-recorder-result-headers%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Go%20%E6%B5%8B%E8%AF%95%E6%98%8E%E6%98%8E%E7%9C%8B%E5%88%B0%E5%93%8D%E5%BA%94%E5%A4%B4%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%20Result%20%E9%87%8C%E6%B2%A1%E6%9C%89%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F13%2Fgo-httptest-recorder-result-headers%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/13/http-103-early-hints-final-response/">
+              <span>上一篇</span>
+              <strong>收到 HTTP 103 Early Hints，为什么还不能算请求成功？</strong>
+              <small>2026-11-13</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/13/go-errors-join-unwrap-tree/">
+              <span>下一篇</span>
+              <strong>errors.Join 包了两个错误，为什么 errors.Unwrap 返回 nil？</strong>
+              <small>2026-11-13</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#两个观察点记录了不同时间">两个观察点记录了不同时间</a>
+          
+            <a class="toc-link toc-link--h2" href="#让两个处理器路径只差赋值时点">让两个处理器路径只差赋值时点</a>
+          
+            <a class="toc-link toc-link--h2" href="#把断言放到消费者真正看到的对象上">把断言放到消费者真正看到的对象上</a>
+          
+            <a class="toc-link toc-link--h2" href="#处理器从未写正文，也没有调用-WriteHeader，会怎样？">处理器从未写正文，也没有调用 WriteHeader，会怎样？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>255</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/13/go-errors-join-unwrap-tree/">errors.Join 包了两个错误，为什么 errors.Unwrap 返回 nil？</a></h3>
+          <p>2026-11-13</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/13/http-103-early-hints-final-response/">收到 HTTP 103 Early Hints，为什么还不能算请求成功？</a></h3>
+          <p>2026-11-13</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/13/http-205-reset-document-view/">都没有正文，HTTP 205 为什么要恢复录入视图？</a></h3>
+          <p>2026-11-13</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

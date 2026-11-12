@@ -1,0 +1,425 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>systemd restart 之后，运行时目录里的文件为什么没了？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="比较 systemd 在直接重启和显式停止时如何清理服务的运行时目录。">
+  
+  
+    <meta name="keywords" content="RuntimeDirectory,RuntimeDirectoryPreserve">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/13/systemd-runtime-directory-preserve-restart/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/13/systemd-runtime-directory-preserve-restart/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/13/systemd-runtime-directory-preserve-restart/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/13/systemd-runtime-directory-preserve-restart/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="systemd restart 之后，运行时目录里的文件为什么没了？ | Midnight blog">
+    <meta property="og:description" content="比较 systemd 在直接重启和显式停止时如何清理服务的运行时目录。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/13/systemd-runtime-directory-preserve-restart/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/13/systemd-runtime-directory-preserve-restart/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/13/systemd-runtime-directory-preserve-restart/","name":"systemd restart 之后，运行时目录里的文件为什么没了？ | Midnight blog","description":"比较 systemd 在直接重启和显式停止时如何清理服务的运行时目录。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/13/systemd-runtime-directory-preserve-restart/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/13/systemd-runtime-directory-preserve-restart/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/13/systemd-runtime-directory-preserve-restart/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/13/systemd-runtime-directory-preserve-restart/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/13/systemd-runtime-directory-preserve-restart/","headline":"systemd restart 之后，运行时目录里的文件为什么没了？","description":"比较 systemd 在直接重启和显式停止时如何清理服务的运行时目录。","inLanguage":"zh-CN","datePublished":"2026-11-12T19:29:59.000Z","dateModified":"2026-11-12T19:29:59.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html#RuntimeDirectoryPreserve="],"keywords":"systemd, 服务运维"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/13/systemd-runtime-directory-preserve-restart/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"systemd restart 之后，运行时目录里的文件为什么没了？","item":"https://www.zyweb.vip/zh-CN/2026/11/13/systemd-runtime-directory-preserve-restart/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/13/systemd-runtime-directory-preserve-restart/" selected>zh-CN</option><option value="/en/2026/11/13/systemd-runtime-directory-preserve-restart/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/13/systemd-runtime-directory-preserve-restart/" selected>zh-CN</option><option value="/en/2026/11/13/systemd-runtime-directory-preserve-restart/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--systemd">systemd</span>
+      <time datetime="2026-11-12T19:29:59.000Z">2026-11-13</time>
+    </div>
+
+    <h1>systemd restart 之后，运行时目录里的文件为什么没了？</h1>
+
+    
+      <p class="post-hero__summary">比较 systemd 在直接重启和显式停止时如何清理服务的运行时目录。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-12T19:29:59.000Z">2026-11-13</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/13/systemd-runtime-directory-preserve-restart/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/13/systemd-runtime-directory-preserve-restart/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>检查目录是否存在时同时读取旧文件。</li><li>restart 保留策略按管理器收到的重启动作判断。</li><li>持久数据应选与运行时目录不同的存储边界。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>进程启动又创建了目录，服务重启之前的临时标记却已经消失。若目录由 systemd 的 <code>RuntimeDirectory</code> 管理，先核对 <code>RuntimeDirectoryPreserve</code>。默认清理可能发生在旧进程停止之后，新实例拿到的是新建目录。</p>
+<p>值班脚本往服务的运行时目录放了一个交接标记，用来告诉下一次启动它要接手哪一轮工作。重启命令成功，目录也在，标记却不见了。排查通常会先问应用是不是删了文件。可以先做一个不读写目录的对照服务，标记由观察者自己写入。这样能把管理器删除目录与应用启动时清理临时文件这两条路径拆开。看见空目录时，已经有了能分辨两者的办法。</p>
+<h3 id="服务管理器收到的是哪一种停止"><a href="#服务管理器收到的是哪一种停止" class="headerlink" title="服务管理器收到的是哪一种停止"></a>服务管理器收到的是哪一种停止</h3><p>对于系统服务，<code>RuntimeDirectory</code> 将指定目录放在 <code>/run</code> 下并随单元管理。对应的保留选项默认为 <code>no</code>，服务停止时移除这些目录。设为 <code>restart</code> 时，systemd 执行手工重启或 <code>Restart=</code> 触发的自动重启，可以保留目录。设为 <code>yes</code> 时，显式停止也不因此移除目录。这里依据 systemd 262 的手册，选项在 235 引入。例子使用普通系统服务和一个专用目录。 <a target="_blank" rel="noopener" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html#RuntimeDirectoryPreserve=">systemd.exec 的 RuntimeDirectoryPreserve 条款</a></p>
+<p>因此操作记录需要写清当时执行的是一次 <code>systemctl restart</code>，还是先停止、再另发启动命令。对外都像是“服务起来了”，中间的清理边界却可以不同。如果脚本把一个 restart 拆成两条命令来做中间检查，也可能无意中改变需要保留的东西。先看单元当时收到的实际操作，再判断是否应该检查应用启动逻辑。</p>
+<h3 id="用不碰标记的服务做对照"><a href="#用不碰标记的服务做对照" class="headerlink" title="用不碰标记的服务做对照"></a>用不碰标记的服务做对照</h3><p>下面是拟议的 Linux 实验，当前没有执行 systemd。请在一次性测试主机上使用专用单元名 <code>zy-runtime-lab.service</code> 和下列完整定义。它的主进程只等待，不创建或删除标记。默认系统服务能运行示例里的 sleep，若目标机路径不同，应使用该环境已确认的绝对路径。不要把目录名改成已有服务所用的路径，例子依赖单元独占这个目录。</p>
+<pre><code class="ini">[Unit]
+Description=Runtime directory lifecycle lab
+
+[Service]
+RuntimeDirectory=zy-runtime-lab
+RuntimeDirectoryPreserve=no
+ExecStart=/bin/sleep infinity
+</code></pre>
+<p>安装定义后执行 <code>systemctl daemon-reload</code>，再启动专用单元。确认 <code>/run/zy-runtime-lab</code> 存在，写入一份带有值 <code>first-run</code> 的 marker。执行 <code>systemctl restart zy-runtime-lab.service</code>，等命令返回再看目录与 marker。然后在正在运行的服务目录里重新写值 <code>explicit-stop</code>，单独执行 <code>systemctl stop zy-runtime-lab.service</code>。在下一次启动以前检查目录和标记。两个操作各用不同值，这样先前残留的文件不会混进另一列。</p>
+<p>接下来只改保留选项，分别以 restart 和 yes 重做两列。换配置前先结束前一轮；若前一轮留下专用目录，应在测试单元停止后清掉它。重新加载定义、启动，再用新标记执行同样的检查。每轮都记录所用设置和命令时间。以下是文档推导的预期，并非系统实际输出。</p>
+<table>
+<thead>
+<tr>
+<th>保留选项</th>
+<th>一次 restart 返回后</th>
+<th>单独 stop 返回后，尚未启动</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>no</code></td>
+<td>目录存在，原标记缺失</td>
+<td>目录被移除</td>
+</tr>
+<tr>
+<td><code>restart</code></td>
+<td>目录存在，原标记和值保留</td>
+<td>目录被移除</td>
+</tr>
+<tr>
+<td><code>yes</code></td>
+<td>目录存在，原标记和值保留</td>
+<td>目录与标记保留</td>
+</tr>
+</tbody></table>
+<p>最容易误判的检查只问重启后目录存不存在。表里第一列的三个目录都应该存在，只有旧标记的状态会变化。若标记缺失时直接把预期改成新目录即可用，就没有测试原来的交接需求。相反，若在显式停止后立刻又启动才采集结果，也会把重新创建的目录记成原目录仍在。每次记录要注明命令结束时服务状态、标记的原始值和读取位置。</p>
+<p>如果单元状态并非预期的已启动或已停止，先保留失败命令的退出值和日志，再解释标记。启动失败时目录可能还未创建，权限错误也可能让读取失败。验收表里的缺失应来自一次对确切路径的检查，不能用读取命令的任意报错代替。</p>
+<h3 id="让保留策略匹配文件的实际用途"><a href="#让保留策略匹配文件的实际用途" class="headerlink" title="让保留策略匹配文件的实际用途"></a>让保留策略匹配文件的实际用途</h3><p>若目录只存这一代进程的临时状态，默认清理使下一轮从空目录开始，有助于避免误读旧标记。若同一个服务需要在重启时交接某个短时文件、明确停止时仍要清掉，restart 更符合这个生命周期。选择 yes 意味着操作员结束服务后也会留下运行时内容。先明确下一次启动是谁读取、读取什么、如何区分陈旧记录，再决定让它存多久。单凭“上次有文件，这次也要有”不足以决定恢复行为。</p>
+<p>服务目录里的旧路径还可能指向上一轮进程曾创建的套接字文件。上面的 sleep 没有监听任何端点，保留目录和标记的证据无法说明端点可用。真实系统还应从客户端核对服务能接受连接、读取的是目标代次，并确认进程没有因旧路径占用而绑定失败。若你想知道另一种管理动作何时得到应用自己的完成回执，可对照<a href="/zh-CN/2026/11/12/systemd-notify-reload-completion/">配置重载为何先返回</a>。</p>
+<p>还可以在测试记录里给文件用途各写一行。进程退出即作废的锁或身份记录，应写明下个进程会怎样重建。需要交接的文件应有代次与读取规则，避免手工停止后的启动误用几天前的数据。演练结束后，停止这个专用单元，移除为它新建的定义和残留目录，再重新加载管理器配置。只清理本次实验的路径。这样下一轮读到的标记能够归因于正在测试的策略。</p>
+<h3 id="设置-yes-能保留到整台机器重启之后吗？"><a href="#设置-yes-能保留到整台机器重启之后吗？" class="headerlink" title="设置 yes 能保留到整台机器重启之后吗？"></a>设置 yes 能保留到整台机器重启之后吗？</h3><p>对系统服务的这份 <code>/run</code> 运行时目录，手册说明重启机器会清空该 tmpfs 上的内容。yes 解决的是停止单元时是否移除。若业务必须在机器启动后继续使用上一次确认的数据，应用要选适当的持久存储，并单独检查异常关机后的完整性。实验里的 marker 可用于读出单元生命周期，但不能代替一次持久数据恢复测试。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html#RuntimeDirectoryPreserve=" rel="noopener">systemd.exec — Execution environment configuration</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--systemd" href="/zh-CN/tags/systemd/">systemd</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%9C%8D%E5%8A%A1%E8%BF%90%E7%BB%B4/">服务运维</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F13%2Fsystemd-runtime-directory-preserve-restart%2F&text=systemd%20restart%20%E4%B9%8B%E5%90%8E%EF%BC%8C%E8%BF%90%E8%A1%8C%E6%97%B6%E7%9B%AE%E5%BD%95%E9%87%8C%E7%9A%84%E6%96%87%E4%BB%B6%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E4%BA%86%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F13%2Fsystemd-runtime-directory-preserve-restart%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=systemd%20restart%20%E4%B9%8B%E5%90%8E%EF%BC%8C%E8%BF%90%E8%A1%8C%E6%97%B6%E7%9B%AE%E5%BD%95%E9%87%8C%E7%9A%84%E6%96%87%E4%BB%B6%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E4%BA%86%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F13%2Fsystemd-runtime-directory-preserve-restart%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/12/aip158-empty-page-next-token/">
+              <span>上一篇</span>
+              <strong>列表返回空数组，还有 next_page_token 时要停吗？</strong>
+              <small>2026-11-12</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/13/sqlite-json-value-argument-provenance/">
+              <span>下一篇</span>
+              <strong>SQLite 拼 JSON 时，数组为什么多了一层引号？</strong>
+              <small>2026-11-13</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h3" href="#服务管理器收到的是哪一种停止">服务管理器收到的是哪一种停止</a>
+          
+            <a class="toc-link toc-link--h3" href="#用不碰标记的服务做对照">用不碰标记的服务做对照</a>
+          
+            <a class="toc-link toc-link--h3" href="#让保留策略匹配文件的实际用途">让保留策略匹配文件的实际用途</a>
+          
+            <a class="toc-link toc-link--h3" href="#设置-yes-能保留到整台机器重启之后吗？">设置 yes 能保留到整台机器重启之后吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>255</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/12/systemd-notify-reload-completion/">systemctl reload 返回了，应用为什么还在用旧配置？</a></h3>
+          <p>2026-11-12</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/09/systemd-workingdirectory-exec-path/">WorkingDirectory设好了，./worker为什么仍启动失败</a></h3>
+          <p>2026-11-09</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/08/systemd-restart-start-limit-recovery/">启动限流窗口过了，systemd不一定会再自动重启</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

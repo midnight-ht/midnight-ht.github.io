@@ -1,0 +1,465 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Array.fromAsync 在等待 mapper 时，会先读取下一项吗？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用可控放行点观察异步迭代器的下一次读取，区分结果保序、映射串行与已启动的工作。">
+  
+  
+    <meta name="keywords" content="fromAsync,mapper,异步迭代器">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/13/array-fromasync-mapper-serial-pull/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/13/array-fromasync-mapper-serial-pull/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/13/array-fromasync-mapper-serial-pull/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/13/array-fromasync-mapper-serial-pull/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Array.fromAsync 在等待 mapper 时，会先读取下一项吗？ | Midnight blog">
+    <meta property="og:description" content="用可控放行点观察异步迭代器的下一次读取，区分结果保序、映射串行与已启动的工作。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/13/array-fromasync-mapper-serial-pull/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/13/array-fromasync-mapper-serial-pull/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/13/array-fromasync-mapper-serial-pull/","name":"Array.fromAsync 在等待 mapper 时，会先读取下一项吗？ | Midnight blog","description":"用可控放行点观察异步迭代器的下一次读取，区分结果保序、映射串行与已启动的工作。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/13/array-fromasync-mapper-serial-pull/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/13/array-fromasync-mapper-serial-pull/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/13/array-fromasync-mapper-serial-pull/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/13/array-fromasync-mapper-serial-pull/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/13/array-fromasync-mapper-serial-pull/","headline":"Array.fromAsync 在等待 mapper 时，会先读取下一项吗？","description":"用可控放行点观察异步迭代器的下一次读取，区分结果保序、映射串行与已启动的工作。","inLanguage":"zh-CN","datePublished":"2026-11-12T19:29:59.000Z","dateModified":"2026-11-12T19:29:59.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://tc39.es/ecma262/multipage/indexed-collections.html#sec-array.fromasync","https://tc39.es/ecma262/multipage/control-abstraction-objects.html#sec-asyncfromsynciteratorcontinuation","https://tc39.es/ecma262/multipage/control-abstraction-objects.html#sec-async-from-sync-iterator-objects","https://nodejs.org/docs/latest-v24.x/api/"],"keywords":"JavaScript, 异步迭代, Promise"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/13/array-fromasync-mapper-serial-pull/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Array.fromAsync 在等待 mapper 时，会先读取下一项吗？","item":"https://www.zyweb.vip/zh-CN/2026/11/13/array-fromasync-mapper-serial-pull/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/13/array-fromasync-mapper-serial-pull/" selected>zh-CN</option><option value="/en/2026/11/13/array-fromasync-mapper-serial-pull/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/13/array-fromasync-mapper-serial-pull/" selected>zh-CN</option><option value="/en/2026/11/13/array-fromasync-mapper-serial-pull/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--javascript">JavaScript</span>
+      <time datetime="2026-11-12T19:29:59.000Z">2026-11-13</time>
+    </div>
+
+    <h1>Array.fromAsync 在等待 mapper 时，会先读取下一项吗？</h1>
+
+    
+      <p class="post-hero__summary">用可控放行点观察异步迭代器的下一次读取，区分结果保序、映射串行与已启动的工作。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-12T19:29:59.000Z">2026-11-13</time> · 预计阅读 9 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/13/array-fromasync-mapper-serial-pull/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/13/array-fromasync-mapper-serial-pull/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>映射尚未完成时不会拉取下一项。</li><li>最终结果顺序不能证明任务何时启动。</li><li>已经启动的工作不受收集方式追溯控制。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>异步来源的第一项 A 已进入 mapper，却卡在一个尚未放行的等待点。此时下一次读取有没有开始？fromAsync 会等当前 mapper 完成，再拉取下一项。最后的数组保持 A、B 顺序，单看这个顺序并不能证明工作是何时开始的。</p>
+<h2 id="先看下一次读取，而不是结果数组"><a href="#先看下一次读取，而不是结果数组" class="headerlink" title="先看下一次读取，而不是结果数组"></a>先看下一次读取，而不是结果数组</h2><p><a target="_blank" rel="noopener" href="https://tc39.es/ecma262/multipage/indexed-collections.html#sec-array.fromasync">ECMAScript 对 fromAsync 的定义</a>区分异步可迭代对象、同步可迭代对象和类似数组的对象。这里先只看第一个分支。方法调用当前迭代器的 next，等待它给出迭代结果，从结果中取得 value。若传入 mapper，方法调用它并等待返回值，然后将转换结果写入数组，再进入下一轮。读下一条之前，有一个由当前转换结果决定的等待点。</p>
+<p>设想一份小型目录的读取适配器。每次 next 只产生一条记录，mapper 将这一项转换为可供列表显示的文本。若适配器把自己的读取也做成惰性的，第二次 next 尚未发生，就不会由本次遍历开始第二条读取。这个判断只描述由迭代动作触发的工作。来源可以自己预取，也可以由别的调用者提前启动任务；收集函数并不能把已经开始的操作重新放回队列。</p>
+<p>这样的先后关系需要单独测试。结果中的 A 在 B 前面，既可能因为 B 等 A 完成后才启动，也可能因为两项都先启动、收集者最终按输入位置组合。依赖顺序的项目应记录调用与完成点。只比最后数组，可能把两个不同的调度方案都判为符合合同。</p>
+<h2 id="用一道显式门固定观察时点"><a href="#用一道显式门固定观察时点" class="headerlink" title="用一道显式门固定观察时点"></a>用一道显式门固定观察时点</h2><p>以下是一个独立的本地 Node 示例。异步迭代器只给出 A 和 B，随后结束。A 的 mapper 宣布自己已开始，再等测试主动放行。测试收到这个开始信号后立即核对记录，避免通过睡眠若干毫秒猜测 mapper 是否已进入。值都是教学字符串，没有访问目录服务。</p>
+<pre><code class="js">import { deepEqual } from &#39;node:assert/strict&#39;;
+
+const gate = () =&gt; Promise.withResolvers();
+const { promise: waiting, resolve: release } = gate();
+const { promise: began, resolve: markStarted } = gate();
+const order = [];
+const record = item =&gt; order.push(item);
+const values = [&#39;A&#39;, &#39;B&#39;];
+let index = 0;
+const input = {
+  [Symbol.asyncIterator]() { return this; },
+  async next() {
+    const value = values[index++];
+    record(value ? &#39;pull &#39; + value : &#39;done&#39;);
+    return { value, done: value === undefined };
+  },
+};
+const result = Array.fromAsync(input, async value =&gt; {
+  record(&#39;start &#39; + value);
+  if (value === &#39;A&#39;) {
+    markStarted();
+    await waiting;
+  }
+  record(&#39;finish &#39; + value);
+  return value.toLowerCase();
+});
+await began;
+deepEqual(order.slice(), [&#39;pull A&#39;, &#39;start A&#39;]);
+release();
+deepEqual(await result, [&#39;a&#39;, &#39;b&#39;]);
+deepEqual(order, [
+  &#39;pull A&#39;, &#39;start A&#39;, &#39;finish A&#39;, &#39;pull B&#39;, &#39;start B&#39;, &#39;finish B&#39;, &#39;done&#39;,
+]);
+
+const { promise: parallelGate, resolve: releaseParallel } = gate();
+const launched = [];
+const tasks = values.map(async value =&gt; {
+  launched.push(value);
+  if (value === &#39;A&#39;) await parallelGate;
+  return value.toLowerCase();
+});
+deepEqual(launched, [&#39;A&#39;, &#39;B&#39;]);
+releaseParallel();
+deepEqual(await Promise.all(tasks), [&#39;a&#39;, &#39;b&#39;]);
+console.log(JSON.stringify({ order, launched }));
+</code></pre>
+<p>在打开门之前，预期只有 A 的读取和 mapper 开始。打开后，A 先结束，才会出现 B 的读取与转换，最后还有一次表示完成的 next。断言所用的完整序列来自已知输入和指定等待点，不由日志反推出预期。另一组先对普通数组调用 map 创建两个承诺，随后才等待整体结果；A 依然没有放行时，B 已在调用过程中开始。两组最后都得到小写的 a、b，所以这是一个能排除错误解释的对照。</p>
+<p>代码还特意让生产者只记录 next 的调用，而不只记录 mapper。假如生产者已经读取第二项，只把 B 的转换延到第一项结束，两个 mapper 的起止日志看起来仍会串行，实际来源已经预读。这对可能产生网络或存储操作的适配器有区别。检查生产者日志能确认第二项还没有交给收集器，至于来源自己的后台预取，需要在来源内部另作记录。</p>
+<h2 id="什么时候值得用这个顺序"><a href="#什么时候值得用这个顺序" class="headerlink" title="什么时候值得用这个顺序"></a>什么时候值得用这个顺序</h2><p>如果每次转换依赖上一次的提交结果，先完成再读取下一项能让依赖清楚地落在代码中。若单项工作互不依赖且成本很高，也可能选择限定并发，明确什么时候开始下一项，以及排序依据是什么。示例用两项任务展示并发启动，不能据此把没有上限的任务批量发出。对于无限或很大的来源，也要考虑逐项消费和提前停止；最终必须物化成数组的接口不适合没有结束条件的输入。</p>
+<p>还可以在验收时将两个顺序要求分开写：一个是结果按原始编号排列，一个是在上一项转换未完成前不得读取下一项。若需求只关心前者，第二条不该意外变成限制；若来源需要严格控制拉取，它才是一条不可省略的断言。本站<a href="/zh-CN/2026/10/16/foreach-async-completion/">异步 forEach 的完成问题</a>说明外层何时等待回调，本篇增加的是生产者和转换函数之间的具体时序。</p>
+<p>如果生产者本身给每次读取分配编号，可以在 mapper 开始时记录同一个编号，而不是用日志先后猜测对应关系。比如两个记录的展示文字恰好相同，只打印文字无法看出哪个转换结果对应哪次拉取。应给测试输入保留不同编号，比较每个编号从拉取到转换完成的路径。这里的固定字符串已经不同，真实重复内容的验收则需补这层身份。计时数字可以在之后用于性能观察，不能代替这份因果顺序。</p>
+<p>失败时也应写出独立的可观察条件。例如固定让 A 的转换拒绝，在这一有限迭代例里检查收集 Promise 的拒绝，并确认 B 未被由该循环拉取。是否有来源资源需要关闭，还要根据迭代器协议和应用持有的资源确定。已经由独立任务启动的操作，不能从收集者的拒绝推断它也被撤销。以上是拟议的失败验收，和上方固定成功路径的断言不是同一份运行结果。</p>
+<h2 id="自定义-async-iterator-的-value-本身是-Promise，会自动解包吗？"><a href="#自定义-async-iterator-的-value-本身是-Promise，会自动解包吗？" class="headerlink" title="自定义 async iterator 的 value 本身是 Promise，会自动解包吗？"></a>自定义 async iterator 的 value 本身是 Promise，会自动解包吗？</h2><p>要看输入路径和有没有 mapper。直接的异步迭代分支等待 next 返回的迭代结果；无 mapper 时，它从结果对象取出 value 并存入数组，并不会为那个字段再加一层等待。同步数组要先经<a target="_blank" rel="noopener" href="https://tc39.es/ecma262/multipage/control-abstraction-objects.html#sec-asyncfromsynciteratorcontinuation">同步迭代器的异步适配步骤</a>，其中会采用 value。给直接异步来源提供一个返回原值的 mapper，也会走等待 mapper 返回结果的步骤。</p>
+<pre><code class="js">import { deepEqual, strictEqual } from &#39;node:assert/strict&#39;;
+
+const inner = Promise.resolve(&#39;A&#39;);
+const { fromAsync } = Array;
+const collect = fromAsync.bind(Array);
+function direct() {
+  let used = false;
+  return {
+    [Symbol.asyncIterator]() { return this; },
+    async next() {
+      if (used) return { done: true };
+      used = true;
+      return { value: inner, done: false };
+    },
+  };
+}
+
+const [carried] = await collect(direct());
+const [adopted] = await collect([inner]);
+const [mapped] = await collect(direct(), value =&gt; value);
+strictEqual(carried, inner);
+deepEqual([adopted, mapped], [&#39;A&#39;, &#39;A&#39;]);
+console.log(&#39;direct value retained; sync wrapper and mapper awaited&#39;);
+</code></pre>
+<p>这段对照改变的是每项值的形状，前面的门控用例只用普通字符串。检查时分别比较对象身份和最终字符值。外层已经拿到数组，可以与数组元素仍是 Promise 同时成立；若调用接口明确要字符串，应使转换或验证覆盖这个差异。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://tc39.es/ecma262/multipage/indexed-collections.html#sec-array.fromasync" rel="noopener">ECMAScript §23.1.2.2 Array.fromAsync</a></li><li><a target="_blank" href="https://tc39.es/ecma262/multipage/control-abstraction-objects.html#sec-asyncfromsynciteratorcontinuation" rel="noopener">ECMAScript AsyncFromSyncIteratorContinuation</a></li><li><a target="_blank" href="https://tc39.es/ecma262/multipage/control-abstraction-objects.html#sec-async-from-sync-iterator-objects" rel="noopener">ECMAScript Async-from-Sync Iterator Objects</a></li><li><a target="_blank" href="https://nodejs.org/docs/latest-v24.x/api/" rel="noopener">Node.js runtime documentation — environment reference for local fixture</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--javascript" href="/zh-CN/tags/JavaScript/">JavaScript</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%BC%82%E6%AD%A5%E8%BF%AD%E4%BB%A3/">异步迭代</a>
+          
+            <a class="tag tag--promise" href="/zh-CN/tags/Promise/">Promise</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F13%2Farray-fromasync-mapper-serial-pull%2F&text=Array.fromAsync%20%E5%9C%A8%E7%AD%89%E5%BE%85%20mapper%20%E6%97%B6%EF%BC%8C%E4%BC%9A%E5%85%88%E8%AF%BB%E5%8F%96%E4%B8%8B%E4%B8%80%E9%A1%B9%E5%90%97%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F13%2Farray-fromasync-mapper-serial-pull%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Array.fromAsync%20%E5%9C%A8%E7%AD%89%E5%BE%85%20mapper%20%E6%97%B6%EF%BC%8C%E4%BC%9A%E5%85%88%E8%AF%BB%E5%8F%96%E4%B8%8B%E4%B8%80%E9%A1%B9%E5%90%97%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F13%2Farray-fromasync-mapper-serial-pull%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/13/cmake-defer-argument-evaluation/">
+              <span>上一篇</span>
+              <strong>CMake 延迟调用为什么读到了后改的变量？</strong>
+              <small>2026-11-13</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/13/aria-posinset-virtual-list-window/">
+              <span>下一篇</span>
+              <strong>虚拟列表只渲染三项，怎么标记真实位置？</strong>
+              <small>2026-11-13</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#先看下一次读取，而不是结果数组">先看下一次读取，而不是结果数组</a>
+          
+            <a class="toc-link toc-link--h2" href="#用一道显式门固定观察时点">用一道显式门固定观察时点</a>
+          
+            <a class="toc-link toc-link--h2" href="#什么时候值得用这个顺序">什么时候值得用这个顺序</a>
+          
+            <a class="toc-link toc-link--h2" href="#自定义-async-iterator-的-value-本身是-Promise，会自动解包吗？">自定义 async iterator 的 value 本身是 Promise，会自动解包吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>255</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/12/promise-withresolvers-settlement-owner/">用 withResolvers 封装回调时，谁能结算？</a></h3>
+          <p>2026-11-12</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/24/promise-any-fulfillment-aggregateerror/">Promise.any 等到的是成功请求，还是业务有效结果？</a></h3>
+          <p>2026-10-24</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/13/intl-segmenter-wordlike-count/">Intl.Segmenter 已用 word，为什么词数还算多了？</a></h3>
+          <p>2026-11-13</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
