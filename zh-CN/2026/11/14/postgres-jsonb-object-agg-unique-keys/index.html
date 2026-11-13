@@ -1,0 +1,416 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>PostgreSQL 生成 JSONB 对象时，两个来源行为什么只剩一个键？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用两个部门和三条设置区分 PostgreSQL JSONB 对象聚合的决胜顺序、组内拒重复与严格模式。">
+  
+  
+    <meta name="keywords" content="jsonb_object_agg,unique keys,aggregate ordering">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/14/postgres-jsonb-object-agg-unique-keys/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/14/postgres-jsonb-object-agg-unique-keys/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/14/postgres-jsonb-object-agg-unique-keys/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/14/postgres-jsonb-object-agg-unique-keys/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="PostgreSQL 生成 JSONB 对象时，两个来源行为什么只剩一个键？ | Midnight blog">
+    <meta property="og:description" content="用两个部门和三条设置区分 PostgreSQL JSONB 对象聚合的决胜顺序、组内拒重复与严格模式。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/14/postgres-jsonb-object-agg-unique-keys/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/14/postgres-jsonb-object-agg-unique-keys/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/14/postgres-jsonb-object-agg-unique-keys/","name":"PostgreSQL 生成 JSONB 对象时，两个来源行为什么只剩一个键？ | Midnight blog","description":"用两个部门和三条设置区分 PostgreSQL JSONB 对象聚合的决胜顺序、组内拒重复与严格模式。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/14/postgres-jsonb-object-agg-unique-keys/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/14/postgres-jsonb-object-agg-unique-keys/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/14/postgres-jsonb-object-agg-unique-keys/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/14/postgres-jsonb-object-agg-unique-keys/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/14/postgres-jsonb-object-agg-unique-keys/","headline":"PostgreSQL 生成 JSONB 对象时，两个来源行为什么只剩一个键？","description":"用两个部门和三条设置区分 PostgreSQL JSONB 对象聚合的决胜顺序、组内拒重复与严格模式。","inLanguage":"zh-CN","datePublished":"2026-11-13T19:19:59.000Z","dateModified":"2026-11-13T19:19:59.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/functions-aggregate.html"],"keywords":"PostgreSQL, JSONB, SQL"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/14/postgres-jsonb-object-agg-unique-keys/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"PostgreSQL 生成 JSONB 对象时，两个来源行为什么只剩一个键？","item":"https://www.zyweb.vip/zh-CN/2026/11/14/postgres-jsonb-object-agg-unique-keys/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/14/postgres-jsonb-object-agg-unique-keys/" selected>zh-CN</option><option value="/en/2026/11/14/postgres-jsonb-object-agg-unique-keys/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/14/postgres-jsonb-object-agg-unique-keys/" selected>zh-CN</option><option value="/en/2026/11/14/postgres-jsonb-object-agg-unique-keys/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--postgresql">PostgreSQL</span>
+      <time datetime="2026-11-13T19:19:59.000Z">2026-11-14</time>
+    </div>
+
+    <h1>PostgreSQL 生成 JSONB 对象时，两个来源行为什么只剩一个键？</h1>
+
+    
+      <p class="post-hero__summary">用两个部门和三条设置区分 PostgreSQL JSONB 对象聚合的决胜顺序、组内拒重复与严格模式。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-13T19:19:59.000Z">2026-11-14</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/14/postgres-jsonb-object-agg-unique-keys/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/14/postgres-jsonb-object-agg-unique-keys/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>普通对象聚合保留最后处理的同名值。</li><li>唯一模式会拒绝同一组中的重复键。</li><li>按输出合同选择决胜、拒绝或保留所有来源。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>PostgreSQL 的 jsonb_object_agg 会把同名键压成一个，保留最后处理的值。若输出合同要求每组只有一条来源能定义该键，应选会拒绝重复的聚合，并把冲突留给能够定位输入的错误路径。</p>
+<p>假设一个设置接口要为每个部门生成一个 JSONB 对象。部门一有两条 color 设置，先后是红和蓝。部门二也有 color，值是绿。接口本来要求每个部门只有一条颜色设置，开发却看到聚合成功并返回两个对象，认为源数据没有冲突。问题是对象中的键数已经不是聚合前的行数。第一次检查应回到每个输出对象的来源组，弄清是哪里重复，而不是拿对象的最终大小替输入做验收。</p>
+<h2 id="最后的值由聚合输入决定"><a href="#最后的值由聚合输入决定" class="headerlink" title="最后的值由聚合输入决定"></a>最后的值由聚合输入决定</h2><p>PostgreSQL 十八版的聚合文档说明，普通 JSONB 对象聚合把键转成文本。当同名键多次出现时，结果只保留最后一个值。若业务确实约定按序号采用最后一条，应在聚合调用里给出明确排序，并处理序号相同的情况。查询最外层的 ORDER BY 可以给部门行排序，却不能替内部聚合提供同一份输入顺序。重复键如果本来属于异常，就不必编一条决胜规则，只应让冲突显式失败。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-aggregate.html">PostgreSQL 18 聚合函数</a>。</p>
+<p>同一键在两个部门出现并不冲突，只要两个部门被分成不同的输出组。给聚合选择唯一模式之前，先把组的边界与键的业务范围写清。若部门内部的设置来自多个来源，还要判断它们的名字是否应当映到同一个键。示例里的名称本来就是文本，不讨论自定义数据类型如何转换。迁移真实查询时，应检查实际传给聚合的键表达式以及它是否会合并原本不同的标识。</p>
+<h2 id="用相同三条来源记录验收三个结果"><a href="#用相同三条来源记录验收三个结果" class="headerlink" title="用相同三条来源记录验收三个结果"></a>用相同三条来源记录验收三个结果</h2><p>以下是未执行的教学 SQL。临时表给出两个部门、每条设置的唯一组内序号、键和值。第一份查询有意选择组内最后一条；第二份查询为唯一模式提供一个跨组重名的正控制。负例在这两份查询之后单独运行，以免一个预期错误中断整个会话中的其它验收。</p>
+<pre><code class="sql">CREATE TEMP TABLE settings (
+    department int,
+    seq int,
+    name text,
+    value text
+);
+INSERT INTO settings VALUES
+    (1, 1, &#39;color&#39;, &#39;red&#39;),
+    (1, 2, &#39;color&#39;, &#39;blue&#39;),
+    (2, 1, &#39;color&#39;, &#39;green&#39;);
+
+SELECT department, jsonb_object_agg(name, value ORDER BY seq) AS payload
+FROM settings
+GROUP BY department
+ORDER BY department;
+
+SELECT department, jsonb_object_agg_unique(name, value) AS payload
+FROM settings
+WHERE department &lt;&gt; 1 OR seq = 1
+GROUP BY department
+ORDER BY department;
+</code></pre>
+<p>第一份查询预期得到两个部门。部门一的 color 是 blue，部门二是 green。第二份查询只保留部门一的序号一与部门二的记录，预期得到 red 和 green。为单独运行负例，复制第二份查询并移除 WHERE 条件，其他内容保持相同。预期聚合在部门一发现重复 color 并报告错误，不提供可作为成功响应消费的一组结果。这里不检查异常文本的某个语言版本；执行时应记录实际数据库版本、错误代码和该部门的输入身份。</p>
+<p>成功结果也应按部门和键配对核对，不能只检查有两个对象。如果聚合前的连接不小心从其他部门带来一条颜色行，最后保留的颜色可能恰好与预期相同，普通查询仍会成功。应另外核对聚合输入，用组键与 JSON 键统计每组来源数。在输出要求唯一时，拒重复的聚合能让这类冲突显露出来；它不会自动证明连接的归属条件正确。样本没有关联外部表。</p>
+<h2 id="选择允许哪一种冲突处置"><a href="#选择允许哪一种冲突处置" class="headerlink" title="选择允许哪一种冲突处置"></a>选择允许哪一种冲突处置</h2><p>配置要求“一键一条来源”时，适合使用唯一模式，并在出错后从原始组查出重复项。不要为了让导出完成，临时改用普通聚合吞掉错误。如果业务需要保留所有记录，用数组或明细列表比对象更适合。若已确认“后一次更新覆盖前一次”，普通模式也可以表达这项决定，但需要一个稳定且可验收的决胜键。让业务规则先决定输出类型，再用数据库函数落实。</p>
+<p>还可以构造两条内容完全相同但来自不同记录的输入。如果测试只核对最终 JSON 值，两个相同值被覆盖也无法发现。唯一要求约束的是输入键数，而不取决于旧值与新值是否恰好相等。把输入来源身份加入诊断回执，会让修复落在冲突数据本身。站内的 <a href="/zh-CN/2026/11/09/json-duplicate-member-interoperability/">JSON 重复成员校验</a> 讨论读入原始对象之前的检查；这里由 SQL 行创建对象，来源行还在时可以沿组核对。</p>
+<p>在接口端，若错误中途使事务进入失败状态，应让调用方明确处理这次失败，再用独立的只读查询诊断输入。不要把一次失败请求中已经打印的局部日志当作完整交付。另准备一个部门确实没有设置的输入，确认产品希望显示缺失还是空对象；那是另一个空输入合同，不能据此改变重复键失败的处理。本文没有执行 SQL 或连接 API，所有结果只是固定样本的预期。</p>
+<p>如果用独立预检列出冲突，注意它和最终聚合可能读到不同时间的输入。两次查询之间若有写入，仅凭先前预检通过就撤掉聚合的拒绝规则，会留下新冲突的窗口。可以让演练在预检和输出之间插入一条同名记录，再确认最终操作仍拒绝。这里没有实现事务协调，也没有验证并发写入。需要保证长期唯一性的系统，应依实际数据模型和约束明确哪些写入可以创建同名键，而不是把临时诊断当成约束本身。</p>
+<h2 id="唯一模式下，空值能跳过但仍检查重名吗？"><a href="#唯一模式下，空值能跳过但仍检查重名吗？" class="headerlink" title="唯一模式下，空值能跳过但仍检查重名吗？"></a>唯一模式下，空值能跳过但仍检查重名吗？</h2><p>PostgreSQL 十八版的 jsonb_object_agg_unique_strict 会跳过值为 SQL NULL 的键值对，同时对重复键报错，文档明确包括带空值的键值对。可以用另一组输入，颜色为 green，memo 值为 SQL NULL。普通唯一模式应保留 memo 的 JSON null，严格唯一模式应省略这个键。再追加同名 memo 的一条非空记录，单独运行严格模式，预期仍因重复报错。两条对照分别检查省略与冲突，不能只看最终对象里没有 memo 就推断唯一性通过。这个变体未执行。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-aggregate.html" rel="noopener">PostgreSQL: Documentation: 18: 9.21. Aggregate Functions</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--jsonb" href="/zh-CN/tags/JSONB/">JSONB</a>
+          
+            <a class="tag tag--sql" href="/zh-CN/tags/SQL/">SQL</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F14%2Fpostgres-jsonb-object-agg-unique-keys%2F&text=PostgreSQL%20%E7%94%9F%E6%88%90%20JSONB%20%E5%AF%B9%E8%B1%A1%E6%97%B6%EF%BC%8C%E4%B8%A4%E4%B8%AA%E6%9D%A5%E6%BA%90%E8%A1%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%8F%AA%E5%89%A9%E4%B8%80%E4%B8%AA%E9%94%AE%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F14%2Fpostgres-jsonb-object-agg-unique-keys%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=PostgreSQL%20%E7%94%9F%E6%88%90%20JSONB%20%E5%AF%B9%E8%B1%A1%E6%97%B6%EF%BC%8C%E4%B8%A4%E4%B8%AA%E6%9D%A5%E6%BA%90%E8%A1%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%8F%AA%E5%89%A9%E4%B8%80%E4%B8%AA%E9%94%AE%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F14%2Fpostgres-jsonb-object-agg-unique-keys%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/14/promql-histogram-quantile-bucket-repair/">
+              <span>上一篇</span>
+              <strong>Prometheus 给出了 p75，为什么还说桶计数被修正？</strong>
+              <small>2026-11-14</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/14/http-deprecation-sunset-two-dates/">
+              <span>下一篇</span>
+              <strong>收到 Deprecation 还能继续用 API 吗？</strong>
+              <small>2026-11-14</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#最后的值由聚合输入决定">最后的值由聚合输入决定</a>
+          
+            <a class="toc-link toc-link--h2" href="#用相同三条来源记录验收三个结果">用相同三条来源记录验收三个结果</a>
+          
+            <a class="toc-link toc-link--h2" href="#选择允许哪一种冲突处置">选择允许哪一种冲突处置</a>
+          
+            <a class="toc-link toc-link--h2" href="#唯一模式下，空值能跳过但仍检查重名吗？">唯一模式下，空值能跳过但仍检查重名吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>254</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/13/postgres-array-agg-left-join-empty/">客户没有子记录，为什么 array_agg 给了 {NULL}？</a></h3>
+          <p>2026-11-13</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/">GROUP BY 只写了主键，为什么还能选出名称？</a></h3>
+          <p>2026-11-12</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/12/postgres-partial-index-generic-plan-predicate/">字面量用得到部分索引，绑定状态后为什么不行？</a></h3>
+          <p>2026-11-12</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

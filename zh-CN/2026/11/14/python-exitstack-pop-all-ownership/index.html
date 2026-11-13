@@ -1,0 +1,432 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>退出 with 以后，ExitStack 的资源为什么还开着？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用实际运行的部分失败与成功交接，核对 ExitStack.pop_all 的回调转移和关闭顺序。">
+  
+  
+    <meta name="keywords" content="ExitStack,pop_all,cleanup">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/14/python-exitstack-pop-all-ownership/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/14/python-exitstack-pop-all-ownership/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/14/python-exitstack-pop-all-ownership/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/14/python-exitstack-pop-all-ownership/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="退出 with 以后，ExitStack 的资源为什么还开着？ | Midnight blog">
+    <meta property="og:description" content="用实际运行的部分失败与成功交接，核对 ExitStack.pop_all 的回调转移和关闭顺序。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/14/python-exitstack-pop-all-ownership/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/14/python-exitstack-pop-all-ownership/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/14/python-exitstack-pop-all-ownership/","name":"退出 with 以后，ExitStack 的资源为什么还开着？ | Midnight blog","description":"用实际运行的部分失败与成功交接，核对 ExitStack.pop_all 的回调转移和关闭顺序。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/14/python-exitstack-pop-all-ownership/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/14/python-exitstack-pop-all-ownership/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/14/python-exitstack-pop-all-ownership/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/14/python-exitstack-pop-all-ownership/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/14/python-exitstack-pop-all-ownership/","headline":"退出 with 以后，ExitStack 的资源为什么还开着？","description":"用实际运行的部分失败与成功交接，核对 ExitStack.pop_all 的回调转移和关闭顺序。","inLanguage":"zh-CN","datePublished":"2026-11-13T19:19:59.000Z","dateModified":"2026-11-13T19:19:59.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.14/library/contextlib.html#contextlib.ExitStack"],"keywords":"Python, Resources, Testing"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/14/python-exitstack-pop-all-ownership/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"退出 with 以后，ExitStack 的资源为什么还开着？","item":"https://www.zyweb.vip/zh-CN/2026/11/14/python-exitstack-pop-all-ownership/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/14/python-exitstack-pop-all-ownership/" selected>zh-CN</option><option value="/en/2026/11/14/python-exitstack-pop-all-ownership/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/14/python-exitstack-pop-all-ownership/" selected>zh-CN</option><option value="/en/2026/11/14/python-exitstack-pop-all-ownership/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--python">Python</span>
+      <time datetime="2026-11-13T19:19:59.000Z">2026-11-14</time>
+    </div>
+
+    <h1>退出 with 以后，ExitStack 的资源为什么还开着？</h1>
+
+    
+      <p class="post-hero__summary">用实际运行的部分失败与成功交接，核对 ExitStack.pop_all 的回调转移和关闭顺序。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-13T19:19:59.000Z">2026-11-14</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/14/python-exitstack-pop-all-ownership/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/14/python-exitstack-pop-all-ownership/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>pop_all 转移退出回调。</li><li>部分获取失败仍由原栈清理。</li><li>交接后由新栈负责退出。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>调用 ExitStack.pop_all 后，已经登记的退出回调会转到一个新栈。离开原来的 with 时，原栈已经没有这些清理工作。要让资源继续供调用者使用，就把新栈和资源一起交付，并明确由谁关闭。</p>
+<p>假设一个导出器需要两个输入句柄。第二个获取步骤可能失败，失败时必须关闭已经打开的第一个。两个都拿到以后，导出器希望把它们交给调用方继续使用。如果只在函数里开一个普通 with 并直接返回句柄，函数离开作用域就会清理它们；如果索性不登记清理，第二个获取失败时又可能留下第一个。ExitStack 可以先负责失败回收，再在两个获取步骤都通过时移交已登记的回调。</p>
+<h2 id="交接发生在回调栈上"><a href="#交接发生在回调栈上" class="headerlink" title="交接发生在回调栈上"></a>交接发生在回调栈上</h2><p>同步 ExitStack 的 enter_context 进入一个上下文管理器，并登记它的退出方法。登记者按逆序退出。pop_all 会将当前回调栈转移到新的 ExitStack，调用时没有任何退出回调运行。新的栈可以由持有者显式调用 close，或由另一个 with 管理。官方文档还说明，回调不会在栈对象被垃圾回收时隐式执行。丢掉返回值会丢失这次明确的清理入口，不能依赖对象销毁时机来完成交付。<a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/contextlib.html#contextlib.ExitStack">Python 3.14 contextlib</a>。</p>
+<p>这里被移交的是同一组退出动作。资源不需要重新获取，后加入的回调仍在先加入的前面执行。对调用方而言，获得两个句柄和接收清理责任是同一次交接中的两部分。API 如果只返回句柄，调用方就很难知道该用哪个栈收尾，失败责任也不易在调用关系上核对。</p>
+<h2 id="让成功交接和部分失败各走一次"><a href="#让成功交接和部分失败各走一次" class="headerlink" title="让成功交接和部分失败各走一次"></a>让成功交接和部分失败各走一次</h2><p>下方完整程序已在本地 Python 3.11.15 执行。A 与 B 是内存里的上下文管理器，记录进入尝试和关闭，没有打开文件或连接真实服务。第二次获取是否成功是两条路径唯一的准备差异。程序先用失败控制确认已经获得的资源会清理，再用成功路径观察两个作用域。</p>
+<pre><code class="python">from contextlib import ExitStack, contextmanager
+
+events = []
+
+@contextmanager
+def acquire(name, fail=False):
+    events.append(&quot;try &quot; + name)
+    if fail:
+        raise ValueError(name)
+    try:
+        yield name
+    finally:
+        events.append(&quot;close &quot; + name)
+
+def open_pair(fail=False):
+    with ExitStack() as stack:
+        first = stack.enter_context(acquire(&quot;A&quot;))
+        second = stack.enter_context(acquire(&quot;B&quot;, fail))
+        return (first, second), stack.pop_all()
+
+try:
+    open_pair(fail=True)
+except ValueError:
+    assert events == [&quot;try A&quot;, &quot;try B&quot;, &quot;close A&quot;]
+else:
+    raise AssertionError(&quot;expected acquisition failure&quot;)
+print(&quot;partial:&quot;, events)
+
+events.clear()
+pair, owner = open_pair()
+assert pair == (&quot;A&quot;, &quot;B&quot;)
+assert events == [&quot;try A&quot;, &quot;try B&quot;]
+try:
+    print(&quot;after transfer:&quot;, events)
+finally:
+    owner.close()
+assert events == [&quot;try A&quot;, &quot;try B&quot;, &quot;close B&quot;, &quot;close A&quot;]
+print(&quot;after close:&quot;, events)
+</code></pre>
+<p>部分失败时，预期看到先尝试 A，再尝试 B，然后只关闭 A。B 在交付资源之前抛出，未登记退出动作。成功时，open_pair 返回后先核对两个值，还不能看到关闭事件。调用新栈的 close 后，预期先关闭 B，再关闭 A。归档输出保存了三次观察。只检查最终有没有关闭两个资源，会让“离开原栈时已经关闭”和“新持有者用完才关闭”得到相同结果。这个例子把关闭时点与次数一起验收。</p>
+<p>样本在获取 B 的阶段抛错。它不展示某个上下文管理器在自己进入过程中又获取内部资源后如何回收。如果 B 的进入步骤先创建了内部对象再失败，B 必须处理自己的部分构造，或在取得内部对象时立即登记相应责任。外层的 enter_context 不能凭空知道 B 在抛错前做了什么。旧文的 <a href="/zh-CN/2026/10/26/python-contextmanager-single-yield-cleanup/">单次 yield 资源管理</a> 解释管理器内部何时承担退出责任；这里核对的是已经成功登记的清理如何跨作用域转移。</p>
+<h2 id="把交接放到最后一个需要保护的步骤后"><a href="#把交接放到最后一个需要保护的步骤后" class="headerlink" title="把交接放到最后一个需要保护的步骤后"></a>把交接放到最后一个需要保护的步骤后</h2><p>如果导出器除了打开两个输入，还要校验它们的头部或分配一个临时缓冲区，应先完成这些步骤，再决定要不要移交。在转移以后继续做可能失败的工作，就需要保证新栈也处于明确的关闭路径。可以增加一个独立反例，让获取都成功，但让准备工作最后一步失败。预期函数没有把资源交给调用者，A 与 B 都各关闭一次。若这组失败被错误安排在 pop_all 之后，原 with 的退出不会再清理这两个资源。这项对照未执行；主程序只检查第二次获取失败。</p>
+<p>另一项应用检查是明确调用者什么时候失去使用资格。假设两个文件在交接后要写入同一个输出，关闭新栈后应停止后续写入。可以在接收 API 的测试里用可记录关闭状态的句柄，把正常输出、使用失败和调用方异常分别验证。若模块需要报告清理自身的错误，另加一组会抛错的回调并保存实际传播路径。这里的两个内存管理器都不会在关闭时抛错，不能从它们的结果推断真实文件已写完、数据已持久化，或异常会被自动合并。</p>
+<p>还有一种接口只在回调期间借用资源，调用者不该在回调结束后继续保留句柄。它可以把全部工作留在原来的栈里，省去移交。如果确实要把资源送到另一个工作者，应让接收动作同时携带清理入口；发送失败时，仍由当前持有者关闭。验收可以让接收方分别接受和拒绝交接。拒绝时不应遗留活动资源，接受时原作用域结束仍可使用，最后由接收方关闭一次。对这种接口，保留接受动作与关闭动作的记录比只看返回的句柄更有用。这个并发或队列交付对照没有运行，内存例子只在同一调用链中转移责任。</p>
+<h2 id="新栈用-close-和用-with，退出回调收到的异常一样吗？"><a href="#新栈用-close-和用-with，退出回调收到的异常一样吗？" class="headerlink" title="新栈用 close 和用 with，退出回调收到的异常一样吗？"></a>新栈用 close 和用 with，退出回调收到的异常一样吗？</h2><p>对栈中第一个执行的普通退出回调，直接 close 启动的是没有异常的退出，初始参数表示无异常。用 with 管理新栈时，如果主体抛错，退出回调可以收到对应异常信息。后续回调拿到的状态还可能随前面的回调抑制或替换异常而变化。可在独立探针里登记一个只记录三项参数的退出方法，分别通过 close 和有异常的 with 退出，再检查是否保留了原异常。用 callback 登记的普通函数没有这组三项参数。这个追问未运行。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/contextlib.html#contextlib.ExitStack" rel="noopener">contextlib — Utilities for with-statement contexts — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+            <a class="tag tag--resources" href="/zh-CN/tags/Resources/">Resources</a>
+          
+            <a class="tag tag--testing" href="/zh-CN/tags/Testing/">Testing</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F14%2Fpython-exitstack-pop-all-ownership%2F&text=%E9%80%80%E5%87%BA%20with%20%E4%BB%A5%E5%90%8E%EF%BC%8CExitStack%20%E7%9A%84%E8%B5%84%E6%BA%90%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E5%BC%80%E7%9D%80%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F14%2Fpython-exitstack-pop-all-ownership%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E9%80%80%E5%87%BA%20with%20%E4%BB%A5%E5%90%8E%EF%BC%8CExitStack%20%E7%9A%84%E8%B5%84%E6%BA%90%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E5%BC%80%E7%9D%80%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F14%2Fpython-exitstack-pop-all-ownership%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/14/python-unittest-assert-count-equal-multiplicity/">
+              <span>上一篇</span>
+              <strong>顺序无关的测试，为什么不能只比较 set？</strong>
+              <small>2026-11-14</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/">
+              <span>下一篇</span>
+              <strong>父任务改了 ContextVar，已经创建的子任务为什么仍读到旧值？</strong>
+              <small>2026-11-14</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#交接发生在回调栈上">交接发生在回调栈上</a>
+          
+            <a class="toc-link toc-link--h2" href="#让成功交接和部分失败各走一次">让成功交接和部分失败各走一次</a>
+          
+            <a class="toc-link toc-link--h2" href="#把交接放到最后一个需要保护的步骤后">把交接放到最后一个需要保护的步骤后</a>
+          
+            <a class="toc-link toc-link--h2" href="#新栈用-close-和用-with，退出回调收到的异常一样吗？">新栈用 close 和用 with，退出回调收到的异常一样吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>254</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/14/python-unittest-assert-count-equal-multiplicity/">顺序无关的测试，为什么不能只比较 set？</a></h3>
+          <p>2026-11-14</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/14/pydantic-revalidate-nested-instance/">Pydantic 外层通过，为什么内层实例还有非法字段？</a></h3>
+          <p>2026-11-14</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/">父任务改了 ContextVar，已经创建的子任务为什么仍读到旧值？</a></h3>
+          <p>2026-11-14</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

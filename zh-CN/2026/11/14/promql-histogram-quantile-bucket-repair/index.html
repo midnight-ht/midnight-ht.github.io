@@ -1,0 +1,453 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Prometheus 给出了 p75，为什么还说桶计数被修正？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="手算一组累计桶的分位数修复，用单调对照分开数值结果与输入质量。">
+  
+  
+    <meta name="keywords" content="histogram_quantile,累计桶">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/14/promql-histogram-quantile-bucket-repair/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/14/promql-histogram-quantile-bucket-repair/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/14/promql-histogram-quantile-bucket-repair/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/14/promql-histogram-quantile-bucket-repair/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Prometheus 给出了 p75，为什么还说桶计数被修正？ | Midnight blog">
+    <meta property="og:description" content="手算一组累计桶的分位数修复，用单调对照分开数值结果与输入质量。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/14/promql-histogram-quantile-bucket-repair/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/14/promql-histogram-quantile-bucket-repair/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/14/promql-histogram-quantile-bucket-repair/","name":"Prometheus 给出了 p75，为什么还说桶计数被修正？ | Midnight blog","description":"手算一组累计桶的分位数修复，用单调对照分开数值结果与输入质量。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/14/promql-histogram-quantile-bucket-repair/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/14/promql-histogram-quantile-bucket-repair/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/14/promql-histogram-quantile-bucket-repair/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/14/promql-histogram-quantile-bucket-repair/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/14/promql-histogram-quantile-bucket-repair/","headline":"Prometheus 给出了 p75，为什么还说桶计数被修正？","description":"手算一组累计桶的分位数修复，用单调对照分开数值结果与输入质量。","inLanguage":"zh-CN","datePublished":"2026-11-13T19:19:59.000Z","dateModified":"2026-11-13T19:19:59.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://prometheus.io/docs/prometheus/latest/querying/functions/#histogram_quantile","https://prometheus.io/docs/prometheus/latest/querying/api/#format-overview"],"keywords":"Prometheus, 直方图"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/14/promql-histogram-quantile-bucket-repair/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Prometheus 给出了 p75，为什么还说桶计数被修正？","item":"https://www.zyweb.vip/zh-CN/2026/11/14/promql-histogram-quantile-bucket-repair/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/14/promql-histogram-quantile-bucket-repair/" selected>zh-CN</option><option value="/en/2026/11/14/promql-histogram-quantile-bucket-repair/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/14/promql-histogram-quantile-bucket-repair/" selected>zh-CN</option><option value="/en/2026/11/14/promql-histogram-quantile-bucket-repair/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--prometheus">Prometheus</span>
+      <time datetime="2026-11-13T19:19:59.000Z">2026-11-14</time>
+    </div>
+
+    <h1>Prometheus 给出了 p75，为什么还说桶计数被修正？</h1>
+
+    
+      <p class="post-hero__summary">手算一组累计桶的分位数修复，用单调对照分开数值结果与输入质量。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-13T19:19:59.000Z">2026-11-14</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/14/promql-histogram-quantile-bucket-repair/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/14/promql-histogram-quantile-bucket-repair/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>经典桶的累计计数不应随上界扩大而下降。</li><li>修复后仍可计算出分位数。</li><li>查询数值与 info 注记应分别核对。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>一个累计桶竟比更窄的桶少，Prometheus 仍然可以给出分位数。经典直方图的计数明显逆序时，<code>histogram_quantile</code> 会为这次计算抬高下降的桶，并附带提示。分位数有值和输入没有问题，是两件需要分别核对的事。</p>
+<p>设想值班工程师看到面板里的 p75 仍为零点四五秒，另一份查询回执却说输入需要修正。如果他只对照面板数值，会觉得没有变化。需要看的是计算用到了哪几项桶计数，以及修正之前它们为何彼此不合。本文只讨论由带 <code>le</code> 标签的序列表示的经典直方图。原生直方图的输入形状和部分插值规则不同，不沿用这里的四桶算例。</p>
+<h3 id="先把累计数按桶上界排列"><a href="#先把累计数按桶上界排列" class="headerlink" title="先把累计数按桶上界排列"></a>先把累计数按桶上界排列</h3><p>每个经典桶统计小于或等于某个上界的观察数。上界扩大后，原先已经数进去的观察仍包含在内，累计值可以持平但不应下降。假设同一目标的四个桶依次为三十、二十、五十、六十，那么第二个桶违反了这项关系。当前查询仍可求值：手册说明，超过允许浮点尾差的逆序会通过把下降桶提高到前一个桶的值来修复，并附加一条 info 注记。这个过程改变的是查询使用的计数，不是在采集端重写旧样本。 <a target="_blank" rel="noopener" href="https://prometheus.io/docs/prometheus/latest/querying/functions/#histogram_quantile">Prometheus 的 histogram_quantile 参考</a></p>
+<table>
+<thead>
+<tr>
+<th>上界（秒）</th>
+<th>原始累计数</th>
+<th>计算使用的累计数</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0.1</td>
+<td>30</td>
+<td>30</td>
+</tr>
+<tr>
+<td>0.3</td>
+<td>20</td>
+<td>30</td>
+</tr>
+<tr>
+<td>0.5</td>
+<td>50</td>
+<td>50</td>
+</tr>
+<tr>
+<td>+Inf</td>
+<td>60</td>
+<td>60</td>
+</tr>
+</tbody></table>
+<p>总数六十的百分之七十五是四十五。这个位置落在上界为零点五的有限桶内，前一个上界是零点三。计算使用的累计数从三十到五十增加二十，四十五在这段区间里经过十五个计数，即四分之三。对经典桶做线性插值，得到零点四五秒。这个数字只说明按修复后的桶可以估算分位数，不能确定每个请求实际用了多久。若采集数据里应有的其他标签在查询前被混合，也要回到原始桶看所属对象。</p>
+<h3 id="用同样的数值做一个反例"><a href="#用同样的数值做一个反例" class="headerlink" title="用同样的数值做一个反例"></a>用同样的数值做一个反例</h3><p>给另一组输入直接提供三十、三十、五十、六十。它没有明显逆序，计算仍然得到同一个分位数。下面是完整的拟议 promtool 测试，分别为异常组和原本单调组断言输出。两组每条序列仅提供一个样本，不经过 <code>rate</code> 或聚合，以隔离这一处数值机制。测试未运行。保存为 repair.yml 后可在适用的 Prometheus 工具环境执行 <code>promtool test rules repair.yml</code>。</p>
+<pre><code class="yaml">rule_files: []
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: &#39;bad_bucket{le=&quot;0.1&quot;}&#39;
+        values: &#39;30&#39;
+      - series: &#39;bad_bucket{le=&quot;0.3&quot;}&#39;
+        values: &#39;20&#39;
+      - series: &#39;bad_bucket{le=&quot;0.5&quot;}&#39;
+        values: &#39;50&#39;
+      - series: &#39;bad_bucket{le=&quot;+Inf&quot;}&#39;
+        values: &#39;60&#39;
+      - series: &#39;ok_bucket{le=&quot;0.1&quot;}&#39;
+        values: &#39;30&#39;
+      - series: &#39;ok_bucket{le=&quot;0.3&quot;}&#39;
+        values: &#39;30&#39;
+      - series: &#39;ok_bucket{le=&quot;0.5&quot;}&#39;
+        values: &#39;50&#39;
+      - series: &#39;ok_bucket{le=&quot;+Inf&quot;}&#39;
+        values: &#39;60&#39;
+    promql_expr_test:
+      - expr: &#39;histogram_quantile(0.75, bad_bucket)&#39;
+        eval_time: 0m
+        exp_samples:
+          - labels: &#39;{}&#39;
+            value: 0.45
+      - expr: &#39;histogram_quantile(0.75, ok_bucket)&#39;
+        eval_time: 0m
+        exp_samples:
+          - labels: &#39;{}&#39;
+            value: 0.45
+</code></pre>
+<p>两条值断言即使都通过，也不能说明两条输入一样健康。需要验收注记时，用包含同一时点样本的隔离查询环境，分别把两条表达式提交给 Prometheus HTTP API。保存整个响应，再查看顶层 <code>infos</code> 与实际返回值。异常组预期出现计数修复相关的消息，对照组不应出现这条消息。该 API 检查也未执行。API 可以同时返回数据与说明，后者不必让请求失败；使用面板或客户端时，要确认它是否把注记展示出来。 <a target="_blank" rel="noopener" href="https://prometheus.io/docs/prometheus/latest/querying/api/#format-overview">Prometheus HTTP API 响应格式</a></p>
+<h3 id="找回被修正之前的桶"><a href="#找回被修正之前的桶" class="headerlink" title="找回被修正之前的桶"></a>找回被修正之前的桶</h3><p>定位时保留查询求值时间和完整标签，从聚合后的向量往回看。先找出哪个相邻桶下降，再检查产生它们的两个来源是否是同一批观察，单位与维度是否一致。若查询组合了不同目标或不同时间范围，可以单独导出每个目标的桶再对照，避免误把一个目标的计数补到另一个目标。文档给出的修复提示说明有值得调查的输入异常，并未承诺某一种原因。修复结果仍可服务临时浏览，若要用于发布验收或长期容量判断，应先确认原始计数和查询路径的质量。</p>
+<p>排查时还可把相邻两桶的查询写成互相独立的检查。假如较窄桶按服务和实例分组，较宽桶却只按服务分组，肉眼看到的两条曲线可能根本不对应同一组输入。把两条样本的完整标签和求值时间放在一起，能先发现这种比较错位。若聚合前每个目标的原始桶都满足累计关系，接下来应查看查询是否给不同桶使用了相同的目标选择条件。两条时间序列上的数值都来自计数器，也不能代替这一核对。</p>
+<p>对于需要长期保存的监控证据，可以给控制组和异常组各留一份查询回执。控制组用于确认同样的查询表达式与响应解析在合理输入下可工作；异常组用于确认观察者能看到该特定注记。若回执中缺少 infos，先核对服务器和客户端版本，再查是否在代理或显示层丢了这个字段。这个验收计划不假定面板一定渲染 API 的所有信息。</p>
+<p>还要区别结果精度与报告范围。旧文<a href="/zh-CN/2026/10/12/prometheus-quantile-aggregation/">为什么不能把各实例的分位数求平均</a>讨论如何获得正确的组合分布；这里先假定需要的桶来自同一输入组，再检查该组的累计关系。验收不能因为组内结果看起来平稳，就跳过对这组输入的核对。记录时把数值、修复注记和相邻原始计数放在一起。否则同事重跑时即使得到完全相同的分位数，也无法说明那次修复是否还发生。</p>
+<h3 id="两个桶只有极小的下降，也会出现同一条修复提示吗？"><a href="#两个桶只有极小的下降，也会出现同一条修复提示吗？" class="headerlink" title="两个桶只有极小的下降，也会出现同一条修复提示吗？"></a>两个桶只有极小的下降，也会出现同一条修复提示吗？</h3><p>手册先忽略小到可归因于浮点精度的相邻差异，门槛是两个计数之和的一万亿分之一。比如相邻计数近似三十，下降若远小于六乘十的负十一次方，就落在这一小差异尺度内。只有调整后仍存在逆序，才走向前一桶计数抬高的处理并附上本文讨论的注记。主例下降十，远不接近该门槛。该微差变体未运行，验证时应分别确认输入差异、结果值和这条注记，而不是把没有注记理解成未发生任何浮点处理。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://prometheus.io/docs/prometheus/latest/querying/functions/#histogram_quantile" rel="noopener">Query functions — Prometheus</a></li><li><a target="_blank" href="https://prometheus.io/docs/prometheus/latest/querying/api/#format-overview" rel="noopener">HTTP API — Prometheus</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--prometheus" href="/zh-CN/tags/Prometheus/">Prometheus</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E7%9B%B4%E6%96%B9%E5%9B%BE/">直方图</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F14%2Fpromql-histogram-quantile-bucket-repair%2F&text=Prometheus%20%E7%BB%99%E5%87%BA%E4%BA%86%20p75%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E8%AF%B4%E6%A1%B6%E8%AE%A1%E6%95%B0%E8%A2%AB%E4%BF%AE%E6%AD%A3%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F14%2Fpromql-histogram-quantile-bucket-repair%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Prometheus%20%E7%BB%99%E5%87%BA%E4%BA%86%20p75%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E8%AF%B4%E6%A1%B6%E8%AE%A1%E6%95%B0%E8%A2%AB%E4%BF%AE%E6%AD%A3%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F14%2Fpromql-histogram-quantile-bucket-repair%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/14/pydantic-revalidate-nested-instance/">
+              <span>上一篇</span>
+              <strong>Pydantic 外层通过，为什么内层实例还有非法字段？</strong>
+              <small>2026-11-14</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/14/postgres-jsonb-object-agg-unique-keys/">
+              <span>下一篇</span>
+              <strong>PostgreSQL 生成 JSONB 对象时，两个来源行为什么只剩一个键？</strong>
+              <small>2026-11-14</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h3" href="#先把累计数按桶上界排列">先把累计数按桶上界排列</a>
+          
+            <a class="toc-link toc-link--h3" href="#用同样的数值做一个反例">用同样的数值做一个反例</a>
+          
+            <a class="toc-link toc-link--h3" href="#找回被修正之前的桶">找回被修正之前的桶</a>
+          
+            <a class="toc-link toc-link--h3" href="#两个桶只有极小的下降，也会出现同一条修复提示吗？">两个桶只有极小的下降，也会出现同一条修复提示吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>254</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/09/prometheus-staleness-lookback-instant/">停报后固定显示五分钟，是错误的Prometheus规则</a></h3>
+          <p>2026-11-09</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/08/promql-bool-alert-presence/">PromQL 算出 0，告警为什么仍然 active？</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/">Prometheus丢弃全部抓取样本后，up为什么还在？</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

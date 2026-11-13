@@ -1,0 +1,421 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>父任务改了 ContextVar，已经创建的子任务为什么仍读到旧值？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用实际运行的事件门对照，区分 asyncio 的任务创建、上下文复制与随后读取。">
+  
+  
+    <meta name="keywords" content="create_task,task context,ContextVar">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/14/python-asyncio-contextvar-task-snapshot/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="父任务改了 ContextVar，已经创建的子任务为什么仍读到旧值？ | Midnight blog">
+    <meta property="og:description" content="用实际运行的事件门对照，区分 asyncio 的任务创建、上下文复制与随后读取。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/","name":"父任务改了 ContextVar，已经创建的子任务为什么仍读到旧值？ | Midnight blog","description":"用实际运行的事件门对照，区分 asyncio 的任务创建、上下文复制与随后读取。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/","headline":"父任务改了 ContextVar，已经创建的子任务为什么仍读到旧值？","description":"用实际运行的事件门对照，区分 asyncio 的任务创建、上下文复制与随后读取。","inLanguage":"zh-CN","datePublished":"2026-11-13T19:19:59.000Z","dateModified":"2026-11-13T19:19:59.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.14/library/asyncio-task.html#asyncio.create_task","https://docs.python.org/3.14/library/contextvars.html"],"keywords":"Python, asyncio, ContextVar"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"父任务改了 ContextVar，已经创建的子任务为什么仍读到旧值？","item":"https://www.zyweb.vip/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/" selected>zh-CN</option><option value="/en/2026/11/14/python-asyncio-contextvar-task-snapshot/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/" selected>zh-CN</option><option value="/en/2026/11/14/python-asyncio-contextvar-task-snapshot/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--python">Python</span>
+      <time datetime="2026-11-13T19:19:59.000Z">2026-11-14</time>
+    </div>
+
+    <h1>父任务改了 ContextVar，已经创建的子任务为什么仍读到旧值？</h1>
+
+    
+      <p class="post-hero__summary">用实际运行的事件门对照，区分 asyncio 的任务创建、上下文复制与随后读取。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-13T19:19:59.000Z">2026-11-14</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/14/python-asyncio-contextvar-task-snapshot/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>默认上下文在创建任务时复制。</li><li>父任务重新绑定不会替换已创建任务中的绑定。</li><li>可变绑定值的对象身份需要单独考虑。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>默认情况下，asyncio 创建任务时复制当前上下文。父任务后来重新绑定 ContextVar，即使子任务还没读这个变量，子任务也会从创建时那份上下文读取。需要让后台工作使用新绑定时，应在绑定之后创建任务，或明确传入所需的上下文。</p>
+<p>假设服务用上下文变量记录请求编号。它先创建一个后台协程任务，然后在当前请求中换成另一个编号。后台任务等到信号放行才生成记录，工程师看到的是先前的编号。排查时要找的是调用 create_task 的位置，以及编号在那个位置的实际绑定。日志的生成时间能说明什么时候读取，却不能单独说明读取的是哪份上下文。</p>
+<h2 id="不靠睡眠验证创建与读取的先后"><a href="#不靠睡眠验证创建与读取的先后" class="headerlink" title="不靠睡眠验证创建与读取的先后"></a>不靠睡眠验证创建与读取的先后</h2><p>Python 的 asyncio 文档规定，create_task 没有收到显式 context 参数时会复制当前上下文。这样得到的任务可以在自己的上下文中执行。协程对象的创建和把它交给 create_task 是不同动作。这里的预期绑定到后者，不能用函数定义的位置或第一次 await 的位置替代。<a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/asyncio-task.html#asyncio.create_task">Python 3.14 asyncio Tasks</a>。</p>
+<p>下面的本地程序已在 Python 3.11.15 执行。父任务先设置 A，创建第一个任务，再设置 B 并释放事件门。子任务的读操作必须等事件门打开。该门起初关闭，所以可以保证第一条读取发生在父任务已设 B 之后，不需要用机器速度推断。第二个任务在父任务已经设置 B 时创建，提供不同创建时点的正对照。</p>
+<pre><code class="python">import asyncio
+from contextvars import ContextVar
+
+request_id = ContextVar(&quot;request_id&quot;)
+
+async def read_when_ready(gate):
+    await gate.wait()
+    return request_id.get()
+
+async def main():
+    gate = asyncio.Event()
+    first_token = request_id.set(&quot;A&quot;)
+    try:
+        first = asyncio.create_task(read_when_ready(gate))
+        second_token = request_id.set(&quot;B&quot;)
+        try:
+            gate.set()
+            first_value = await first
+            parent_value = request_id.get()
+            second = asyncio.create_task(read_when_ready(gate))
+            observed = (first_value, parent_value, await second)
+            assert observed == (&quot;A&quot;, &quot;B&quot;, &quot;B&quot;), observed
+            print(observed)
+        finally:
+            request_id.reset(second_token)
+    finally:
+        request_id.reset(first_token)
+
+asyncio.run(main())
+</code></pre>
+<p>独立预期是第一个任务读 A，父任务读 B，随后创建的任务读 B。归档记录给出这三个观察和精确代码。若只比较两次后台日志文本，看见不同编号并不能说明哪次应该对应哪个请求。程序把结果顺序固定为第一个子任务、父任务、第二个子任务，使创建时点和字段归属可查。这个测试不涉及工作线程、进程切换、HTTP 中间件或实际日志服务。</p>
+<h2 id="让调用位置反映编号归属"><a href="#让调用位置反映编号归属" class="headerlink" title="让调用位置反映编号归属"></a>让调用位置反映编号归属</h2><p>如果子任务要代表父任务当前的请求，把绑定编号与创建任务放在能看出先后的路径中。比如先获得订单号、再建立读订单的任务。若在早期创建任务只是为了等待后续条件，而任务必须使用后来才确认的编号，可以直接把已知编号作为函数参数传入另一阶段，或者等编号就绪再创建需要它的任务。参数比隐式上下文更容易在跨系统交接时看见；上下文变量适合执行过程中确实需要读取同一绑定的辅助函数。</p>
+<p>Python 三点十一及以后可以在 create_task 中指定 context。要主动控制某个后台任务的值，可以从明确的上下文构造或复制需要的范围，再在创建处传入。不要默认把当前请求的全部绑定都交给一个与该请求无关的后台任务。后台任务应携带哪些诊断字段由业务决定。本文未测试显式 context，不把默认复制的结果外推到同一个自定义上下文被多个任务共享的设计。本站的 <a href="/zh-CN/2026/10/26/python-asyncio-taskgroup-failure-scope/">TaskGroup 失败范围</a> 讨论谁会被等待和取消，这里只检查任务从哪里获得变量绑定。</p>
+<p>还可以给接口日志设计一个反向控制。将两条记录都延迟到父任务改值之后生成，再分别检查它们属于各自的请求。只检查每条日志都带有某个编号，无法发现误把所有记录归到最新请求。若代码在测试里手工拼接日志前缀，也不会经过真实的变量读取点。应把观测放到真正取值的函数上，再核对最终日志是否使用了它。这个应用侧验证未运行。</p>
+<p>一种容易误诊的调用方式是提前把协程对象存到队列，之后才由另一处代码创建任务。可以额外准备一份对照：编号为 A 时构造协程对象但不启动任务，设为 B 后再交给任务创建入口，随后把父绑定改为 C 才放行。预期读取 B。这个预期与主例中的创建后重绑定不同，可以排除“构造协程对象就已经固定上下文”的解释。若实际队列跨线程或进程，还要检查消费端的构造位置与值如何传递，本地事件门没有模拟这种交接。</p>
+<p>父任务使用完临时绑定后，也应恢复自己的值。示例每次 set 都保存对应 token，并按相反顺序恢复。假设一个工作循环连续处理请求甲和乙，若甲失败后没有清理，乙开始时可能带着甲的诊断信息。可以把“中途抛错”加入工作循环回归，核对退出甲后原来的绑定已经恢复，再创建乙的工作。这项恢复测试应读取父任务自己的状态，不能只靠已经创建的子任务读到旧值来证明父任务恢复成功。这里没有运行这两项追加测试。</p>
+<h2 id="如果-ContextVar-绑定的是列表，父任务-append-会怎样？"><a href="#如果-ContextVar-绑定的是列表，父任务-append-会怎样？" class="headerlink" title="如果 ContextVar 绑定的是列表，父任务 append 会怎样？"></a>如果 ContextVar 绑定的是列表，父任务 append 会怎样？</h2><p>上下文复制是浅复制，变量所绑定的对象本身不会因此深拷贝。如果父任务与已创建的任务仍绑定同一个列表，在事件门打开前对列表就地 append，子任务可以看见变化。这个条件与重新绑定一个新列表不同。可以分别准备一条原地追加的路径和一条将变量重新设为新列表的路径，比较两边的对象身份与元素。若需要稳定快照，可选不可变值，或在明确的交接边界构造独立对象。主程序只用不可变字符串，这个列表对照没有运行。<a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/contextvars.html">Python contextvars</a>。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/asyncio-task.html#asyncio.create_task" rel="noopener">Coroutines and tasks — Python 3.14.10 documentation</a></li><li><a target="_blank" href="https://docs.python.org/3.14/library/contextvars.html" rel="noopener">contextvars — Context Variables — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+            <a class="tag tag--asyncio" href="/zh-CN/tags/asyncio/">asyncio</a>
+          
+            <a class="tag tag--contextvar" href="/zh-CN/tags/ContextVar/">ContextVar</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F14%2Fpython-asyncio-contextvar-task-snapshot%2F&text=%E7%88%B6%E4%BB%BB%E5%8A%A1%E6%94%B9%E4%BA%86%20ContextVar%EF%BC%8C%E5%B7%B2%E7%BB%8F%E5%88%9B%E5%BB%BA%E7%9A%84%E5%AD%90%E4%BB%BB%E5%8A%A1%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E8%AF%BB%E5%88%B0%E6%97%A7%E5%80%BC%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F14%2Fpython-asyncio-contextvar-task-snapshot%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E7%88%B6%E4%BB%BB%E5%8A%A1%E6%94%B9%E4%BA%86%20ContextVar%EF%BC%8C%E5%B7%B2%E7%BB%8F%E5%88%9B%E5%BB%BA%E7%9A%84%E5%AD%90%E4%BB%BB%E5%8A%A1%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E8%AF%BB%E5%88%B0%E6%97%A7%E5%80%BC%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F14%2Fpython-asyncio-contextvar-task-snapshot%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/14/python-exitstack-pop-all-ownership/">
+              <span>上一篇</span>
+              <strong>退出 with 以后，ExitStack 的资源为什么还开着？</strong>
+              <small>2026-11-14</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/14/pytest-importlib-duplicate-basename/">
+              <span>下一篇</span>
+              <strong>两个 pytest 文件同名，为什么默认收集会冲突？</strong>
+              <small>2026-11-14</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#不靠睡眠验证创建与读取的先后">不靠睡眠验证创建与读取的先后</a>
+          
+            <a class="toc-link toc-link--h2" href="#让调用位置反映编号归属">让调用位置反映编号归属</a>
+          
+            <a class="toc-link toc-link--h2" href="#如果-ContextVar-绑定的是列表，父任务-append-会怎样？">如果 ContextVar 绑定的是列表，父任务 append 会怎样？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>254</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/">asyncio.Queue.join 返回，不等于每条业务都成功了</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/python-aclosing-generator-cleanup/">用 aclosing 把异步生成器的关闭留在当前任务内</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/">Python wait_for 一秒超时，为什么一秒后还没返回？</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

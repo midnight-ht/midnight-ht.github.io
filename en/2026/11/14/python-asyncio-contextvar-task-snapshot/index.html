@@ -1,0 +1,420 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why does an asyncio task read the old ContextVar value? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Use an executed event-gated fixture to separate asyncio task creation, context copying, and the later read.">
+  
+  
+    <meta name="keywords" content="create_task,task context,ContextVar">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/14/python-asyncio-contextvar-task-snapshot/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/14/python-asyncio-contextvar-task-snapshot/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why does an asyncio task read the old ContextVar value? | Midnight blog">
+    <meta property="og:description" content="Use an executed event-gated fixture to separate asyncio task creation, context copying, and the later read.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/14/python-asyncio-contextvar-task-snapshot/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/14/python-asyncio-contextvar-task-snapshot/#webpage","url":"https://www.zyweb.vip/en/2026/11/14/python-asyncio-contextvar-task-snapshot/","name":"Why does an asyncio task read the old ContextVar value? | Midnight blog","description":"Use an executed event-gated fixture to separate asyncio task creation, context copying, and the later read.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/14/python-asyncio-contextvar-task-snapshot/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/14/python-asyncio-contextvar-task-snapshot/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/14/python-asyncio-contextvar-task-snapshot/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/14/python-asyncio-contextvar-task-snapshot/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/14/python-asyncio-contextvar-task-snapshot/","headline":"Why does an asyncio task read the old ContextVar value?","description":"Use an executed event-gated fixture to separate asyncio task creation, context copying, and the later read.","inLanguage":"en","datePublished":"2026-11-13T19:19:59.000Z","dateModified":"2026-11-13T19:19:59.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://docs.python.org/3.14/library/asyncio-task.html#asyncio.create_task","https://docs.python.org/3.14/library/contextvars.html"],"keywords":"Python, asyncio, ContextVar"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/14/python-asyncio-contextvar-task-snapshot/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why does an asyncio task read the old ContextVar value?","item":"https://www.zyweb.vip/en/2026/11/14/python-asyncio-contextvar-task-snapshot/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/">zh-CN</option><option value="/en/2026/11/14/python-asyncio-contextvar-task-snapshot/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/">zh-CN</option><option value="/en/2026/11/14/python-asyncio-contextvar-task-snapshot/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--python">Python</span>
+      <time datetime="2026-11-13T19:19:59.000Z">2026-11-14</time>
+    </div>
+
+    <h1>Why does an asyncio task read the old ContextVar value?</h1>
+
+    
+      <p class="post-hero__summary">Use an executed event-gated fixture to separate asyncio task creation, context copying, and the later read.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-13T19:19:59.000Z">2026-11-14</time> · Estimated read 9 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/14/python-asyncio-contextvar-task-snapshot/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>The default context is copied at task creation.</li><li>Rebinding a parent variable leaves the child’s copied binding alone.</li><li>Mutable values need a separate ownership decision.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>By default, asyncio copies the current context when it creates a task. A later ContextVar rebinding in the parent does not change the child’s copied binding, even if the child has not read it yet. Create work after setting the intended binding, or pass a deliberate context.</p>
+<p>Suppose a service keeps a request ID in a context variable. It creates a background task and then changes the ID in the current request. The background task waits before recording anything, yet it still reads the earlier ID. Look at the binding where create_task ran. The log time tells you when a read happened and cannot identify the context by itself.</p>
+<h2 id="Gate-the-read-without-a-sleep"><a href="#Gate-the-read-without-a-sleep" class="headerlink" title="Gate the read without a sleep"></a>Gate the read without a sleep</h2><p>The asyncio reference says create_task copies the current context when no explicit context is supplied. Creating a coroutine object is separate from creating a task for it. The fixture’s binding is tied to task creation. <a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/asyncio-task.html#asyncio.create_task">Python 3.14 asyncio Tasks</a>.</p>
+<p>The following program ran on Python 3.11.15. The parent sets A and creates a task, then sets B before releasing an event. The child reads only after that event. A second task is created while the parent already has B, giving an independent control.</p>
+<pre><code class="python">import asyncio
+from contextvars import ContextVar
+
+request_id = ContextVar(&quot;request_id&quot;)
+
+async def read_when_ready(gate):
+    await gate.wait()
+    return request_id.get()
+
+async def main():
+    gate = asyncio.Event()
+    first_token = request_id.set(&quot;A&quot;)
+    try:
+        first = asyncio.create_task(read_when_ready(gate))
+        second_token = request_id.set(&quot;B&quot;)
+        try:
+            gate.set()
+            first_value = await first
+            parent_value = request_id.get()
+            second = asyncio.create_task(read_when_ready(gate))
+            observed = (first_value, parent_value, await second)
+            assert observed == (&quot;A&quot;, &quot;B&quot;, &quot;B&quot;), observed
+            print(observed)
+        finally:
+            request_id.reset(second_token)
+    finally:
+        request_id.reset(first_token)
+
+asyncio.run(main())
+</code></pre>
+<p>Expect A from the first task, B in the parent, and B from the second task. The archive records all three observations and the exact code. The event makes the read order explicit without assuming how fast the machine schedules the coroutine. These observations concern one local event loop and do not verify worker threads, processes, HTTP middleware, or a logging service.</p>
+<h2 id="Choose-what-the-task-should-inherit"><a href="#Choose-what-the-task-should-inherit" class="headerlink" title="Choose what the task should inherit"></a>Choose what the task should inherit</h2><p>When a task represents the current request, put task creation after setting the request identity. If background work needs information that will only be known later, pass the value to a later stage as an argument or delay creation of the task that needs it. Arguments make a cross-system handoff visible. A context variable is useful for helpers that share a binding within the execution.</p>
+<p>Python 3.11 and later also let create_task accept a context argument. Choose the background task’s scope explicitly if it should carry a different set of values. The fixture does not exercise that option or reuse one custom context across tasks. The related <a href="/en/2026/10/26/python-asyncio-taskgroup-failure-scope/">TaskGroup failure article</a> examines which tasks are awaited and canceled. The issue here is where a task’s binding comes from.</p>
+<p>An application can add a control in which both records are emitted after the parent changes the value. Check that each record still belongs to the right request. Simply checking that both records contain an ID would miss attributing everything to the latest request. Observe the function that actually reads the value and the final log that uses it. That application check was not run.</p>
+<p>To isolate coroutine construction from task creation, construct a coroutine under A, create its task under B, and let it read only after the parent has set C. It should read B. A separate worker-loop check can also fail one job deliberately and verify that the parent’s temporary binding is restored before the next job. These additional checks were not run.</p>
+<h2 id="What-if-the-ContextVar-holds-a-list-and-the-parent-appends-to-it"><a href="#What-if-the-ContextVar-holds-a-list-and-the-parent-appends-to-it" class="headerlink" title="What if the ContextVar holds a list and the parent appends to it?"></a>What if the ContextVar holds a list and the parent appends to it?</h2><p>A context copy is shallow. If both bindings refer to the same list, appending to that list before releasing the gate can be visible in the child. Rebinding the parent to a new list is a separate case. Compare object identity and contents in two independent tests. Use an immutable value or make an independent object at handoff when a stable snapshot is required. The main program uses immutable strings. This list probe was not run. <a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/contextvars.html">Python contextvars</a>.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/asyncio-task.html#asyncio.create_task" rel="noopener">Coroutines and tasks — Python 3.14.10 documentation</a></li><li><a target="_blank" href="https://docs.python.org/3.14/library/contextvars.html" rel="noopener">contextvars — Context Variables — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--python" href="/en/tags/Python/">Python</a>
+          
+            <a class="tag tag--asyncio" href="/en/tags/asyncio/">asyncio</a>
+          
+            <a class="tag tag--contextvar" href="/en/tags/ContextVar/">ContextVar</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F14%2Fpython-asyncio-contextvar-task-snapshot%2F&text=Why%20does%20an%20asyncio%20task%20read%20the%20old%20ContextVar%20value%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F14%2Fpython-asyncio-contextvar-task-snapshot%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20does%20an%20asyncio%20task%20read%20the%20old%20ContextVar%20value%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F14%2Fpython-asyncio-contextvar-task-snapshot%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/14/python-exitstack-pop-all-ownership/">
+              <span>Previous Post</span>
+              <strong>Why are the resources still open after ExitStack exits?</strong>
+              <small>2026-11-14</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/14/pytest-importlib-duplicate-basename/">
+              <span>Next Post</span>
+              <strong>Why can two pytest files with the same name collide during collection?</strong>
+              <small>2026-11-14</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Gate-the-read-without-a-sleep">Gate the read without a sleep</a>
+          
+            <a class="toc-link toc-link--h2" href="#Choose-what-the-task-should-inherit">Choose what the task should inherit</a>
+          
+            <a class="toc-link toc-link--h2" href="#What-if-the-ContextVar-holds-a-list-and-the-parent-appends-to-it">What if the ContextVar holds a list and the parent appends to it?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>254</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>212</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>127</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/01/python-asyncio-queue-join-accounting/">A returning asyncio.Queue.join does not certify every business result</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/31/python-aclosing-generator-cleanup/">Keep async generator cleanup inside the consuming task</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/29/python-asyncio-waitfor-cancellation-settlement/">Why can Python wait_for return after its one-second timeout?</a></h3>
+          <p>2026-10-29</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
