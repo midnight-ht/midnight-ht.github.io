@@ -1,0 +1,435 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Go 脱离请求取消以后，新的 Context 为什么没有 Done？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="比较 Go 父级取消、WithoutCancel 派生状态和重新设置的独立期限。">
+  
+  
+    <meta name="keywords" content="WithoutCancel,Done,deadline">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/15/go-context-withoutcancel-bounded-cleanup/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/15/go-context-withoutcancel-bounded-cleanup/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/15/go-context-withoutcancel-bounded-cleanup/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/15/go-context-withoutcancel-bounded-cleanup/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Go 脱离请求取消以后，新的 Context 为什么没有 Done？ | Midnight blog">
+    <meta property="og:description" content="比较 Go 父级取消、WithoutCancel 派生状态和重新设置的独立期限。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/15/go-context-withoutcancel-bounded-cleanup/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/15/go-context-withoutcancel-bounded-cleanup/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/15/go-context-withoutcancel-bounded-cleanup/","name":"Go 脱离请求取消以后，新的 Context 为什么没有 Done？ | Midnight blog","description":"比较 Go 父级取消、WithoutCancel 派生状态和重新设置的独立期限。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/15/go-context-withoutcancel-bounded-cleanup/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/15/go-context-withoutcancel-bounded-cleanup/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/15/go-context-withoutcancel-bounded-cleanup/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/15/go-context-withoutcancel-bounded-cleanup/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/15/go-context-withoutcancel-bounded-cleanup/","headline":"Go 脱离请求取消以后，新的 Context 为什么没有 Done？","description":"比较 Go 父级取消、WithoutCancel 派生状态和重新设置的独立期限。","inLanguage":"zh-CN","datePublished":"2026-11-14T19:28:29.000Z","dateModified":"2026-11-14T19:28:29.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://pkg.go.dev/context#WithoutCancel","https://github.com/golang/go/blob/go1.27.4/src/context/context.go"],"keywords":"Go, Context, Backend"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/15/go-context-withoutcancel-bounded-cleanup/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Go 脱离请求取消以后，新的 Context 为什么没有 Done？","item":"https://www.zyweb.vip/zh-CN/2026/11/15/go-context-withoutcancel-bounded-cleanup/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/15/go-context-withoutcancel-bounded-cleanup/" selected>zh-CN</option><option value="/en/2026/11/15/go-context-withoutcancel-bounded-cleanup/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/15/go-context-withoutcancel-bounded-cleanup/" selected>zh-CN</option><option value="/en/2026/11/15/go-context-withoutcancel-bounded-cleanup/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--go">Go</span>
+      <time datetime="2026-11-14T19:28:29.000Z">2026-11-15</time>
+    </div>
+
+    <h1>Go 脱离请求取消以后，新的 Context 为什么没有 Done？</h1>
+
+    
+      <p class="post-hero__summary">比较 Go 父级取消、WithoutCancel 派生状态和重新设置的独立期限。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-14T19:28:29.000Z">2026-11-15</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/15/go-context-withoutcancel-bounded-cleanup/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/15/go-context-withoutcancel-bounded-cleanup/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>WithoutCancel 不继承取消与期限。</li><li>值查找仍可以取得父级普通值。</li><li>独立清理可以重新设置时间边界。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Go 的 WithoutCancel 会让派生上下文脱离父级取消与期限，返回的 Done 是 nil。它仍能沿原来的父级读取值。确实要让一段清理在请求取消后继续时，应给这段工作单独设定期限。</p>
+<p>设想导出请求必须登记临时资源，客户端提前离开时，服务还需要把一次退出结果交给本地接收器。用原请求上下文调用接收器，它可能一入场就看到取消。把请求上下文交给 WithoutCancel 后再传入，虽然不受这次取消影响，却同时失去了之前的截止时间。若接收器迟迟不返回，原来负责限制等待的机制已经不存在。决定脱离以前，先确认谁拥有这项工作以及会等待到什么时候。</p>
+<h2 id="脱离以后，到底保留哪些东西"><a href="#脱离以后，到底保留哪些东西" class="headerlink" title="脱离以后，到底保留哪些东西"></a>脱离以后，到底保留哪些东西</h2><p>Go 标准库从一点二一版提供 WithoutCancel。文档明确说明，新上下文不会随父级取消，Deadline 表示没有期限，Err 和 Cause 返回 nil，Done 本身也是 nil。固定版本的官方源码显示，Value 仍向原父级查找。应用仍可读取原来的追踪编号，但它不再通过这个上下文观察原请求的取消结果。需要调查原始失败时，在自己的错误记录里保留父级结果。<a target="_blank" rel="noopener" href="https://pkg.go.dev/context@go1.27.4#WithoutCancel">Go context 参考</a> 与 <a target="_blank" rel="noopener" href="https://github.com/golang/go/blob/go1.27.4/src/context/context.go#L586-L611">固定版本实现</a>。</p>
+<p>只接收一个 nil 通道没有可到达的取消事件。在 select 中，这个分支不能靠父级取消就绪。假如等待循环本来只能由该分支退出，替换上下文后就应检查它还有没有另一个结束条件。Detach 也不会改变一个函数本身是否观察上下文。传入一个有期限的对象，只能给函数提供相应信号；一个不读这个信号的阻塞操作仍需要自己的验证。</p>
+<h2 id="三层上下文绑定三份预期"><a href="#三层上下文绑定三份预期" class="headerlink" title="三层上下文绑定三份预期"></a>三层上下文绑定三份预期</h2><p>下面是未执行的 Go 教学程序。在支持 WithoutCancel 的工具链中运行。它先建立带追踪值和较远期限的父级，再派生脱离取消的上下文。主动取消父级以后，再为脱离者创建一条已经过期的期限。使用过去的固定时点是为了观察已经结束的状态，因此不用 sleep 等一个任意的超时。示例只操作标准库对象。</p>
+<pre><code class="go">package main
+
+import (
+    &quot;context&quot;
+    &quot;fmt&quot;
+    &quot;time&quot;
+)
+
+type traceKey struct{}
+
+var deadline = context.WithDeadline
+
+func main() {
+    root := context.WithValue(context.Background(), traceKey{}, &quot;demo-17&quot;)
+    parent, stop := deadline(root, time.Now().Add(time.Hour))
+    defer stop()
+    detached := context.WithoutCancel(parent)
+    stop()
+
+    _, hasDeadline := detached.Deadline()
+    observedErrors := [3]error{parent.Err(), detached.Err(), context.Cause(detached)}
+    if observedErrors != ([3]error{context.Canceled, nil, nil}) {
+        panic(&quot;unexpected error state&quot;)
+    }
+    if detached.Done() != nil || hasDeadline || detached.Value(traceKey{}) != &quot;demo-17&quot; {
+        panic(&quot;unexpected parent or detached state&quot;)
+    }
+
+    bounded, cancel := deadline(detached, time.Unix(1, 0))
+    defer cancel()
+    select {
+    case &lt;-bounded.Done():
+        if bounded.Err() != context.DeadlineExceeded {
+            panic(&quot;wrong bounded context error&quot;)
+        }
+    default:
+        panic(&quot;expired deadline did not finish&quot;)
+    }
+    fmt.Println(&quot;parent canceled, detached alive, bounded deadline expired&quot;)
+}
+</code></pre>
+<p>第一份预期是父级返回 Canceled。第二份预期是脱离者仍能取得 demo-17，且没有可等待的 Done、期限和取消原因。第三份预期是新后代立即出现 DeadlineExceeded。后三个状态不能用一条“清理成功”日志一起替代。只观测追踪值保留，可能漏掉已经没有中止信号；只观测新的边界结束，也不能证明它没有误沿父级取消。程序用独立条件限制三个对象，而且没有真的连接接收器或删除资源。</p>
+<p>在实际应用里可以给清理函数注入一个测试接收器。父级取消之后，观察它是否仍进入需要运行的步骤。另让接收器显式等待清理上下文的结束，并核对返回的是清理期限的错误。这样能覆盖真实调用处有没有把新的上下文继续传下去。上面的固定过期时点只是标准库状态检查，这个调用者回归目前未运行。</p>
+<h2 id="按工作归属决定是否脱离"><a href="#按工作归属决定是否脱离" class="headerlink" title="按工作归属决定是否脱离"></a>按工作归属决定是否脱离</h2><p>用户主动取消上传时，主要的处理步骤通常还应响应取消。与之不同，释放自有的临时资源可能由服务负责完成。不要把整个请求流程换成脱离者；只在需要后续责任的调用处派生，再给它一个能解释的独立预算。对于有外部副作用的动作，还要查它是否允许在请求结束后开始。上下文的生命周期无法代替服务定义外部动作的授权与幂等规则。</p>
+<p>可在正常结束和提前取消这两个入口各核对一次资源状态。正常结束时，清理只执行一次；取消后，原请求不再推进主要操作，但登记的清理步骤仍按自己的条件结束。若清理超期，应该保存它自己的关闭结果，而不是覆盖最早的请求失败。后台进程在服务关闭时如何处理这些工作，也是更高层的职责。站内的 <a href="/zh-CN/2026/10/29/python-asyncio-waitfor-cancellation-settlement/">取消与等待时点</a> 讨论异步函数收到取消后的收尾；这里关注 Go 的独立截止时间这一处合同。</p>
+<p>可以再对清理接收器安排一条提前返回和一条等待结束的独立路径。提前返回时调用持有者自己的取消函数，确认关联的工作有明确收尾；等待路径则用有界测试环境观察截止时间到达后返回的错误。测试不能只用一份已经过期的上下文证明真实接收器在收到信号以前正常工作。给请求主流程和这个接收器不同的活动记录，确认主流程不会因清理仍在运行而隐式继续提交请求。这里的请求、清理和接收器都只是应用侧设计，未运行。</p>
+<p>如果原应用只在函数返回时才报告清理结果，错误的等待还可能拖住一批下游任务。应在真正由应用拥有的清理范围里定义结果和结束动作，给成功、失败和超期三个出口分别记录关键信息。否则即使父级状态记录完整，也看不到哪一项资源失去处理者。验收要绑定到这次清理的资源标识，避免另一个后台任务的完成记录误让本项通过。</p>
+<h2 id="脱离请求后，原上下文里的身份信息会一起消失吗？"><a href="#脱离请求后，原上下文里的身份信息会一起消失吗？" class="headerlink" title="脱离请求后，原上下文里的身份信息会一起消失吗？"></a>脱离请求后，原上下文里的身份信息会一起消失吗？</h2><p>不会因为取消脱离而自动消失，普通值仍沿原上下文查找。若后台任务只应携带追踪编号，可以创建一份明确只含该测试值的上下文，再给它设置截止时间。验收给原上下文放两个独立标记，只允许新任务读到其中一个。不要把能读到标记解释为获得后台操作的权限，也不要让一次局部示例替代真实数据保留策略。这项选择性传值的测试未执行。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://pkg.go.dev/context#WithoutCancel" rel="noopener">context package - context - Go Packages</a></li><li><a target="_blank" href="https://github.com/golang/go/blob/go1.27.4/src/context/context.go" rel="noopener">Go go1.27.4 context.go — WithoutCancel implementation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--go" href="/zh-CN/tags/Go/">Go</a>
+          
+            <a class="tag tag--context" href="/zh-CN/tags/Context/">Context</a>
+          
+            <a class="tag tag--backend" href="/zh-CN/tags/Backend/">Backend</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F15%2Fgo-context-withoutcancel-bounded-cleanup%2F&text=Go%20%E8%84%B1%E7%A6%BB%E8%AF%B7%E6%B1%82%E5%8F%96%E6%B6%88%E4%BB%A5%E5%90%8E%EF%BC%8C%E6%96%B0%E7%9A%84%20Context%20%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E6%9C%89%20Done%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F15%2Fgo-context-withoutcancel-bounded-cleanup%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Go%20%E8%84%B1%E7%A6%BB%E8%AF%B7%E6%B1%82%E5%8F%96%E6%B6%88%E4%BB%A5%E5%90%8E%EF%BC%8C%E6%96%B0%E7%9A%84%20Context%20%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E6%9C%89%20Done%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F15%2Fgo-context-withoutcancel-bounded-cleanup%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/15/go-time-parse-in-location-zone-boundary/">
+              <span>上一篇</span>
+              <strong>Go 解析没有时区的时间，为什么同一字符串差了八小时？</strong>
+              <small>2026-11-15</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/15/git-rerere-reuse-working-tree-index/">
+              <span>下一篇</span>
+              <strong>Git 找回了上次的冲突解法，为什么还要 git add？</strong>
+              <small>2026-11-15</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#脱离以后，到底保留哪些东西">脱离以后，到底保留哪些东西</a>
+          
+            <a class="toc-link toc-link--h2" href="#三层上下文绑定三份预期">三层上下文绑定三份预期</a>
+          
+            <a class="toc-link toc-link--h2" href="#按工作归属决定是否脱离">按工作归属决定是否脱离</a>
+          
+            <a class="toc-link toc-link--h2" href="#脱离请求后，原上下文里的身份信息会一起消失吗？">脱离请求后，原上下文里的身份信息会一起消失吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>253</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>211</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/15/go-time-parse-in-location-zone-boundary/">Go 解析没有时区的时间，为什么同一字符串差了八小时？</a></h3>
+          <p>2026-11-15</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/14/go-csv-reader-reuse-record-alias/">Go CSV 逐行正确，攒成批却为什么两行一样？</a></h3>
+          <p>2026-11-14</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/13/go-errors-join-unwrap-tree/">errors.Join 包了两个错误，为什么 errors.Unwrap 返回 nil？</a></h3>
+          <p>2026-11-13</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

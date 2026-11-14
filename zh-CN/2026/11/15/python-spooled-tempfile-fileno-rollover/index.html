@@ -1,0 +1,412 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Python 临时文件明明很小，为什么一调用 fileno 就落盘？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用两条本地样本核对 Python 临时文件的描述符触发、显式转换和读回结果。">
+  
+  
+    <meta name="keywords" content="SpooledTemporaryFile,fileno,rollover">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/15/python-spooled-tempfile-fileno-rollover/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/15/python-spooled-tempfile-fileno-rollover/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/15/python-spooled-tempfile-fileno-rollover/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/15/python-spooled-tempfile-fileno-rollover/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Python 临时文件明明很小，为什么一调用 fileno 就落盘？ | Midnight blog">
+    <meta property="og:description" content="用两条本地样本核对 Python 临时文件的描述符触发、显式转换和读回结果。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/15/python-spooled-tempfile-fileno-rollover/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/15/python-spooled-tempfile-fileno-rollover/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/15/python-spooled-tempfile-fileno-rollover/","name":"Python 临时文件明明很小，为什么一调用 fileno 就落盘？ | Midnight blog","description":"用两条本地样本核对 Python 临时文件的描述符触发、显式转换和读回结果。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/15/python-spooled-tempfile-fileno-rollover/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/15/python-spooled-tempfile-fileno-rollover/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/15/python-spooled-tempfile-fileno-rollover/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/15/python-spooled-tempfile-fileno-rollover/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/15/python-spooled-tempfile-fileno-rollover/","headline":"Python 临时文件明明很小，为什么一调用 fileno 就落盘？","description":"用两条本地样本核对 Python 临时文件的描述符触发、显式转换和读回结果。","inLanguage":"zh-CN","datePublished":"2026-11-14T19:28:29.000Z","dateModified":"2026-11-14T19:28:29.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.14/library/tempfile.html#tempfile.SpooledTemporaryFile"],"keywords":"Python, Temporary Files, Backend"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/15/python-spooled-tempfile-fileno-rollover/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Python 临时文件明明很小，为什么一调用 fileno 就落盘？","item":"https://www.zyweb.vip/zh-CN/2026/11/15/python-spooled-tempfile-fileno-rollover/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/15/python-spooled-tempfile-fileno-rollover/" selected>zh-CN</option><option value="/en/2026/11/15/python-spooled-tempfile-fileno-rollover/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/15/python-spooled-tempfile-fileno-rollover/" selected>zh-CN</option><option value="/en/2026/11/15/python-spooled-tempfile-fileno-rollover/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--python">Python</span>
+      <time datetime="2026-11-14T19:28:29.000Z">2026-11-15</time>
+    </div>
+
+    <h1>Python 临时文件明明很小，为什么一调用 fileno 就落盘？</h1>
+
+    
+      <p class="post-hero__summary">用两条本地样本核对 Python 临时文件的描述符触发、显式转换和读回结果。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-14T19:28:29.000Z">2026-11-15</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/15/python-spooled-tempfile-fileno-rollover/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/15/python-spooled-tempfile-fileno-rollover/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>调用 fileno 可以触发临时文件转换。</li><li>公开样本分别核对描述符、位置和字节。</li><li>需要可重开路径时，应另验文件名接口。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Python 的 SpooledTemporaryFile 即使只写了很少的字节，调用 fileno 也会让已有数据转入真正的临时文件。大小阈值和描述符是两种触发条件。如果下游库必须拿到描述符，应把这次转换算进临时文件使用方案。</p>
+<p>假设后台导出三个字节的测试记录，并把可读写的文件对象传给上传适配器。应用把阈值设置成八字节，原以为这份记录肯定一直留在内存。适配器为了取得描述符调用 fileno，随后临时文件开始参与工作。排查应先记录谁请求了描述符，再核对适配器究竟需要描述符还是只需要读写方法。只搜大对象的写入位置，会漏掉这种与大小无关的转换。</p>
+<h2 id="把两条转换路径分开看"><a href="#把两条转换路径分开看" class="headerlink" title="把两条转换路径分开看"></a>把两条转换路径分开看</h2><p>标准库文档说明，数据会缓存在内存中，直到长度超过 max_size，或者调用文件的 fileno 方法。之后按 TemporaryFile 的方式工作。还有一个公开接口 rollover，可以主动执行转换。只要使用 fileno，哪怕目的是检查有没有真实描述符，这个读起来像查询的动作也会改变对象状态。检查程序若先调用它，再判断之前是否已经转换，就把观察动作和触发动作合在一起了。<a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/tempfile.html#tempfile.SpooledTemporaryFile">Python tempfile 参考</a>。</p>
+<p>这也影响异常处理的位置。配置八字节的阈值并不能免除部署环境对临时文件位置的要求。给适配器加一条独立的失败用例，让它在请求描述符时无法建立可用临时文件，观察错误是在交接前还是交接后被处理。真实权限和目录行为取决于部署，不能用一次普通运行替另一台机器背书；下面的样本没有制造这类系统错误。</p>
+<h2 id="分别验收字节、位置和描述符"><a href="#分别验收字节、位置和描述符" class="headerlink" title="分别验收字节、位置和描述符"></a>分别验收字节、位置和描述符</h2><p>下面完整程序在本地 Python 3.11.15 运行。两个分支都在同样的八字节阈值下写入 abc。第一个分支直接索取描述符，第二个先显式转换再索取。程序只使用公开接口，刷新后检查描述符对应的大小，再核对当前位置和读回内容。</p>
+<pre><code class="python">import os
+from tempfile import SpooledTemporaryFile
+
+def observe(explicit):
+    with SpooledTemporaryFile(max_size=8, mode=&quot;w+b&quot;) as spool:
+        spool.write(b&quot;abc&quot;)
+        if explicit:
+            spool.rollover()
+        handle = spool.fileno()
+        spool.flush()
+        assert os.fstat(handle).st_size == 3
+        assert spool.tell() == 3
+        spool.seek(0)
+        assert spool.read() == b&quot;abc&quot;
+    return &quot;explicit&quot; if explicit else &quot;descriptor&quot;
+
+print(observe(False), observe(True))
+</code></pre>
+<p>两组都以大小三、文件位置三和读回 abc 为预期。归档运行完成了两组断言。第一组说明这个小输入也能在公开的描述符入口获得真实文件。第二组验证显式转换以后，同样可以从该对象读回预期数据。两种结果没有检测文件页是否写入物理介质，也没有观察转换前内部对象的存储位置。不能把刷新缓冲写成数据已经持久化；样本的结论只关乎本地描述符与对象内容。</p>
+<p>如果还要单独测试大小阈值，应准备长度恰好等于八和超过八的输入，并选择不会自己调用 fileno 的观察方法。文档中的大小条件是超过，对这一点可核对原文。应用层也可以在输入路径记录何时向存储适配器请求真实文件。若测试的目标是业务持有对象能否继续读取，直接断言字节就够了；若目标是内部转换时点，需要明确所观察的实现和版本，不能用公开转换动作反推旧状态。这个阈值扩展没有运行。</p>
+<h2 id="按消费方接口选择资源形式"><a href="#按消费方接口选择资源形式" class="headerlink" title="按消费方接口选择资源形式"></a>按消费方接口选择资源形式</h2><p>对于只需要 read、seek 的组件，可以给它一份符合文件对象合同的输入，测试中检查读取范围和当前位置。若组件必须把描述符交给系统调用，就主动在明确位置完成交接，例如先请求描述符，再安排使用与释放。这样，一次转换失败能归到这个准备步骤，避免在真正发送数据以后牵连后续操作。实际业务是否应保留正在生成的产物，需要另外定义；这个示例退出作用域就释放临时资源。</p>
+<p>还可把同一份三字节数据送进两个假的接收器。第一个只读对象，返回实际字节数；第二个先要求描述符，再从对象核对读取结果。给两条路径分别记录读取位置，防止把起始位置错误归因于转换。若接收器用完后还要访问原对象，先明确是谁管理关闭，避免接收器提前关闭调用者仍要用的资源。这两条接收器路径是验收设计，未运行。真实接收器也可能在一次调用中提前读取或调整位置，应通过其入口复查。</p>
+<p>导出 API 还可以把很小的输入、接近容量的输入和需要描述符的输入分别纳入验收。每次记录文件对象由谁创建、谁请求转换，以及关闭发生在什么时候。这样能区分空导出、数据截断和临时资源准备失败，而不必从最后一条“上传失败”猜测。这里没有比较两种模式的费用，也没有测算容量。</p>
+<p>给上传适配器做单元测试时，还可以让一个可读对象故意不提供可用的描述符。传给只需要读的接收器，预期三字节仍可完整交付；传给要求描述符的接收器，预期在准备阶段明确报错。这样可以检验文档中写下的最低接口条件，又不会误把内存测试当作部署临时目录验证。这个扩展未执行。</p>
+<h2 id="转换后能把-name-当成另一个程序可重开的路径吗？"><a href="#转换后能把-name-当成另一个程序可重开的路径吗？" class="headerlink" title="转换后能把 name 当成另一个程序可重开的路径吗？"></a>转换后能把 name 当成另一个程序可重开的路径吗？</h2><p>不能把 TemporaryFile 语义当成保证存在的文件名。不同平台可能根本不给它可重新打开的目录项，或者在创建后移除目录项。若下游要求的是路径，应选择明确提供可见名称的接口，并单测关闭及重新打开的时点。站内的 <a href="/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/">NamedTemporaryFile 重开与清理</a> 进一步讨论这份路径合同。这里的描述符测试没有运行另一个进程，也没有验证在任何平台上可以靠 name 重新打开。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/tempfile.html#tempfile.SpooledTemporaryFile" rel="noopener">tempfile — Generate temporary files and directories — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+            <a class="tag tag--temporary-files" href="/zh-CN/tags/Temporary-Files/">Temporary Files</a>
+          
+            <a class="tag tag--backend" href="/zh-CN/tags/Backend/">Backend</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F15%2Fpython-spooled-tempfile-fileno-rollover%2F&text=Python%20%E4%B8%B4%E6%97%B6%E6%96%87%E4%BB%B6%E6%98%8E%E6%98%8E%E5%BE%88%E5%B0%8F%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%80%E8%B0%83%E7%94%A8%20fileno%20%E5%B0%B1%E8%90%BD%E7%9B%98%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F15%2Fpython-spooled-tempfile-fileno-rollover%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Python%20%E4%B8%B4%E6%97%B6%E6%96%87%E4%BB%B6%E6%98%8E%E6%98%8E%E5%BE%88%E5%B0%8F%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%80%E8%B0%83%E7%94%A8%20fileno%20%E5%B0%B1%E8%90%BD%E7%9B%98%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F15%2Fpython-spooled-tempfile-fileno-rollover%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/">
+              <span>上一篇</span>
+              <strong>SQLite 开着 WAL 时，只复制数据库文件会漏掉哪条记录？</strong>
+              <small>2026-11-15</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/15/python-logging-dictconfig-existing-loggers/">
+              <span>下一篇</span>
+              <strong>Python 改完日志配置，为什么旧 logger 不再出声？</strong>
+              <small>2026-11-15</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#把两条转换路径分开看">把两条转换路径分开看</a>
+          
+            <a class="toc-link toc-link--h2" href="#分别验收字节、位置和描述符">分别验收字节、位置和描述符</a>
+          
+            <a class="toc-link toc-link--h2" href="#按消费方接口选择资源形式">按消费方接口选择资源形式</a>
+          
+            <a class="toc-link toc-link--h2" href="#转换后能把-name-当成另一个程序可重开的路径吗？">转换后能把 name 当成另一个程序可重开的路径吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>253</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>211</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/15/go-context-withoutcancel-bounded-cleanup/">Go 脱离请求取消以后，新的 Context 为什么没有 Done？</a></h3>
+          <p>2026-11-15</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/15/go-time-parse-in-location-zone-boundary/">Go 解析没有时区的时间，为什么同一字符串差了八小时？</a></h3>
+          <p>2026-11-15</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/15/python-logging-dictconfig-existing-loggers/">Python 改完日志配置，为什么旧 logger 不再出声？</a></h3>
+          <p>2026-11-15</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

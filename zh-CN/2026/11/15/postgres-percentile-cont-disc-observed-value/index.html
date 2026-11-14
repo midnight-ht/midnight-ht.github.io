@@ -1,0 +1,400 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>PostgreSQL 的中位数为什么不在原始样本里？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用四项测量区分 PostgreSQL 连续百分位的插值和离散百分位的选值。">
+  
+  
+    <meta name="keywords" content="percentile_cont,percentile_disc,ordered-set aggregate">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/15/postgres-percentile-cont-disc-observed-value/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/15/postgres-percentile-cont-disc-observed-value/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/15/postgres-percentile-cont-disc-observed-value/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/15/postgres-percentile-cont-disc-observed-value/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="PostgreSQL 的中位数为什么不在原始样本里？ | Midnight blog">
+    <meta property="og:description" content="用四项测量区分 PostgreSQL 连续百分位的插值和离散百分位的选值。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/15/postgres-percentile-cont-disc-observed-value/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/15/postgres-percentile-cont-disc-observed-value/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/15/postgres-percentile-cont-disc-observed-value/","name":"PostgreSQL 的中位数为什么不在原始样本里？ | Midnight blog","description":"用四项测量区分 PostgreSQL 连续百分位的插值和离散百分位的选值。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/15/postgres-percentile-cont-disc-observed-value/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/15/postgres-percentile-cont-disc-observed-value/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/15/postgres-percentile-cont-disc-observed-value/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/15/postgres-percentile-cont-disc-observed-value/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/15/postgres-percentile-cont-disc-observed-value/","headline":"PostgreSQL 的中位数为什么不在原始样本里？","description":"用四项测量区分 PostgreSQL 连续百分位的插值和离散百分位的选值。","inLanguage":"zh-CN","datePublished":"2026-11-14T19:28:29.000Z","dateModified":"2026-11-14T19:28:29.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/functions-aggregate.html"],"keywords":"PostgreSQL, Statistics, SQL"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/15/postgres-percentile-cont-disc-observed-value/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"PostgreSQL 的中位数为什么不在原始样本里？","item":"https://www.zyweb.vip/zh-CN/2026/11/15/postgres-percentile-cont-disc-observed-value/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/15/postgres-percentile-cont-disc-observed-value/" selected>zh-CN</option><option value="/en/2026/11/15/postgres-percentile-cont-disc-observed-value/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/15/postgres-percentile-cont-disc-observed-value/" selected>zh-CN</option><option value="/en/2026/11/15/postgres-percentile-cont-disc-observed-value/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--postgresql">PostgreSQL</span>
+      <time datetime="2026-11-14T19:28:29.000Z">2026-11-15</time>
+    </div>
+
+    <h1>PostgreSQL 的中位数为什么不在原始样本里？</h1>
+
+    
+      <p class="post-hero__summary">用四项测量区分 PostgreSQL 连续百分位的插值和离散百分位的选值。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-14T19:28:29.000Z">2026-11-15</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/15/postgres-percentile-cont-disc-observed-value/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/15/postgres-percentile-cont-disc-observed-value/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>连续百分位可以插值。</li><li>离散百分位选择已有观测值。</li><li>记录身份与统计值要分别核对。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>PostgreSQL 的连续百分位可以返回输入里不存在的数值。对十、二十、三十和四十取中位数，连续版本在中间两项之间插值得到二十五。离散版本则从排序好的输入取值，这组数据中会选二十。</p>
+<p>假设团队把导入时长整理成一张报表。产品希望读者知道典型完成时间，排查工具又希望能指回原有记录。查询结果写成二十五毫秒，拿原始数据搜索却没有任何记录使用这个时间。先确认字段要表达的是什么。如果它是一种统计估计，找不到同值的原始记录可以符合合同；如果产品要求给出一个观测值，连续百分位不承担这个要求。</p>
+<h2 id="先确认中位数来自哪套选择规则"><a href="#先确认中位数来自哪套选择规则" class="headerlink" title="先确认中位数来自哪套选择规则"></a>先确认中位数来自哪套选择规则</h2><p>PostgreSQL 十八版在同一份文档里分别描述两类有序集聚合。连续版本可以在相邻输入间插值。离散版本从排序后的值中选择达到指定百分比位置的第一项。给这两个函数相同的四个不同数值，都求二分之一，并不能预期输出相同。二十五来自排序位置两侧的二十和三十，二十本身是第二项，也是累计包含一半样本时所在的位置。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-aggregate.html">PostgreSQL 18 聚合函数</a>。</p>
+<p>有序集聚合的排序写在 WITHIN GROUP 里。查询最后排列报表行，无法替代每个组里对观测值的排序。另一个容易忽略的输入是 SQL NULL。这里两个百分位都忽略输入中的空值。假如采集器把没有响应时间的任务也写进一张表，统计结果只覆盖有时长的记录。数据合同若要求展示覆盖程度，可同时返回总任务数和实际测量数，并决定未取得时长的任务如何解释。不能把二十五毫秒自动归给没有测量的任务。</p>
+<h2 id="用四项测量核对两份结果"><a href="#用四项测量核对两份结果" class="headerlink" title="用四项测量核对两份结果"></a>用四项测量核对两份结果</h2><p>下面是未执行的教学 SQL。它给出四个毫秒数，再加入一条 SQL NULL，不依赖已存在的业务表。用 PostgreSQL 十八版验收时，先保留 measured 的独立预期，再分别比较两个聚合结果。</p>
+<pre><code class="sql">WITH samples(ms) AS (VALUES (10), (20), (30), (40), (NULL))
+SELECT count(ms) AS measured,
+       percentile_cont(0.5) WITHIN GROUP (ORDER BY ms) AS interpolated,
+       percentile_disc(0.5) WITHIN GROUP (ORDER BY ms) AS selected
+FROM samples;
+</code></pre>
+<p>预期 measured 为四，interpolated 为二十五，selected 为二十。不要让测试通过从同一函数反算预期，否则两种入口即使误接成同一个，结果也可能被接受。可以保存这四项外加一条空记录为独立输入。若实际系统会对小数做显示取整，先核对数据库结果，再检查界面怎样显示。一份页面看起来没有小数的截图，不能证明离散选择真的发生了。</p>
+<p>再准备一个反例，让排序值为十、二十、二十和四十。这时两种策略对二分之一都可以得到二十。如果验收只用这一组数据，换错函数仍可能通过。因此将没有相同中间项的主样本留作区分两种策略的用例，再用重复值验证测试确实允许它们出现。主程序未运行，重复值也是单独的纸面预期。</p>
+<p>如果来源组完全没有有效测量，应明确报表怎样标示没有结果。例如按服务输出时，保留服务标识和可用样本数，再定义百分位缺失的显示。不要擅自把空值转成零，因为零毫秒与没有一次测量表达的是不同信息。现场检查还要验证整组服务是否出现在结果中；从仅包含测量的明细表起步，即使处理了聚合的空值，也可能根本没有需要展示的分组。</p>
+<h2 id="从消费者需要的证据选择模式"><a href="#从消费者需要的证据选择模式" class="headerlink" title="从消费者需要的证据选择模式"></a>从消费者需要的证据选择模式</h2><p>如果容量规划需要比较连续的时长估计，使用连续版本，并让字段名说明这是一种计算结果。若系统要从输入定义的等级里选一个阈值，离散版本更容易维持等级合同。若后续页面要直接定位原始任务，仅返回一个离散时长还不够，因为同一个值可以出现在多条记录上。应另定义用任务编号、时间或明确的排序方法选择代表记录。用两条耗时相同但编号不同的输入核对这一段，而不是拿百分位数本身充当唯一主键。</p>
+<p>组边界也可能改变结果。按整批计算和逐租户分别计算时，同样四个数字能落在不同组。实际验收应保存每个结果行对应的源记录集合和非空计数，再检查百分位。若某个关联多复制了一次十，累计分布会随之改变。要区分函数选择错误和输入行数错误，先核对同一条观测究竟参加了几次。站内的 <a href="/zh-CN/2026/11/14/promql-histogram-quantile-bucket-repair/">PromQL 直方图桶校验</a> 处理累积桶输入，本例直接使用每条精确观测。</p>
+<p>如果输出还会参与告警，预期里应注明选择依据。设时长阈值为二十二毫秒，离散中位数二十不会越过它，连续中位数二十五会。团队要先确定告警针对的是选出的已观测阈值，还是连续统计值，再按选择写回归。验证报告可把原始样本、数据库未格式化结果、页面展示和实际告警状态放在不同字段记录。如果产品改了统计策略，测试也应表明哪些消费者受到影响。这个告警对照没有运行，示例没有配置告警规则或模拟通知。</p>
+<h2 id="如果一次传多个百分位，其中还包含-NULL-呢？"><a href="#如果一次传多个百分位，其中还包含-NULL-呢？" class="headerlink" title="如果一次传多个百分位，其中还包含 NULL 呢？"></a>如果一次传多个百分位，其中还包含 NULL 呢？</h2><p>数组重载的返回形状跟请求数组一致，空位置留空。给同样四个有效观测传入四分之一、NULL、四分之三，连续模式预期依次为十七点五、空、三十二点五。离散模式预期十、空、三十。调用方应核对位置，再给显示标签配对，不能先删除空位置以后再按原下标贴标签。这个数组变体未执行；主例同样只有预期，没有实际数据库或报表结果。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-aggregate.html" rel="noopener">PostgreSQL: Documentation: 18: 9.21. Aggregate Functions</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--statistics" href="/zh-CN/tags/Statistics/">Statistics</a>
+          
+            <a class="tag tag--sql" href="/zh-CN/tags/SQL/">SQL</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F15%2Fpostgres-percentile-cont-disc-observed-value%2F&text=PostgreSQL%20%E7%9A%84%E4%B8%AD%E4%BD%8D%E6%95%B0%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E5%9C%A8%E5%8E%9F%E5%A7%8B%E6%A0%B7%E6%9C%AC%E9%87%8C%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F15%2Fpostgres-percentile-cont-disc-observed-value%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=PostgreSQL%20%E7%9A%84%E4%B8%AD%E4%BD%8D%E6%95%B0%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E5%9C%A8%E5%8E%9F%E5%A7%8B%E6%A0%B7%E6%9C%AC%E9%87%8C%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F15%2Fpostgres-percentile-cont-disc-observed-value%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/15/pytest-deselect-node-id-prefix/">
+              <span>上一篇</span>
+              <strong>pytest 只想排除一个测试，为什么另一个也没执行？</strong>
+              <small>2026-11-15</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/15/object-fromentries-duplicate-key-policy/">
+              <span>下一篇</span>
+              <strong>Object.fromEntries 转换后，为什么只剩最后一个值？</strong>
+              <small>2026-11-15</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#先确认中位数来自哪套选择规则">先确认中位数来自哪套选择规则</a>
+          
+            <a class="toc-link toc-link--h2" href="#用四项测量核对两份结果">用四项测量核对两份结果</a>
+          
+            <a class="toc-link toc-link--h2" href="#从消费者需要的证据选择模式">从消费者需要的证据选择模式</a>
+          
+            <a class="toc-link toc-link--h2" href="#如果一次传多个百分位，其中还包含-NULL-呢？">如果一次传多个百分位，其中还包含 NULL 呢？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>253</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>211</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/14/postgres-jsonb-object-agg-unique-keys/">PostgreSQL 生成 JSONB 对象时，两个来源行为什么只剩一个键？</a></h3>
+          <p>2026-11-14</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/13/postgres-array-agg-left-join-empty/">客户没有子记录，为什么 array_agg 给了 {NULL}？</a></h3>
+          <p>2026-11-13</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/12/postgres-group-by-primary-key-dependency/">GROUP BY 只写了主键，为什么还能选出名称？</a></h3>
+          <p>2026-11-12</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

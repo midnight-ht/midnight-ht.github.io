@@ -1,0 +1,447 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Docker 已发停止信号，为什么还是强制杀掉了容器？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="通过同一镜像的三次停止对照，区分 Docker 首信号和停止宽限期。">
+  
+  
+    <meta name="keywords" content="STOPSIGNAL,停止宽限期">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/15/docker-stopsignal-timeout-distinction/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/15/docker-stopsignal-timeout-distinction/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/15/docker-stopsignal-timeout-distinction/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/15/docker-stopsignal-timeout-distinction/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Docker 已发停止信号，为什么还是强制杀掉了容器？ | Midnight blog">
+    <meta property="og:description" content="通过同一镜像的三次停止对照，区分 Docker 首信号和停止宽限期。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/15/docker-stopsignal-timeout-distinction/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/15/docker-stopsignal-timeout-distinction/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/15/docker-stopsignal-timeout-distinction/","name":"Docker 已发停止信号，为什么还是强制杀掉了容器？ | Midnight blog","description":"通过同一镜像的三次停止对照，区分 Docker 首信号和停止宽限期。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/15/docker-stopsignal-timeout-distinction/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/15/docker-stopsignal-timeout-distinction/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/15/docker-stopsignal-timeout-distinction/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/15/docker-stopsignal-timeout-distinction/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/15/docker-stopsignal-timeout-distinction/","headline":"Docker 已发停止信号，为什么还是强制杀掉了容器？","description":"通过同一镜像的三次停止对照，区分 Docker 首信号和停止宽限期。","inLanguage":"zh-CN","datePublished":"2026-11-14T19:28:29.000Z","dateModified":"2026-11-14T19:28:29.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.docker.com/reference/dockerfile/#stopsignal","https://docs.docker.com/reference/cli/docker/container/stop/"],"keywords":"Docker, 容器停止"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/15/docker-stopsignal-timeout-distinction/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Docker 已发停止信号，为什么还是强制杀掉了容器？","item":"https://www.zyweb.vip/zh-CN/2026/11/15/docker-stopsignal-timeout-distinction/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/15/docker-stopsignal-timeout-distinction/" selected>zh-CN</option><option value="/en/2026/11/15/docker-stopsignal-timeout-distinction/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/15/docker-stopsignal-timeout-distinction/" selected>zh-CN</option><option value="/en/2026/11/15/docker-stopsignal-timeout-distinction/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--docker">Docker</span>
+      <time datetime="2026-11-14T19:28:29.000Z">2026-11-15</time>
+    </div>
+
+    <h1>Docker 已发停止信号，为什么还是强制杀掉了容器？</h1>
+
+    
+      <p class="post-hero__summary">通过同一镜像的三次停止对照，区分 Docker 首信号和停止宽限期。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-14T19:28:29.000Z">2026-11-15</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/15/docker-stopsignal-timeout-distinction/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/15/docker-stopsignal-timeout-distinction/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>检查 Docker 最初发送哪种信号。</li><li>保存应用接收和完成清理的两条证据。</li><li>用同一镜像分离宽限变化与实例信号覆盖。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>先发哪种信号和接下来等多久是两项设置。Docker 发送了预定的停止信号以后，如果容器没有在宽限期内退出，仍可用 SIGKILL 结束它。</p>
+<p>值班人员调整了镜像的停止信号，希望应用走完清理流程。发布演练里，应用已经打印收到信号，最后却没有写出清理完成的记录。继续怀疑是不是信号没送到，会漏掉收到之后的时间边界。相反，只把宽限改大，也无法说明应用收到的是自己预期的那个信号。验收应该分别观察处理器进入、处理器完成和容器终止。三个时刻任一缺失，都要先核对此处的证据，而不是从最后一行日志反推整段过程。</p>
+<h2 id="把首信号和宽限分开读"><a href="#把首信号和宽限分开读" class="headerlink" title="把首信号和宽限分开读"></a>把首信号和宽限分开读</h2><p>Dockerfile 的 <code>STOPSIGNAL</code> 定义 daemon 停止容器时选用的首信号，没有设置时通常使用 SIGTERM。创建容器时可用 <code>--stop-signal</code> 覆盖镜像指定的内容。Docker 的停止命令还可以单次指定信号和等待时间。等待期耗尽而容器仍未退出时，daemon 会发送 SIGKILL。这几个设置分别回答镜像默认、实例配置和本次命令采用的值。只看到 Dockerfile 里写了某项，仍不足以还原真实运行的停止路径。 <a target="_blank" rel="noopener" href="https://docs.docker.com/reference/dockerfile/#stopsignal">Dockerfile 的 STOPSIGNAL</a>；<a target="_blank" rel="noopener" href="https://docs.docker.com/reference/cli/docker/container/stop/">Docker 容器停止命令</a></p>
+<h2 id="让同一程序收到两种可辨认的信号"><a href="#让同一程序收到两种可辨认的信号" class="headerlink" title="让同一程序收到两种可辨认的信号"></a>让同一程序收到两种可辨认的信号</h2><p>下面是用于隔离 Linux 容器环境的完整样本。没有构建镜像，也没有执行容器停止。程序直接作为容器的主进程，开始前注册两种处理器。USR1 分支等待六秒以表示尚未结束的工作；TERM 分支不延迟，方便观察信号配置切换。打印立即刷新。这个等待只是演练手段，不能外推为真实应用的清理方式。</p>
+<pre><code class="dockerfile">FROM python:3.12-slim
+COPY shutdown.py /shutdown.py
+STOPSIGNAL SIGUSR1
+ENTRYPOINT [&quot;python&quot;, &quot;/shutdown.py&quot;]
+</code></pre>
+<p>将这份程序存为 shutdown.py，与 Dockerfile 放在同一独立目录。</p>
+<pre><code class="python">import signal
+import time
+
+
+def stop(signum, frame):
+    print(f&quot;received:{signal.Signals(signum).name}&quot;, flush=True)
+    if signum == signal.SIGUSR1:
+        time.sleep(6)
+    print(&quot;finished&quot;, flush=True)
+    raise SystemExit(0)
+
+
+signal.signal(signal.SIGUSR1, stop)
+signal.signal(signal.SIGTERM, stop)
+print(&quot;ready&quot;, flush=True)
+while True:
+    signal.pause()
+</code></pre>
+<p>拟用 <code>docker build -t stop-signal-lab .</code> 构建一次。启动三个不同名称的容器，其中两个直接用镜像设置，第三个在 docker run 创建时加上 <code>--stop-signal SIGTERM</code>。每个都应先在日志明确看到 ready，再单独执行停止命令。第一个与第三个各给十二秒等待，第二个只给一秒。命令应明确传入 <code>docker stop --timeout</code> 的值，避免继承某个未记录的默认。三轮都使用独立容器，不拿已经停止的一个复用前一次日志。</p>
+<pre><code class="sh">docker run -d --name grace-long stop-signal-lab
+docker run -d --name grace-short stop-signal-lab
+docker run -d --name signal-term --stop-signal SIGTERM stop-signal-lab
+# Inspect each container&#39;s logs for ready before stopping it.
+docker stop --timeout 12 grace-long signal-term
+docker stop --timeout 1 grace-short
+</code></pre>
+<p>在看到 ready 之前不应发送停止命令。若某个容器在注册处理器前已退出，应先保留启动日志和容器状态，把这一格标为未完成，而不是借由没有完成标记宣称短宽限生效。命令本身的正常返回也只说明它完成了停止操作。验收程序需接着读取三个容器的日志，按不同名称核对每一份退出与标记。若环境拒绝重复使用已有名称，可以换整组专用名称，并同步更新命令和核对表，避免误读上一轮的记录。这个流程不需要任何真实业务输入。</p>
+<table>
+<thead>
+<tr>
+<th>实验</th>
+<th>应用进入标记</th>
+<th>完成标记预期</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>镜像默认信号，长宽限</td>
+<td>received:SIGUSR1</td>
+<td>有</td>
+</tr>
+<tr>
+<td>镜像默认信号，短宽限</td>
+<td>received:SIGUSR1</td>
+<td>无</td>
+</tr>
+<tr>
+<td>实例覆盖信号，长宽限</td>
+<td>received:SIGTERM</td>
+<td>有</td>
+</tr>
+</tbody></table>
+<p>短宽限作为负例，预期 daemon 在程序完成前终止容器。将标记和 <code>docker inspect</code> 中的容器终态一起记录。不要把收到标记和终态之间的固定时间间隔写成断言：宿主负载会影响观察到的时间。若短宽限连收到标记也没取到，先检查 ready、有效信号和日志是否可读，再判断样本是否达到想测的条件。若业务需要确认被强制终止，应另查 daemon 或事件记录，不能只凭某个退出值推断此前发生了什么。</p>
+<h2 id="让验收说明配置实际改变了什么"><a href="#让验收说明配置实际改变了什么" class="headerlink" title="让验收说明配置实际改变了什么"></a>让验收说明配置实际改变了什么</h2><p>比较前两轮时，负责信号的程序和配置都一样，差异来自停止命令等待多久。比较第一轮和第三轮，时间给得一样，首信号才是变化量。若实际工程还通过编排平台运行，记录平台给这次停止操作传入了什么，而不是只保存镜像构建记录。真实服务也应确认所需的收尾动作发生在终止之前，例如写入队列确认或关闭受控连接。这些业务操作在样本中没有发生，完成标记只说明演练程序走到了指定位置。</p>
+<p>这组试验刻意固定 exec 入口。若应用根本不是主进程，先查看<a href="/zh-CN/2026/10/13/docker-entrypoint-signal/">入口进程怎样交接信号</a>。先解决到达路径，再看首信号是否与处理器约定相符，最后观察耗时。测试时同时保存容器标识、创建选项、停止命令以及每个标记，才能判断两轮是否真的只改变了一项条件。清理时只移除为实验新建的容器和镜像。</p>
+<p>如果一轮演练打印了完成标记，却没有及时退出，还要看完成标记是否写得太早。例如真实程序可能在标记后仍等待工作线程，daemon 观察到的是容器还活着。验收可要求记录开始和完成，随后由管理接口独立确认进程终止。不能把“已进入清理”当作“可以开始替换所有副本”，也不能仅由容器离开运行状态就断言业务已完整交接。保留每个状态各自的时间，下一次才能确认改变宽限有没有解决实际缺口。</p>
+<p>要让停止实验适用于不同机器，也可以先保留镜像解析结果。若两轮用了同一个标签却指向不同制品，处理器代码版本可能已经变化。镜像只构建一次的安排正是为了把这项差异排除在外；留下实际镜像标识后，后续能确认哪一次只是调整命令参数。</p>
+<h2 id="前台直接按-Ctrl-C，也会使用镜像的首信号吗？"><a href="#前台直接按-Ctrl-C，也会使用镜像的首信号吗？" class="headerlink" title="前台直接按 Ctrl+C，也会使用镜像的首信号吗？"></a>前台直接按 Ctrl+C，也会使用镜像的首信号吗？</h2><p>Dockerfile 手册明确将键盘中断与 daemon 停止区分。前台键盘的 Ctrl+C 产生 SIGINT，不因镜像指定 USR1 而改成它。若测试通过已有终端或包装程序，仍应明确实际交互入口与信号行为。这是另一个验证条件，正文只计划演练停止命令。可以在独立的前台程序安装可见的 SIGINT 处理器来观察，两份记录分别保留。该变体未执行。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.docker.com/reference/dockerfile/#stopsignal" rel="noopener">Dockerfile reference — STOPSIGNAL</a></li><li><a target="_blank" href="https://docs.docker.com/reference/cli/docker/container/stop/" rel="noopener">docker container stop — Docker CLI reference</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--docker" href="/zh-CN/tags/docker/">Docker</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%AE%B9%E5%99%A8%E5%81%9C%E6%AD%A2/">容器停止</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F15%2Fdocker-stopsignal-timeout-distinction%2F&text=Docker%20%E5%B7%B2%E5%8F%91%E5%81%9C%E6%AD%A2%E4%BF%A1%E5%8F%B7%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E6%98%AF%E5%BC%BA%E5%88%B6%E6%9D%80%E6%8E%89%E4%BA%86%E5%AE%B9%E5%99%A8%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F15%2Fdocker-stopsignal-timeout-distinction%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Docker%20%E5%B7%B2%E5%8F%91%E5%81%9C%E6%AD%A2%E4%BF%A1%E5%8F%B7%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E6%98%AF%E5%BC%BA%E5%88%B6%E6%9D%80%E6%8E%89%E4%BA%86%E5%AE%B9%E5%99%A8%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F15%2Fdocker-stopsignal-timeout-distinction%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/15/dom-slotchange-assignment-versus-text/">
+              <span>上一篇</span>
+              <strong>投影文字已经改了，为什么 slotchange 没触发？</strong>
+              <small>2026-11-15</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/15/css-content-visibility-auto-find/">
+              <span>下一篇</span>
+              <strong>用了 content-visibility:auto，为什么离屏内容还能搜到？</strong>
+              <small>2026-11-15</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#把首信号和宽限分开读">把首信号和宽限分开读</a>
+          
+            <a class="toc-link toc-link--h2" href="#让同一程序收到两种可辨认的信号">让同一程序收到两种可辨认的信号</a>
+          
+            <a class="toc-link toc-link--h2" href="#让验收说明配置实际改变了什么">让验收说明配置实际改变了什么</a>
+          
+            <a class="toc-link toc-link--h2" href="#前台直接按-Ctrl-C，也会使用镜像的首信号吗？">前台直接按 Ctrl+C，也会使用镜像的首信号吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>253</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>211</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/13/docker-copy-link-layer-independence/">基础层改了，Docker 的制品复制层还能复用吗？</a></h3>
+          <p>2026-11-13</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/">Docker secret值换了，为什么认证步骤仍命中缓存？</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/docker-run-network-fetch-scope/">RUN断网，远程ADD为什么仍可能下载？</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

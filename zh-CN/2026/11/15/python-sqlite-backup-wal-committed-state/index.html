@@ -1,0 +1,433 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>SQLite 开着 WAL 时，只复制数据库文件会漏掉哪条记录？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用实际隔离试验对照 SQLite 主文件副本和连接备份，按已提交的记录标识验收。">
+  
+  
+    <meta name="keywords" content="SQLite WAL,Connection.backup,committed rows">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/15/python-sqlite-backup-wal-committed-state/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="SQLite 开着 WAL 时，只复制数据库文件会漏掉哪条记录？ | Midnight blog">
+    <meta property="og:description" content="用实际隔离试验对照 SQLite 主文件副本和连接备份，按已提交的记录标识验收。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/","name":"SQLite 开着 WAL 时，只复制数据库文件会漏掉哪条记录？ | Midnight blog","description":"用实际隔离试验对照 SQLite 主文件副本和连接备份，按已提交的记录标识验收。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/","headline":"SQLite 开着 WAL 时，只复制数据库文件会漏掉哪条记录？","description":"用实际隔离试验对照 SQLite 主文件副本和连接备份，按已提交的记录标识验收。","inLanguage":"zh-CN","datePublished":"2026-11-14T19:28:29.000Z","dateModified":"2026-11-14T19:28:29.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.14/library/sqlite3.html#sqlite3.Connection.backup","https://www.sqlite.org/wal.html","https://www.sqlite.org/backup.html"],"keywords":"SQLite, Python, Backup"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"SQLite 开着 WAL 时，只复制数据库文件会漏掉哪条记录？","item":"https://www.zyweb.vip/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/" selected>zh-CN</option><option value="/en/2026/11/15/python-sqlite-backup-wal-committed-state/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/" selected>zh-CN</option><option value="/en/2026/11/15/python-sqlite-backup-wal-committed-state/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--sqlite">SQLite</span>
+      <time datetime="2026-11-14T19:28:29.000Z">2026-11-15</time>
+    </div>
+
+    <h1>SQLite 开着 WAL 时，只复制数据库文件会漏掉哪条记录？</h1>
+
+    
+      <p class="post-hero__summary">用实际隔离试验对照 SQLite 主文件副本和连接备份，按已提交的记录标识验收。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-14T19:28:29.000Z">2026-11-15</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/15/python-sqlite-backup-wal-committed-state/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>SQLite 已提交的记录可能仍在 WAL。</li><li>连接备份需要对目标副本独立读取。</li><li>打开成功不能替代记录验收。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>SQLite 使用 WAL 时，已经提交的行可能还在 WAL 文件里。只复制主数据库文件，可能得到一份可以打开却缺少这条已提交记录的副本。对仍在使用的库，用 SQLite 的连接备份接口生成可独立验收的副本。</p>
+<p>设想应用保存了第二条库存记录，写入连接读得回来，备份任务却只把数据库同名文件复制到另一个目录。检查者打开副本，表仍然存在，只有第一条记录。此时先查两份副本分别从哪个入口取得内容，再按业务主键核对，而不是从能否打开文件推断已经保留所有提交。一个结构正常的旧视图也能通过打开检查。</p>
+<h2 id="提交记录与主文件何时不同"><a href="#提交记录与主文件何时不同" class="headerlink" title="提交记录与主文件何时不同"></a>提交记录与主文件何时不同</h2><p>SQLite 说明，WAL 是数据库持久状态的一部分。数据库仍在使用时，把主文件与对应的 WAL 分开，可能丢失已经提交的事务。应用通过连接读取时，数据库会依据自己的状态协调读取，不必从单一主文件推断当前结果。这里关注一份没有其它写入者的隔离库，有意把第二条记录留在 WAL 中。没有把这个对照扩展成任意活库文件复制都只会少一行。<a target="_blank" rel="noopener" href="https://www.sqlite.org/wal.html#the_wal_file">SQLite WAL 文件说明</a>。</p>
+<p>Python 的 sqlite3.Connection.backup 接受另一条连接作为目标，并调用 SQLite 的备份能力。使用时应当给目标分配独立路径，完成后关闭目标连接，再用新的连接检查内容。源库里刚好能查到数据，只能当成源侧证据。通过目标副本再次查询，才能核对目标确实保存了预期状态。没有其他写入者的样本也不会决定生产系统在并发期间采用哪个业务截止点。<a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/sqlite3.html#sqlite3.Connection.backup">Python sqlite3 backup</a>。</p>
+<h2 id="让两个副本从不同入口取得数据"><a href="#让两个副本从不同入口取得数据" class="headerlink" title="让两个副本从不同入口取得数据"></a>让两个副本从不同入口取得数据</h2><p>下面的标准库程序已在 Python 3.11.15、SQLite 3.53.1 的临时目录运行。它关闭本连接的自动 checkpoint，先把包含记录一的基线送入主文件，再提交记录二。整个复制阶段没有其他应用连接修改数据库。复制主文件的步骤只是隔离负对照，不是生产备份命令。</p>
+<pre><code class="python">from contextlib import closing
+from pathlib import Path
+from shutil import copyfile
+from sqlite3 import connect, sqlite_version
+from tempfile import TemporaryDirectory
+
+def query(connection, sql):
+    return list(connection.execute(sql))
+
+def rows(connection):
+    return query(connection, &quot;SELECT id FROM sample ORDER BY id&quot;)
+
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    live = root / &quot;live&quot;
+    main_only = root / &quot;main-only&quot;
+    backup = root / &quot;backup&quot;
+    with closing(connect(live)) as writer:
+        assert query(writer, &quot;PRAGMA journal_mode=WAL&quot;) == [(&quot;wal&quot;,)]
+        writer.executescript(&quot;&quot;&quot;
+            PRAGMA wal_autocheckpoint=0;
+            CREATE TABLE sample (id INTEGER PRIMARY KEY);
+            INSERT INTO sample VALUES (1);
+        &quot;&quot;&quot;)
+        assert query(writer, &quot;PRAGMA wal_checkpoint(TRUNCATE)&quot;) == [(0, 0, 0)]
+        query(writer, &quot;INSERT INTO sample VALUES (2)&quot;)
+        writer.commit()
+        assert rows(writer) == [(1,), (2,)]
+        copyfile(live, main_only)
+        with closing(connect(backup)) as target:
+            writer.backup(target)
+
+        with closing(connect(main_only)) as isolated:
+            assert rows(isolated) == [(1,)]
+        with closing(connect(backup)) as restored:
+            assert rows(restored) == [(1,), (2,)]
+            assert query(restored, &quot;PRAGMA integrity_check&quot;) == [(&quot;ok&quot;,)]
+        print(sqlite_version, &quot;live=1,2 main-only=1 backup=1,2&quot;)
+</code></pre>
+<p>写入连接实际读到一和二。只复制主文件的副本独立打开后，只读到一。通过连接备份取得的文件也独立打开，读到一和二，完整性检查返回 ok。程序保留写入连接到两份检查结束以后，避免最后一条连接关闭引起的处理提前改变负对照。它并没有尝试在修改并行发生时复制文件。归档的输出和断言只描述这一次受控环境，不能作为线上数据的完整性证明。</p>
+<p>这次实验的三个分组要保持独立。如果读主文件副本时把原库同名 WAL 也放到同一位置，就无法再证明差异来自是否读取 WAL。夹具用不同文件名和同一受控目录隔开目标。另一个常见误验是直接把同样的查询发回源连接，然后把查询结果贴到备份回执。检查记录应写下连接实际打开的路径、读取的表和目标行标识，使结果归属可追溯。</p>
+<h2 id="用业务可恢复性验收目标"><a href="#用业务可恢复性验收目标" class="headerlink" title="用业务可恢复性验收目标"></a>用业务可恢复性验收目标</h2><p>真实备份验收可以挑选已提交的少量稳定标识，检查目标中的关联行和表结构。完整性检查返回正常，只能支持数据库结构相关的那项检查。如果产品需要备份到某个准确的业务标记，还要明确标记何时提交，备份范围如何覆盖它，并在恢复之后检查。对独立数据库进程、附件和外部身份服务，也应保存它们自己的恢复条件。这个本地样本不涉及这些依赖。</p>
+<p>也可以准备一次错误的验收决策作对照。让主文件副本通过打开和基线查询，但把记录二列为备份必须包含的验收项。只有在按主键验证时，这份副本才会失败。这样能确认测试没有把最早那条记录当成全部证据。站内的 <a href="/zh-CN/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/">SQLite checkpoint 与读事务</a> 讨论长读如何影响归并时点，这里故意控制 checkpoint，只检查活库中一项新提交怎样进入可读副本。</p>
+<p>恢复演练还需要验证数据之间的关系。可以给第二条记录附一条库存明细，记录号二、明细号二十一，先写出真正可用于查询的两行预期。打开只含基线的错误副本时，结构检查仍可能正常，这条库存及其明细却都不存在。若备份只找到了记录二，明细丢失，也不能判整体成功。把关联关系的核对放在目标副本，避免漏掉仅迁入部分表或在错误连接上核对的问题。这组业务行是测试设计，主样本没有明细表。</p>
+<p>为了不把测试变成一条只会成功的路径，可独立挑选一个明确不该存在的记录，例如编号三。验证恢复程序没有把另一份样本中的记录合并进来。对实际项目，先在源状态固定验收范围，再记录目标版本、开始与完成时间，并标明预期中哪些内容可能出现在并发写入之后。这里没有演示并发备份的一致性机制，也没有声称运行时自动选择业务所需的截止点。</p>
+<h2 id="默认会把命名附加库也备份吗？"><a href="#默认会把命名附加库也备份吗？" class="headerlink" title="默认会把命名附加库也备份吗？"></a>默认会把命名附加库也备份吗？</h2><p>Python 的 backup 默认选择源库名 main。若应用另有通过 ATTACH 命名的数据库，应按需要为每个数据库准备明确目标，并用 name 选择源。可给主库和附库分别放一个不同的验收标识，确认只有显式请求的附库标识出现在它自己的副本中。逐库完成并不自动证明这些副本覆盖同一个跨库业务时点。这项附库验证未运行，样本只观察一个主库。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/sqlite3.html#sqlite3.Connection.backup" rel="noopener">sqlite3 — DB-API 2.0 interface for SQLite databases — Python 3.14.10 documentation</a></li><li><a target="_blank" href="https://www.sqlite.org/wal.html" rel="noopener">Write-Ahead Logging</a></li><li><a target="_blank" href="https://www.sqlite.org/backup.html" rel="noopener">SQLite Backup API</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--sqlite" href="/zh-CN/tags/SQLite/">SQLite</a>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+            <a class="tag tag--backup" href="/zh-CN/tags/Backup/">Backup</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F15%2Fpython-sqlite-backup-wal-committed-state%2F&text=SQLite%20%E5%BC%80%E7%9D%80%20WAL%20%E6%97%B6%EF%BC%8C%E5%8F%AA%E5%A4%8D%E5%88%B6%E6%95%B0%E6%8D%AE%E5%BA%93%E6%96%87%E4%BB%B6%E4%BC%9A%E6%BC%8F%E6%8E%89%E5%93%AA%E6%9D%A1%E8%AE%B0%E5%BD%95%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F15%2Fpython-sqlite-backup-wal-committed-state%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=SQLite%20%E5%BC%80%E7%9D%80%20WAL%20%E6%97%B6%EF%BC%8C%E5%8F%AA%E5%A4%8D%E5%88%B6%E6%95%B0%E6%8D%AE%E5%BA%93%E6%96%87%E4%BB%B6%E4%BC%9A%E6%BC%8F%E6%8E%89%E5%93%AA%E6%9D%A1%E8%AE%B0%E5%BD%95%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F15%2Fpython-sqlite-backup-wal-committed-state%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/15/redis-sintercard-limit-threshold/">
+              <span>上一篇</span>
+              <strong>SINTERCARD LIMIT 2 返回 2，交集真的只有两个吗？</strong>
+              <small>2026-11-15</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/15/python-spooled-tempfile-fileno-rollover/">
+              <span>下一篇</span>
+              <strong>Python 临时文件明明很小，为什么一调用 fileno 就落盘？</strong>
+              <small>2026-11-15</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#提交记录与主文件何时不同">提交记录与主文件何时不同</a>
+          
+            <a class="toc-link toc-link--h2" href="#让两个副本从不同入口取得数据">让两个副本从不同入口取得数据</a>
+          
+            <a class="toc-link toc-link--h2" href="#用业务可恢复性验收目标">用业务可恢复性验收目标</a>
+          
+            <a class="toc-link toc-link--h2" href="#默认会把命名附加库也备份吗？">默认会把命名附加库也备份吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>253</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>211</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/python-sqlite-executemany-returning-discard/">Python sqlite3 executemany 执行了 RETURNING，为什么 fetchall 为空？</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/30/python-sqlite-executescript-precommit/">SQLite 脚本报错后回滚，前一笔 Python 写入为什么还在？</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/15/python-logging-dictconfig-existing-loggers/">Python 改完日志配置，为什么旧 logger 不再出声？</a></h3>
+          <p>2026-11-15</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

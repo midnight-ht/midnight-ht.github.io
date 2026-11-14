@@ -1,0 +1,432 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why can copying only the main SQLite file miss a committed row? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Compare a main-file-only control with a SQLite connection backup and verify a committed row in the destination.">
+  
+  
+    <meta name="keywords" content="SQLite WAL,Connection.backup,committed rows">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/15/python-sqlite-backup-wal-committed-state/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/15/python-sqlite-backup-wal-committed-state/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why can copying only the main SQLite file miss a committed row? | Midnight blog">
+    <meta property="og:description" content="Compare a main-file-only control with a SQLite connection backup and verify a committed row in the destination.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/15/python-sqlite-backup-wal-committed-state/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/15/python-sqlite-backup-wal-committed-state/#webpage","url":"https://www.zyweb.vip/en/2026/11/15/python-sqlite-backup-wal-committed-state/","name":"Why can copying only the main SQLite file miss a committed row? | Midnight blog","description":"Compare a main-file-only control with a SQLite connection backup and verify a committed row in the destination.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/15/python-sqlite-backup-wal-committed-state/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/15/python-sqlite-backup-wal-committed-state/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/15/python-sqlite-backup-wal-committed-state/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/15/python-sqlite-backup-wal-committed-state/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/15/python-sqlite-backup-wal-committed-state/","headline":"Why can copying only the main SQLite file miss a committed row?","description":"Compare a main-file-only control with a SQLite connection backup and verify a committed row in the destination.","inLanguage":"en","datePublished":"2026-11-14T19:28:29.000Z","dateModified":"2026-11-14T19:28:29.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://docs.python.org/3.14/library/sqlite3.html#sqlite3.Connection.backup","https://www.sqlite.org/wal.html","https://www.sqlite.org/backup.html"],"keywords":"SQLite, Python, Backup"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/15/python-sqlite-backup-wal-committed-state/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why can copying only the main SQLite file miss a committed row?","item":"https://www.zyweb.vip/en/2026/11/15/python-sqlite-backup-wal-committed-state/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/">zh-CN</option><option value="/en/2026/11/15/python-sqlite-backup-wal-committed-state/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/">zh-CN</option><option value="/en/2026/11/15/python-sqlite-backup-wal-committed-state/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--sqlite">SQLite</span>
+      <time datetime="2026-11-14T19:28:29.000Z">2026-11-15</time>
+    </div>
+
+    <h1>Why can copying only the main SQLite file miss a committed row?</h1>
+
+    
+      <p class="post-hero__summary">Compare a main-file-only control with a SQLite connection backup and verify a committed row in the destination.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-14T19:28:29.000Z">2026-11-15</time> · Estimated read 10 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/15/python-sqlite-backup-wal-committed-state/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>A committed SQLite row can remain in the WAL.</li><li>Verify the target copy through an independent read.</li><li>Opening the file does not establish which records it contains.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>A committed SQLite row can still live in the WAL. Copying only the main database can produce a file that opens but lacks that row. Use SQLite’s connection backup API for a live database and verify the resulting copy separately.</p>
+<p>Suppose an application commits a second inventory record. The writer can read it, while a task that copies only the main database produces a file containing the table and just the first record. Check how each copy was made and compare the business IDs. A readable older database can still fail the backup contract.</p>
+<h2 id="Account-for-state-in-the-WAL"><a href="#Account-for-state-in-the-WAL" class="headerlink" title="Account for state in the WAL"></a>Account for state in the WAL</h2><p>SQLite documents the WAL as part of the database’s persistent state. Separating a database in use from its WAL can lose committed transactions. The engine’s live connection can read committed contents using its own coordination. This example deliberately leaves a second row in the WAL, with no competing writer. <a target="_blank" rel="noopener" href="https://www.sqlite.org/wal.html#the_wal_file">SQLite WAL file</a>.</p>
+<p>Python’s sqlite3.Connection.backup uses a distinct target connection. Give it a dedicated path and verify its contents through a new read afterward. Reading from the source does not establish what the copy contains. This fixture does not establish a production cutoff under concurrent writes. <a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/sqlite3.html#sqlite3.Connection.backup">Python sqlite3 backup</a>.</p>
+<h2 id="Compare-two-ways-to-obtain-a-copy"><a href="#Compare-two-ways-to-obtain-a-copy" class="headerlink" title="Compare two ways to obtain a copy"></a>Compare two ways to obtain a copy</h2><p>This complete standard-library program ran in a temporary directory on Python 3.11.15 with SQLite 3.53.1. It disables automatic checkpoints on the writer, checkpoints the baseline, and commits row two. Copying the main file is an isolated negative control.</p>
+<pre><code class="python">from contextlib import closing
+from pathlib import Path
+from shutil import copyfile
+from sqlite3 import connect, sqlite_version
+from tempfile import TemporaryDirectory
+
+def query(connection, sql):
+    return list(connection.execute(sql))
+
+def rows(connection):
+    return query(connection, &quot;SELECT id FROM sample ORDER BY id&quot;)
+
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    live = root / &quot;live&quot;
+    main_only = root / &quot;main-only&quot;
+    backup = root / &quot;backup&quot;
+    with closing(connect(live)) as writer:
+        assert query(writer, &quot;PRAGMA journal_mode=WAL&quot;) == [(&quot;wal&quot;,)]
+        writer.executescript(&quot;&quot;&quot;
+            PRAGMA wal_autocheckpoint=0;
+            CREATE TABLE sample (id INTEGER PRIMARY KEY);
+            INSERT INTO sample VALUES (1);
+        &quot;&quot;&quot;)
+        assert query(writer, &quot;PRAGMA wal_checkpoint(TRUNCATE)&quot;) == [(0, 0, 0)]
+        query(writer, &quot;INSERT INTO sample VALUES (2)&quot;)
+        writer.commit()
+        assert rows(writer) == [(1,), (2,)]
+        copyfile(live, main_only)
+        with closing(connect(backup)) as target:
+            writer.backup(target)
+
+        with closing(connect(main_only)) as isolated:
+            assert rows(isolated) == [(1,)]
+        with closing(connect(backup)) as restored:
+            assert rows(restored) == [(1,), (2,)]
+            assert query(restored, &quot;PRAGMA integrity_check&quot;) == [(&quot;ok&quot;,)]
+        print(sqlite_version, &quot;live=1,2 main-only=1 backup=1,2&quot;)
+</code></pre>
+<p>The writer returned both IDs. The main-file-only copy reopened with ID one. The connection backup reopened with both and reported ok for integrity_check. The run kept the writer open through verification. No application writes occurred during either copy. The receipt covers this timing and these rows.</p>
+<p>Keep the observations independent. Use distinct files and record the actual paths opened by the check. A test that sends its verification query back to the live source can inadvertently prove the wrong result. A misplaced sidecar would also change the negative control.</p>
+<h2 id="Give-recovery-its-own-acceptance-criteria"><a href="#Give-recovery-its-own-acceptance-criteria" class="headerlink" title="Give recovery its own acceptance criteria"></a>Give recovery its own acceptance criteria</h2><p>Choose stable committed IDs and inspect their related records in the destination. A structural integrity check has its own purpose. If the product promises a business cutoff, verify the relevant commit and what the restored copy contains. External services and separate databases have their own recovery conditions.</p>
+<p>A useful negative check lets the main-file-only copy open and find the baseline, then requires ID two by name. That makes it impossible for a successful open to stand in for the expected data. The related <a href="/en/2026/10/25/sqlite-wal-checkpoint-reader-lifetime/">SQLite checkpoint article</a> covers long reads and checkpoint progress. Here the checkpoint timing is controlled to isolate the backup input.</p>
+<p>A recovery test can also verify a related detail row for ID two, then confirm that a known absent ID stays absent. Query the restored target for both checks. This catches a partial restore or a test accidentally reading another copy. Those application checks were not run.</p>
+<h2 id="Does-the-default-also-back-up-an-attached-database"><a href="#Does-the-default-also-back-up-an-attached-database" class="headerlink" title="Does the default also back up an attached database?"></a>Does the default also back up an attached database?</h2><p>The source name defaults to main. To back up a separately named ATTACH database, make a deliberately selected copy with the name argument and a distinct destination. Give each source a separate marker and verify it in the intended copy. Two individual backups do not establish a shared business snapshot across databases. This follow-up was not run.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/sqlite3.html#sqlite3.Connection.backup" rel="noopener">sqlite3 — DB-API 2.0 interface for SQLite databases — Python 3.14.10 documentation</a></li><li><a target="_blank" href="https://www.sqlite.org/wal.html" rel="noopener">Write-Ahead Logging</a></li><li><a target="_blank" href="https://www.sqlite.org/backup.html" rel="noopener">SQLite Backup API</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--sqlite" href="/en/tags/SQLite/">SQLite</a>
+          
+            <a class="tag tag--python" href="/en/tags/Python/">Python</a>
+          
+            <a class="tag tag--backup" href="/en/tags/Backup/">Backup</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F15%2Fpython-sqlite-backup-wal-committed-state%2F&text=Why%20can%20copying%20only%20the%20main%20SQLite%20file%20miss%20a%20committed%20row%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F15%2Fpython-sqlite-backup-wal-committed-state%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20can%20copying%20only%20the%20main%20SQLite%20file%20miss%20a%20committed%20row%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F15%2Fpython-sqlite-backup-wal-committed-state%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/15/redis-sintercard-limit-threshold/">
+              <span>Previous Post</span>
+              <strong>Does SINTERCARD LIMIT 2 returning 2 mean exactly two matches?</strong>
+              <small>2026-11-15</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/15/python-spooled-tempfile-fileno-rollover/">
+              <span>Next Post</span>
+              <strong>Why does a tiny Python spool roll over when you ask for fileno?</strong>
+              <small>2026-11-15</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Account-for-state-in-the-WAL">Account for state in the WAL</a>
+          
+            <a class="toc-link toc-link--h2" href="#Compare-two-ways-to-obtain-a-copy">Compare two ways to obtain a copy</a>
+          
+            <a class="toc-link toc-link--h2" href="#Give-recovery-its-own-acceptance-criteria">Give recovery its own acceptance criteria</a>
+          
+            <a class="toc-link toc-link--h2" href="#Does-the-default-also-back-up-an-attached-database">Does the default also back up an attached database?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>253</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>211</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>127</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/01/python-sqlite-executemany-returning-discard/">Why does Python sqlite3 executemany discard INSERT RETURNING rows?</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/10/30/python-sqlite-executescript-precommit/">Why does an earlier Python SQLite write survive a failed script and rollback?</a></h3>
+          <p>2026-10-30</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/15/python-logging-dictconfig-existing-loggers/">Why did an existing Python logger go quiet after dictConfig?</a></h3>
+          <p>2026-11-15</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
