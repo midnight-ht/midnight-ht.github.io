@@ -1,0 +1,414 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>PostgreSQL COPY 跳过了坏行，为什么第二条坏值又让整次失败？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用一条与两条整数转换错误对照 PostgreSQL COPY 的跳过预算和命令失败。">
+  
+  
+    <meta name="keywords" content="COPY FROM,ON_ERROR,REJECT_LIMIT">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/16/postgres-copy-on-error-reject-limit/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/16/postgres-copy-on-error-reject-limit/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/16/postgres-copy-on-error-reject-limit/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/16/postgres-copy-on-error-reject-limit/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="PostgreSQL COPY 跳过了坏行，为什么第二条坏值又让整次失败？ | Midnight blog">
+    <meta property="og:description" content="用一条与两条整数转换错误对照 PostgreSQL COPY 的跳过预算和命令失败。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/16/postgres-copy-on-error-reject-limit/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/16/postgres-copy-on-error-reject-limit/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/16/postgres-copy-on-error-reject-limit/","name":"PostgreSQL COPY 跳过了坏行，为什么第二条坏值又让整次失败？ | Midnight blog","description":"用一条与两条整数转换错误对照 PostgreSQL COPY 的跳过预算和命令失败。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/16/postgres-copy-on-error-reject-limit/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/16/postgres-copy-on-error-reject-limit/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/16/postgres-copy-on-error-reject-limit/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/16/postgres-copy-on-error-reject-limit/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/16/postgres-copy-on-error-reject-limit/","headline":"PostgreSQL COPY 跳过了坏行，为什么第二条坏值又让整次失败？","description":"用一条与两条整数转换错误对照 PostgreSQL COPY 的跳过预算和命令失败。","inLanguage":"zh-CN","datePublished":"2026-11-15T19:24:09.000Z","dateModified":"2026-11-15T19:24:09.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/sql-copy.html"],"keywords":"PostgreSQL, SQL, Import"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/16/postgres-copy-on-error-reject-limit/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"PostgreSQL COPY 跳过了坏行，为什么第二条坏值又让整次失败？","item":"https://www.zyweb.vip/zh-CN/2026/11/16/postgres-copy-on-error-reject-limit/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/16/postgres-copy-on-error-reject-limit/" selected>zh-CN</option><option value="/en/2026/11/16/postgres-copy-on-error-reject-limit/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/16/postgres-copy-on-error-reject-limit/" selected>zh-CN</option><option value="/en/2026/11/16/postgres-copy-on-error-reject-limit/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--postgresql">PostgreSQL</span>
+      <time datetime="2026-11-15T19:24:09.000Z">2026-11-16</time>
+    </div>
+
+    <h1>PostgreSQL COPY 跳过了坏行，为什么第二条坏值又让整次失败？</h1>
+
+    
+      <p class="post-hero__summary">用一条与两条整数转换错误对照 PostgreSQL COPY 的跳过预算和命令失败。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-15T19:24:09.000Z">2026-11-16</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/16/postgres-copy-on-error-reject-limit/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/16/postgres-copy-on-error-reject-limit/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>ignore 适用于转换错误。</li><li>超过拒绝预算时，命令仍失败。</li><li>需分别核对接受行和失败后的目标。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>PostgreSQL 的 COPY FROM 开启 ON_ERROR ignore 后，可以跳过输入值无法转换为列类型的行。再设置 REJECT_LIMIT 以后，超过预算仍会让本次命令失败。要验收部分导入，应分别检查保留下来的记录和超限后目标的可见状态。</p>
+<p>设想库存导入的数量列要求整数，文件里偶尔出现一个非数字值。安全的容错政策可能允许丢掉一条，并要求操作员根据来源标识修正它。如果第二条坏值出现，业务希望暂停整批，而不是默默接受更多缺口。一次忽略设置和一个拒绝预算分别定义了这两段行为。排查时先确定报错属于哪一项，再确认本次导入是否还能产生可用结果。</p>
+<h2 id="先界定可以跳过的错误"><a href="#先界定可以跳过的错误" class="headerlink" title="先界定可以跳过的错误"></a>先界定可以跳过的错误</h2><p>PostgreSQL 十八版文档把 ON_ERROR ignore 描述为适用于文本和 CSV 的 COPY FROM 输入转换。若输入中某列不能转换成指定类型，这一行可被丢弃。REJECT_LIMIT 只与 ignore 配合使用，需要正的整数预算。超过它以后，COPY 仍失败。省略此上限时，转换错误可继续被跳过。把这个设置描述成忽略一切坏数据，会把约束、结构或其它阶段的错误混在一起。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-copy.html">PostgreSQL 18 COPY 文档</a>。</p>
+<p>使用预算时还需定义统计口径。这里的样本每条坏行只放一个转换错误，避免将本例解释成一行有多个问题时如何逐项计数。导入后应使用源行标识对照实际写入的集合。只看已复制条数可能漏掉错误地保留了别的记录；只保存跳过数字，也不能给上游足够信息修正原值。</p>
+<h2 id="在同一预算上放一条、再放两条坏值"><a href="#在同一预算上放一条、再放两条坏值" class="headerlink" title="在同一预算上放一条、再放两条坏值"></a>在同一预算上放一条、再放两条坏值</h2><p>以下是未执行的 PostgreSQL 十八版教学脚本。用独立测试库和 psql 会话，启用默认自动提交，允许预期失败后的下一条查询继续执行。如果当前客户端遇到错误会直接停止，应分别提交两组 COPY，并在失败后单独发出最后的计数。反斜杠与点作为内联输入的结束标记，只供这里的 psql 入口使用。两个目标最初为空。</p>
+<pre><code class="sql">CREATE TEMP TABLE one_bad (id int, quantity int);
+CREATE TEMP TABLE two_bad (LIKE one_bad);
+
+COPY one_bad FROM STDIN WITH
+  (FORMAT csv, ON_ERROR ignore, REJECT_LIMIT 1);
+1,10
+2,bad
+3,30
+\.
+TABLE one_bad ORDER BY id;
+
+COPY two_bad FROM STDIN WITH
+  (FORMAT csv, ON_ERROR ignore, REJECT_LIMIT 1);
+1,10
+2,bad
+3,30
+4,worse
+\.
+SELECT count(*) FROM two_bad;
+</code></pre>
+<p>第一份输入只有编号二的数量无法转成整数，跳过后预期看到编号一和三，对应数量十和三十。第二份在相同输入末尾加入编号四及另一份坏数量。编号二随后还有可转换的三，这有助于看出失败点不是遇到第一条错行便停止。超限后应记录实际错误，再检查第二个目标的可见行数为零。失败前候选记录一与三不能当作已交付结果。此处特意采用独立自动提交的语句，若改为显式事务，需先处理失败事务再读取目标。</p>
+<p>实际部署中，转换失败被跳过时可从配置允许的通知观察行数，但通知不是最终行集合的替代物。对第一份样本，可以保留数据库结果、导入工具获得的状态以及实际写入的编号。对第二份样本，还要核对没有把失败请求的先前进度写成成功通知。这些接口观察未运行。站内的 <a href="/zh-CN/2026/11/13/postgres-copy-csv-null-quoted/">CSV 空值与引号</a> 解释输入值怎样被解释，本篇把坏值限定为一个能够明确触发整数转换错误的字符串。</p>
+<h2 id="给部分成功和整次失败不同出口"><a href="#给部分成功和整次失败不同出口" class="headerlink" title="给部分成功和整次失败不同出口"></a>给部分成功和整次失败不同出口</h2><p>如果产品允许少量异常，调用方可以对接受列表作独立核对，并给需要修改的源行保留稳定身份。重新上传时，应先决定只补失败行还是重放整份。若把已接受的行和新修好的行一起交给缺少重复处理政策的导入，可能得到不同于首次的结果。验收可以为初次文件和修复文件各选一条稳定记录并核对最终归属。此例没有实现重试或去重。</p>
+<p>另一种产品选择是任何一项出错都停止。这样可以不启用容错，要求发送方修正后再提交。部分容错并不节省对业务完整性的验证。如果恢复工具最后只比较一列计数，仍可能把编号丢失误认为允许跳过。独立保留预期全部输入、可接受输出和拒绝理由，更便于决定是否发布导入结果。</p>
+<p>还可以给读取器一份没有任何坏值的基线。同一预算下，所有合法编号都应出现，不能因为应用总打算剔除某个编号就把样本偶然写成通过。真正的部署验收应保存客户端版本、选项及错误后连接状态，并从预期的表检查记录。这里没有验证其它驱动如何转发 COPY 输入、如何交付通知或如何重开连接。</p>
+<p>若导入任务由两个组件协作，还应核对谁把数据库结果翻译成产品状态。可以让写入端返回“接受两条、跳过一条”，检查应用把这些编号与待修正来源对应起来。再让独立的超限样本返回错误，确认任务读取端没有沿用上一轮成功摘要。若服务缓存了进度，回归还要检查失败后的最终状态会替换进度提示，而不是仅出现在后台日志中。此处没有测试通知传递，也不假定所有驱动能提供相同的通知格式。面向操作员的报告应以经过目标检查的结果为准。</p>
+<h2 id="数据可以转成整数，但违反-CHECK，也会被跳过吗？"><a href="#数据可以转成整数，但违反-CHECK，也会被跳过吗？" class="headerlink" title="数据可以转成整数，但违反 CHECK，也会被跳过吗？"></a>数据可以转成整数，但违反 CHECK，也会被跳过吗？</h2><p>转换成功不属于前述忽略条件。可另建表要求 quantity 大于零，再用负一作为 CSV 数量。它能转成整数，却会触发约束；应独立检查 COPY 失败并确认目标没有这次导入的可见记录。不要把这次拒绝拿去解释前两条非数字错误的预算。这个约束变体未执行，主例只给出输入转换的预期。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-copy.html" rel="noopener">PostgreSQL: Documentation: 18: COPY</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--sql" href="/zh-CN/tags/SQL/">SQL</a>
+          
+            <a class="tag tag--import" href="/zh-CN/tags/Import/">Import</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F16%2Fpostgres-copy-on-error-reject-limit%2F&text=PostgreSQL%20COPY%20%E8%B7%B3%E8%BF%87%E4%BA%86%E5%9D%8F%E8%A1%8C%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E7%AC%AC%E4%BA%8C%E6%9D%A1%E5%9D%8F%E5%80%BC%E5%8F%88%E8%AE%A9%E6%95%B4%E6%AC%A1%E5%A4%B1%E8%B4%A5%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F16%2Fpostgres-copy-on-error-reject-limit%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=PostgreSQL%20COPY%20%E8%B7%B3%E8%BF%87%E4%BA%86%E5%9D%8F%E8%A1%8C%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E7%AC%AC%E4%BA%8C%E6%9D%A1%E5%9D%8F%E5%80%BC%E5%8F%88%E8%AE%A9%E6%95%B4%E6%AC%A1%E5%A4%B1%E8%B4%A5%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F16%2Fpostgres-copy-on-error-reject-limit%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/16/pytest-strict-config-unknown-key/">
+              <span>上一篇</span>
+              <strong>pytest 的配置拼错了，为什么测试还是绿的？</strong>
+              <small>2026-11-16</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/16/map-groupby-object-key-identity/">
+              <span>下一篇</span>
+              <strong>Map.groupBy 里两个同名对象，为什么没有分到一组？</strong>
+              <small>2026-11-16</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#先界定可以跳过的错误">先界定可以跳过的错误</a>
+          
+            <a class="toc-link toc-link--h2" href="#在同一预算上放一条、再放两条坏值">在同一预算上放一条、再放两条坏值</a>
+          
+            <a class="toc-link toc-link--h2" href="#给部分成功和整次失败不同出口">给部分成功和整次失败不同出口</a>
+          
+            <a class="toc-link toc-link--h2" href="#数据可以转成整数，但违反-CHECK，也会被跳过吗？">数据可以转成整数，但违反 CHECK，也会被跳过吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>252</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>210</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/15/postgres-percentile-cont-disc-observed-value/">PostgreSQL 的中位数为什么不在原始样本里？</a></h3>
+          <p>2026-11-15</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/14/postgres-jsonb-object-agg-unique-keys/">PostgreSQL 生成 JSONB 对象时，两个来源行为什么只剩一个键？</a></h3>
+          <p>2026-11-14</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/13/postgres-array-agg-left-join-empty/">客户没有子记录，为什么 array_agg 给了 {NULL}？</a></h3>
+          <p>2026-11-13</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

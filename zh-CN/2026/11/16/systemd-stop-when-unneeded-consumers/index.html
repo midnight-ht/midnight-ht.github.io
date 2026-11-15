@@ -1,0 +1,419 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>最后一个依赖服务停了，systemd 为什么也停掉了共享进程？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用两个 systemd 消费单元观察共享服务何时需要保留、何时可以自动停止。">
+  
+  
+    <meta name="keywords" content="StopWhenUnneeded,单元依赖">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/16/systemd-stop-when-unneeded-consumers/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/16/systemd-stop-when-unneeded-consumers/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/16/systemd-stop-when-unneeded-consumers/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/16/systemd-stop-when-unneeded-consumers/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="最后一个依赖服务停了，systemd 为什么也停掉了共享进程？ | Midnight blog">
+    <meta property="og:description" content="用两个 systemd 消费单元观察共享服务何时需要保留、何时可以自动停止。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/16/systemd-stop-when-unneeded-consumers/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/16/systemd-stop-when-unneeded-consumers/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/16/systemd-stop-when-unneeded-consumers/","name":"最后一个依赖服务停了，systemd 为什么也停掉了共享进程？ | Midnight blog","description":"用两个 systemd 消费单元观察共享服务何时需要保留、何时可以自动停止。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/16/systemd-stop-when-unneeded-consumers/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/16/systemd-stop-when-unneeded-consumers/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/16/systemd-stop-when-unneeded-consumers/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/16/systemd-stop-when-unneeded-consumers/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/16/systemd-stop-when-unneeded-consumers/","headline":"最后一个依赖服务停了，systemd 为什么也停掉了共享进程？","description":"用两个 systemd 消费单元观察共享服务何时需要保留、何时可以自动停止。","inLanguage":"zh-CN","datePublished":"2026-11-15T19:24:09.000Z","dateModified":"2026-11-15T19:24:09.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html","https://github.com/systemd/systemd/blob/v262/src/core/unit.c","https://github.com/systemd/systemd/blob/v262/src/core/unit-dependency-atom.c"],"keywords":"systemd, 服务运维"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/16/systemd-stop-when-unneeded-consumers/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"最后一个依赖服务停了，systemd 为什么也停掉了共享进程？","item":"https://www.zyweb.vip/zh-CN/2026/11/16/systemd-stop-when-unneeded-consumers/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/16/systemd-stop-when-unneeded-consumers/" selected>zh-CN</option><option value="/en/2026/11/16/systemd-stop-when-unneeded-consumers/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/16/systemd-stop-when-unneeded-consumers/" selected>zh-CN</option><option value="/en/2026/11/16/systemd-stop-when-unneeded-consumers/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--systemd">systemd</span>
+      <time datetime="2026-11-15T19:24:09.000Z">2026-11-16</time>
+    </div>
+
+    <h1>最后一个依赖服务停了，systemd 为什么也停掉了共享进程？</h1>
+
+    
+      <p class="post-hero__summary">用两个 systemd 消费单元观察共享服务何时需要保留、何时可以自动停止。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-15T19:24:09.000Z">2026-11-16</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/16/systemd-stop-when-unneeded-consumers/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/16/systemd-stop-when-unneeded-consumers/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>在共享单元上选择无人需要时停止。</li><li>观察最后一个已声明依赖的消费方。</li><li>管理器依赖不等于应用实时连接。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>共享单元可以选择在无人需要时停止。systemd 看的是管理器记录的单元依赖；如果最后一个仍需要它的消费单元停了，共享服务可能也会结束。</p>
+<p>现场有两个独立的处理程序，都会启动一份共享本地服务。维护者停止第一个程序时，本地服务继续运行；停止第二个以后，它也被停止。有人从进程日志猜测共享服务自行退出。可以先从管理器的设置解释这条路径：共享单元自己是否打开了“无人需要时停止”，两个程序是否都声明了它，以及停止以后还有没有其他单元保持这份依赖。只有三个条件都核对，才好判断看到的状态是否符合原配置。</p>
+<h2 id="先查共享单元上的开关"><a href="#先查共享单元上的开关" class="headerlink" title="先查共享单元上的开关"></a>先查共享单元上的开关</h2><p><a target="_blank" rel="noopener" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html">systemd.unit 手册</a>说明，<code>StopWhenUnneeded</code> 默认为 false。设为 true 后，若没有其他活动单元需要它，管理器可自动停止它。开关应该写在准备被清理的那个共享单元上。它并不要求每个消费者附带一条停止共享服务的命令。只关掉一个消费者，另一个还维持所需的依赖，前者的停止不会单独满足这个条件。</p>
+<p>这里使用 Wants 声明从消费者指向共享服务的关系。版本 262 的实现将反向的 WANTED_BY 纳入阻止这项自动停止的依赖集合。管理器还检查对方是否已有待处理作业、仍处在活动或过渡状态，或将要重启。实验刻意不用自动重启和额外的依赖，避免把“停止请求发了”立即读成消费者已经不再需要共享服务。 <a target="_blank" rel="noopener" href="https://github.com/systemd/systemd/blob/v262/src/core/unit.c">systemd 262 的单元停止判断</a> <a target="_blank" rel="noopener" href="https://github.com/systemd/systemd/blob/v262/src/core/unit-dependency-atom.c">相关依赖类型映射</a></p>
+<h2 id="对照停止第一份和最后一份的结果"><a href="#对照停止第一份和最后一份的结果" class="headerlink" title="对照停止第一份和最后一份的结果"></a>对照停止第一份和最后一份的结果</h2><p>以下是尚未运行的隔离 Linux 演练。服务仅执行长等待，不接业务请求。保存第一份定义为 shared-lab.service。将第二份分别保存为 client-lab-a.service 和 client-lab-b.service。两份消费者定义完全相同。请确保这些名字没有被已有任务使用，且环境中的可执行路径有效。</p>
+<pre><code class="ini">[Unit]
+Description=Shared dependency lab
+StopWhenUnneeded=yes
+
+[Service]
+ExecStart=/bin/sleep infinity
+</code></pre>
+<pre><code class="ini">[Unit]
+Description=Consumer in shared dependency lab
+Wants=shared-lab.service
+After=shared-lab.service
+
+[Service]
+ExecStart=/bin/sleep infinity
+</code></pre>
+<p>加载三个专用单元以后，一次启动两个消费者，观察共享服务和两个消费者都处于活动状态。随后单独停掉第一个，核对另一个仍活动，共享服务应继续运行。再停止第二个，核对没有别的消费者依赖共享服务，预计管理器会安排停止。用同一个单元名逐次查询状态并保存日志，等相关作业完成再记录最终状态。样本不规定准确到某一秒一定看到进程消失。</p>
+<pre><code class="sh">shared=shared-lab.service
+first=client-lab-a.service
+second=client-lab-b.service
+status() { systemctl show -p ActiveState &quot;$shared&quot;; }
+
+systemctl start &quot;$first&quot; &quot;$second&quot;
+status
+systemctl stop &quot;$first&quot;
+status
+systemctl stop &quot;$second&quot;
+status
+</code></pre>
+<p>上面最后一条只采集当时状态。如果停止作业尚未执行完，继续查看管理器的任务与日志。验收表要保留第一个消费者结束后到第二个结束前的读取点，不能把两次停止合成一条命令再去补写中间状态。若第一个消费者未真正进入活动状态，应将该轮作废并重新准备。这样可以避免程序初次启动失败后，样本看起来恰好在一个已不存在的依赖下停止。</p>
+<p>此外还要确认两次测试的共享进程身份。假如临时任务被其他配置自动重新启动，状态可能先停再活跃，单次读取不足以说明它是否一直运行。应用如果要求已有连接不断，还要用连接结果判断。这个扩展不属于未触发清理的状态判定，不能仅凭看到 active 代替。</p>
+<p>接着把共享单元改为 <code>StopWhenUnneeded=no</code>。清理上一轮的三份运行状态，重新加载定义，同样依次启动和停止两个消费者。若没有引入其他关系或故障，在这份控制里，停止最后一位消费者以后，共享服务仍应保持活动。这个负例能排除一个常见误解：消费者停止并不天然传播给它想启动的单元。若对照组也停了，先核对配置里是否还有其它停止传播、进程本身是否结束，以及是否记录了有效设置，再解释结果。</p>
+<h2 id="把运行中的业务和单元依赖分开"><a href="#把运行中的业务和单元依赖分开" class="headerlink" title="把运行中的业务和单元依赖分开"></a>把运行中的业务和单元依赖分开</h2><p>想让临时工作人员共用一项资源，最后一个退出后便清理，共享单元采用这项设置可能符合要求。若还有未声明的外部使用者，或者共享服务必须一直等待下一批工作，不能只凭两个本机消费单元的状态来决定整体生命周期。管理器没有拿每一条外部请求去判断这份单元是否仍需要。应让部署的一方明确占用何时开始、何时结束，或保持长期单元由独立的生命周期约定控制。</p>
+<p>在真正交付的验收里，可分别记录服务停止前最后一个消费单元的状态、系统给共享服务写下的退出原因、以及外部调用者最后一次成功访问的证据。如果外部监测显示还有流量而服务已停，应先检查这段流量有没有代表它的单元关系。这种证据能够区分配置逻辑与业务合同不一致，而不用把日志里所有结束事件都当成进程故障。实际配置还可能被额外文件覆盖，复查时应保留为三个单元加载的定义。关于每次退出是否保留运行目录，可参照<a href="/zh-CN/2026/11/13/systemd-runtime-directory-preserve-restart/">运行时文件为何在重启后消失</a>。</p>
+<h2 id="如果需要跟着指定单元一起停止，可以写-PartOf-吗？"><a href="#如果需要跟着指定单元一起停止，可以写-PartOf-吗？" class="headerlink" title="如果需要跟着指定单元一起停止，可以写 PartOf 吗？"></a>如果需要跟着指定单元一起停止，可以写 PartOf 吗？</h2><p>PartOf 表达另一项关系：列出的单元发生停止或重启时，管理器把该动作传给当前单元。方向由声明决定。这里关注的是最后一项依赖都消失后才停止；如果直接跟随某一个消费者，就可能在另一个仍活动时触发动作。主例没有配置 PartOf。要评估这项新需求，应另做单个指定单元的停止或重启，并确认动作传播方向与原来的多人共用合同是否一致。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html" rel="noopener">systemd.unit — Unit configuration</a></li><li><a target="_blank" href="https://github.com/systemd/systemd/blob/v262/src/core/unit.c" rel="noopener">systemd 262 unit.c</a></li><li><a target="_blank" href="https://github.com/systemd/systemd/blob/v262/src/core/unit-dependency-atom.c" rel="noopener">systemd 262 unit-dependency-atom.c</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--systemd" href="/zh-CN/tags/systemd/">systemd</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%9C%8D%E5%8A%A1%E8%BF%90%E7%BB%B4/">服务运维</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F16%2Fsystemd-stop-when-unneeded-consumers%2F&text=%E6%9C%80%E5%90%8E%E4%B8%80%E4%B8%AA%E4%BE%9D%E8%B5%96%E6%9C%8D%E5%8A%A1%E5%81%9C%E4%BA%86%EF%BC%8Csystemd%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B9%9F%E5%81%9C%E6%8E%89%E4%BA%86%E5%85%B1%E4%BA%AB%E8%BF%9B%E7%A8%8B%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F16%2Fsystemd-stop-when-unneeded-consumers%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E6%9C%80%E5%90%8E%E4%B8%80%E4%B8%AA%E4%BE%9D%E8%B5%96%E6%9C%8D%E5%8A%A1%E5%81%9C%E4%BA%86%EF%BC%8Csystemd%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B9%9F%E5%81%9C%E6%8E%89%E4%BA%86%E5%85%B1%E4%BA%AB%E8%BF%9B%E7%A8%8B%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F16%2Fsystemd-stop-when-unneeded-consumers%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/15/aip134-update-mask-omitted-empty/">
+              <span>上一篇</span>
+              <strong>update_mask 不传和传空路径，会更新同样的字段吗？</strong>
+              <small>2026-11-15</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/16/redis-smismember-positional-results/">
+              <span>下一篇</span>
+              <strong>Redis 一次查三个成员，为什么结果不是三个成员名？</strong>
+              <small>2026-11-16</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#先查共享单元上的开关">先查共享单元上的开关</a>
+          
+            <a class="toc-link toc-link--h2" href="#对照停止第一份和最后一份的结果">对照停止第一份和最后一份的结果</a>
+          
+            <a class="toc-link toc-link--h2" href="#把运行中的业务和单元依赖分开">把运行中的业务和单元依赖分开</a>
+          
+            <a class="toc-link toc-link--h2" href="#如果需要跟着指定单元一起停止，可以写-PartOf-吗？">如果需要跟着指定单元一起停止，可以写 PartOf 吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>252</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>210</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/14/systemd-runtime-max-oneshot-activation/">systemd 的 oneshot 卡住，RuntimeMaxSec 为什么没限制它？</a></h3>
+          <p>2026-11-14</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/13/systemd-runtime-directory-preserve-restart/">systemd restart 之后，运行时目录里的文件为什么没了？</a></h3>
+          <p>2026-11-13</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/15/systemd-timer-inactive-relative-cadence/">systemd 定时任务结束后再等五分钟，应该用哪个计时点？</a></h3>
+          <p>2026-11-15</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,475 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Go Rows.Next 返回 false，为什么不能直接宣布结果完整？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用同一个已读前缀区分 Go Rows.Next 的正常终止、驱动失败和结果交付。">
+  
+  
+    <meta name="keywords" content="Rows.Next,Rows.Err,database/sql">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/16/go-database-sql-rows-err-iteration/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/16/go-database-sql-rows-err-iteration/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/16/go-database-sql-rows-err-iteration/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/16/go-database-sql-rows-err-iteration/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Go Rows.Next 返回 false，为什么不能直接宣布结果完整？ | Midnight blog">
+    <meta property="og:description" content="用同一个已读前缀区分 Go Rows.Next 的正常终止、驱动失败和结果交付。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/16/go-database-sql-rows-err-iteration/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/16/go-database-sql-rows-err-iteration/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/16/go-database-sql-rows-err-iteration/","name":"Go Rows.Next 返回 false，为什么不能直接宣布结果完整？ | Midnight blog","description":"用同一个已读前缀区分 Go Rows.Next 的正常终止、驱动失败和结果交付。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/16/go-database-sql-rows-err-iteration/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/16/go-database-sql-rows-err-iteration/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/16/go-database-sql-rows-err-iteration/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/16/go-database-sql-rows-err-iteration/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/16/go-database-sql-rows-err-iteration/","headline":"Go Rows.Next 返回 false，为什么不能直接宣布结果完整？","description":"用同一个已读前缀区分 Go Rows.Next 的正常终止、驱动失败和结果交付。","inLanguage":"zh-CN","datePublished":"2026-11-15T19:24:09.000Z","dateModified":"2026-11-15T19:24:09.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://pkg.go.dev/database/sql#Rows.Err"],"keywords":"Go, SQL, Backend"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/16/go-database-sql-rows-err-iteration/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Go Rows.Next 返回 false，为什么不能直接宣布结果完整？","item":"https://www.zyweb.vip/zh-CN/2026/11/16/go-database-sql-rows-err-iteration/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/16/go-database-sql-rows-err-iteration/" selected>zh-CN</option><option value="/en/2026/11/16/go-database-sql-rows-err-iteration/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/16/go-database-sql-rows-err-iteration/" selected>zh-CN</option><option value="/en/2026/11/16/go-database-sql-rows-err-iteration/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--go">Go</span>
+      <time datetime="2026-11-15T19:24:09.000Z">2026-11-16</time>
+    </div>
+
+    <h1>Go Rows.Next 返回 false，为什么不能直接宣布结果完整？</h1>
+
+    
+      <p class="post-hero__summary">用同一个已读前缀区分 Go Rows.Next 的正常终止、驱动失败和结果交付。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-15T19:24:09.000Z">2026-11-16</time> · 预计阅读 8 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/16/go-database-sql-rows-err-iteration/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/16/go-database-sql-rows-err-iteration/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>Next 的假值可能来自不同终点。</li><li>用 Rows.Err 检查迭代失败。</li><li>Scan 的返回与部分结果政策分别处理。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Go 的 Rows.Next 返回 false 只说明没有可继续扫描的下一行。遍历可能已经正常结束，也可能在准备下一行时失败。循环退出后要检查 Rows.Err，才能判断这次结果能不能作为完整集合交付。</p>
+<p>假设导出函数从数据库一路读取订单。第一条扫描成功，第二次准备记录时连接出了问题。旧实现看到 Next 变成假便返回累积的列表，调用方把只含一条的输出当成完整报告。现场排查需要记录查询启动、每次扫描成功以及终止错误。一个真实存在的第一条记录只能证明遍历走了多远，不能证明剩余输入已经全部读取。</p>
+<h2 id="两个-Next-停在同一位置，原因可以不同"><a href="#两个-Next-停在同一位置，原因可以不同" class="headerlink" title="两个 Next 停在同一位置，原因可以不同"></a>两个 Next 停在同一位置，原因可以不同</h2><p>标准库文档说明，Next 为下一条扫描准备结果。返回 false 可以是没有下一行，也可以是准备期间发生错误。判断是哪种情况依据 Rows.Err。此外，每次 Scan 前都需要先调用 Next 并取得成功。Row 与 Rows 是不同接口，后者可以在之前已产生若干成功结果后才遇到失败。<a target="_blank" rel="noopener" href="https://pkg.go.dev/database/sql@go1.27.4#Rows">Go database/sql Rows</a>。</p>
+<p>可以把查询合同写成三个观察点。首次 QueryContext 是否得到结果对象，每个 Scan 是否成功读出目标字段，循环停下后是否有错误。逐个检查这些位置可以区分连接未开始、当前值读不出与后续传输中断。对一个必须完整返回结果的 API，如果其中一项失败，应该明确整次读取失败，而不能只因为暂存里还有记录就报告成功。</p>
+<h2 id="用同一个前缀造成两种终止状态"><a href="#用同一个前缀造成两种终止状态" class="headerlink" title="用同一个前缀造成两种终止状态"></a>用同一个前缀造成两种终止状态</h2><p>下方是未执行的教学程序。它只使用标准库和进程内假驱动，不连真实数据库。驱动将两个固定场景名当作输入，两次都先产出编号十二。之后正常路径返回文件结束信号，失败路径返回一个能独立识别的错误。这样就能确认应用究竟检查了已读前缀，还是同时检查了终止结果。</p>
+<pre><code class="go">package main
+
+import (
+    &quot;context&quot;
+    &quot;database/sql&quot;
+    &quot;database/sql/driver&quot;
+    &quot;errors&quot;
+    &quot;fmt&quot;
+    &quot;io&quot;
+)
+
+var readFailure = errors.New(&quot;fixture read failure&quot;)
+
+type demoDriver struct{}
+type demoConn struct{}
+type demoRows struct {
+    first bool
+    end error
+}
+
+func (demoDriver) Open(string) (driver.Conn, error) {
+    return demoConn{}, nil
+}
+func (demoConn) Prepare(string) (driver.Stmt, error) {
+    return nil, errors.New(&quot;unexpected Prepare&quot;)
+}
+func (demoConn) Close() error { return nil }
+func (demoConn) Begin() (driver.Tx, error) {
+    return nil, errors.New(&quot;unexpected Begin&quot;)
+}
+func (demoConn) QueryContext(_ context.Context, mode string, _ []driver.NamedValue) (driver.Rows, error) {
+    var terminal error = io.EOF
+    if mode == &quot;broken&quot; {
+        terminal = readFailure
+    }
+    return &amp;demoRows{first: true, end: terminal}, nil
+}
+func (*demoRows) Columns() []string { return []string{&quot;id&quot;} }
+func (*demoRows) Close() error { return nil }
+func (r *demoRows) Next(dest []driver.Value) error {
+    if r.first {
+        r.first = false
+        dest[0] = int64(12)
+        return nil
+    }
+    return r.end
+}
+
+func run(db *sql.DB, mode string) {
+    result, queryErr := db.QueryContext(context.Background(), mode)
+    if queryErr != nil {
+        panic(queryErr)
+    }
+    defer result.Close()
+    var ids []int
+    for result.Next() {
+        var id int
+        if scanErr := result.Scan(&amp;id); scanErr != nil {
+            panic(scanErr)
+        }
+        ids = append(ids, id)
+    }
+    terminal := result.Err()
+    want := map[string]error{&quot;clean&quot;: nil, &quot;broken&quot;: readFailure}
+    if len(ids) != 1 || ids[0] != 12 || !errors.Is(terminal, want[mode]) {
+        panic(fmt.Sprintf(&quot;%s: %v, %v&quot;, mode, ids, terminal))
+    }
+    fmt.Println(mode, ids, terminal)
+}
+
+func main() {
+    sql.Register(&quot;rows-demo&quot;, demoDriver{})
+    db, openErr := sql.Open(&quot;rows-demo&quot;, &quot;&quot;)
+    if openErr != nil {
+        panic(openErr)
+    }
+    defer db.Close()
+    run(db, &quot;clean&quot;)
+    run(db, &quot;broken&quot;)
+}
+</code></pre>
+<p>两个路径都应成功扫描一次并保存十二。正常组在循环停止后预期 Rows.Err 为 nil；另一组在相同的 Next 返回值之后，预期取回指定的驱动错误。程序为两条路径同时比较内容和错误。这比要求失败组没有任何数据更贴近问题，因为失败发生时第一条已经读取了。这里没有声称真实驱动的所有取消或缓冲错误都在同一时点出现。接入数据库时应另用生产驱动的实际读取方式复查。</p>
+<p>若测试只检查对象存在、列表非空和查询提前没有错误，两条路径都会通过。只检查数量仍会失效。如果实际报告能合法只有一条，也不能据此猜测当前结果是一份截断数据。把同样的一条编号作为两个样本的输入，保留不同的终点，才能证明程序没有让数量承担错误语义。可以给日志补上正在读取的操作名与已读数量，但最终成功标记仍需由终点状态决定。</p>
+<h2 id="客户端如何接收部分结果"><a href="#客户端如何接收部分结果" class="headerlink" title="客户端如何接收部分结果"></a>客户端如何接收部分结果</h2><p>如果后端在发送之前能缓存所有结果，可以等循环和终止检查结束再构造完整响应。缓存的大小和响应等待时间需要单独评估。若协议确实要求逐项发送，就要定义后续失败怎样对可见前缀产生影响。比如客户端可以接收部分事件，但只有终止标记成功时才认定本轮没有缺口。已经发送的数据不能用服务返回的普通错误悄悄撤回。选择何种接口合同应先于是否方便调用 Next。</p>
+<p>给流式消费者增加一个负控制。让测试接收器先取得订单十二，随后观察到错误终止。它可以展示已得到的数据，但界面不应把本轮标为完整。如果产品需要自动重试，另定义客户端从哪里恢复，以及如何防止重新交付已有记录。不要从假驱动的十二推断真实查询已经选择了稳定顺序；顺序需要独立条件。这里没有运行任何网络输出或重试。</p>
+<p>工作者还应该把读取过程中途退出和正常耗尽分开验收。如果应用因为明细太多有意结束读取，记录这一项决定，不能把未继续读取称作服务器没有更多结果。可准备两个源行，限制消费者只接受第一条，确认它交付的是主动限定的结果。若产品需要完整列表，再用同一输入完成全部遍历并核对两个编号。这个容量限制变体没有运行。站内的 <a href="/zh-CN/2026/11/12/go-sql-queryrow-scan-error-boundary/">QueryRow 与 Scan</a> 针对期望单行的读取，本例检查完整迭代何时结束。</p>
+<p>若调用端给用户提供下载进度，也可以让两份数据都累计到一条，然后让成功组发出完整标记，失败组改成可辨认的中断。验收不要取日志最后一行中恰好出现的数字，要读消费者收到的终结结果。后台内部错误与面向调用方的返回可以不同，但它们需要指回同一次读取。这个回执对照未运行。</p>
+<h2 id="Scan-自己返回错误时，可以只检查-Rows-Err-吗？"><a href="#Scan-自己返回错误时，可以只检查-Rows-Err-吗？" class="headerlink" title="Scan 自己返回错误时，可以只检查 Rows.Err 吗？"></a>Scan 自己返回错误时，可以只检查 Rows.Err 吗？</h2><p>不可以把末尾检查当成当前行转换的替代。可单独让驱动产出非数字文本，随后仍尝试用整数接收，直接验证 Scan 返回错误，并确认应用没有交付这条记录。Rows.Err 的文档合同是迭代过程中遇到的错误，不能据它推断所有 Scan 失败会在哪个位置重现。此变体未执行。主程序只验证第一条扫描成功之后的两种结束路径。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://pkg.go.dev/database/sql#Rows.Err" rel="noopener">sql package - database/sql - Go Packages</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--go" href="/zh-CN/tags/Go/">Go</a>
+          
+            <a class="tag tag--sql" href="/zh-CN/tags/SQL/">SQL</a>
+          
+            <a class="tag tag--backend" href="/zh-CN/tags/Backend/">Backend</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F16%2Fgo-database-sql-rows-err-iteration%2F&text=Go%20Rows.Next%20%E8%BF%94%E5%9B%9E%20false%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E8%83%BD%E7%9B%B4%E6%8E%A5%E5%AE%A3%E5%B8%83%E7%BB%93%E6%9E%9C%E5%AE%8C%E6%95%B4%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F16%2Fgo-database-sql-rows-err-iteration%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Go%20Rows.Next%20%E8%BF%94%E5%9B%9E%20false%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E8%83%BD%E7%9B%B4%E6%8E%A5%E5%AE%A3%E5%B8%83%E7%BB%93%E6%9E%9C%E5%AE%8C%E6%95%B4%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F16%2Fgo-database-sql-rows-err-iteration%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/16/http-203-transforming-proxy-provenance/">
+              <span>上一篇</span>
+              <strong>HTTP 203 是失败吗？先核对响应经过的转换代理</strong>
+              <small>2026-11-16</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/16/go-context-afterfunc-stop-completion/">
+              <span>下一篇</span>
+              <strong>Go AfterFunc 的 stop 返回 false，清理已经做完了吗？</strong>
+              <small>2026-11-16</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#两个-Next-停在同一位置，原因可以不同">两个 Next 停在同一位置，原因可以不同</a>
+          
+            <a class="toc-link toc-link--h2" href="#用同一个前缀造成两种终止状态">用同一个前缀造成两种终止状态</a>
+          
+            <a class="toc-link toc-link--h2" href="#客户端如何接收部分结果">客户端如何接收部分结果</a>
+          
+            <a class="toc-link toc-link--h2" href="#Scan-自己返回错误时，可以只检查-Rows-Err-吗？">Scan 自己返回错误时，可以只检查 Rows.Err 吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>252</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>210</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/12/go-sql-queryrow-scan-error-boundary/">Go QueryRowContext 返回了对象，为什么 Scan 才报错？</a></h3>
+          <p>2026-11-12</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/16/go-context-afterfunc-stop-completion/">Go AfterFunc 的 stop 返回 false，清理已经做完了吗？</a></h3>
+          <p>2026-11-16</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/15/go-context-withoutcancel-bounded-cleanup/">Go 脱离请求取消以后，新的 Context 为什么没有 Done？</a></h3>
+          <p>2026-11-15</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

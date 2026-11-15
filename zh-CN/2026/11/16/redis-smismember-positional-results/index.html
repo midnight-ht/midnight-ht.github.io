@@ -1,0 +1,398 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Redis 一次查三个成员，为什么结果不是三个成员名？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="通过重复和交错输入，核对 Redis 批量成员查找中的位置映射。">
+  
+  
+    <meta name="keywords" content="SMISMEMBER,membership,request order">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/16/redis-smismember-positional-results/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/16/redis-smismember-positional-results/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/16/redis-smismember-positional-results/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/16/redis-smismember-positional-results/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Redis 一次查三个成员，为什么结果不是三个成员名？ | Midnight blog">
+    <meta property="og:description" content="通过重复和交错输入，核对 Redis 批量成员查找中的位置映射。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/16/redis-smismember-positional-results/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/16/redis-smismember-positional-results/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/16/redis-smismember-positional-results/","name":"Redis 一次查三个成员，为什么结果不是三个成员名？ | Midnight blog","description":"通过重复和交错输入，核对 Redis 批量成员查找中的位置映射。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/16/redis-smismember-positional-results/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/16/redis-smismember-positional-results/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/16/redis-smismember-positional-results/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/16/redis-smismember-positional-results/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/16/redis-smismember-positional-results/","headline":"Redis 一次查三个成员，为什么结果不是三个成员名？","description":"通过重复和交错输入，核对 Redis 批量成员查找中的位置映射。","inLanguage":"zh-CN","datePublished":"2026-11-15T19:24:09.000Z","dateModified":"2026-11-15T19:24:09.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://redis.io/docs/latest/commands/smismember/"],"keywords":"Redis, Sets, Backend"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/16/redis-smismember-positional-results/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Redis 一次查三个成员，为什么结果不是三个成员名？","item":"https://www.zyweb.vip/zh-CN/2026/11/16/redis-smismember-positional-results/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/16/redis-smismember-positional-results/" selected>zh-CN</option><option value="/en/2026/11/16/redis-smismember-positional-results/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/16/redis-smismember-positional-results/" selected>zh-CN</option><option value="/en/2026/11/16/redis-smismember-positional-results/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--redis">Redis</span>
+      <time datetime="2026-11-15T19:24:09.000Z">2026-11-16</time>
+    </div>
+
+    <h1>Redis 一次查三个成员，为什么结果不是三个成员名？</h1>
+
+    
+      <p class="post-hero__summary">通过重复和交错输入，核对 Redis 批量成员查找中的位置映射。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-15T19:24:09.000Z">2026-11-16</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/16/redis-smismember-positional-results/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/16/redis-smismember-positional-results/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>回复标记按请求顺序排列。</li><li>重复成员值也保留输入位置。</li><li>全零回复不能解释键是否缺失。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Redis 的 SMISMEMBER 按请求顺序返回每个成员的存在标记。返回数组里没有成员名。输入里如果同一个值占两个位置，客户端仍要保留两个位置的结果，才能把每项标记贴回发起它的检查。</p>
+<p>假设后台先对一份任务列表做批量标签检查，再给每一行加上提示。两条不同任务可能包含同一个标签。若代码先把标签放进集合，再拿结果逐项覆盖原任务列表，重复输入就会消失，后续标记也可能向前错位。即使命令成功、命中的标签种类也正确，界面仍然可能给错任务显示通过。验收需要检查的是发出请求的那份顺序和收到的逐项结果。</p>
+<h2 id="让-Redis-回答一组有位置的问题"><a href="#让-Redis-回答一组有位置的问题" class="headerlink" title="让 Redis 回答一组有位置的问题"></a>让 Redis 回答一组有位置的问题</h2><p>从 Redis Open Source 六点二起，SMISMEMBER 可以查询同一个集合里的多个候选值。文档把结果定义为成员状态组成的数组，顺序和请求一致。命中返回一，未命中或集合不存在时返回零。这个命令没有把请求转换成只含命中项的列表，也不返回集合已有成员的遍历。客户端如果要提供标签，需要自行把输入值和对应位置的标记组合起来。<a target="_blank" rel="noopener" href="https://redis.io/docs/latest/commands/smismember/">Redis SMISMEMBER</a>。</p>
+<p>这和只问总共命中几次的合同不同。相同的两种结果，可以有相同的命中数量，却落在不同任务上。测试应对保留位置的业务明确断言每项，而不是只把标记相加。如果设置层只需要给一组去重的标签查状态，可以先去重，再以独立的输入位置数组重建原始批次。这个选择需要保留重复标签的归属，不能因为后端少发几个值就让消费方失去对应关系。</p>
+<h2 id="用重复项和未命中把位置固定下来"><a href="#用重复项和未命中把位置固定下来" class="headerlink" title="用重复项和未命中把位置固定下来"></a>用重复项和未命中把位置固定下来</h2><p>下面是未执行的教学命令。应使用自有隔离的 Redis 实例和起初不存在的键。写入只包含 a 与 c。第一份读取故意先问 c，再问 b，再重复 c，最后问 a。第二份读取用同一集合，但改成先问 b 再问 a。改变的是观察的次序与长度，集合内容保持不变。</p>
+<pre><code class="text">SADD {members-example}:known a c
+SMISMEMBER {members-example}:known c b c a
+SMISMEMBER {members-example}:known b a
+</code></pre>
+<p>预期第一份结果依次为一、零、一、一；第二份为零、一。第一项与第三项都在问 c，但它们分别占据一个输入位置。确认回复长度分别为四和二，再逐项比对。一个按字母顺序重排输入但忘记重建位置的实现，可能仍然得到正确的命中数量。只检查数组长度也不能检测它。给每次调用保留当时发出的成员序列，就能查出标记是 Redis 返回异常，还是在应用拼接结果时错配。</p>
+<p>这份固定输入不包含大小写兼容、数字转换或额外前缀。若线上接口对用户输入做规范化，另用两个规范化后相同的值验证，确认客户端仍保留两个原始请求的位置。如果应用要显示原文，报告里可分别记录原始值、实际发送值和回复标记。这样可以区分漏发、规范化合并和读错位置三类问题。这个应用入口没有运行，也没有连接实际客户端。</p>
+<h2 id="返回结构要满足调用方的使用方式"><a href="#返回结构要满足调用方的使用方式" class="headerlink" title="返回结构要满足调用方的使用方式"></a>返回结构要满足调用方的使用方式</h2><p>页面需要逐行显示时，可以返回一份短记录列表，每项保存稳定行号和存在标记。对只关心某个唯一标签的调用者，可以用映射，不过要先明确不会依赖重复项次数。若组件内部用映射优化查找，批次响应仍可以按原行号输出。验收可以输入两条任务都用 c，中间夹一条 b，确认结果在三个任务上依次为真、假、真，并且两个真仍属于两条不同任务。</p>
+<p>对于大批次，也可以把原批次拆成多个请求。分组前先给每项确定位置，把每一组结果放回正确区间，然后核对重复值跨组时不会覆盖其他请求。另准备一组只有部分请求成功的输入，定义该批次应该报错还是返回单独失败的区间。一次命令中的位置规则不能替客户端决定不同请求的完成顺序，也不能保证多个调用自动观察同一份集合状态。这里没有运行分批、乱序回包或连接重试。站内的 <a href="/zh-CN/2026/11/15/redis-sintercard-limit-threshold/">Redis 交集计数边界</a> 讨论只保留数字所能表达的结论，本例关心每项状态对应谁。</p>
+<p>记录故障时还要区分数据值和命令错误。命令正常返回零，是对请求项的成员判断；客户端若收到类型或连接错误，不能自动将整批补成零。后者会让筛选页面把未知状态显示成明确未命中。可在应用测试中分别保留一次合法全零结果和一次读取失败，再看消费者是否进入不同出口。这种错误映射未在样本中验证。</p>
+<p>还可把相同的任务键按不同排列送进接口，要求结果随各自任务移动。对两个同样三次命中的输出，保留一份把唯一未命中标到不同位置的坏结果，确认逐行断言会拒绝。这个验收应使用客户端真正对外返回的结构，而不只是命令的原始回复。它没有运行。</p>
+<h2 id="整个键不存在时，怎样区别正常的全零？"><a href="#整个键不存在时，怎样区别正常的全零？" class="headerlink" title="整个键不存在时，怎样区别正常的全零？"></a>整个键不存在时，怎样区别正常的全零？</h2><p>可以用全新缺失键检查 a 与 b，预期得到两个零；用确实存在但不包含 a 与 b 的另一个集合做相同请求，也应得到两个零。单次成员数组没有提供键级原因。若产品要求区分未配置与未匹配，应另依据权威配置或明确的读取流程来判断。独立查询键是否存在也会遇到键在两次调用间变化的情况，不能把它同成员结果默认为一个快照。这个追问未执行。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://redis.io/docs/latest/commands/smismember/" rel="noopener">SMISMEMBER | Docs</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--redis" href="/zh-CN/tags/Redis/">Redis</a>
+          
+            <a class="tag tag--sets" href="/zh-CN/tags/Sets/">Sets</a>
+          
+            <a class="tag tag--backend" href="/zh-CN/tags/Backend/">Backend</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F16%2Fredis-smismember-positional-results%2F&text=Redis%20%E4%B8%80%E6%AC%A1%E6%9F%A5%E4%B8%89%E4%B8%AA%E6%88%90%E5%91%98%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E7%BB%93%E6%9E%9C%E4%B8%8D%E6%98%AF%E4%B8%89%E4%B8%AA%E6%88%90%E5%91%98%E5%90%8D%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F16%2Fredis-smismember-positional-results%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Redis%20%E4%B8%80%E6%AC%A1%E6%9F%A5%E4%B8%89%E4%B8%AA%E6%88%90%E5%91%98%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E7%BB%93%E6%9E%9C%E4%B8%8D%E6%98%AF%E4%B8%89%E4%B8%AA%E6%88%90%E5%91%98%E5%90%8D%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F16%2Fredis-smismember-positional-results%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/16/systemd-stop-when-unneeded-consumers/">
+              <span>上一篇</span>
+              <strong>最后一个依赖服务停了，systemd 为什么也停掉了共享进程？</strong>
+              <small>2026-11-16</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/16/python-singledispatch-first-argument/">
+              <span>下一篇</span>
+              <strong>Python 标了两种类型，singledispatch 为什么没选第二种处理器？</strong>
+              <small>2026-11-16</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#让-Redis-回答一组有位置的问题">让 Redis 回答一组有位置的问题</a>
+          
+            <a class="toc-link toc-link--h2" href="#用重复项和未命中把位置固定下来">用重复项和未命中把位置固定下来</a>
+          
+            <a class="toc-link toc-link--h2" href="#返回结构要满足调用方的使用方式">返回结构要满足调用方的使用方式</a>
+          
+            <a class="toc-link toc-link--h2" href="#整个键不存在时，怎样区别正常的全零？">整个键不存在时，怎样区别正常的全零？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>252</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>210</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/15/redis-sintercard-limit-threshold/">SINTERCARD LIMIT 2 返回 2，交集真的只有两个吗？</a></h3>
+          <p>2026-11-15</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/12/redis-lmove-processing-recovery/">Redis 工作者取到任务后崩溃，任务留在哪里？</a></h3>
+          <p>2026-11-12</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/16/go-context-afterfunc-stop-completion/">Go AfterFunc 的 stop 返回 false，清理已经做完了吗？</a></h3>
+          <p>2026-11-16</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
