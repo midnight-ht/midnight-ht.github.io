@@ -1,0 +1,426 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why didn&#39;t sync.Once.Do retry after a panic? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Use an attempt count, configuration state, and a fresh-instance control to separate Once behavior after a panic from retries owned by the application.">
+  
+  
+    <meta name="keywords" content="sync.Once.Do,panic,initialization retry">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/18/go-sync-once-panic-no-retry/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/18/go-sync-once-panic-no-retry/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/18/go-sync-once-panic-no-retry/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/18/go-sync-once-panic-no-retry/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why didn&#39;t sync.Once.Do retry after a panic? | Midnight blog">
+    <meta property="og:description" content="Use an attempt count, configuration state, and a fresh-instance control to separate Once behavior after a panic from retries owned by the application.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/18/go-sync-once-panic-no-retry/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/18/go-sync-once-panic-no-retry/#webpage","url":"https://www.zyweb.vip/en/2026/11/18/go-sync-once-panic-no-retry/","name":"Why didn't sync.Once.Do retry after a panic? | Midnight blog","description":"Use an attempt count, configuration state, and a fresh-instance control to separate Once behavior after a panic from retries owned by the application.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/18/go-sync-once-panic-no-retry/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/18/go-sync-once-panic-no-retry/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/18/go-sync-once-panic-no-retry/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/18/go-sync-once-panic-no-retry/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/18/go-sync-once-panic-no-retry/","headline":"Why didn't sync.Once.Do retry after a panic?","description":"Use an attempt count, configuration state, and a fresh-instance control to separate Once behavior after a panic from retries owned by the application.","inLanguage":"en","datePublished":"2026-11-17T19:35:08.000Z","dateModified":"2026-11-17T19:35:08.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://pkg.go.dev/sync#Once.Do"],"keywords":"Go, sync.Once, Initialization"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/18/go-sync-once-panic-no-retry/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why didn't sync.Once.Do retry after a panic?","item":"https://www.zyweb.vip/en/2026/11/18/go-sync-once-panic-no-retry/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/18/go-sync-once-panic-no-retry/">zh-CN</option><option value="/en/2026/11/18/go-sync-once-panic-no-retry/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/18/go-sync-once-panic-no-retry/">zh-CN</option><option value="/en/2026/11/18/go-sync-once-panic-no-retry/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--go">Go</span>
+      <time datetime="2026-11-17T19:35:08.000Z">2026-11-18</time>
+    </div>
+
+    <h1>Why didn&#39;t sync.Once.Do retry after a panic?</h1>
+
+    
+      <p class="post-hero__summary">Use an attempt count, configuration state, and a fresh-instance control to separate Once behavior after a panic from retries owned by the application.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-17T19:35:08.000Z">2026-11-18</time> · Estimated read 12 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/18/go-sync-once-panic-no-retry/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/18/go-sync-once-panic-no-retry/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>A Once does not invoke a new function after its first invocation panics.</li><li>Check the initialization artifact and the recorded failure separately.</li><li>Use application retry state if initialization must recover after a temporary failure.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>A Go service panics on its first attempt to load a local config. The caller recovers and calls Do on the same sync.Once again. The second call returns, but the config is still missing. “Do returned” and “initialization succeeded” are different observations. The first call used up that Once even though its function panicked.</p>
+<h2 id="Recovery-changes-the-caller-39-s-control-flow"><a href="#Recovery-changes-the-caller-39-s-control-flow" class="headerlink" title="Recovery changes the caller&#39;s control flow"></a>Recovery changes the caller&#39;s control flow</h2><p>Suppose the initializer reads local configuration and saves the parsed result in memory. It panics before the read completes, and its caller recovers so it can continue. The program has an error record but no valid config for a consumer. Give the same Once a second Do call, even with an innocuous replacement function, and the new function will still be skipped. Recovering does not undo the Once&#39;s record of the first call.</p>
+<p>The Go contract applies to an instance. Do invokes the function only for the first call on that instance. If it panics, Do treats that invocation as having returned. Future calls return without invoking a function. A Once coordinates callers around one initialization attempt. It does not preserve a business success value or replay the first panic to later callers. If a consumer assumes there is config after Do, its next error could come from accessing missing state, with no second initializer run.</p>
+<p>The return count can give a misleading picture. After the first panic, the caller that recovered can continue its own work. Three later calls might all return. Four log entries cannot establish that any config was loaded. Track the actual artifact, recorded failure, or readiness state if you need to know whether the service can accept work. The wait between attempts changes nothing: the file could become readable immediately, seconds later, or never, and the original Once would still skip the function.</p>
+<h2 id="Use-a-second-function-and-a-second-instance-as-separate-controls"><a href="#Use-a-second-function-and-a-second-instance-as-separate-controls" class="headerlink" title="Use a second function and a second instance as separate controls"></a>Use a second function and a second instance as separate controls</h2><p>This sequential Go fixture has not been run. Its first helper recovers the expected panic around a single Do call. The second call on the original Once passes a different function, which sets loaded if invoked. A fresh Once receives exactly the same writing function as an independent control.</p>
+<pre><code class="go">package main
+
+import &quot;sync&quot;
+
+func firstAttempt(once *sync.Once, attempts *int) (failure any) {
+    defer func() { failure = recover() }()
+    once.Do(func() {
+        *attempts += 1
+        panic(&quot;temporary config failure&quot;)
+    })
+    return
+}
+
+func main() {
+    var once, fresh sync.Once
+    attempts := 0
+    loaded := false
+    if firstAttempt(&amp;once, &amp;attempts) != &quot;temporary config failure&quot; {
+        panic(&quot;first call did not report the expected panic&quot;)
+    }
+
+    load := func() { loaded = true }
+    once.Do(load)
+    if attempts != 1 || loaded {
+        panic(&quot;the original Once should not run load&quot;)
+    }
+
+    fresh.Do(load)
+    if !loaded {
+        panic(&quot;fresh Once should run load&quot;)
+    }
+}
+</code></pre>
+<p>First, check that the intended panic occurred. A missing invocation or unrelated panic should fail the fixture immediately. Then require both one attempt and a false loaded flag. This confirms the original function did run once, but the writer never ran on that instance. Finally, the fresh Once runs the same writer. The last check shows the writer is capable of changing the flag.</p>
+<p>Simply recovering and calling Do again gives you a program that continues running. A test checking only for a lack of another panic would misclassify that as a successful retry. A service acceptance test can instead verify that an actual consumer reads the desired version before reporting readiness and that a failed initialization reports missing state. This fixture reasons about sequential calls and local variables. It does not test concurrent goroutines, production logs, or I/O recovery.</p>
+<h2 id="Decide-what-“once”-means-for-your-initializer"><a href="#Decide-what-“once”-means-for-your-initializer" class="headerlink" title="Decide what “once” means for your initializer"></a>Decide what “once” means for your initializer</h2><p>If a service permits one attempt, retain either the loaded value or the failure and expose that result after Do. A process that needs static configuration before accepting requests can stay unready and let the deployment controller decide whether to restart it. Do can manage the single function call while the application reads the actual readiness state. A request path should not announce that config is readable just because Do returned.</p>
+<p>If you need to reload in the same process after a temporary failure, use a state model that supports retries. Decide who makes the next attempt, how concurrent callers wait, which version becomes visible after success, and when to report a persistent failure. An acceptance test should start with a failed read and a recorded error, then make the file available and verify that a consumer reads the new version and that the observable success count follows the retry contract. Creating a fresh Once for each request simply discards the shared boundary between them.</p>
+<p>Logs can distinguish tried from ready. Record start and result in the actual loader. At the caller, record the recovered failure and any readable version separately. The distinction remains useful if a process has several unrelated initializers. If a log shows one function entry, one load failure, and many Do returns, inspect how the application interprets those events. The site&#39;s article about <a href="/en/2026/11/16/go-context-afterfunc-stop-completion/">stopping a Go AfterFunc</a> covers another distinction between an API result and completed work. Here the state is that of a single initialization.</p>
+<h2 id="What-if-the-initializer-calls-Do-on-the-same-Once"><a href="#What-if-the-initializer-calls-Do-on-the-same-Once" class="headerlink" title="What if the initializer calls Do on the same Once?"></a>What if the initializer calls Do on the same Once?</h2><p>The call deadlocks. The original Do waits for its function to finish; the nested call also waits for that same execution. Imagine a loader that calls the outer initialization API to read a default, inadvertently reaching the same Once instance. Panic recovery cannot resolve that wait. Keep the routine that reads config beneath the boundary that coordinates initialization, so the loader cannot re-enter its own guard. The fixture does not execute this case. Inspect the call chain and the identity of each Once to diagnose it.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://pkg.go.dev/sync#Once.Do" rel="noopener">sync package - sync - Go Packages</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--go" href="/en/tags/Go/">Go</a>
+          
+            <a class="tag tag--sync-once" href="/en/tags/sync.Once/">sync.Once</a>
+          
+            <a class="tag tag--initialization" href="/en/tags/Initialization/">Initialization</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F18%2Fgo-sync-once-panic-no-retry%2F&text=Why%20didn't%20sync.Once.Do%20retry%20after%20a%20panic%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F18%2Fgo-sync-once-panic-no-retry%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20didn't%20sync.Once.Do%20retry%20after%20a%20panic%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F18%2Fgo-sync-once-panic-no-retry%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/18/http-300-representation-choices/">
+              <span>Previous Post</span>
+              <strong>Does HTTP 300 make a client jump to one URL?</strong>
+              <small>2026-11-18</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/18/go-strings-cut-empty-after-separator/">
+              <span>Next Post</span>
+              <strong>Did strings.Cut see an equals sign if the value was empty?</strong>
+              <small>2026-11-18</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Recovery-changes-the-caller-39-s-control-flow">Recovery changes the caller&amp;#39;s control flow</a>
+          
+            <a class="toc-link toc-link--h2" href="#Use-a-second-function-and-a-second-instance-as-separate-controls">Use a second function and a second instance as separate controls</a>
+          
+            <a class="toc-link toc-link--h2" href="#Decide-what-“once”-means-for-your-initializer">Decide what “once” means for your initializer</a>
+          
+            <a class="toc-link toc-link--h2" href="#What-if-the-initializer-calls-Do-on-the-same-Once">What if the initializer calls Do on the same Once?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>250</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>209</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>89</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/18/go-strings-cut-empty-after-separator/">Did strings.Cut see an equals sign if the value was empty?</a></h3>
+          <p>2026-11-18</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/17/go-io-copyn-short-read-partial-write/">Why did Go CopyN write bytes even though it failed?</a></h3>
+          <p>2026-11-17</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/16/go-context-afterfunc-stop-completion/">Does a false return from Go AfterFunc’s stop mean cleanup finished?</a></h3>
+          <p>2026-11-16</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

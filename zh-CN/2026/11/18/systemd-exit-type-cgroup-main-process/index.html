@@ -1,0 +1,417 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>主进程退出后，systemd 为什么还认为服务在运行？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用同样的父子进程解释 systemd 的 main 与 cgroup 生命周期，并分开核对应用交付。">
+  
+  
+    <meta name="keywords" content="ExitType,cgroup,主进程">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/18/systemd-exit-type-cgroup-main-process/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/18/systemd-exit-type-cgroup-main-process/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/18/systemd-exit-type-cgroup-main-process/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/18/systemd-exit-type-cgroup-main-process/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="主进程退出后，systemd 为什么还认为服务在运行？ | Midnight blog">
+    <meta property="og:description" content="用同样的父子进程解释 systemd 的 main 与 cgroup 生命周期，并分开核对应用交付。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/18/systemd-exit-type-cgroup-main-process/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/18/systemd-exit-type-cgroup-main-process/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/18/systemd-exit-type-cgroup-main-process/","name":"主进程退出后，systemd 为什么还认为服务在运行？ | Midnight blog","description":"用同样的父子进程解释 systemd 的 main 与 cgroup 生命周期，并分开核对应用交付。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/18/systemd-exit-type-cgroup-main-process/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/18/systemd-exit-type-cgroup-main-process/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/18/systemd-exit-type-cgroup-main-process/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/18/systemd-exit-type-cgroup-main-process/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/18/systemd-exit-type-cgroup-main-process/","headline":"主进程退出后，systemd 为什么还认为服务在运行？","description":"用同样的父子进程解释 systemd 的 main 与 cgroup 生命周期，并分开核对应用交付。","inLanguage":"zh-CN","datePublished":"2026-11-17T19:35:08.000Z","dateModified":"2026-11-17T19:35:08.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html","https://www.freedesktop.org/software/systemd/man/latest/systemd.kill.html","https://docs.kernel.org/admin-guide/cgroup-v2.html"],"keywords":"systemd, 运维验证"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/18/systemd-exit-type-cgroup-main-process/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"主进程退出后，systemd 为什么还认为服务在运行？","item":"https://www.zyweb.vip/zh-CN/2026/11/18/systemd-exit-type-cgroup-main-process/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/18/systemd-exit-type-cgroup-main-process/" selected>zh-CN</option><option value="/en/2026/11/18/systemd-exit-type-cgroup-main-process/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/18/systemd-exit-type-cgroup-main-process/" selected>zh-CN</option><option value="/en/2026/11/18/systemd-exit-type-cgroup-main-process/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--systemd">systemd</span>
+      <time datetime="2026-11-17T19:35:08.000Z">2026-11-18</time>
+    </div>
+
+    <h1>主进程退出后，systemd 为什么还认为服务在运行？</h1>
+
+    
+      <p class="post-hero__summary">用同样的父子进程解释 systemd 的 main 与 cgroup 生命周期，并分开核对应用交付。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-17T19:35:08.000Z">2026-11-18</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/18/systemd-exit-type-cgroup-main-process/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/18/systemd-exit-type-cgroup-main-process/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>main 模式以确定的主进程为观察点。</li><li>cgroup 模式会观察仍存活的组成员。</li><li>应用输出需要单独核对。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>主进程已经退出，systemd 仍可能把服务视为运行中。用 <code>ExitType=cgroup</code> 时，管理器关心的是整个服务控制组是否还有进程存活。默认的 <code>ExitType=main</code> 则以主进程退出为生命周期的终点。查清这项设置，才能解释主进程号与服务状态为什么会给出不同的观察。</p>
+<p>例如交付脚本启动一个任务包装器，它派出子进程后很快返回。监控记录了包装器退出，就报告服务的工作已经结束。等到下一步移动输出目录时，真正的执行进程也许正在写。另一个部署却把包装器退出当作服务结束，并清理了组里的进程。相同的进程树可以对应不同的生命周期合同。先用不写业务文件的对照确认管理器在观察谁。</p>
+<h3 id="给两份服务相同的进程树"><a href="#给两份服务相同的进程树" class="headerlink" title="给两份服务相同的进程树"></a>给两份服务相同的进程树</h3><p>在可丢弃的 Linux 测试机上，用 systemd 250 或更新版本。在 <code>/run/zy18-exit-lab/</code> 创建 <code>worker.sh</code>。启动子进程后，父脚本等三秒，打印一个退出前的标记再正常返回。子进程若能继续，会在更晚的时点打印另一条标记。父进程退出标记用来找到观察窗口，子进程完成标记则用于第二次核对。</p>
+<pre><code class="sh">(
+  sleep 18
+  printf &#39;zy18-child-complete\n&#39;
+) &amp;
+printf &#39;zy18-child-start pid=%s\n&#39; &quot;$!&quot;
+sleep 3
+printf &#39;zy18-main-returning\n&#39;
+exit 0
+</code></pre>
+<p>把下面的定义保存为 <code>/etc/systemd/system/zy18-exit-main.service</code>。为另一个单元复制相同定义到 <code>zy18-exit-group.service</code>，只将 <code>ExitType=main</code> 改成 <code>ExitType=cgroup</code>。实验用 <code>Type=exec</code>。两份定义用同样的停止清理模式，省得把进程清理配置也当成一项变化。</p>
+<pre><code class="ini">[Service]
+Type=exec
+ExitType=main
+KillMode=control-group
+ExecStart=/bin/sh /run/zy18-exit-lab/worker.sh
+</code></pre>
+<p>在有管理权限的实验终端启动，记录每个单元的属性和日志。下面的等待只试图提供一个可观察的窗口。机器负载异常或记录与标记时间不符时，应读本轮日志确认处在哪个阶段，再另开一趟比较。不要为了凑点位把未退出的主进程当作已经退出。</p>
+<pre><code class="sh">systemctl daemon-reload
+systemctl start zy18-exit-main.service zy18-exit-group.service
+sleep 7
+systemctl show zy18-exit-main.service zy18-exit-group.service \
+  -p Id -p MainPID -p ActiveState -p ControlGroup
+sleep 14
+for unit in zy18-exit-main.service zy18-exit-group.service; do
+  systemctl show &quot;$unit&quot; -p ActiveState
+  journalctl -b -u &quot;$unit&quot; --no-pager
+done
+</code></pre>
+<p>在父脚本已经正常退出、子进程还没执行完时，预期 main 单元已停止，组内留下的进程会按设置清理。cgroup 单元预期仍然 active，尽管已经没有存活的主进程。可用子进程起始日志记录的 PID 和服务控制组路径确认仍是原来的尝试，接着用完成标记判断子进程有没有走到自己的最后一条语句。等存活的子进程退出后，cgroup 单元也应停止。实验预期只基于手册和这份定义。本文没有运行 Linux 管理器，不能把等待秒数或状态组合当成观测回执。实验结束后在该临时机器停止单元并撤掉文件。</p>
+<h3 id="服务还在运行，接手人该继续查什么"><a href="#服务还在运行，接手人该继续查什么" class="headerlink" title="服务还在运行，接手人该继续查什么"></a>服务还在运行，接手人该继续查什么</h3><p>对一个有稳定常驻主进程的服务，主进程退出通常就是需要处理的事件。此时可保留默认判据，把健康状态和主进程监督结合起来。如果应用没有能可靠定位的单一主进程，而一组子进程才完整表达它还在工作，cgroup 判据会使管理器覆盖剩余的运行阶段。改配置之前先给剩余的进程确认职责。比如有一个误留的调试进程，它也会延长整个组的存活，活动状态就不能说明应用仍在产生需要的业务输出。</p>
+<p>验收时可以把管理器判断和应用完成时间记在一份时间线上。保留本次启动身份、父进程退出记录、子进程完成标记和相关的管理器状态。若本轮开始之前有过旧实例，先界定日志窗口，以免把上次的完成标记抄到现在。出现“状态仍 active，但文件写入早就结束”的问题，应验证哪一个组成员还活着。出现“状态已 inactive，输出缺尾”时，再查子进程是否被清理，以及应用是否为中断提供了可恢复边界。</p>
+<p>还有一个可独立检查的反例。假设一份导出必须写完十个分片，管理器最后看到了组内所有进程退出。这只能看到生命周期终点。若一个子进程写到第五个分片后提前返回，生命周期终点并不能告诉读者缺了哪些文件。给交接脚本一份预期清单，在它准备接收输出之前核对实际分片身份和内容。需要时还要检查导出程序的退出原因。这个业务反例未运行，实验只给两个过程标记。</p>
+<p>为发布选择 cgroup 时，明确运维动作从哪个事件开始。若清理工具只需要确认没有旧进程持有目录，可以将管理器的停止和组成员核对用作准备信号。若清理改成移动归档，还要独立检查归档已完成。这两个任务看的是同一服务，却可以有不同的成功条件。把实验中的父返回和子完成当作两个不同的时间点，是为了让交接人确定自己真正依赖哪个。</p>
+<p>在采用统一 cgroup v2 的机器上，可以用初次日志输出的子进程 PID 读对应的 /proc/PID/cgroup。查询应记录时间，并核对统一层级的路径与单元属性中的 ControlGroup。若进程已经消失，这一个读数不可用；若数字已经被另一个进程重用，单凭号码相同也不能用于证明存活。安排对照时，把子进程执行时间留得足以观察，并保留本轮的日志时间段。这个成员归属查询未实际运行。</p>
+<h3 id="能给-Type-oneshot-也用-ExitType-cgroup-吗？"><a href="#能给-Type-oneshot-也用-ExitType-cgroup-吗？" class="headerlink" title="能给 Type=oneshot 也用 ExitType=cgroup 吗？"></a>能给 Type=oneshot 也用 ExitType=cgroup 吗？</h3><p>不能。手册对这个组合单独设了限制。若现在的单元类型是 oneshot，而任务需要在主脚本返回后继续用整个进程组来表示运行中，要重新选能表达持续进程生命周期的服务类型，再验启动、完成和停止。主实验统一使用 Type=exec，因此没有覆盖 oneshot。也不要为了让后续任务尽早开始，随意将运行中的工作改成没有生命周期约束的后台活动。</p>
+<p><a href="/zh-CN/2026/11/08/systemd-restart-start-limit-recovery/">相关站内阅读：systemd 启动限流和重启</a></p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html" rel="noopener">systemd.service — Service unit configuration — ExitType</a></li><li><a target="_blank" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.kill.html" rel="noopener">systemd.kill — Process killing procedure configuration — KillMode</a></li><li><a target="_blank" href="https://docs.kernel.org/admin-guide/cgroup-v2.html" rel="noopener">Control Group v2 — The Linux Kernel documentation — Processes</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--systemd" href="/zh-CN/tags/systemd/">systemd</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E8%BF%90%E7%BB%B4%E9%AA%8C%E8%AF%81/">运维验证</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F18%2Fsystemd-exit-type-cgroup-main-process%2F&text=%E4%B8%BB%E8%BF%9B%E7%A8%8B%E9%80%80%E5%87%BA%E5%90%8E%EF%BC%8Csystemd%20%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E8%AE%A4%E4%B8%BA%E6%9C%8D%E5%8A%A1%E5%9C%A8%E8%BF%90%E8%A1%8C%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F18%2Fsystemd-exit-type-cgroup-main-process%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E4%B8%BB%E8%BF%9B%E7%A8%8B%E9%80%80%E5%87%BA%E5%90%8E%EF%BC%8Csystemd%20%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E8%AE%A4%E4%B8%BA%E6%9C%8D%E5%8A%A1%E5%9C%A8%E8%BF%90%E8%A1%8C%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F18%2Fsystemd-exit-type-cgroup-main-process%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/17/aria-valuetext-range-ordinal-label/">
+              <span>上一篇</span>
+              <strong>画质滑块停在 2，怎样让用户知道这是「标准」？</strong>
+              <small>2026-11-17</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/18/redis-zpopmin-count-last-member-key/">
+              <span>下一篇</span>
+              <strong>ZPOPMIN 要求取两条，为何只回一条还删了键？</strong>
+              <small>2026-11-18</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h3" href="#给两份服务相同的进程树">给两份服务相同的进程树</a>
+          
+            <a class="toc-link toc-link--h3" href="#服务还在运行，接手人该继续查什么">服务还在运行，接手人该继续查什么</a>
+          
+            <a class="toc-link toc-link--h3" href="#能给-Type-oneshot-也用-ExitType-cgroup-吗？">能给 Type=oneshot 也用 ExitType=cgroup 吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>250</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>209</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/17/systemd-assert-condition-job-outcome/">同样缺文件，systemd 为什么一次跳过、一次启动失败？</a></h3>
+          <p>2026-11-17</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/16/systemd-stop-when-unneeded-consumers/">最后一个依赖服务停了，systemd 为什么也停掉了共享进程？</a></h3>
+          <p>2026-11-16</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/15/systemd-timer-inactive-relative-cadence/">systemd 定时任务结束后再等五分钟，应该用哪个计时点？</a></h3>
+          <p>2026-11-15</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

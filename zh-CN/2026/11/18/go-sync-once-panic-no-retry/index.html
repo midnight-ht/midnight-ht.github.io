@@ -1,0 +1,426 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>sync.Once 的 f panic 后，为什么第二次 Do 没重跑？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用调用计数、配置状态和新实例对照，看 sync.Once 在 panic 后做了什么，以及上层何时应另做重试。">
+  
+  
+    <meta name="keywords" content="sync.Once.Do,panic,初始化重试">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/18/go-sync-once-panic-no-retry/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/18/go-sync-once-panic-no-retry/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/18/go-sync-once-panic-no-retry/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/18/go-sync-once-panic-no-retry/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="sync.Once 的 f panic 后，为什么第二次 Do 没重跑？ | Midnight blog">
+    <meta property="og:description" content="用调用计数、配置状态和新实例对照，看 sync.Once 在 panic 后做了什么，以及上层何时应另做重试。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/18/go-sync-once-panic-no-retry/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/18/go-sync-once-panic-no-retry/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/18/go-sync-once-panic-no-retry/","name":"sync.Once 的 f panic 后，为什么第二次 Do 没重跑？ | Midnight blog","description":"用调用计数、配置状态和新实例对照，看 sync.Once 在 panic 后做了什么，以及上层何时应另做重试。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/18/go-sync-once-panic-no-retry/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/18/go-sync-once-panic-no-retry/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/18/go-sync-once-panic-no-retry/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/18/go-sync-once-panic-no-retry/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/18/go-sync-once-panic-no-retry/","headline":"sync.Once 的 f panic 后，为什么第二次 Do 没重跑？","description":"用调用计数、配置状态和新实例对照，看 sync.Once 在 panic 后做了什么，以及上层何时应另做重试。","inLanguage":"zh-CN","datePublished":"2026-11-17T19:35:08.000Z","dateModified":"2026-11-17T19:35:08.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://pkg.go.dev/sync#Once.Do"],"keywords":"Go, sync.Once, 初始化"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/18/go-sync-once-panic-no-retry/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"sync.Once 的 f panic 后，为什么第二次 Do 没重跑？","item":"https://www.zyweb.vip/zh-CN/2026/11/18/go-sync-once-panic-no-retry/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/18/go-sync-once-panic-no-retry/" selected>zh-CN</option><option value="/en/2026/11/18/go-sync-once-panic-no-retry/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/18/go-sync-once-panic-no-retry/" selected>zh-CN</option><option value="/en/2026/11/18/go-sync-once-panic-no-retry/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--go">Go</span>
+      <time datetime="2026-11-17T19:35:08.000Z">2026-11-18</time>
+    </div>
+
+    <h1>sync.Once 的 f panic 后，为什么第二次 Do 没重跑？</h1>
+
+    
+      <p class="post-hero__summary">用调用计数、配置状态和新实例对照，看 sync.Once 在 panic 后做了什么，以及上层何时应另做重试。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-17T19:35:08.000Z">2026-11-18</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/18/go-sync-once-panic-no-retry/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/18/go-sync-once-panic-no-retry/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>同一个 Once 在首次函数 panic 后不会再次调用传入的函数。</li><li>另行核对初始化产物与失败状态。</li><li>确需恢复后重试时，由应用维护重试状态。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Go 服务第一次加载本地配置时发生 panic，调用方捕获之后重新执行同一个 sync.Once 的 Do。第二次调用顺利返回，配置却仍然没有写入。这里需要把“这次 Do 已经返回”和“初始化已成功”分开看：第一次调用发生 panic 也会消耗这一个 Once 的执行机会。</p>
+<h2 id="恢复-panic-改变的是调用方的控制流"><a href="#恢复-panic-改变的是调用方的控制流" class="headerlink" title="恢复 panic 改变的是调用方的控制流"></a>恢复 panic 改变的是调用方的控制流</h2><p>设想初始化函数读取本地配置并把解析后的结构保存到内存。读文件尚未完成就发生 panic，捕获它的调用方选择继续运行。现在已有一份错误记录，没有一份可供业务读取的有效配置。如果调用方立刻以同一个 Once 再调用 Do，即使换了一个简单的初始化函数，后续函数仍不会被调用。把 recover 放在哪并不能撤销 Once 已经记录的这次调用。</p>
+<p>Go 的契约针对一个 Once 实例。Do 调用传入函数，只限该实例第一次调用的那次；如果传入函数 panic，Do 把它视为已经返回，后续调用会直接返回。这个实例能帮助多个使用者围绕同一次初始化汇合。它不会保留一个代表业务成功的值，也不会把初始化函数的异常重新传播给后续调用者。若调用端在 Do 之后默认已经有配置，第二次抛错的原因可能是读取未初始化状态，而非初始化函数再跑了一次。</p>
+<p>常见的误导证据是只统计 Do 返回次数。首次调用发生了 panic，调用者恢复之后能继续做自己的工作。后续三个调用也可能全部返回，但这四条日志无法说明配置加载过。如果需要判断当前能不能处理请求，应另查加载产物、业务错误或状态字段。这里的延时不是决定条件：文件立即恢复、几秒后恢复或者永远读不到，都不会改变同一实例后面是否再次调用函数。</p>
+<h2 id="用另一个函数和另一个实例拆开验证"><a href="#用另一个函数和另一个实例拆开验证" class="headerlink" title="用另一个函数和另一个实例拆开验证"></a>用另一个函数和另一个实例拆开验证</h2><p>下面的顺序夹具未在 Go 运行。第一段只包住一次调用，在调用者这一层捕获约定的 panic；之后给原 Once 传入一个不同的函数，让它一旦执行就写入 loaded。再给新建的 Once 传入相同的写入函数，形成不共享状态的控制组。</p>
+<pre><code class="go">package main
+
+import &quot;sync&quot;
+
+func firstAttempt(once *sync.Once, attempts *int) (failure any) {
+    defer func() { failure = recover() }()
+    once.Do(func() {
+        *attempts += 1
+        panic(&quot;temporary config failure&quot;)
+    })
+    return
+}
+
+func main() {
+    var once, fresh sync.Once
+    attempts := 0
+    loaded := false
+    if firstAttempt(&amp;once, &amp;attempts) != &quot;temporary config failure&quot; {
+        panic(&quot;first call did not report the expected panic&quot;)
+    }
+
+    load := func() { loaded = true }
+    once.Do(load)
+    if attempts != 1 || loaded {
+        panic(&quot;the original Once should not run load&quot;)
+    }
+
+    fresh.Do(load)
+    if !loaded {
+        panic(&quot;fresh Once should run load&quot;)
+    }
+}
+</code></pre>
+<p>第一个断言要求确实遇到了准备好的 panic。若初次调用没有跑，或者因为完全不相干的原因抛错，样例会直接停下来。接下来要同时看到 attempts 等于一、loaded 仍为假，才能确认已经尝试过一次，而且后来那个写入函数没有进入。最后 fresh 让同一函数成功写入。这样就不必猜测函数本身是不是空实现，或者正文的状态标志是否根本无法更新。</p>
+<p>反过来，若测试只写一次 recover 后再调用 Do，程序没有退出，仍不足以证明重试成功。若它只检查没有再次 panic，也会得到一样的误判。为服务验收加一个实际消费者更稳妥，例如在返回就绪之前明确读到配置版本，并让失败路径报告未加载。这个夹具只推导顺序调用与简单变量变化，没测多个 goroutine 同时进入、线上日志收集或任何 I/O 恢复能力。</p>
+<h2 id="选用-Once-前，写清一次意味着什么"><a href="#选用-Once-前，写清一次意味着什么" class="headerlink" title="选用 Once 前，写清一次意味着什么"></a>选用 Once 前，写清一次意味着什么</h2><p>允许尝试一次的初始化，可以把持久结果分成加载值和失败状态，等 Do 完成以后再把同样的结果交给后续请求。比如进程必须取得静态配置版本才能接单，初始化失败后就保持不可用并让部署控制器决定是否重启。这种情况下，Do 可以管理一次函数执行，而就绪检查仍由应用从真实状态决定。不要让请求路径因为 Do 返回就直接宣布能读配置。</p>
+<p>如果业务要求配置恢复以后在同一进程内重新加载，应另外编写支持失败和重试的状态逻辑。要先决定谁发起下一次、并发调用者怎样等结果、成功以后用哪份配置，以及失败多少次后才向上报告。受控验收至少给出两个条件：初次读取失败并留下错误；下一次在明确恢复之后，消费者能读到新的版本，并且可见的成功次数与应用约定一致。把它化简为每次请求都新建一个 Once，只会丢掉请求之间这份共同初始化的边界。</p>
+<p>还能从诊断日志里直接区分“尝试过”和“加载好”两个状态。给真实加载函数记录开始与结束，在调用方分别记录恢复结果和可读版本。这样即使同一服务里有多个互不相干的初始化，也能查到当前失败属于哪一项。若发现最后只有一次函数开始日志、一次初始化错误，却有许多 Do 返回日志，应先检查应用如何解释这几条事件。本站<a href="/zh-CN/2026/11/16/go-context-afterfunc-stop-completion/">Go AfterFunc 的停止与完成</a>介绍另一种布尔结果和业务完成时刻之间的区别，这里的检查对象是一次初始化的状态。</p>
+<h2 id="如果初始化函数内部又调用同一个-Once-的-Do-呢？"><a href="#如果初始化函数内部又调用同一个-Once-的-Do-呢？" class="headerlink" title="如果初始化函数内部又调用同一个 Once 的 Do 呢？"></a>如果初始化函数内部又调用同一个 Once 的 Do 呢？</h2><p>这种调用会一直等待。首次 Do 要等它的函数运行完才返回；内部调用又要等这次正在执行的函数结束；两者互相依赖。比如加载器为了读默认配置又调用上层的初始化入口，恰好复用了同一个 Once，恢复 panic 的分支也救不了这次等待。应把真正读配置的过程与控制一次调用的外层入口拆开，避免加载器再回到该入口。上面的程序没有执行这个反例，排查时可直接检查静态调用链与每个 Once 的实例身份。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://pkg.go.dev/sync#Once.Do" rel="noopener">sync package - sync - Go Packages</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--go" href="/zh-CN/tags/Go/">Go</a>
+          
+            <a class="tag tag--sync-once" href="/zh-CN/tags/sync.Once/">sync.Once</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%88%9D%E5%A7%8B%E5%8C%96/">初始化</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F18%2Fgo-sync-once-panic-no-retry%2F&text=sync.Once%20%E7%9A%84%20f%20panic%20%E5%90%8E%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E7%AC%AC%E4%BA%8C%E6%AC%A1%20Do%20%E6%B2%A1%E9%87%8D%E8%B7%91%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F18%2Fgo-sync-once-panic-no-retry%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=sync.Once%20%E7%9A%84%20f%20panic%20%E5%90%8E%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E7%AC%AC%E4%BA%8C%E6%AC%A1%20Do%20%E6%B2%A1%E9%87%8D%E8%B7%91%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F18%2Fgo-sync-once-panic-no-retry%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/18/http-300-representation-choices/">
+              <span>上一篇</span>
+              <strong>收到 HTTP 300，客户端必须跳去某一个地址吗？</strong>
+              <small>2026-11-18</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/18/go-strings-cut-empty-after-separator/">
+              <span>下一篇</span>
+              <strong>strings.Cut 拆出的值为空，怎样知道配置有没有等号？</strong>
+              <small>2026-11-18</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#恢复-panic-改变的是调用方的控制流">恢复 panic 改变的是调用方的控制流</a>
+          
+            <a class="toc-link toc-link--h2" href="#用另一个函数和另一个实例拆开验证">用另一个函数和另一个实例拆开验证</a>
+          
+            <a class="toc-link toc-link--h2" href="#选用-Once-前，写清一次意味着什么">选用 Once 前，写清一次意味着什么</a>
+          
+            <a class="toc-link toc-link--h2" href="#如果初始化函数内部又调用同一个-Once-的-Do-呢？">如果初始化函数内部又调用同一个 Once 的 Do 呢？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>250</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>209</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/18/go-strings-cut-empty-after-separator/">strings.Cut 拆出的值为空，怎样知道配置有没有等号？</a></h3>
+          <p>2026-11-18</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/17/go-io-copyn-short-read-partial-write/">Go CopyN 报错，目标为什么还是多了两个字节？</a></h3>
+          <p>2026-11-17</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/16/go-context-afterfunc-stop-completion/">Go AfterFunc 的 stop 返回 false，清理已经做完了吗？</a></h3>
+          <p>2026-11-16</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

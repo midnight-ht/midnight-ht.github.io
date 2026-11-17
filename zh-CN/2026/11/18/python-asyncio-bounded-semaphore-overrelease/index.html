@@ -1,0 +1,424 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>并发上限设成 1，为什么 Semaphore 后来可以进两次？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="对照普通和有上界的 asyncio 信号量，验证重复归还如何改变后续可用额度，并检查取消路径的归还责任。">
+  
+  
+    <meta name="keywords" content="Semaphore,BoundedSemaphore,release">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/18/python-asyncio-bounded-semaphore-overrelease/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="并发上限设成 1，为什么 Semaphore 后来可以进两次？ | Midnight blog">
+    <meta property="og:description" content="对照普通和有上界的 asyncio 信号量，验证重复归还如何改变后续可用额度，并检查取消路径的归还责任。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/","name":"并发上限设成 1，为什么 Semaphore 后来可以进两次？ | Midnight blog","description":"对照普通和有上界的 asyncio 信号量，验证重复归还如何改变后续可用额度，并检查取消路径的归还责任。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/","headline":"并发上限设成 1，为什么 Semaphore 后来可以进两次？","description":"对照普通和有上界的 asyncio 信号量，验证重复归还如何改变后续可用额度，并检查取消路径的归还责任。","inLanguage":"zh-CN","datePublished":"2026-11-17T19:35:08.000Z","dateModified":"2026-11-17T19:35:08.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.14/library/asyncio-sync.html#asyncio.BoundedSemaphore"],"keywords":"Python, asyncio, 并发"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"并发上限设成 1，为什么 Semaphore 后来可以进两次？","item":"https://www.zyweb.vip/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/" selected>zh-CN</option><option value="/en/2026/11/18/python-asyncio-bounded-semaphore-overrelease/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/" selected>zh-CN</option><option value="/en/2026/11/18/python-asyncio-bounded-semaphore-overrelease/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--python">Python</span>
+      <time datetime="2026-11-17T19:35:08.000Z">2026-11-18</time>
+    </div>
+
+    <h1>并发上限设成 1，为什么 Semaphore 后来可以进两次？</h1>
+
+    
+      <p class="post-hero__summary">对照普通和有上界的 asyncio 信号量，验证重复归还如何改变后续可用额度，并检查取消路径的归还责任。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-17T19:35:08.000Z">2026-11-18</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/18/python-asyncio-bounded-semaphore-overrelease/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>用独立实例检查多余归还与随后能取得的额度。</li><li>上界只核对总数，每次归还还需要明确持有者。</li><li>手动管理时，获取成功后才进入负责归还的保护区。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>信号量初始化时只有一个名额。工作结束后归还一次，退出函数前又归还了一次。普通 asyncio.Semaphore 接受了多出来的归还，结果下一轮两次获取都能立即成功。要复现这类并发上限失效，先查归还操作，再看是哪里应该拥有这份额度。</p>
+<h2 id="初始计数为一，归还之后可以变成多少"><a href="#初始计数为一，归还之后可以变成多少" class="headerlink" title="初始计数为一，归还之后可以变成多少"></a>初始计数为一，归还之后可以变成多少</h2><p>Semaphore 保存一个内部计数。获取额度会减少计数；计数为零且调用无法立即取得额度时，获取会等待。释放则增加额度，并可能唤醒正在等待的任务。普通 Semaphore 允许释放调用多于获取调用。所以在这个没有等待者的例子里，原本只有一份额度，取走再归还回到一，多归还一次就得到二。没有任何任务显式改过并发配置，运行状态却已经能容纳两份工作。</p>
+<p>BoundedSemaphore 继承了获取与释放的用途，同时在释放时维护初始上界。若归还会让计数高于初始化的数值，release() 抛出 ValueError。计数从零恢复到一属于正常归还；计数已有一，再试图释放则会失败。异常发生在多余归还这一侧，可以顺着调用堆栈去找是哪段清理逻辑多走了一次。</p>
+<p>上界是一条总量规则。它不能知道哪一个任务正在使用额度，也不会检查谁调用了 release。如果初始值为二，两个任务都已取得额度且没有其他等待者，某个任务把自己的额度归还两次，计数仍然可能只到二；第二次错误归还就没有超过该上界。之后真正持有另一个额度的人再归还，报错地点可能已经离开第一次犯错的路径。若要追查这类问题，记录获取方与归还方的任务标识比仅统计异常次数更可靠。</p>
+<h2 id="在没有排队者的循环里做两个对照"><a href="#在没有排队者的循环里做两个对照" class="headerlink" title="在没有排队者的循环里做两个对照"></a>在没有排队者的循环里做两个对照</h2><p>下面创建两个独立的信号量，每个从一开始。每次先获取并正常归还一次，再尝试额外归还。夹具不启动后台任务，也不使用定时等待。它用 locked() 检查当下是否还能立即获取，因此不需要让一个故意多余的 acquire 卡住整个测试。</p>
+<pre><code class="python">import asyncio
+
+async def exercise(make_semaphore, bounded):
+    sem = make_semaphore(1)
+    take_permit = sem.acquire
+    return_permit = sem.release
+    await take_permit()
+    return_permit()
+    try:
+        return_permit()
+    except ValueError:
+        assert bounded
+    else:
+        assert not bounded
+
+    await take_permit()
+    assert sem.locked() is bounded
+    if not bounded:
+        await take_permit()
+        assert sem.locked()
+        return_permit()
+    return_permit()
+
+async def main():
+    await exercise(asyncio.Semaphore, bounded=False)
+    await exercise(asyncio.BoundedSemaphore, bounded=True)
+    print(&quot;ordinary admitted two; bounded rejected extra release&quot;)
+
+asyncio.run(main())
+</code></pre>
+<p>普通实例第一次尝试无异常，接下来取得一份额后仍可立即获取第二份，这两次都在上面的夹具里执行过。达到两份占用后才不能立即再取。带上界的实例则在额外归还时抛错，之后取得唯一的一份就进入不能立即获取的状态。用两个新实例分别验证，避免在已经被错误归还污染的计数上混入其他并发行为。</p>
+<p>这个例子还保护了正常归还的路径。第一次释放放在捕获异常的语句块之外，如果出错，测试会直接失败。这样可以防止有人只断言出现过一次 ValueError，却没有证明究竟是哪一步抛出的。最后再按真实取得的额度数量清理，便于把例子扩展为同一个循环中的多个独立场景。实测范围是单事件循环里的初始额度及重复释放，不测任务公平性、线程安全、吞吐或真实网络负载。</p>
+<h2 id="归还的那行代码应由谁负责"><a href="#归还的那行代码应由谁负责" class="headerlink" title="归还的那行代码应由谁负责"></a>归还的那行代码应由谁负责</h2><p>一次常见的错误是两层函数都安排清理。外层任务进入临界区时先持有额度；内层函数完成工作，为了“保险”也归还一次；外层退出时再执行自己的清理。等到很多任务同时运行，看到后来的接口限额变宽，很难把原因追回其中某次多余释放。处理这种交接时，可以留一个明确的约定：取得额度的一层也负责归还，内层只处理工作结果。</p>
+<p>如果业务能把获取与归还包在同一个代码块，用 async with 管理信号量可以减少手动安排的分支。若确实需要跨函数或跨对象交接，测试应锁住几条不同路径，包括成功返回、业务抛错，以及清理入口被重复调用。每条路径分别观察后续可用名额和归还次数。带上界实例可以在部分错误上提前报警，但要检查所有权，仍要根据取得记录看是否每份额度只归还一次。</p>
+<p>可以用一个独立的服务级控制验证这条约定。让首个请求获取额度后停在应用可控的门上，确认第二个请求尚不能进入；再让业务支路失败，并观察哪一层归还。只有原持有者的退出允许第二个请求进入。这个验收关注服务的临界区，比夹具里直接调用信号量多了一层实际职责。本站<a href="/zh-CN/2026/10/26/python-asyncio-taskgroup-failure-scope/">TaskGroup 的取消范围与清理</a>讨论组内失败的传播，这里关注取消或退出之后哪个调用点有权归还额度。</p>
+<h2 id="等待-acquire-时被取消，finally-应该放在哪里？"><a href="#等待-acquire-时被取消，finally-应该放在哪里？" class="headerlink" title="等待 acquire 时被取消，finally 应该放在哪里？"></a>等待 acquire 时被取消，finally 应该放在哪里？</h2><p>把 await sem.acquire() 放在手动 try/finally 之前。只有获取成功返回以后，才进入包含工作逻辑、并在退出时归还的保护区。如果等待本身就被取消，调用者没有取得额度，因而无需执行自己的 release。相反，如果工作已经开始，随后取消要沿工作代码所在的保护区退出并清理。不要把尚未取得额度的等待也包进一个无条件归还的 finally。</p>
+<p>对取消的验收可以分两条；在第一条里用一个已持有的额度阻住等待方并取消等待方，确认原持有者仍独占额度。第二条让工作方在成功获取后停在一个可控制的等待点，再取消它，随后新任务应能正常获取。这个检查要看两条独立的取消时机。文章里的运行夹具只走了同步顺序的获取与释放，两条取消验收是建议验证的行为，没有代替读者运行它们。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/asyncio-sync.html#asyncio.BoundedSemaphore" rel="noopener">Synchronization Primitives — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+            <a class="tag tag--asyncio" href="/zh-CN/tags/asyncio/">asyncio</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%B9%B6%E5%8F%91/">并发</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F18%2Fpython-asyncio-bounded-semaphore-overrelease%2F&text=%E5%B9%B6%E5%8F%91%E4%B8%8A%E9%99%90%E8%AE%BE%E6%88%90%201%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%20Semaphore%20%E5%90%8E%E6%9D%A5%E5%8F%AF%E4%BB%A5%E8%BF%9B%E4%B8%A4%E6%AC%A1%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F18%2Fpython-asyncio-bounded-semaphore-overrelease%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E5%B9%B6%E5%8F%91%E4%B8%8A%E9%99%90%E8%AE%BE%E6%88%90%201%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%20Semaphore%20%E5%90%8E%E6%9D%A5%E5%8F%AF%E4%BB%A5%E8%BF%9B%E4%B8%A4%E6%AC%A1%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F18%2Fpython-asyncio-bounded-semaphore-overrelease%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/18/python-counter-subtract-negative-counts/">
+              <span>上一篇</span>
+              <strong>Counter 相减之后，为什么欠货商品消失了？</strong>
+              <small>2026-11-18</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/18/pytest-register-assert-rewrite-helper/">
+              <span>下一篇</span>
+              <strong>同一句断言移进辅助模块，pytest 为什么只剩 AssertionError？</strong>
+              <small>2026-11-18</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#初始计数为一，归还之后可以变成多少">初始计数为一，归还之后可以变成多少</a>
+          
+            <a class="toc-link toc-link--h2" href="#在没有排队者的循环里做两个对照">在没有排队者的循环里做两个对照</a>
+          
+            <a class="toc-link toc-link--h2" href="#归还的那行代码应由谁负责">归还的那行代码应由谁负责</a>
+          
+            <a class="toc-link toc-link--h2" href="#等待-acquire-时被取消，finally-应该放在哪里？">等待 acquire 时被取消，finally 应该放在哪里？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>250</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>209</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/">父任务改了 ContextVar，已经创建的子任务为什么仍读到旧值？</a></h3>
+          <p>2026-11-14</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/python-asyncio-queue-join-accounting/">asyncio.Queue.join 返回，不等于每条业务都成功了</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/python-aclosing-generator-cleanup/">用 aclosing 把异步生成器的关闭留在当前任务内</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

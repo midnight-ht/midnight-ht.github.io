@@ -1,0 +1,424 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>How did a Semaphore initialized with one permit admit two acquires? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Compare plain and bounded asyncio semaphores to see how an extra release affects capacity and how to assign cleanup around cancellation.">
+  
+  
+    <meta name="keywords" content="Semaphore,BoundedSemaphore,release">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/18/python-asyncio-bounded-semaphore-overrelease/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/18/python-asyncio-bounded-semaphore-overrelease/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="How did a Semaphore initialized with one permit admit two acquires? | Midnight blog">
+    <meta property="og:description" content="Compare plain and bounded asyncio semaphores to see how an extra release affects capacity and how to assign cleanup around cancellation.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/18/python-asyncio-bounded-semaphore-overrelease/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/18/python-asyncio-bounded-semaphore-overrelease/#webpage","url":"https://www.zyweb.vip/en/2026/11/18/python-asyncio-bounded-semaphore-overrelease/","name":"How did a Semaphore initialized with one permit admit two acquires? | Midnight blog","description":"Compare plain and bounded asyncio semaphores to see how an extra release affects capacity and how to assign cleanup around cancellation.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/18/python-asyncio-bounded-semaphore-overrelease/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/18/python-asyncio-bounded-semaphore-overrelease/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/18/python-asyncio-bounded-semaphore-overrelease/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/18/python-asyncio-bounded-semaphore-overrelease/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/18/python-asyncio-bounded-semaphore-overrelease/","headline":"How did a Semaphore initialized with one permit admit two acquires?","description":"Compare plain and bounded asyncio semaphores to see how an extra release affects capacity and how to assign cleanup around cancellation.","inLanguage":"en","datePublished":"2026-11-17T19:35:08.000Z","dateModified":"2026-11-17T19:35:08.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://docs.python.org/3.14/library/asyncio-sync.html#asyncio.BoundedSemaphore"],"keywords":"Python, asyncio, Concurrency"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/18/python-asyncio-bounded-semaphore-overrelease/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"How did a Semaphore initialized with one permit admit two acquires?","item":"https://www.zyweb.vip/en/2026/11/18/python-asyncio-bounded-semaphore-overrelease/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/">zh-CN</option><option value="/en/2026/11/18/python-asyncio-bounded-semaphore-overrelease/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/">zh-CN</option><option value="/en/2026/11/18/python-asyncio-bounded-semaphore-overrelease/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--python">Python</span>
+      <time datetime="2026-11-17T19:35:08.000Z">2026-11-18</time>
+    </div>
+
+    <h1>How did a Semaphore initialized with one permit admit two acquires?</h1>
+
+    
+      <p class="post-hero__summary">Compare plain and bounded asyncio semaphores to see how an extra release affects capacity and how to assign cleanup around cancellation.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-17T19:35:08.000Z">2026-11-18</time> · Estimated read 13 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/18/python-asyncio-bounded-semaphore-overrelease/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Use separate instances to check extra releases and subsequent capacity.</li><li>The bound checks a total; give each release its own accountable owner.</li><li>With manual cleanup, enter the release-protected region only after acquisition succeeds.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>The semaphore starts with one permit. A worker finishes and returns its permit, then returns it again while exiting. A plain asyncio.Semaphore accepts the extra release. The next two acquires now succeed immediately. When investigating this kind of capacity change, start with releases and find the code that owned the permit.</p>
+<h2 id="How-far-can-the-count-rise-after-a-release"><a href="#How-far-can-the-count-rise-after-a-release" class="headerlink" title="How far can the count rise after a release?"></a>How far can the count rise after a release?</h2><p>A semaphore maintains an internal count. Acquiring a permit reduces the count. If it is zero and the call cannot acquire immediately, the acquire waits. Releasing increases available capacity and can wake a waiter. A plain Semaphore permits more releases than acquires. In this example there are no waiters. Taking the single permit reduces the count to zero, returning it brings it to one, and returning it again brings it to two. No task explicitly changed the configured limit, yet the semaphore can now accommodate two holders.</p>
+<p>BoundedSemaphore serves the same purpose and checks the starting bound on release. A release() that would push the count above its initial value raises ValueError. The legitimate return from zero to one works. The next return, at one already, fails. The exception lands at the extra release, so the stack can point to the cleanup branch that ran an extra time.</p>
+<p>This is a check on the total, without knowledge of task identity. Imagine a bound of two with both permits held and nobody waiting. One task returning its own permit twice can bring the count to two without crossing the starting bound. When the other real holder releases later, the failure can appear far from the original mistake. If you need to trace this kind of bug, record who acquired and who released rather than counting exceptions alone.</p>
+<h2 id="Use-two-controls-without-queued-tasks"><a href="#Use-two-controls-without-queued-tasks" class="headerlink" title="Use two controls without queued tasks"></a>Use two controls without queued tasks</h2><p>Create two independent semaphores, each starting at one. Acquire and return a permit, then attempt one extra release in each case. The fixture creates no background tasks and uses no timer. It uses locked() to inspect whether an immediate acquire is possible, so it does not have to issue a deliberately blocked acquire.</p>
+<pre><code class="python">import asyncio
+
+async def exercise(make_semaphore, bounded):
+    sem = make_semaphore(1)
+    take_permit = sem.acquire
+    return_permit = sem.release
+    await take_permit()
+    return_permit()
+    try:
+        return_permit()
+    except ValueError:
+        assert bounded
+    else:
+        assert not bounded
+
+    await take_permit()
+    assert sem.locked() is bounded
+    if not bounded:
+        await take_permit()
+        assert sem.locked()
+        return_permit()
+    return_permit()
+
+async def main():
+    await exercise(asyncio.Semaphore, bounded=False)
+    await exercise(asyncio.BoundedSemaphore, bounded=True)
+    print(&quot;ordinary admitted two; bounded rejected extra release&quot;)
+
+asyncio.run(main())
+</code></pre>
+<p>The plain object accepts the first extra release. After the next acquire it can still admit a second, and the fixture actually takes both. Only after holding two does it show that a further acquire would not be immediate. The bounded object raises on the extra release. Once its one legitimate permit is held, it cannot admit another immediately. Fresh instances keep the altered state of one trial out of the other.</p>
+<p>The test protects a legitimate return as well. The first release is outside the exception handler; a failure there fails the test outright. An assertion that merely observed some ValueError would not prove which release produced it. Cleanup at the end returns exactly the permits acquired in that trial, making the routine suitable for other independent trials in the same loop. This run tests starting capacity and extra releases within one event loop. It measures no fairness, thread behavior, throughput, or network load.</p>
+<h2 id="Give-one-layer-ownership-of-the-release"><a href="#Give-one-layer-ownership-of-the-release" class="headerlink" title="Give one layer ownership of the release"></a>Give one layer ownership of the release</h2><p>Two functions sometimes both take responsibility for cleanup. An outer worker acquires the permit before it enters a critical section. An inner operation releases it to be safe, and the outer worker then executes its own cleanup. By the time a busy service appears to admit too much work, the surplus release may be hard to locate. A clear contract gives release to the same layer that acquires. The inner operation is responsible for returning its work result.</p>
+<p>If acquisition and cleanup can live together, using the semaphore as an async context manager reduces the number of manually managed branches. If ownership really travels between functions or objects, test successful return, a work exception, and a repeated cleanup call separately. Check the capacity left afterward as well as the calls that returned it. A bounded semaphore detects some mistakes early. An ownership check still needs to account for each acquired permit separately.</p>
+<p>A service test can put the first admitted request behind an application-controlled gate and verify that a second request remains outside. Then trigger an error in the work branch and see which layer releases. Only exit by the original holder should admit the second request. That test checks an actual critical section in addition to primitive calls. The site&#39;s <a href="/en/2026/10/26/python-asyncio-taskgroup-failure-scope/">TaskGroup cancellation and cleanup article</a> covers propagation of failure across a task group. Here the issue is which code owns the release when a holder exits or is cancelled.</p>
+<h2 id="Where-should-finally-go-if-a-task-can-be-cancelled-while-waiting"><a href="#Where-should-finally-go-if-a-task-can-be-cancelled-while-waiting" class="headerlink" title="Where should finally go if a task can be cancelled while waiting?"></a>Where should finally go if a task can be cancelled while waiting?</h2><p>Put await sem.acquire() before the manual try/finally. Enter the protected work region only after acquisition returns successfully. Cancellation while waiting means the caller has acquired no permit and needs no release of its own. If cancellation instead interrupts work that already started, the work exits through the protected region and releases. Avoid an unconditional finally enclosing both the wait and the work.</p>
+<p>Test the two cancellation times separately. Hold a permit, cancel a second task while it waits, and verify that the original holder remains exclusive. In another run, let the task acquire, hold it at a controlled wait inside the work, and cancel it there. A fresh task should then get the permit. Those are recommended service tests. The executed fixture above checks sequential acquires and releases; it covers neither cancellation scenario.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/asyncio-sync.html#asyncio.BoundedSemaphore" rel="noopener">Synchronization Primitives — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--python" href="/en/tags/Python/">Python</a>
+          
+            <a class="tag tag--asyncio" href="/en/tags/asyncio/">asyncio</a>
+          
+            <a class="tag tag--concurrency" href="/en/tags/Concurrency/">Concurrency</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F18%2Fpython-asyncio-bounded-semaphore-overrelease%2F&text=How%20did%20a%20Semaphore%20initialized%20with%20one%20permit%20admit%20two%20acquires%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F18%2Fpython-asyncio-bounded-semaphore-overrelease%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=How%20did%20a%20Semaphore%20initialized%20with%20one%20permit%20admit%20two%20acquires%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F18%2Fpython-asyncio-bounded-semaphore-overrelease%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/18/python-counter-subtract-negative-counts/">
+              <span>Previous Post</span>
+              <strong>Why did the shortage disappear from Counter subtraction?</strong>
+              <small>2026-11-18</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/18/pytest-register-assert-rewrite-helper/">
+              <span>Next Post</span>
+              <strong>Why did moving the same assertion into a helper leave pytest with a bare AssertionError?</strong>
+              <small>2026-11-18</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#How-far-can-the-count-rise-after-a-release">How far can the count rise after a release?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Use-two-controls-without-queued-tasks">Use two controls without queued tasks</a>
+          
+            <a class="toc-link toc-link--h2" href="#Give-one-layer-ownership-of-the-release">Give one layer ownership of the release</a>
+          
+            <a class="toc-link toc-link--h2" href="#Where-should-finally-go-if-a-task-can-be-cancelled-while-waiting">Where should finally go if a task can be cancelled while waiting?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>250</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>209</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>89</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/17/python-futures-as-completed-input-identity/">Why can’t you zip as_completed results back to the original inputs?</a></h3>
+          <p>2026-11-17</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/14/python-asyncio-contextvar-task-snapshot/">Why does an asyncio task read the old ContextVar value?</a></h3>
+          <p>2026-11-14</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/01/python-asyncio-queue-join-accounting/">A returning asyncio.Queue.join does not certify every business result</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

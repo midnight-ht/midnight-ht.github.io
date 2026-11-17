@@ -1,0 +1,436 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>一个 Pending Pod 明明有空闲节点，为什么不开始调度？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="对照一个带门和一个无门的 Pod，核对调度门释放、节点分配和应用就绪各自的证据。">
+  
+  
+    <meta name="keywords" content="schedulingGates,SchedulingGated,PodScheduled">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="一个 Pending Pod 明明有空闲节点，为什么不开始调度？ | Midnight blog">
+    <meta property="og:description" content="对照一个带门和一个无门的 Pod，核对调度门释放、节点分配和应用就绪各自的证据。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/","name":"一个 Pending Pod 明明有空闲节点，为什么不开始调度？ | Midnight blog","description":"对照一个带门和一个无门的 Pod，核对调度门释放、节点分配和应用就绪各自的证据。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/","headline":"一个 Pending Pod 明明有空闲节点，为什么不开始调度？","description":"对照一个带门和一个无门的 Pod，核对调度门释放、节点分配和应用就绪各自的证据。","inLanguage":"zh-CN","datePublished":"2026-11-17T19:35:08.000Z","dateModified":"2026-11-17T19:35:08.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://kubernetes.io/docs/concepts/scheduling-eviction/pod-scheduling-readiness/"],"keywords":"Kubernetes, 发布运维"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"一个 Pending Pod 明明有空闲节点，为什么不开始调度？","item":"https://www.zyweb.vip/zh-CN/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/" selected>zh-CN</option><option value="/en/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/" selected>zh-CN</option><option value="/en/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--kubernetes">Kubernetes</span>
+      <time datetime="2026-11-17T19:35:08.000Z">2026-11-18</time>
+    </div>
+
+    <h1>一个 Pending Pod 明明有空闲节点，为什么不开始调度？</h1>
+
+    
+      <p class="post-hero__summary">对照一个带门和一个无门的 Pod，核对调度门释放、节点分配和应用就绪各自的证据。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-17T19:35:08.000Z">2026-11-18</time> · 预计阅读 8 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>调度门未移除时等待放行。</li><li>用 PodScheduled 和 UID 核对释放效果。</li><li>容器就绪另行验证。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>一个 Pending Pod 即使遇到空闲节点，也可能还没进入节点分配。只要 <code>spec.schedulingGates</code> 里还有未移除的门，通常的调度流程就会等待。先查实际门清单与节点分配状态，可以区分“尚未允许调度”和“允许了但找不到节点”。</p>
+<p>这个问题容易在外部准备慢的时候露出来。交付任务先创建 Pod，再等待一次与节点选择无关的准备动作。Pod 已经能被查询，任务报告也显示提交成功，调度却没有开始。有人看见 Pending 就去扩容，结果新增节点也无法关闭由另一个流程掌管的门。下面用一个无门的对照和一个有门的 Pod，验证看似一样的等待能否被精确描述。</p>
+<h3 id="固定节点条件，只给一个对象加门"><a href="#固定节点条件，只给一个对象加门" class="headerlink" title="固定节点条件，只给一个对象加门"></a>固定节点条件，只给一个对象加门</h3><p>在可丢弃的 Kubernetes 测试环境中做以下实验。PodSchedulingReadiness 自 Kubernetes 1.30 起稳定。环境要允许创建新的命名空间和 Pod，选择默认调度器，并有至少一个满足这些 Pod 约束的节点。例子不指定 nodeName，假设准入过程也不会修改此字段或加别的门。把这份清单保存为 <code>pods.yaml</code>。</p>
+<pre><code class="yaml">apiVersion: v1
+kind: Pod
+metadata:
+  name: ordinary
+spec:
+  containers:
+  - name: pause
+    image: registry.k8s.io/pause:3.10
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gated
+spec:
+  schedulingGates:
+  - name: example.com/prepared
+  containers:
+  - name: pause
+    image: registry.k8s.io/pause:3.10
+</code></pre>
+<p>为降低误操作，让命令明确使用之前核对过的实验上下文。将 <code>LAB_CTX</code> 设成该上下文，以下内容存为 Shell 脚本。先以 ordinary 的 PodScheduled 条件作为节点分配的正向对照。即使镜像尚未拉取，这条条件也比容器是不是 Ready 更适合判断这个阶段。随后查看 gated 的理由与实际字段，确认无节点分配。最后一组断言要在移除门后执行。预期过渡发生在同一个 Pod UID 上。</p>
+<pre><code class="sh">set -eu
+: &quot;${LAB_CTX:?set LAB_CTX to the disposable cluster context}&quot;
+ns=zy18-scheduling-gate
+lab() { kubectl --context &quot;$LAB_CTX&quot; -n &quot;$ns&quot; &quot;$@&quot;; }
+kubectl --context &quot;$LAB_CTX&quot; create namespace &quot;$ns&quot;
+lab create -f pods.yaml
+lab wait --for=condition=PodScheduled pod/ordinary --timeout=90s
+
+status_path=&#39;{.status.conditions[?(@.type==&quot;PodScheduled&quot;)].reason}&#39;
+lab wait --for=&quot;jsonpath=$status_path=SchedulingGated&quot; pod/gated --timeout=90s
+node_path=&#39;{.spec.nodeName}&#39;
+uid_path=&#39;{.metadata.uid}&#39;
+gate_path=&#39;{.spec.schedulingGates[0].name}&#39;
+observed_gate=$(lab get pod/gated -o &quot;jsonpath=$gate_path&quot;)
+test &quot;$observed_gate&quot; = example.com/prepared
+test -z &quot;$(lab get pod/gated -o &quot;jsonpath=$node_path&quot;)&quot;
+before=$(lab get pod/gated -o &quot;jsonpath=$uid_path&quot;)
+
+lab patch pod/gated --type=merge -p &#39;{&quot;spec&quot;:{&quot;schedulingGates&quot;:[]}}&#39;
+lab wait --for=condition=PodScheduled pod/gated --timeout=90s
+after=$(lab get pod/gated -o &quot;jsonpath=$uid_path&quot;)
+test -n &quot;$after&quot;
+test &quot;$after&quot; = &quot;$before&quot;
+lab get pod/gated -o wide
+</code></pre>
+<p>先期待 ordinary 获得节点。gated 应报告调度门仍在、无节点分配，并给出 SchedulingGated 原因。在移除唯一的门之后，它才进入普通调度。只要仍有合适的节点，预期可看到该 Pod 的 PodScheduled 成为 true，且 UID 与移除前相同。若门已移除但条件仍未满足，应查资源、约束和调度事件。移除这个门没有多给它任何资源，也没有为后续时刻保留一个位置。九十秒是客户端等待上限，不能拿它当平台调度承诺。</p>
+<p>这份实验没有连接集群，也未运行上述命令。需要在自己的测试集群验收时，保存两条初始观察和释放后的同 UID 观察。如果执行后发现 ordinary 也没分配节点，先解决对照缺失的问题，别把两个对象都未调度写成门有效。实验完成后删除只为它创建的命名空间；核对该动作仍指向临时上下文。</p>
+<h3 id="让移除操作有清楚的所有者"><a href="#让移除操作有清楚的所有者" class="headerlink" title="让移除操作有清楚的所有者"></a>让移除操作有清楚的所有者</h3><p>调度门适合表达可以在调度前观察的条件。比如负责准备数据的控制器得到本次输入已登记的回执，再移除自有门。写一条可复核的释放规则。若仅根据 Pod age 到了多少秒就删除，准备作业可能还未结束。反过来，如果准入给了一个没人负责的门，正确调度的 Pod 会一直没有机会。观察该门发生了什么，要从业务前置条件和控制器操作两处取证。</p>
+<p>验收还应保留一个相反的输入。准备系统给出明确失败时，应让门留在清单里，同时让读者知道等待的原因。日常运维可以给这类任务加上独立的告警时限，到点查负责者和准备过程，而不是无限等到 Pod 进 Running。准备成功之后，另外观察调度成功和应用可用。容器镜像拉取失败、进程退出或 readiness 未达到，都可能发生在分配节点之后。把 readiness 信号当成调度门已释放的日志，会让接手的人漏掉真正的核对点。</p>
+<p>准备回执还需要能识别当前对象。譬如发布脚本删除一份等待过久的 Pod，然后用同样的名字重建。准备系统稍后返回了前一份输入的成功消息。如果只用名字查找对象并释放门，可能把还没拿到新输入的任务提前放行。一个稳妥的交接把准备工作绑定到本次对象身份或业务批次，释放前再核对这份身份。看到名字相同而批次不同就保留门，由准备方重新出具正确回执。这一故障例不涉及实际集群操作。</p>
+<p>若需要两个独立前提，可以分别赋予门名和负责者。例如资料已生成由存储流程确认，处理许可由编排流程确认。先拿到资料时只移掉对应的门，另一个前提尚未满足就仍需等待。控制器要复读实际门清单和准备结果。对于由多个流程管理的真实对象，不能把本例清空整个列表的补丁原样照搬。实验知道清单只有自己创建的一项，正式流程则应只移除自己负责的那一项。</p>
+<p>值班报告最好记录门清单何时变化、调度条件何时成功以及应用何时可服务。如果一个窗口内看不到应用请求结果，可以直接写应用验收未完成；已经能确认节点分配时，仍可把这个阶段如实交接。由此分出需要交给准备系统、调度运维或应用负责者的证据。</p>
+<h3 id="先移除了门，事后可以再加回原-Pod-吗？"><a href="#先移除了门，事后可以再加回原-Pod-吗？" class="headerlink" title="先移除了门，事后可以再加回原 Pod 吗？"></a>先移除了门，事后可以再加回原 Pod 吗？</h3><p>不可以。官方文档规定创建时初始化门，已创建对象只允许移除现有门。可以在同样隔离环境中，对已释放的 gated 提交一次新增 <code>example.com/prepared</code> 的补丁，预期 API 拒绝，并再次读取门清单确认没有写入。这个对照没有运行。计划需要重新等待时，应让后续的新 Pod 按正确前置条件创建，或设计独立的应用状态控制。调度门的删除不能作为可来回切换的暂停按钮。</p>
+<p><a href="/zh-CN/2026/10/18/kubernetes-readiness-gates-unknown/">相关站内阅读：Pod 调度之后的 readinessGates</a></p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://kubernetes.io/docs/concepts/scheduling-eviction/pod-scheduling-readiness/" rel="noopener">Pod Scheduling Readiness — Kubernetes — Configuring Pod schedulingGates</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--kubernetes" href="/zh-CN/tags/Kubernetes/">Kubernetes</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%8F%91%E5%B8%83%E8%BF%90%E7%BB%B4/">发布运维</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F18%2Fkubernetes-pod-scheduling-gate-add-remove%2F&text=%E4%B8%80%E4%B8%AA%20Pending%20Pod%20%E6%98%8E%E6%98%8E%E6%9C%89%E7%A9%BA%E9%97%B2%E8%8A%82%E7%82%B9%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E5%BC%80%E5%A7%8B%E8%B0%83%E5%BA%A6%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F18%2Fkubernetes-pod-scheduling-gate-add-remove%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E4%B8%80%E4%B8%AA%20Pending%20Pod%20%E6%98%8E%E6%98%8E%E6%9C%89%E7%A9%BA%E9%97%B2%E8%8A%82%E7%82%B9%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E5%BC%80%E5%A7%8B%E8%B0%83%E5%BA%A6%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F18%2Fkubernetes-pod-scheduling-gate-add-remove%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/18/ml-confidence-calibration-bin-gap/">
+              <span>上一篇</span>
+              <strong>平均置信度等于正确率，为什么分类器仍可能没校准？</strong>
+              <small>2026-11-18</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/18/javascript-regexp-escape-literal-search/">
+              <span>下一篇</span>
+              <strong>搜索 A+B 时，怎样让正则按字面理解加号？</strong>
+              <small>2026-11-18</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h3" href="#固定节点条件，只给一个对象加门">固定节点条件，只给一个对象加门</a>
+          
+            <a class="toc-link toc-link--h3" href="#让移除操作有清楚的所有者">让移除操作有清楚的所有者</a>
+          
+            <a class="toc-link toc-link--h3" href="#先移除了门，事后可以再加回原-Pod-吗？">先移除了门，事后可以再加回原 Pod 吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>250</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>209</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/17/kubernetes-job-suspend-active-pod-replacement/">暂停 Kubernetes Job，正在运行的 Pod 会原地等吗？</a></h3>
+          <p>2026-11-17</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/17/systemd-assert-condition-job-outcome/">同样缺文件，systemd 为什么一次跳过、一次启动失败？</a></h3>
+          <p>2026-11-17</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/16/kubernetes-job-ttl-finished-object-evidence/">Job 跑完没多久就查不到了，TTL 从哪一刻开始？</a></h3>
+          <p>2026-11-16</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
