@@ -1,0 +1,420 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>weakref.finalize 已登记，为什么删除变量后对象仍活着？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用本地 CPython 对照验证回调持有目标与独立回调的差别。">
+  
+  
+    <meta name="keywords" content="object lifetime,bound methods,weak references">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/17/python-weakref-finalize-bound-method-owner/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/17/python-weakref-finalize-bound-method-owner/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/17/python-weakref-finalize-bound-method-owner/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/17/python-weakref-finalize-bound-method-owner/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="weakref.finalize 已登记，为什么删除变量后对象仍活着？ | Midnight blog">
+    <meta property="og:description" content="用本地 CPython 对照验证回调持有目标与独立回调的差别。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/17/python-weakref-finalize-bound-method-owner/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/17/python-weakref-finalize-bound-method-owner/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/17/python-weakref-finalize-bound-method-owner/","name":"weakref.finalize 已登记，为什么删除变量后对象仍活着？ | Midnight blog","description":"用本地 CPython 对照验证回调持有目标与独立回调的差别。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/17/python-weakref-finalize-bound-method-owner/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/17/python-weakref-finalize-bound-method-owner/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/17/python-weakref-finalize-bound-method-owner/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/17/python-weakref-finalize-bound-method-owner/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/17/python-weakref-finalize-bound-method-owner/","headline":"weakref.finalize 已登记，为什么删除变量后对象仍活着？","description":"用本地 CPython 对照验证回调持有目标与独立回调的差别。","inLanguage":"zh-CN","datePublished":"2026-11-16T19:23:36.000Z","dateModified":"2026-11-16T19:23:36.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.14/library/weakref.html"],"keywords":"Python, Resources, Backend"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/17/python-weakref-finalize-bound-method-owner/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"weakref.finalize 已登记，为什么删除变量后对象仍活着？","item":"https://www.zyweb.vip/zh-CN/2026/11/17/python-weakref-finalize-bound-method-owner/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/17/python-weakref-finalize-bound-method-owner/" selected>zh-CN</option><option value="/en/2026/11/17/python-weakref-finalize-bound-method-owner/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/17/python-weakref-finalize-bound-method-owner/" selected>zh-CN</option><option value="/en/2026/11/17/python-weakref-finalize-bound-method-owner/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--python">Python</span>
+      <time datetime="2026-11-16T19:23:36.000Z">2026-11-17</time>
+    </div>
+
+    <h1>weakref.finalize 已登记，为什么删除变量后对象仍活着？</h1>
+
+    
+      <p class="post-hero__summary">用本地 CPython 对照验证回调持有目标与独立回调的差别。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-16T19:23:36.000Z">2026-11-17</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/17/python-weakref-finalize-bound-method-owner/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/17/python-weakref-finalize-bound-method-owner/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>绑定方法可能持有目标。</li><li>独立核对对象存活和登记状态。</li><li>主动关闭仍需要明确职责。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>把对象自己的绑定方法交给 weakref.finalize，可能让回调持有本来要等待回收的对象。删除原变量以后，另一条引用仍然存在。需要让回收触发后备清理时，应让回调只持有真正需要的信息，避免把目标对象绕回登记记录。</p>
+<p>设想一个组件持有需要释放的本地资源。作者希望外部不再使用组件时也能收尾，便在构造时登记组件自己的清理方法。测试删除了变量，却始终看不到通知，于是怀疑没有收集垃圾。先画出从清理登记到回调、再从绑定方法到对象的关系。此处多出来的是引用本身，主动调用垃圾收集器也不能替程序解除它。</p>
+<h2 id="回调保留了哪些对象"><a href="#回调保留了哪些对象" class="headerlink" title="回调保留了哪些对象"></a>回调保留了哪些对象</h2><p>标准库警告，finalize 的函数、位置参数和关键字参数不能直接或间接持有目标对象。绑定方法是明确提到的反例，因为它包含实际调用时使用的实例。换成一个在模块中定义的函数也要继续检查参数。如果把目标当作参数传入，引用仍存在。捕获目标的闭包同样不能解决这个问题。应当确定清理实际需要的是哪一个资源编号、句柄或独立操作，再核对这些值能否反向找到持有它们的对象。<a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/weakref.html#weakref.finalize">Python weakref.finalize</a>。</p>
+<p>观察对象是否存活时，不要把它取出来长期放到额外变量里。测试可以保存一份弱引用，用一次布尔观察确认是否还能取得目标。finalizer 的 alive 表示这项登记是否仍可被执行，不是对象已经初始化、资源还开放或业务操作正常的标记。把这两项放在并列字段，才不会把登记状态推断成真实资源状态。</p>
+<h2 id="两份对象只改变回调持有的值"><a href="#两份对象只改变回调持有的值" class="headerlink" title="两份对象只改变回调持有的值"></a>两份对象只改变回调持有的值</h2><p>下面完整程序在本地 CPython 3.11.15 执行。第一份对象登记自己的绑定方法，第二份只登记列表的 append 和一个常量标记。两个标记都存到同一个纯内存列表，便于核对各自触发情况。这里没有打开文件、数据库或连接真实服务，也不要求不同解释器在同一语句后采用相同回收时点。</p>
+<pre><code class="python">import gc
+from weakref import finalize, ref
+
+events = []
+
+class Payload:
+    def mark(self):
+        events.append(&quot;held&quot;)
+
+held = Payload()
+free = Payload()
+watch = (ref(held), ref(free))
+bad = finalize(held, held.mark)
+good = finalize(free, events.append, &quot;free&quot;)
+
+del held, free
+gc.collect()
+assert tuple(ref() is not None for ref in watch) == (True, False)
+assert tuple(entry.alive for entry in (bad, good)) == (True, False)
+assert events == [&quot;free&quot;]
+bad()
+bad()
+gc.collect()
+assert watch[0]() is None
+assert not bad.alive and events == [&quot;free&quot;, &quot;held&quot;]
+print(events)
+</code></pre>
+<p>实际检查表明，删除外部变量后第一份对象仍可从弱引用找到，且它的登记保持存活。第二份对象已经不可取得，对应登记已经执行，记录只含 free。随后程序主动调用第一份登记两次，最终只增添一次 held。再次检查第一份弱引用时已不可取得对象。这组结果同时保留独立存活观察和通知列表，避免用没有日志反推所有对象都还活着，或用一条通知推断实际资源已经安全释放。</p>
+<p>主动调用一个活跃登记会执行回调并标记登记不再可用，后续调用返回空值。这个显式入口与等待收集器是不同的计划。若真实程序需要在请求返回前完成关闭，最好使用自己能掌握的生命周期，并把后备登记与主动关闭之间的责任写清。此样本只检查普通内存回调，不覆盖并发的关闭尝试，也没有模拟关机。</p>
+<h2 id="给清理职责一个可以验证的单独入口"><a href="#给清理职责一个可以验证的单独入口" class="headerlink" title="给清理职责一个可以验证的单独入口"></a>给清理职责一个可以验证的单独入口</h2><p>应用中可以让普通关闭操作使用不依赖目标对象的清理函数。若清理只需要文件路径，传独立的路径值；若需要另一个对象，先确认那个对象不会持有原组件。验证时应分别构造最小回调与闭包捕获的控制，观察删除唯一外部变量以后弱引用是否仍存在。检查真实资源是否释放则应另取文件、锁或连接的观测证据。本例没有运行这些集成路径。站内的 <a href="/zh-CN/2026/11/14/python-exitstack-pop-all-ownership/">ExitStack 交接</a> 讨论显式移交已经登记的清理，本篇所问的是后备回调如何意外保持目标存活。</p>
+<p>即使没有引用问题，也不能把解释器退出当成按时清理的业务保证。文档描述仍存活的登记默认会在退出时运行，但晚期退出还有限制，实际程序也可能因中断等条件不走普通收尾。应该为资源正常关闭、失败关闭和重复调用分别设置断言。只检查程序末尾出现过一条信息，不能说明过程中资源及时可用。上面的运行没有测试解释器关闭时回调顺序。</p>
+<p>在一个应用测试里，可以让正常关闭先释放一个编号对应的资源，再丢掉组件，验证后备回调不会把同一编号再释放一次。另准备一个没有正常调用关闭的组件，核对后备机制只在观测到适当生命周期后运行。资源类型如果需要在特定线程关闭，还要留出独立的调用记录，不能从内存列表中的标记推断线程要求已经符合。这些都是未执行的集成控制。应用应给主动关闭和后备动作不同的观察点，错误由负责的拥有者记录，避免回收后的回调只留下难以归属的一条日志。</p>
+<h2 id="想取消登记而不执行回调，detach-返回什么？"><a href="#想取消登记而不执行回调，detach-返回什么？" class="headerlink" title="想取消登记而不执行回调，detach 返回什么？"></a>想取消登记而不执行回调，detach 返回什么？</h2><p>对于仍存活的登记，detach 会先令它失效，再返回目标、函数、参数和关键字参数四元组。它不执行回调。若把返回值长期保存在变量里，四元组中的目标仍是强引用。可以给一个独立对象登记回调，调用 detach 后分别核对登记失效、回调未写入事件、丢弃返回值以后才重新检查对象存活。这个取消登记变体未运行，主例用的是显式调用。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/weakref.html" rel="noopener">weakref — Weak references — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+            <a class="tag tag--resources" href="/zh-CN/tags/Resources/">Resources</a>
+          
+            <a class="tag tag--backend" href="/zh-CN/tags/Backend/">Backend</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F17%2Fpython-weakref-finalize-bound-method-owner%2F&text=weakref.finalize%20%E5%B7%B2%E7%99%BB%E8%AE%B0%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%88%A0%E9%99%A4%E5%8F%98%E9%87%8F%E5%90%8E%E5%AF%B9%E8%B1%A1%E4%BB%8D%E6%B4%BB%E7%9D%80%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F17%2Fpython-weakref-finalize-bound-method-owner%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=weakref.finalize%20%E5%B7%B2%E7%99%BB%E8%AE%B0%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%88%A0%E9%99%A4%E5%8F%98%E9%87%8F%E5%90%8E%E5%AF%B9%E8%B1%A1%E4%BB%8D%E6%B4%BB%E7%9D%80%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F17%2Fpython-weakref-finalize-bound-method-owner%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/17/redis-smove-existing-destination-cardinality/">
+              <span>上一篇</span>
+              <strong>SMOVE 返回 1，为什么目标集合的数量没增加？</strong>
+              <small>2026-11-17</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/17/python-shutil-copyfileobj-destination-flush/">
+              <span>下一篇</span>
+              <strong>copyfileobj 返回了，为什么另一个读取者还是看不到内容？</strong>
+              <small>2026-11-17</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#回调保留了哪些对象">回调保留了哪些对象</a>
+          
+            <a class="toc-link toc-link--h2" href="#两份对象只改变回调持有的值">两份对象只改变回调持有的值</a>
+          
+            <a class="toc-link toc-link--h2" href="#给清理职责一个可以验证的单独入口">给清理职责一个可以验证的单独入口</a>
+          
+            <a class="toc-link toc-link--h2" href="#想取消登记而不执行回调，detach-返回什么？">想取消登记而不执行回调，detach 返回什么？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>251</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>210</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/17/python-functools-wraps-wrapped-introspection/">Python 的装饰器原样转发，为什么检查工具仍只看见包装器？</a></h3>
+          <p>2026-11-17</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/17/python-futures-as-completed-input-identity/">用 as_completed 取结果，为什么不能和输入按位置 zip？</a></h3>
+          <p>2026-11-17</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/17/python-shutil-copyfileobj-destination-flush/">copyfileobj 返回了，为什么另一个读取者还是看不到内容？</a></h3>
+          <p>2026-11-17</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

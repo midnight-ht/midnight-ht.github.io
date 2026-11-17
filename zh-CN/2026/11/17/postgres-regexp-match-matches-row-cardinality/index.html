@@ -1,0 +1,405 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>PostgreSQL 换了正则函数，为什么匹配不到的记录整行消失？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用同一份备注对照 PostgreSQL 正则标量、逐匹配明细和来源行保留。">
+  
+  
+    <meta name="keywords" content="regexp_match,regexp_matches,result rows">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/17/postgres-regexp-match-matches-row-cardinality/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/17/postgres-regexp-match-matches-row-cardinality/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/17/postgres-regexp-match-matches-row-cardinality/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/17/postgres-regexp-match-matches-row-cardinality/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="PostgreSQL 换了正则函数，为什么匹配不到的记录整行消失？ | Midnight blog">
+    <meta property="og:description" content="用同一份备注对照 PostgreSQL 正则标量、逐匹配明细和来源行保留。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/17/postgres-regexp-match-matches-row-cardinality/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/17/postgres-regexp-match-matches-row-cardinality/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/17/postgres-regexp-match-matches-row-cardinality/","name":"PostgreSQL 换了正则函数，为什么匹配不到的记录整行消失？ | Midnight blog","description":"用同一份备注对照 PostgreSQL 正则标量、逐匹配明细和来源行保留。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/17/postgres-regexp-match-matches-row-cardinality/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/17/postgres-regexp-match-matches-row-cardinality/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/17/postgres-regexp-match-matches-row-cardinality/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/17/postgres-regexp-match-matches-row-cardinality/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/17/postgres-regexp-match-matches-row-cardinality/","headline":"PostgreSQL 换了正则函数，为什么匹配不到的记录整行消失？","description":"用同一份备注对照 PostgreSQL 正则标量、逐匹配明细和来源行保留。","inLanguage":"zh-CN","datePublished":"2026-11-16T19:23:36.000Z","dateModified":"2026-11-16T19:23:36.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/functions-matching.html"],"keywords":"PostgreSQL, SQL, Text"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/17/postgres-regexp-match-matches-row-cardinality/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"PostgreSQL 换了正则函数，为什么匹配不到的记录整行消失？","item":"https://www.zyweb.vip/zh-CN/2026/11/17/postgres-regexp-match-matches-row-cardinality/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/17/postgres-regexp-match-matches-row-cardinality/" selected>zh-CN</option><option value="/en/2026/11/17/postgres-regexp-match-matches-row-cardinality/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/17/postgres-regexp-match-matches-row-cardinality/" selected>zh-CN</option><option value="/en/2026/11/17/postgres-regexp-match-matches-row-cardinality/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--postgresql">PostgreSQL</span>
+      <time datetime="2026-11-16T19:23:36.000Z">2026-11-17</time>
+    </div>
+
+    <h1>PostgreSQL 换了正则函数，为什么匹配不到的记录整行消失？</h1>
+
+    
+      <p class="post-hero__summary">用同一份备注对照 PostgreSQL 正则标量、逐匹配明细和来源行保留。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-16T19:23:36.000Z">2026-11-17</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/17/postgres-regexp-match-matches-row-cardinality/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/17/postgres-regexp-match-matches-row-cardinality/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>标量无匹配时返回 NULL。</li><li>集合版本无匹配时不返回行。</li><li>要按来源验收行数与归属。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>PostgreSQL 的 regexp_match 在找不到匹配时返回 SQL NULL，regexp_matches 则可以返回零行。把标量函数换成返回集合的函数以后，无匹配的输入可能整行消失。先确定报表要保留输入行，还是要为每个匹配生成明细。</p>
+<p>假设一个运维报表从文字备注里提取数字编号。原来每条备注都保留一行，没有编号时只显示空。后来需要在一条备注里找出所有编号，函数名多了一个字母，结果却漏掉了完全没有匹配的备注。只检查命中的编号，会让这种改动看起来符合需求。还需要验收哪些源行应该保留，以及同一行有两个编号时输出应该占几行。</p>
+<h2 id="一个空值和零行会进入不同的查询结果"><a href="#一个空值和零行会进入不同的查询结果" class="headerlink" title="一个空值和零行会进入不同的查询结果"></a>一个空值和零行会进入不同的查询结果</h2><p>PostgreSQL 十八版文档把 regexp_match 定义为返回第一次匹配的捕获数组，没有匹配时返回 NULL。regexp_matches 的返回值是捕获数组的集合。它没有匹配就不产生行；使用 g 标记时，可以分别返回多次匹配。这里的模式只含一组数字捕获，因此每次匹配的结果都是含一个字符串的数组。其他正则多捕获组，以及匹配到空字符串，都应按各自规则验证。不能用返回数组长度直接推断输入产生了多少匹配行。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-matching.html">PostgreSQL 正则匹配函数</a>。</p>
+<p>在标量投影中，一个字段为 NULL，源行仍有可见的编号。用交叉关联组合匹配行时，每个来源只与它自己的匹配集结合，空集合没有可组合的明细。此时无匹配的源实际上仍在输入表，只是查询形状没有为它保留输出。报表日志应明确记录“没有提取结果”或“源行没有返回”，避免从结果空白倒推底层记录被删除。</p>
+<h2 id="对照一次、两次和零次匹配的输出"><a href="#对照一次、两次和零次匹配的输出" class="headerlink" title="对照一次、两次和零次匹配的输出"></a>对照一次、两次和零次匹配的输出</h2><p>下面是未执行的 PostgreSQL 十八版教学 SQL。在隔离会话建立两条备注，第一条内容有数字十二和三十四，第二条没有数字。第一条查询只拿首次匹配，第二条将全部匹配扩为行。后者的最终排序只是让验收结果易读，不用它声明函数天然给所有消费方相同的输出顺序。</p>
+<pre><code class="sql">CREATE TEMP TABLE extract_demo (id int, note text);
+INSERT INTO extract_demo VALUES (1, &#39;A12 B34&#39;), (2, &#39;none&#39;);
+
+SELECT id, regexp_match(note, &#39;([0-9]+)&#39;) AS captures
+FROM extract_demo ORDER BY id;
+
+SELECT id, captures
+FROM extract_demo
+CROSS JOIN LATERAL regexp_matches(note, &#39;([0-9]+)&#39;, &#39;g&#39;) AS m(captures)
+ORDER BY id, captures;
+</code></pre>
+<p>标量查询应返回两行。编号一的 captures 是只含文本十二的数组，编号二是 SQL NULL。集合查询则都来自编号一，两份捕获分别是文本十二与三十四；编号二不出现在输出中。两条查询恰好都返回两行，因此只检查总数会完全漏掉丢失的源。同时核对每个编号出现的次数，以及数字仍属于正确来源。若应用只需要一次匹配，集合查询查全的两个编号也不能代替标量合同。</p>
+<p>测试还可以准备一个来自错误来源的匹配控制。假设第二条备注仍是 none，但查询不小心使用共享文本 A12 去计算匹配，结果第二条也会带十二。输出行数可能仍对，结果归属已经错了。应通过输入编号比对原始备注与对应捕获。这里未运行这个错误变体，也没有评估索引、耗时或模式复杂度。重点是结果行怎样与原始数据对应。</p>
+<h2 id="按消费者需要确定每行代表谁"><a href="#按消费者需要确定每行代表谁" class="headerlink" title="按消费者需要确定每行代表谁"></a>按消费者需要确定每行代表谁</h2><p>若每条记录对应一个表格单元，可以继续采用首个匹配，并给无匹配的值明确定义显示。若需要列出全部编号，则让每条匹配对应独立明细，并继续携带源行标识。两个来源行碰巧提取相同编号时，明细可能仍是两项；不能无意中把同值去重变成来源去重。给两条都含十二的备注各自检查归属，是另一份未执行的消费端测试。</p>
+<p>汇总还要区分没有源行和返回了源行但为空。有的报表应该按来源计算完整分母，详情页才按匹配展开。如果使用明细输出直接统计源数量，两个匹配会重复算同一条备注，同时无匹配记录被漏掉。可以并列保存原始来源计数与每来源匹配次数，再决定在哪个阶段提供合计。站内的 <a href="/zh-CN/2026/11/09/postgres-lateral-left-join-empty/">每客最近订单与 LATERAL</a> 也涉及逐来源关联，但本例的零行与多行由正则接口确定。</p>
+<p>迁移前还有一项必要核对。旧调用者可能已经用字段为空表示“需要人工处理”。如果新查询直接丢掉整行，该流程就没有机会排入工作。应给无匹配的标识单独准备一条回归，检查它是否仍进入业务约定的出口。这里没有运行真实报表或人工流程。</p>
+<p>若任务计划按是否能抽取编号来分发，还可保存一个独立输入清单。清单有编号一和二，不依赖任何提取函数。预期编号一进入正常报告，编号二进入人工处理。随后对比报道及待处理的可见结果，确保两个清单的并集仍覆盖原输入，且没有把同一备注排两次。若同一条备注产生两个捕获值，正常报告可以展开两行，分发统计仍只应算这一个来源。把分发数量和明细数量分开，方便处理方确认改变的是报告形状还是工作量。这个对照未运行，也未要求查询负责提交后续任务。</p>
+<h2 id="需要全部匹配，又要保留一条无匹配来源怎么办？"><a href="#需要全部匹配，又要保留一条无匹配来源怎么办？" class="headerlink" title="需要全部匹配，又要保留一条无匹配来源怎么办？"></a>需要全部匹配，又要保留一条无匹配来源怎么办？</h2><p>可以把第二条查询改成 LEFT JOIN LATERAL 并在连接条件写 ON true。用同一输入重新验证，编号一仍来自两条匹配，编号二保留一条右侧为空的行，合计三条。这样得到的输出仍混有真正的匹配明细和一行保留来源用的补空记录。若再按匹配字段做后置过滤，还要检查编号二是否被重新删掉。这项变体没有执行。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-matching.html" rel="noopener">PostgreSQL: Documentation: 18: 9.7. Pattern Matching</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--sql" href="/zh-CN/tags/SQL/">SQL</a>
+          
+            <a class="tag tag--text" href="/zh-CN/tags/Text/">Text</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F17%2Fpostgres-regexp-match-matches-row-cardinality%2F&text=PostgreSQL%20%E6%8D%A2%E4%BA%86%E6%AD%A3%E5%88%99%E5%87%BD%E6%95%B0%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%8C%B9%E9%85%8D%E4%B8%8D%E5%88%B0%E7%9A%84%E8%AE%B0%E5%BD%95%E6%95%B4%E8%A1%8C%E6%B6%88%E5%A4%B1%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F17%2Fpostgres-regexp-match-matches-row-cardinality%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=PostgreSQL%20%E6%8D%A2%E4%BA%86%E6%AD%A3%E5%88%99%E5%87%BD%E6%95%B0%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%8C%B9%E9%85%8D%E4%B8%8D%E5%88%B0%E7%9A%84%E8%AE%B0%E5%BD%95%E6%95%B4%E8%A1%8C%E6%B6%88%E5%A4%B1%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F17%2Fpostgres-regexp-match-matches-row-cardinality%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/17/pytest-confcutdir-ancestor-conftest/">
+              <span>上一篇</span>
+              <strong>缩小 pytest 的 conftest 范围后，为什么 fixture 找不到了？</strong>
+              <small>2026-11-17</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/17/llm-judge-pairwise-swap-unresolved/">
+              <span>下一篇</span>
+              <strong>模型两次都选 A，为什么未必是同一个回答赢？</strong>
+              <small>2026-11-17</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#一个空值和零行会进入不同的查询结果">一个空值和零行会进入不同的查询结果</a>
+          
+            <a class="toc-link toc-link--h2" href="#对照一次、两次和零次匹配的输出">对照一次、两次和零次匹配的输出</a>
+          
+            <a class="toc-link toc-link--h2" href="#按消费者需要确定每行代表谁">按消费者需要确定每行代表谁</a>
+          
+            <a class="toc-link toc-link--h2" href="#需要全部匹配，又要保留一条无匹配来源怎么办？">需要全部匹配，又要保留一条无匹配来源怎么办？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>251</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>210</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/16/postgres-copy-on-error-reject-limit/">PostgreSQL COPY 跳过了坏行，为什么第二条坏值又让整次失败？</a></h3>
+          <p>2026-11-16</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/15/postgres-percentile-cont-disc-observed-value/">PostgreSQL 的中位数为什么不在原始样本里？</a></h3>
+          <p>2026-11-15</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/14/postgres-jsonb-object-agg-unique-keys/">PostgreSQL 生成 JSONB 对象时，两个来源行为什么只剩一个键？</a></h3>
+          <p>2026-11-14</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
