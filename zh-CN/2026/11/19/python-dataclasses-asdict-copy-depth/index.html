@@ -1,0 +1,420 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>asdict 转成字典，为什么字段对象也换了？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用列表修改和嵌套负责人字段，对照 dataclasses.asdict 的递归转换与 fields/getattr 的浅层投影。">
+  
+  
+    <meta name="keywords" content="asdict,fields,深浅复制">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/19/python-dataclasses-asdict-copy-depth/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/19/python-dataclasses-asdict-copy-depth/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/19/python-dataclasses-asdict-copy-depth/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/19/python-dataclasses-asdict-copy-depth/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="asdict 转成字典，为什么字段对象也换了？ | Midnight blog">
+    <meta property="og:description" content="用列表修改和嵌套负责人字段，对照 dataclasses.asdict 的递归转换与 fields/getattr 的浅层投影。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/19/python-dataclasses-asdict-copy-depth/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/19/python-dataclasses-asdict-copy-depth/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/19/python-dataclasses-asdict-copy-depth/","name":"asdict 转成字典，为什么字段对象也换了？ | Midnight blog","description":"用列表修改和嵌套负责人字段，对照 dataclasses.asdict 的递归转换与 fields/getattr 的浅层投影。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/19/python-dataclasses-asdict-copy-depth/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/19/python-dataclasses-asdict-copy-depth/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/19/python-dataclasses-asdict-copy-depth/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/19/python-dataclasses-asdict-copy-depth/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/19/python-dataclasses-asdict-copy-depth/","headline":"asdict 转成字典，为什么字段对象也换了？","description":"用列表修改和嵌套负责人字段，对照 dataclasses.asdict 的递归转换与 fields/getattr 的浅层投影。","inLanguage":"zh-CN","datePublished":"2026-11-18T19:25:15.000Z","dateModified":"2026-11-18T19:25:15.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.14/library/dataclasses.html","https://docs.python.org/3.14/library/json.html"],"keywords":"Python, dataclasses, 对象复制"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/19/python-dataclasses-asdict-copy-depth/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"asdict 转成字典，为什么字段对象也换了？","item":"https://www.zyweb.vip/zh-CN/2026/11/19/python-dataclasses-asdict-copy-depth/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/19/python-dataclasses-asdict-copy-depth/" selected>zh-CN</option><option value="/en/2026/11/19/python-dataclasses-asdict-copy-depth/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/19/python-dataclasses-asdict-copy-depth/" selected>zh-CN</option><option value="/en/2026/11/19/python-dataclasses-asdict-copy-depth/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--python">Python</span>
+      <time datetime="2026-11-18T19:25:15.000Z">2026-11-19</time>
+    </div>
+
+    <h1>asdict 转成字典，为什么字段对象也换了？</h1>
+
+    
+      <p class="post-hero__summary">用列表修改和嵌套负责人字段，对照 dataclasses.asdict 的递归转换与 fields/getattr 的浅层投影。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-18T19:25:15.000Z">2026-11-19</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/19/python-dataclasses-asdict-copy-depth/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/19/python-dataclasses-asdict-copy-depth/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>asdict 递归转换容器和数据类，其他对象使用 deepcopy。</li><li>浅层字段投影保留原字段引用。</li><li>转换成字典后，传输编码能力仍需另外验收。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>把数据类交给 asdict，得到的字典里确实有 items 字段，但修改其中的列表没有改变原对象。dataclasses.asdict 会递归转换数据类和容器，并深复制其他对象。若调用者只想得到字段名与原字段引用，需要另外构造浅层投影。</p>
+<h2 id="外层变成字典，内部值从哪里来"><a href="#外层变成字典，内部值从哪里来" class="headerlink" title="外层变成字典，内部值从哪里来"></a>外层变成字典，内部值从哪里来</h2><p>假设一次后台任务用 Packet 保存条目列表和负责人。条目是可变列表，负责人又是一个带名字的数据类。把任务交给日志系统时，调用者可能希望得到独立的数据；交给同进程的编辑器时，又可能希望编辑器直接操作当前列表。两种场景外层都能用字典表达，可是内部是否仍指向原来的对象，会决定后续修改到底落在哪里。</p>
+<p>asdict 不只遍历最外层字段。它会继续走进数据类、字典、列表和元组，把嵌套数据类变为字典；对于其他对象，使用 deepcopy。结果因此不能当成一层换了名字的引用表。例子中的列表会成为另一个列表，负责人则由 Owner 实例变成含 name 的字典。调用者即使看见相同名字和相同条目，也仍需核对类型与身份。</p>
+<p>标准库文档也给出浅层做法：枚举 fields，从原对象取得每个字段值，然后构造新字典。外层字典是新的，字段值仍是原来的引用。所以新增一个顶层键不会凭空给数据类加字段，但往 items 引用的列表里追加，就会影响原对象。用一句“复制了”无法同时描述这两层不同关系，接口说明最好把外层结构和内部值的所有权都写清。</p>
+<h2 id="用两条修改路径分别观察来源"><a href="#用两条修改路径分别观察来源" class="headerlink" title="用两条修改路径分别观察来源"></a>用两条修改路径分别观察来源</h2><p>下面的数据只有一个条目与一个负责人。先比较转换结果的结构，再检查关键身份，最后各修改一个列表。执行时没有数据库、文件对象或网络资源，观察只属于这些标准库数据结构。</p>
+<pre><code class="python">from dataclasses import asdict, dataclass, fields
+
+@dataclass
+class Owner:
+    name: str
+
+@dataclass
+class Packet:
+    items: list[str]
+    owner: Owner
+
+source = Packet([&quot;A&quot;], Owner(&quot;Lin&quot;))
+deep = asdict(source)
+shallow = {f.name: getattr(source, f.name) for f in fields(source)}
+assert deep == {&quot;items&quot;: [&quot;A&quot;], &quot;owner&quot;: {&quot;name&quot;: &quot;Lin&quot;}}
+assert deep[&quot;items&quot;] is not source.items
+assert shallow[&quot;items&quot;] is source.items
+assert shallow[&quot;owner&quot;] is source.owner
+deep[&quot;items&quot;].append(&quot;B&quot;)
+assert source.items == [&quot;A&quot;]
+shallow[&quot;items&quot;].append(&quot;C&quot;)
+assert source.items == [&quot;A&quot;, &quot;C&quot;]
+assert deep[&quot;items&quot;] == [&quot;A&quot;, &quot;B&quot;]
+print(&quot;asdict detached list; field projection retained references&quot;)
+</code></pre>
+<p>深转换的初始值是 items 为 A、owner 为含名字的字典。浅层投影仍然拿着原来的列表与负责人实例。给深转换列表增加 B 后，源列表保持只有 A；给浅层列表增加 C 后，源列表变成 A、C，而深转换列表仍是 A、B。最后一条检查使两个结果不能仅凭相同初值误过，实际修改确实去了不同位置。</p>
+<p>这里没有只用相等来推断独立性。两个不同列表最初可以相等，一条浅层投影也能打印成与深转换很接近的内容。is 检查告诉读者哪两个对象相同，修改后的值则告诉读者这种共享实际怎样影响程序。如果测试只比较刚生成时的字典，它可能在两种实现之间任意切换，直到编辑器更新任务时才发现改到了副本。</p>
+<p>负责人字段提供另一个控制。如果消费端期待 Owner 的方法或属性，深转换得到字典之后，原来的访问合同已经变化。浅层投影保持这个实例。若消费者只需要负责人名字，应用可以主动导出一个明确的字符串字段，减少对原对象内部形状的依赖。这个选择由接收者需要什么来定，不能从输出是否能打印推断。</p>
+<h2 id="选择快照还是同一份可变状态"><a href="#选择快照还是同一份可变状态" class="headerlink" title="选择快照还是同一份可变状态"></a>选择快照还是同一份可变状态</h2><p>为日志或外部传输准备内容时，独立投影可以减少后续修改让已准备数据发生变化的机会。不过 asdict 的递归复制本身没有替应用建立跨字段的一致性边界。如果另一个线程同时改列表与负责人，应用还需要选择什么时候读取、是否协调以及保存哪版内容。这份单线程样例没有验证并行修改，也没有测量复制成本。</p>
+<p>如果编辑器要接着操作原任务，浅层字段投影可以保留引用，但也要让接收者知道修改会影响谁。保存到缓存或交给不熟悉的调用者后，共享列表可能在另一个入口被改动。可以给只读消费者导出必要的不可变值，或按合同主动建立快照。试图用浅层字典让所有内部对象都变成只读，并不会成功。</p>
+<p>还有一种不显眼的故障是先深转换，再指望修改转换结果作为任务更新。程序可能正常返回，编辑界面也显示了改后条目，原任务却没变化。对更新入口的验收，应从实际源对象重新读一次，确认 C 等预期标识出现。对于必须隔离的快照接口，则反过来修改导出结果，要求源保持不变。两条合同各留一份方向明确的断言，更容易发现换错工具。</p>
+<p>本站<a href="/zh-CN/2026/10/12/structured-clone-transfer-ownership/">资源转移后的所有权</a>介绍另一个对象交接问题。这里没有把原对象变成不可使用的资源，也没有浏览器参与；源与浅层投影的引用仍然可能被同一进程同时持有。运行记录仅验证所列类型与列表内容，不能把它扩大为任意资源都可安全复制。</p>
+<h2 id="asdict-得到字典，就能直接-JSON-编码吗？"><a href="#asdict-得到字典，就能直接-JSON-编码吗？" class="headerlink" title="asdict 得到字典，就能直接 JSON 编码吗？"></a>asdict 得到字典，就能直接 JSON 编码吗？</h2><p>增加一个自定义类型的字段时，递归处理可以把这个对象复制成另一个同类对象，仍然没有把它变成 JSON 支持的原生值。直接 json.dumps 可能抛出 TypeError。若消费协议只接受字符串或数字，应显式选择该对象的哪些字段可以导出，再分别检查格式与业务内容。这个自定义字段变体没有执行；本页执行的例子只有字符串、列表与数据类。接受方需要 JSON 时，把可编码性作为额外的测试入口，避免把转换字典这一步当成整份传输合同已经通过。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/dataclasses.html" rel="noopener">dataclasses — Data Classes — Python 3.14.10 documentation</a></li><li><a target="_blank" href="https://docs.python.org/3.14/library/json.html" rel="noopener">json — JSON encoder and decoder — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+            <a class="tag tag--dataclasses" href="/zh-CN/tags/dataclasses/">dataclasses</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%AF%B9%E8%B1%A1%E5%A4%8D%E5%88%B6/">对象复制</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F19%2Fpython-dataclasses-asdict-copy-depth%2F&text=asdict%20%E8%BD%AC%E6%88%90%E5%AD%97%E5%85%B8%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%AD%97%E6%AE%B5%E5%AF%B9%E8%B1%A1%E4%B9%9F%E6%8D%A2%E4%BA%86%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F19%2Fpython-dataclasses-asdict-copy-depth%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=asdict%20%E8%BD%AC%E6%88%90%E5%AD%97%E5%85%B8%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%AD%97%E6%AE%B5%E5%AF%B9%E8%B1%A1%E4%B9%9F%E6%8D%A2%E4%BA%86%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F19%2Fpython-dataclasses-asdict-copy-depth%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/19/python-deque-maxlen-insert-overflow/">
+              <span>上一篇</span>
+              <strong>deque 满了，append 能继续，insert 为什么报错？</strong>
+              <small>2026-11-19</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/19/python-bisect-key-search-probe/">
+              <span>下一篇</span>
+              <strong>bisect 已指定 key，为什么还不能传整条记录搜索？</strong>
+              <small>2026-11-19</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#外层变成字典，内部值从哪里来">外层变成字典，内部值从哪里来</a>
+          
+            <a class="toc-link toc-link--h2" href="#用两条修改路径分别观察来源">用两条修改路径分别观察来源</a>
+          
+            <a class="toc-link toc-link--h2" href="#选择快照还是同一份可变状态">选择快照还是同一份可变状态</a>
+          
+            <a class="toc-link toc-link--h2" href="#asdict-得到字典，就能直接-JSON-编码吗？">asdict 得到字典，就能直接 JSON 编码吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>249</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>208</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/19/python-bisect-key-search-probe/">bisect 已指定 key，为什么还不能传整条记录搜索？</a></h3>
+          <p>2026-11-19</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/19/python-deque-maxlen-insert-overflow/">deque 满了，append 能继续，insert 为什么报错？</a></h3>
+          <p>2026-11-19</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/19/python-math-isclose-zero-absolute-tolerance/">数值已经接近零，isclose 为什么仍为 False？</a></h3>
+          <p>2026-11-19</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

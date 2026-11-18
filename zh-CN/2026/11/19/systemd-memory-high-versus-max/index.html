@@ -1,0 +1,425 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>服务内存超过 MemoryHigh，为什么没被立即杀掉？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="分清 systemd 的内存回收阈值与硬边界，结合有效值和 cgroup 事件判断服务状态。">
+  
+  
+    <meta name="keywords" content="MemoryHigh,MemoryMax,memory.events">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/19/systemd-memory-high-versus-max/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/19/systemd-memory-high-versus-max/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/19/systemd-memory-high-versus-max/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/19/systemd-memory-high-versus-max/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="服务内存超过 MemoryHigh，为什么没被立即杀掉？ | Midnight blog">
+    <meta property="og:description" content="分清 systemd 的内存回收阈值与硬边界，结合有效值和 cgroup 事件判断服务状态。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/19/systemd-memory-high-versus-max/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/19/systemd-memory-high-versus-max/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/19/systemd-memory-high-versus-max/","name":"服务内存超过 MemoryHigh，为什么没被立即杀掉？ | Midnight blog","description":"分清 systemd 的内存回收阈值与硬边界，结合有效值和 cgroup 事件判断服务状态。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/19/systemd-memory-high-versus-max/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/19/systemd-memory-high-versus-max/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/19/systemd-memory-high-versus-max/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/19/systemd-memory-high-versus-max/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/19/systemd-memory-high-versus-max/","headline":"服务内存超过 MemoryHigh，为什么没被立即杀掉？","description":"分清 systemd 的内存回收阈值与硬边界，结合有效值和 cgroup 事件判断服务状态。","inLanguage":"zh-CN","datePublished":"2026-11-18T19:25:15.000Z","dateModified":"2026-11-18T19:25:15.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.kernel.org/admin-guide/cgroup-v2.html","https://www.freedesktop.org/software/systemd/man/latest/systemd.resource-control.html"],"keywords":"systemd, 资源控制"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/19/systemd-memory-high-versus-max/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"服务内存超过 MemoryHigh，为什么没被立即杀掉？","item":"https://www.zyweb.vip/zh-CN/2026/11/19/systemd-memory-high-versus-max/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/19/systemd-memory-high-versus-max/" selected>zh-CN</option><option value="/en/2026/11/19/systemd-memory-high-versus-max/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/19/systemd-memory-high-versus-max/" selected>zh-CN</option><option value="/en/2026/11/19/systemd-memory-high-versus-max/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--systemd">systemd</span>
+      <time datetime="2026-11-18T19:25:15.000Z">2026-11-19</time>
+    </div>
+
+    <h1>服务内存超过 MemoryHigh，为什么没被立即杀掉？</h1>
+
+    
+      <p class="post-hero__summary">分清 systemd 的内存回收阈值与硬边界，结合有效值和 cgroup 事件判断服务状态。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-18T19:25:15.000Z">2026-11-19</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/19/systemd-memory-high-versus-max/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/19/systemd-memory-high-versus-max/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>MemoryHigh 引发回收和节流。</li><li>MemoryMax 是另一道硬性边界。</li><li>有效阈值和事件计数要配对读取。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>服务超过 <code>MemoryHigh</code> 后仍然存活，可以符合 systemd 的内存控制设计。这个值触发回收压力和节流，不是越界便立即杀进程的开关。需要限制内存使用的另一道边界是 <code>MemoryMax</code>。先读实际生效的控制项，再解释进程存活或退出。</p>
+<p>发布验收里常有一个误判。配置写了三十二兆，监控后来看到更高的用量，维护者就报告限制没有加载。这个结论少了中间一层。要核对的是有没有进入回收压力，以及使用的是哪一项边界。反过来，内存用量看似一直低于阈值，也不能证明节流已经触发。只看一张用量曲线，无法代替有效设置和事件计数。</p>
+<h3 id="两个边界分别约束什么"><a href="#两个边界分别约束什么" class="headerlink" title="两个边界分别约束什么"></a>两个边界分别约束什么</h3><p>在统一 cgroup v2 层级上，MemoryHigh 对应 <code>memory.high</code>。超过它会令进程承受回收和节流。Linux 内核文档明确说明，越过 high 本身不会调用 OOM killer，在极端情况下这个边界也可能被突破。MemoryMax 对应 <code>memory.max</code>。达到该硬性边界且无法回收降低使用时，可能在组内触发 OOM。内核也给出暂时越界及有些分配失败不触发 OOM 的条件，所以不能写成只要越过数值就必然有一次杀进程。<a target="_blank" rel="noopener" href="https://docs.kernel.org/admin-guide/cgroup-v2.html">内核的内存接口说明</a></p>
+<p>这两项可一起配置。high 作为日常调控，max 保留另一道防线。控制器发生压力时，程序可能变慢，业务延迟也许随之变化，但具体变化需要实际观测。没有执行特定负载，就不能从三十二兆的配置推导某个延迟百分比。也不能只看到程序没死，就认定它一直没受约束。<a target="_blank" rel="noopener" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.resource-control.html">systemd 的 MemoryHigh 与 MemoryMax</a></p>
+<h3 id="给隔离负载留一组可读的回执"><a href="#给隔离负载留一组可读的回执" class="headerlink" title="给隔离负载留一组可读的回执"></a>给隔离负载留一组可读的回执</h3><p>下面是一份未运行的 Linux 测试机练习。需要已启用统一层级和 memory 控制器，systemd 版本支持所列属性，并有足够空闲资源。只在可丢弃机器上进行，不修改真实业务服务。先将 Python 脚本保存为 <code>/run/zy19-memory/allocate.py</code>。它申请四十八份一兆的字节数组，再逐页触碰以避免只观察到虚拟地址范围。解释器和分配器自身也占内存，所以总用量不等于那四十八兆。</p>
+<pre><code class="python">import time
+
+blocks = []
+for index in range(48):
+    block = bytearray(1024 * 1024)
+    for offset in range(0, len(block), 4096):
+        block[offset] = 1
+    blocks.append(block)
+print(&quot;allocation-ready&quot;, len(blocks), flush=True)
+time.sleep(60)
+</code></pre>
+<p>创建 <code>/etc/systemd/system/zy19-memory.service</code>。例子中的解释器路径须与实验机实际路径一致。程序保留工作集六十秒，方便另一个终端读取控制组。不要以等待时间预测回收次数。</p>
+<pre><code class="ini">[Service]
+Type=exec
+ExecStart=/usr/bin/python3 /run/zy19-memory/allocate.py
+MemoryAccounting=yes
+MemoryHigh=32M
+MemoryMax=96M
+</code></pre>
+<p>启动后，先读有效属性与当次日志。看到本轮 allocation-ready 才能把后面的读取解释为申请已经完成。另一个终端执行下列命令。cgroup 路径以管理器返回的值为准，读取者应在同一主机的相同 cgroup 命名空间中操作。</p>
+<pre><code class="sh">unit=zy19-memory.service
+systemctl show &quot;$unit&quot; -p ActiveState -p MemoryCurrent \
+  -p EffectiveMemoryHigh -p EffectiveMemoryMax -p ControlGroup
+group=$(systemctl show &quot;$unit&quot; -p ControlGroup --value)
+test -n &quot;$group&quot;
+base=&quot;/sys/fs/cgroup$group&quot;
+for file in memory.current memory.high memory.max memory.events.local; do
+  printf &#39;\n%s\n&#39; &quot;$file&quot;
+  cat &quot;$base/$file&quot;
+done
+journalctl -b -u &quot;$unit&quot; --no-pager
+</code></pre>
+<p>安装定义后要重新加载管理器并显式启动这个实验单元，读取前后都记录时间。可以先做一次 high 为 infinity、max 保持九十六兆的基线，再在全新一趟中改回三十二兆。比较本轮 memory.events.local 的 high 事件及有效阈值，保留每趟开始时和申请后两次快照。如果程序没能打印就已退出，先读原错误和 OOM 相关事件，再判断解释器路径、资源限制或负载是否满足条件。</p>
+<p>这里的独立预期是语义关系。看到 high 增加而没有 oom_kill，可以符合越界回收；high 值有效却未看到事件，须确认负载是否真的越界。不能硬性规定每趟有多少次 high 事件。若内核未提供所需字段，记录环境不支持该读取，按实际接口另行核对。本文没有 Linux 运行回执，没有启动单元或施加内存负载。练习后在这台隔离机停止单元、撤掉定义和脚本。</p>
+<p>装好脚本与单元定义后，准备终端依次执行 <code>systemctl daemon-reload</code> 和 <code>systemctl start zy19-memory.service</code>。为每一趟设置同样的观测流程，配置变化后再次重新加载。不要把上次的日志标记当作本轮完成分配，应按本次启动时间取日志。</p>
+<p>事件是计数，读到一个非零值并不足以指向当前阶段。保存申请前后两次读数及控制组身份，再计算同一组上的变化。进程很快退出时，控制组可能已不存在，事后才尝试打开文件就拿不到当时计数。提前安排读数采集，并让它保存在实验组之外，能为未知退出保留调查材料。若组被重建或计数重新开始，应分开解释两份快照，不能跨对象相减。这里没有执行采集；它规定的是下一次实验需要留下的最小证据。</p>
+<h3 id="进程退出不是唯一验收条件"><a href="#进程退出不是唯一验收条件" class="headerlink" title="进程退出不是唯一验收条件"></a>进程退出不是唯一验收条件</h3><p>假设程序能持有工作集，却因此慢到业务请求超时。进程仍然存活和控制项已经生效，都无法证明服务满足交付的响应合同。另行用受控请求记录响应和负载阶段，并把它与压力事件对齐。若应用主动放弃缓存，内存回落也可能发生而没有结束进程。判断运维动作时，明确自己要降低内存、维持服务响应，还是验证资源隔离，然后分别取证。</p>
+<p>配置评审还可以保留一个负向解释。把负载缩到远低于 high，进程成功完成不会证明回收机制被检验。让正常对照证明程序能启动，再用压力场景观察资源事件。这个程序没有覆盖应用缓存、交换策略或全机内存耗尽，不能由它声称任何产品已可承受压力。</p>
+<h3 id="子服务把-MemoryMax-写大，就能越过父-slice-吗？"><a href="#子服务把-MemoryMax-写大，就能越过父-slice-吗？" class="headerlink" title="子服务把 MemoryMax 写大，就能越过父 slice 吗？"></a>子服务把 MemoryMax 写大，就能越过父 slice 吗？</h3><p>不能。systemd 报告的 EffectiveMemoryMax 会考虑单元与父 slice 更严格的限制，并受物理内存约束。子单元写九十六兆，父级的限制更紧，验收就不能只读子单元的配置文本。沿层级核对有效值和相关事件，再安排负载。这是主例新增的层级条件，主例假设隔离环境的有效边界符合预设，没有配置父 slice 对照。</p>
+<p><a href="/zh-CN/2026/11/18/systemd-exit-type-cgroup-main-process/">相关站内阅读：cgroup 成员与 systemd 服务生命周期</a></p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.kernel.org/admin-guide/cgroup-v2.html" rel="noopener">Control Group v2 — Memory interface files</a></li><li><a target="_blank" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.resource-control.html" rel="noopener">systemd.resource-control — MemoryHigh and MemoryMax</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--systemd" href="/zh-CN/tags/systemd/">systemd</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E8%B5%84%E6%BA%90%E6%8E%A7%E5%88%B6/">资源控制</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F19%2Fsystemd-memory-high-versus-max%2F&text=%E6%9C%8D%E5%8A%A1%E5%86%85%E5%AD%98%E8%B6%85%E8%BF%87%20MemoryHigh%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E8%A2%AB%E7%AB%8B%E5%8D%B3%E6%9D%80%E6%8E%89%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F19%2Fsystemd-memory-high-versus-max%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E6%9C%8D%E5%8A%A1%E5%86%85%E5%AD%98%E8%B6%85%E8%BF%87%20MemoryHigh%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E8%A2%AB%E7%AB%8B%E5%8D%B3%E6%9D%80%E6%8E%89%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F19%2Fsystemd-memory-high-versus-max%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/18/aria-sort-active-column-header/">
+              <span>上一篇</span>
+              <strong>表格换了排序列，为什么旧表头的 aria-sort 要移除？</strong>
+              <small>2026-11-18</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/">
+              <span>下一篇</span>
+              <strong>integrity_check 返回 ok，SQLite 为什么仍有孤儿行？</strong>
+              <small>2026-11-19</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h3" href="#两个边界分别约束什么">两个边界分别约束什么</a>
+          
+            <a class="toc-link toc-link--h3" href="#给隔离负载留一组可读的回执">给隔离负载留一组可读的回执</a>
+          
+            <a class="toc-link toc-link--h3" href="#进程退出不是唯一验收条件">进程退出不是唯一验收条件</a>
+          
+            <a class="toc-link toc-link--h3" href="#子服务把-MemoryMax-写大，就能越过父-slice-吗？">子服务把 MemoryMax 写大，就能越过父 slice 吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>249</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>208</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/18/systemd-exit-type-cgroup-main-process/">主进程退出后，systemd 为什么还认为服务在运行？</a></h3>
+          <p>2026-11-18</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/17/systemd-assert-condition-job-outcome/">同样缺文件，systemd 为什么一次跳过、一次启动失败？</a></h3>
+          <p>2026-11-17</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/16/systemd-stop-when-unneeded-consumers/">最后一个依赖服务停了，systemd 为什么也停掉了共享进程？</a></h3>
+          <p>2026-11-16</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

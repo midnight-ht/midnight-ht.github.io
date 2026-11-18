@@ -1,0 +1,412 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>CronJob 晚到一分钟，为什么这次 Job 没补出来？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="把 CronJob 原计划与控制器检查时刻对齐，用三十和九十秒窗口解释缺失一期的边界。">
+  
+  
+    <meta name="keywords" content="startingDeadlineSeconds,CronJob,迟到窗口">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/19/kubernetes-cronjob-start-deadline-window/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/19/kubernetes-cronjob-start-deadline-window/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/19/kubernetes-cronjob-start-deadline-window/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/19/kubernetes-cronjob-start-deadline-window/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="CronJob 晚到一分钟，为什么这次 Job 没补出来？ | Midnight blog">
+    <meta property="og:description" content="把 CronJob 原计划与控制器检查时刻对齐，用三十和九十秒窗口解释缺失一期的边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/19/kubernetes-cronjob-start-deadline-window/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/19/kubernetes-cronjob-start-deadline-window/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/19/kubernetes-cronjob-start-deadline-window/","name":"CronJob 晚到一分钟，为什么这次 Job 没补出来？ | Midnight blog","description":"把 CronJob 原计划与控制器检查时刻对齐，用三十和九十秒窗口解释缺失一期的边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/19/kubernetes-cronjob-start-deadline-window/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/19/kubernetes-cronjob-start-deadline-window/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/19/kubernetes-cronjob-start-deadline-window/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/19/kubernetes-cronjob-start-deadline-window/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/19/kubernetes-cronjob-start-deadline-window/","headline":"CronJob 晚到一分钟，为什么这次 Job 没补出来？","description":"把 CronJob 原计划与控制器检查时刻对齐，用三十和九十秒窗口解释缺失一期的边界。","inLanguage":"zh-CN","datePublished":"2026-11-18T19:25:15.000Z","dateModified":"2026-11-18T19:25:15.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/"],"keywords":"Kubernetes, 定时交付"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/19/kubernetes-cronjob-start-deadline-window/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"CronJob 晚到一分钟，为什么这次 Job 没补出来？","item":"https://www.zyweb.vip/zh-CN/2026/11/19/kubernetes-cronjob-start-deadline-window/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/19/kubernetes-cronjob-start-deadline-window/" selected>zh-CN</option><option value="/en/2026/11/19/kubernetes-cronjob-start-deadline-window/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/19/kubernetes-cronjob-start-deadline-window/" selected>zh-CN</option><option value="/en/2026/11/19/kubernetes-cronjob-start-deadline-window/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--kubernetes">Kubernetes</span>
+      <time datetime="2026-11-18T19:25:15.000Z">2026-11-19</time>
+    </div>
+
+    <h1>CronJob 晚到一分钟，为什么这次 Job 没补出来？</h1>
+
+    
+      <p class="post-hero__summary">把 CronJob 原计划与控制器检查时刻对齐，用三十和九十秒窗口解释缺失一期的边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-18T19:25:15.000Z">2026-11-19</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/19/kubernetes-cronjob-start-deadline-window/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/19/kubernetes-cronjob-start-deadline-window/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>以原计划创建时刻计算迟到。</li><li>窗口内资格与真实任务完成分别核对。</li><li>保留事件当时有效的窗口配置。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>CronJob 错过原定创建时刻后，<code>startingDeadlineSeconds</code> 决定这一次还允许晚到多久。控制器检查时，如果距离原计划的时间已经超过这个窗口，就跳过该次执行，后面的计划仍继续。它没有给已启动的容器设置运行时长。</p>
+<p>这适合解释一类缺失任务。团队设了每分钟计划，某一分钟控制器没有及时处理。服务恢复之后，检查清单却没看到那一期 Job。若任务允许的迟到时间本来就很短，恢复并不等于补出每一次历史执行。先把计划时刻和控制器本次检查时刻摆在一起，再查当时有效的窗口。</p>
+<h3 id="两份定义只改变迟到许可"><a href="#两份定义只改变迟到许可" class="headerlink" title="两份定义只改变迟到许可"></a>两份定义只改变迟到许可</h3><p>下面是一份未运行的集群练习。可在隔离命名空间保存为 <code>short-window.yaml</code>。要求集群支持所列 CronJob 字段及 UTC 时区，工作负载可以拉取镜像。例子每分钟计划一次，只向日志打印标记。它没有真实业务副作用。</p>
+<pre><code class="yaml">apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: short-window
+spec:
+  schedule: &quot;* * * * *&quot;
+  timeZone: Etc/UTC
+  startingDeadlineSeconds: 30
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: marker
+            image: busybox:1.36
+            command: [&quot;sh&quot;, &quot;-c&quot;, &quot;echo scheduled-attempt&quot;]
+</code></pre>
+<p>另一份独立定义可以把名称改成 long-window，将窗口改为九十秒，其他条件保持一致。两份对象分开记录身份。真正验证创建延迟需要受控的控制器状态或可重现环境，不能把观察不到任务简单归给这个设置。本文不停止控制器、不联系集群，也没有执行上述清单。下面的数字是帮助核对规则的假设输入。</p>
+<p>设 UTC 计划时刻是十二点零一分整，控制器下一次检查在十二点零一分四十五秒。short-window 的晚到四十五秒已经超过三十秒，按规则跳过这一期。long-window 允许九十秒，当前时刻仍在窗口中，单看这个条件不会跳过。再把检查时刻改成十二点零二分四十五秒，先前那一期晚到一百零五秒，就也超过了九十秒。每行都围绕同一个计划时刻计算，不能把下一期的开始当作前一期重新归零。<a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/">CronJob 的迟到创建窗口</a></p>
+<p>这份时间线给出的是是否被该窗口拒绝。long-window 仍有资格，不保证那个时刻马上得到 Job，更不保证 Pod 能运行。并发政策、控制器状态、准入和调度等条件需要按实际部署分别核对。如果机器只记录了“恢复控制器后成功提交”，还不足以完成这次任务的创建验收。</p>
+<h3 id="为缺失的一期保留原计划身份"><a href="#为缺失的一期保留原计划身份" class="headerlink" title="为缺失的一期保留原计划身份"></a>为缺失的一期保留原计划身份</h3><p>观察真实环境时，先保存 CronJob 身份、计划表达式、时区和当时的 startingDeadlineSeconds。再找这一期原本应创建的时刻与相关控制器事件。若已经出现 Job，可以在支持的版本上核对计划时间注解；如果没有 Job，就应从控制器和调度记录查原因。对象缺席不是一个替代原计划时刻的时间戳，也不能用今天打开页面的时间去计算当时晚到了多久。</p>
+<p>例如采集任务每分钟产一份数据。原计划的一期跳过，下一期成功不代表缺口已补。业务方先确定是否必须补那一期，再安排有明确输入身份的受控重做。把重做执行时间和被补的业务时段分别记录，避免把同一天的另一份成功当成缺失任务的证据。涉及外部副作用时仍需业务自己的去重与结果确认，补跑窗口只选择是否可以晚创建。</p>
+<p>如果管理员在缺失之后改大窗口，也要保留原配置与变更时间。后来的配置读取只能说明现在的许可，不足以判断先前控制器为什么跳过。先将这次事件与当时配置对齐，再单独设计是否补偿。修改配置本身不构成已经补出的回执。设想旧窗口是三十秒，故障后调为九十秒，调查材料若只保存新值，就可能把一次合理的旧跳过误判为违反策略。这是配置取证例，未运行该变更。</p>
+<h3 id="选择窗口时问晚到的结果还有没有价值"><a href="#选择窗口时问晚到的结果还有没有价值" class="headerlink" title="选择窗口时问晚到的结果还有没有价值"></a>选择窗口时问晚到的结果还有没有价值</h3><p>备份任务可能允许晚几小时，逐分钟刷新可能要求下一期直接覆盖旧值。把这项业务取舍变成窗口，再用两条明确在窗口内外的时间线复核。尽量避开恰好等于截止点的样本，减少对观察精度与实现边界的依赖。本文选择四十五秒对三十和九十秒，正是为了让两种结果不靠临界点判断。</p>
+<p>另留一条任务已启动但运行很久的反例。迟到许可满足，不会让启动后的长任务在三十秒时自动停止。想约束执行时长，需要另查 Job 或容器对应的机制，并检查真正运行对象的配置。将创建延迟与运行时间混在一项告警里，会让值班人拿错证据。控制器创建了 Job、调度了 Pod 和业务结果出现，各自都应留有独立记录。</p>
+<p>跨分钟时还要区分不同的计划项。例如检查时刻是十二点零二分十秒，九十秒窗口内的十二点零一分计划晚了七十秒，十二点零二分计划晚了十秒。仅从窗口判断，两个不同计划项都没有超时。这段算术不承诺控制器会补两个 Job；实际创建数量仍取决于完整策略和调度过程。查到一份新的 Job 时，应先确认它对应哪个原计划，再决定缺口是否仍在。这个补充同样是纸面时间线。</p>
+<h3 id="窗口设成五秒，能让任务更准时吗？"><a href="#窗口设成五秒，能让任务更准时吗？" class="headerlink" title="窗口设成五秒，能让任务更准时吗？"></a>窗口设成五秒，能让任务更准时吗？</h3><p>不能据此承诺。官方文档说明，CronJob 控制器大约每十秒检查一次，小于十秒的 startingDeadlineSeconds 可能导致任务无法调度。窗口更小是在收紧迟到许可，不会提高控制器的检查频率。若业务真的只接受几秒偏差，先验证当前调度机制是否满足时效合同，再设计失约处理。主例的窗口是三十与九十秒，没有执行五秒对照，也未测量本集群的实际检查节拍。</p>
+<p><a href="/zh-CN/2026/10/14/kubernetes-cronjob-duplicate/">相关站内阅读：CronJob 计划实例与业务去重</a></p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/" rel="noopener">CronJob — Kubernetes — Deadline for delayed Job start</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--kubernetes" href="/zh-CN/tags/Kubernetes/">Kubernetes</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%AE%9A%E6%97%B6%E4%BA%A4%E4%BB%98/">定时交付</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F19%2Fkubernetes-cronjob-start-deadline-window%2F&text=CronJob%20%E6%99%9A%E5%88%B0%E4%B8%80%E5%88%86%E9%92%9F%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%99%E6%AC%A1%20Job%20%E6%B2%A1%E8%A1%A5%E5%87%BA%E6%9D%A5%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F19%2Fkubernetes-cronjob-start-deadline-window%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=CronJob%20%E6%99%9A%E5%88%B0%E4%B8%80%E5%88%86%E9%92%9F%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%99%E6%AC%A1%20Job%20%E6%B2%A1%E8%A1%A5%E5%87%BA%E6%9D%A5%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F19%2Fkubernetes-cronjob-start-deadline-window%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/19/ml-precision-macro-micro-imbalance/">
+              <span>上一篇</span>
+              <strong>micro precision 八成，为什么 macro 只有四成多？</strong>
+              <small>2026-11-19</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/19/javascript-promise-try-sync-invocation/">
+              <span>下一篇</span>
+              <strong>Promise.resolve(load()) 为什么接不住 load 的同步抛错？</strong>
+              <small>2026-11-19</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h3" href="#两份定义只改变迟到许可">两份定义只改变迟到许可</a>
+          
+            <a class="toc-link toc-link--h3" href="#为缺失的一期保留原计划身份">为缺失的一期保留原计划身份</a>
+          
+            <a class="toc-link toc-link--h3" href="#选择窗口时问晚到的结果还有没有价值">选择窗口时问晚到的结果还有没有价值</a>
+          
+            <a class="toc-link toc-link--h3" href="#窗口设成五秒，能让任务更准时吗？">窗口设成五秒，能让任务更准时吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>249</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>208</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/">一个 Pending Pod 明明有空闲节点，为什么不开始调度？</a></h3>
+          <p>2026-11-18</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/17/kubernetes-job-suspend-active-pod-replacement/">暂停 Kubernetes Job，正在运行的 Pod 会原地等吗？</a></h3>
+          <p>2026-11-17</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/16/kubernetes-job-ttl-finished-object-evidence/">Job 跑完没多久就查不到了，TTL 从哪一刻开始？</a></h3>
+          <p>2026-11-16</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

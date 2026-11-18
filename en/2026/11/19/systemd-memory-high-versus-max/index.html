@@ -1,0 +1,425 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why can a service exceed MemoryHigh without being killed immediately? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Distinguish systemd reclaim pressure from the hard memory limit and inspect effective values alongside cgroup events.">
+  
+  
+    <meta name="keywords" content="MemoryHigh,MemoryMax,memory.events">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/19/systemd-memory-high-versus-max/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/19/systemd-memory-high-versus-max/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/19/systemd-memory-high-versus-max/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/19/systemd-memory-high-versus-max/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why can a service exceed MemoryHigh without being killed immediately? | Midnight blog">
+    <meta property="og:description" content="Distinguish systemd reclaim pressure from the hard memory limit and inspect effective values alongside cgroup events.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/19/systemd-memory-high-versus-max/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/19/systemd-memory-high-versus-max/#webpage","url":"https://www.zyweb.vip/en/2026/11/19/systemd-memory-high-versus-max/","name":"Why can a service exceed MemoryHigh without being killed immediately? | Midnight blog","description":"Distinguish systemd reclaim pressure from the hard memory limit and inspect effective values alongside cgroup events.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/19/systemd-memory-high-versus-max/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/19/systemd-memory-high-versus-max/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/19/systemd-memory-high-versus-max/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/19/systemd-memory-high-versus-max/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/19/systemd-memory-high-versus-max/","headline":"Why can a service exceed MemoryHigh without being killed immediately?","description":"Distinguish systemd reclaim pressure from the hard memory limit and inspect effective values alongside cgroup events.","inLanguage":"en","datePublished":"2026-11-18T19:25:15.000Z","dateModified":"2026-11-18T19:25:15.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://docs.kernel.org/admin-guide/cgroup-v2.html","https://www.freedesktop.org/software/systemd/man/latest/systemd.resource-control.html"],"keywords":"systemd, Resource control"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/19/systemd-memory-high-versus-max/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why can a service exceed MemoryHigh without being killed immediately?","item":"https://www.zyweb.vip/en/2026/11/19/systemd-memory-high-versus-max/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/19/systemd-memory-high-versus-max/">zh-CN</option><option value="/en/2026/11/19/systemd-memory-high-versus-max/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/19/systemd-memory-high-versus-max/">zh-CN</option><option value="/en/2026/11/19/systemd-memory-high-versus-max/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--systemd">systemd</span>
+      <time datetime="2026-11-18T19:25:15.000Z">2026-11-19</time>
+    </div>
+
+    <h1>Why can a service exceed MemoryHigh without being killed immediately?</h1>
+
+    
+      <p class="post-hero__summary">Distinguish systemd reclaim pressure from the hard memory limit and inspect effective values alongside cgroup events.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-18T19:25:15.000Z">2026-11-19</time> · Estimated read 14 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/19/systemd-memory-high-versus-max/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/19/systemd-memory-high-versus-max/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>MemoryHigh drives reclaim and throttling.</li><li>MemoryMax provides a separate hard boundary.</li><li>Read effective thresholds and event counters together.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>A service can survive after exceeding <code>MemoryHigh</code> and still behave according to systemd&#39;s memory-control design. That threshold drives reclaim pressure and throttling. <code>MemoryMax</code> supplies a separate hard boundary. Read the effective controls before interpreting whether the process survived or exited.</p>
+<p>A release check can misread this easily. A configuration says thirty-two megabytes and a later sample shows more. Calling the limit ineffective skips a step. Check which boundary was configured and whether reclaim pressure occurred. Usage staying below the threshold also cannot establish that throttling was exercised. A graph alone cannot replace effective settings and event counters.</p>
+<h3 id="Identify-the-two-controls"><a href="#Identify-the-two-controls" class="headerlink" title="Identify the two controls"></a>Identify the two controls</h3><p>In a unified cgroup v2 hierarchy, MemoryHigh maps to <code>memory.high</code>. Crossing it subjects processes to reclaim and throttling. The kernel documentation says exceeding high does not itself invoke the OOM killer, and the boundary can be breached under extreme conditions. MemoryMax maps to <code>memory.max</code>. Reaching that hard boundary without being able to reclaim enough can invoke OOM in the group. The kernel also documents temporary overshoot and allocation failures that do not invoke OOM. Exceeding a number does not promise a kill event. <a target="_blank" rel="noopener" href="https://docs.kernel.org/admin-guide/cgroup-v2.html">Kernel memory interfaces</a></p>
+<p>Both settings can be used together, with high for normal control and max as a further defense. Pressure may slow the program and affect requests, but those effects need measurement. A threshold does not imply a fixed latency penalty. A surviving process may still have been constrained. <a target="_blank" rel="noopener" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.resource-control.html">Systemd memory-control settings</a></p>
+<h3 id="Collect-evidence-from-an-isolated-workload"><a href="#Collect-evidence-from-an-isolated-workload" class="headerlink" title="Collect evidence from an isolated workload"></a>Collect evidence from an isolated workload</h3><p>This is an unexecuted Linux test-machine exercise. It requires a unified hierarchy, the memory controller, a suitable systemd version, and sufficient spare capacity. Use a disposable machine. Save the Python program as <code>/run/zy19-memory/allocate.py</code>. It allocates forty-eight one-megabyte arrays and touches pages so the observation is not just virtual address reservation. The interpreter and allocator also consume memory.</p>
+<pre><code class="python">import time
+
+blocks = []
+for index in range(48):
+    block = bytearray(1024 * 1024)
+    for offset in range(0, len(block), 4096):
+        block[offset] = 1
+    blocks.append(block)
+print(&quot;allocation-ready&quot;, len(blocks), flush=True)
+time.sleep(60)
+</code></pre>
+<p>Save the unit as <code>/etc/systemd/system/zy19-memory.service</code>. Use the interpreter path that exists on the test machine. The workload holds its allocations for a minute to allow inspection. That duration does not predict a reclaim count.</p>
+<pre><code class="ini">[Service]
+Type=exec
+ExecStart=/usr/bin/python3 /run/zy19-memory/allocate.py
+MemoryAccounting=yes
+MemoryHigh=32M
+MemoryMax=96M
+</code></pre>
+<p>After starting it, inspect effective properties and this run&#39;s journal. Observe allocation-ready before treating the sample as post-allocation. Run the following in another terminal on the same host and in the same cgroup namespace.</p>
+<pre><code class="sh">unit=zy19-memory.service
+systemctl show &quot;$unit&quot; -p ActiveState -p MemoryCurrent \
+  -p EffectiveMemoryHigh -p EffectiveMemoryMax -p ControlGroup
+group=$(systemctl show &quot;$unit&quot; -p ControlGroup --value)
+test -n &quot;$group&quot;
+base=&quot;/sys/fs/cgroup$group&quot;
+for file in memory.current memory.high memory.max memory.events.local; do
+  printf &#39;\n%s\n&#39; &quot;$file&quot;
+  cat &quot;$base/$file&quot;
+done
+journalctl -b -u &quot;$unit&quot; --no-pager
+</code></pre>
+<p>Reload the manager after installing the definition and explicitly start the fixture unit. Timestamp observations. A baseline can set high to infinity while retaining the same max, followed by a fresh run with high set to thirty-two megabytes. Compare effective values and the local high-event counter, with snapshots before and after allocation. If the process exits before its marker, inspect its original error and OOM-related events before interpreting the case.</p>
+<p>The oracle is a semantic relationship. Increasing high events without oom_kill can be consistent with reclaim at the high threshold. No events with an effective threshold calls for checking whether usage actually crossed it. Do not require a fixed event count. Record unsupported fields if the kernel lacks an interface. No service was started or memory pressure applied for this article. Stop the fixture and remove its definition and script after a real exercise.</p>
+<p>After installing the script and unit, run <code>systemctl daemon-reload</code> and <code>systemctl start zy19-memory.service</code> in the preparation terminal. Repeat the observation procedure for each run and reload after configuration changes. Select the current start interval so an older allocation marker cannot satisfy this run.</p>
+<p>An event value is a count. A nonzero reading alone does not tie it to the current phase. Keep before-and-after values and control-group identity, then compare the same group. A quickly exiting process may leave no group to inspect afterward. Arrange collection in advance and retain the receipts outside the fixture group. If the group is recreated or the count resets, treat the snapshots separately. This collection was not run. It defines what evidence a later exercise should preserve.</p>
+<h3 id="Verify-more-than-process-survival"><a href="#Verify-more-than-process-survival" class="headerlink" title="Verify more than process survival"></a>Verify more than process survival</h3><p>A process may retain its working set but slow down enough for application requests to time out. Survival and an effective setting do not establish the response contract. Use controlled requests to record behavior and align their timing with pressure events. An application that drops its own cache can reduce usage without exiting. Decide whether the operational goal is lower memory, acceptable response, or isolation, then collect evidence for that goal.</p>
+<p>A low-load control is useful too. A workload far below high can finish normally without exercising reclaim. Let a normal control verify the program can start, then inspect resource events during pressure. This small program does not test application caching, swap strategy, or system-wide exhaustion, and cannot establish product capacity.</p>
+<h3 id="Can-a-larger-child-MemoryMax-override-a-parent-slice"><a href="#Can-a-larger-child-MemoryMax-override-a-parent-slice" class="headerlink" title="Can a larger child MemoryMax override a parent slice?"></a>Can a larger child MemoryMax override a parent slice?</h3><p>No. Systemd reports EffectiveMemoryMax using the tighter limits in the unit and its parent slices, capped by physical memory. A ninety-six-megabyte child setting is insufficient evidence if the parent is stricter. Inspect the effective hierarchy and relevant events before loading the service. This introduces the parent-limit condition. The main fixture assumes its effective boundaries match the proposed values and does not configure a parent-slice comparison.</p>
+<p><a href="/en/2026/11/18/systemd-exit-type-cgroup-main-process/">Related reading on cgroup membership and systemd service lifetime</a></p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://docs.kernel.org/admin-guide/cgroup-v2.html" rel="noopener">Control Group v2 — Memory interface files</a></li><li><a target="_blank" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.resource-control.html" rel="noopener">systemd.resource-control — MemoryHigh and MemoryMax</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--systemd" href="/en/tags/systemd/">systemd</a>
+          
+            <a class="tag tag--resource-control" href="/en/tags/Resource-control/">Resource control</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--delivery" href="/en/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F19%2Fsystemd-memory-high-versus-max%2F&text=Why%20can%20a%20service%20exceed%20MemoryHigh%20without%20being%20killed%20immediately%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F19%2Fsystemd-memory-high-versus-max%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20can%20a%20service%20exceed%20MemoryHigh%20without%20being%20killed%20immediately%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F19%2Fsystemd-memory-high-versus-max%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/18/aria-sort-active-column-header/">
+              <span>Previous Post</span>
+              <strong>Why remove aria-sort from the old header after changing columns?</strong>
+              <small>2026-11-18</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/">
+              <span>Next Post</span>
+              <strong>Why can SQLite integrity_check return ok with an orphan row?</strong>
+              <small>2026-11-19</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h3" href="#Identify-the-two-controls">Identify the two controls</a>
+          
+            <a class="toc-link toc-link--h3" href="#Collect-evidence-from-an-isolated-workload">Collect evidence from an isolated workload</a>
+          
+            <a class="toc-link toc-link--h3" href="#Verify-more-than-process-survival">Verify more than process survival</a>
+          
+            <a class="toc-link toc-link--h3" href="#Can-a-larger-child-MemoryMax-override-a-parent-slice">Can a larger child MemoryMax override a parent slice?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>249</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>208</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>90</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/18/systemd-exit-type-cgroup-main-process/">Why can a systemd service still run after its main process exits?</a></h3>
+          <p>2026-11-18</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/17/systemd-assert-condition-job-outcome/">Why does a missing file skip one systemd unit but fail another start?</a></h3>
+          <p>2026-11-17</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/16/systemd-stop-when-unneeded-consumers/">Why did systemd stop the shared service after its last consumer stopped?</a></h3>
+          <p>2026-11-16</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

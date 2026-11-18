@@ -1,0 +1,424 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Promise.resolve(load()) 为什么接不住 load 的同步抛错？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="先查同步抛错发生在参数求值还是适配器内部，再用固定错误和事件数组验证 Promise.try 的调用边界。">
+  
+  
+    <meta name="keywords" content="Promise.try,同步异常,函数调用,执行顺序">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/19/javascript-promise-try-sync-invocation/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/19/javascript-promise-try-sync-invocation/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/19/javascript-promise-try-sync-invocation/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/19/javascript-promise-try-sync-invocation/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Promise.resolve(load()) 为什么接不住 load 的同步抛错？ | Midnight blog">
+    <meta property="og:description" content="先查同步抛错发生在参数求值还是适配器内部，再用固定错误和事件数组验证 Promise.try 的调用边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/19/javascript-promise-try-sync-invocation/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/19/javascript-promise-try-sync-invocation/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/19/javascript-promise-try-sync-invocation/","name":"Promise.resolve(load()) 为什么接不住 load 的同步抛错？ | Midnight blog","description":"先查同步抛错发生在参数求值还是适配器内部，再用固定错误和事件数组验证 Promise.try 的调用边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/19/javascript-promise-try-sync-invocation/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/19/javascript-promise-try-sync-invocation/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/19/javascript-promise-try-sync-invocation/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/19/javascript-promise-try-sync-invocation/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/19/javascript-promise-try-sync-invocation/","headline":"Promise.resolve(load()) 为什么接不住 load 的同步抛错？","description":"先查同步抛错发生在参数求值还是适配器内部，再用固定错误和事件数组验证 Promise.try 的调用边界。","inLanguage":"zh-CN","datePublished":"2026-11-18T19:25:15.000Z","dateModified":"2026-11-18T19:25:15.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://tc39.es/ecma262/multipage/control-abstraction-objects.html#sec-promise.try","https://tc39.es/ecma262/multipage/control-abstraction-objects.html#sec-promise.resolve","https://tc39.es/ecma262/multipage/ecmascript-language-expressions.html#sec-evaluatecall","https://nodejs.org/docs/latest-v24.x/api/"],"keywords":"JavaScript, Promise, 插件"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/19/javascript-promise-try-sync-invocation/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Promise.resolve(load()) 为什么接不住 load 的同步抛错？","item":"https://www.zyweb.vip/zh-CN/2026/11/19/javascript-promise-try-sync-invocation/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/19/javascript-promise-try-sync-invocation/" selected>zh-CN</option><option value="/en/2026/11/19/javascript-promise-try-sync-invocation/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/19/javascript-promise-try-sync-invocation/" selected>zh-CN</option><option value="/en/2026/11/19/javascript-promise-try-sync-invocation/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--javascript">JavaScript</span>
+      <time datetime="2026-11-18T19:25:15.000Z">2026-11-19</time>
+    </div>
+
+    <h1>Promise.resolve(load()) 为什么接不住 load 的同步抛错？</h1>
+
+    
+      <p class="post-hero__summary">先查同步抛错发生在参数求值还是适配器内部，再用固定错误和事件数组验证 Promise.try 的调用边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-18T19:25:15.000Z">2026-11-19</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/19/javascript-promise-try-sync-invocation/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/19/javascript-promise-try-sync-invocation/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>resolve 接收值之前参数已经求值</li><li>try 把回调调用纳入返回的 Promise</li><li>同步调用和后续反应的时序分开测试</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>插件接口有时返回普通值，有时返回 Promise。调用方把它写成 Promise.resolve(load())，期待后面统一接住失败。某个插件同步抛错时，程序却在生成这份 Promise 之前就跳了出去。要统一的是调用过程和返回结果，不能只把调用已经产生的值交给解析方法。</p>
+<h2 id="抛错发生在谁的调用里面"><a href="#抛错发生在谁的调用里面" class="headerlink" title="抛错发生在谁的调用里面"></a>抛错发生在谁的调用里面</h2><p>在这个表达式中，JavaScript 必须先求出 load() 的结果，才能将它作为参数传给 resolve。如果求值阶段抛错，resolve 根本没拿到那个结果。后面追加 catch 也没有一份由这次表达式返回的 Promise 可以处理。同步异常仍从原来的调用位置向外传播。</p>
+<p>Promise.try 接收的是函数以及要传给它的参数。方法内部调用该函数，普通返回值交给 Promise 的解析过程；调用抛错则交给拒绝过程。这里把 load 本身传进去，调用被纳入了这个边界。结果是同一只错误对象通过返回的拒绝 Promise 传出。</p>
+<p>这个方法并不承诺把每个操作拖到稍后执行。回调由 try 同步调用。如果函数在开始阶段写日志或修改状态，这些动作在方法返回之前已经发生。后续履约或拒绝反应仍走 Promise 的工作机制，不能由回调执行时机推出 catch 会在同一行里同步执行。</p>
+<p>另一种常见写法是先有一份已解决的 Promise，再在 then 里调用 load。它同样能让回调内的抛错成为拒绝，但回调等到对应的工作执行。两种适配可以产生相同的最终值，却有不同的开始时刻。迁移时先确认项目是否依赖立即开始的副作用。</p>
+<h2 id="把错误身份和执行顺序都留下"><a href="#把错误身份和执行顺序都留下" class="headerlink" title="把错误身份和执行顺序都留下"></a>把错误身份和执行顺序都留下</h2><p>下面的脚本只用固定函数。一只函数总抛同一个错误，另一次返回四十二。最后用事件列表比较 try 回调和 then 回调。没有文件读取、网络请求或重试。等待发生在最后，确保实验结束后没有漏掉已经创建的工作。</p>
+<pre><code class="js">import {strictEqual as equal, deepEqual, rejects} from &#39;node:assert&#39;;
+
+const failure = new Error(&#39;fixture load failed&#39;);
+function load() { throw failure; }
+
+let caught;
+try {
+  Promise.resolve(load());
+} catch (error) {
+  caught = error;
+}
+equal(caught, failure);
+
+await rejects(Promise.try(load), error =&gt; error === failure);
+equal(await Promise.try(() =&gt; 42), 42);
+const events = [];
+const immediate = Promise.try(() =&gt; events.push(&#39;try callback&#39;));
+events.push(&#39;returned&#39;);
+const deferred = Promise.resolve().then(() =&gt; events.push(&#39;then callback&#39;));
+deepEqual(events, [&#39;try callback&#39;, &#39;returned&#39;]);
+await Promise.all([immediate, deferred]);
+deepEqual(events, [&#39;try callback&#39;, &#39;returned&#39;, &#39;then callback&#39;]);
+console.log(&#39;Throw identity, return value, and invocation order passed.&#39;);
+</code></pre>
+<p>本地 Node 的断言通过。直接求值表达式的异常由外层 try/catch 接住；将函数交给 Promise.try 后，拒绝原因仍是同一个错误对象。正常返回值是四十二。时序数组在同步阶段包含 try callback 和 returned，等待后才增加 then callback。</p>
+<p>这些检查分别守住三件事：谁处理失败，成功值是否被保留，以及动作何时开始。只测最后能 await 到四十二，会放过同步异常逃出适配边界。只测错误类型，会漏掉重建错误后丢失原始身份。事件顺序则能发现将同步入口改成延迟执行的行为变更。</p>
+<p>如果插件本来返回一份 Promise，解析过程会跟随它的结果。适配器返回自己的 Promise 不代表插件动作已完成。调用方仍需 await 实际成功，或在拒绝路径做相应收尾。包装返回通道没有替具体操作创造取消、回滚或自动重试规则。</p>
+<h2 id="适配入口不改变插件的其余合同"><a href="#适配入口不改变插件的其余合同" class="headerlink" title="适配入口不改变插件的其余合同"></a>适配入口不改变插件的其余合同</h2><p>有些对象方法依赖接收者读取配置，提取成单独函数以后会失去原有调用关系。可以在传入的函数内部按对象方法方式调用。try 提供的是捕获调用完成状态的入口，不会推断 load 原来属于哪一个实例。两个不同配置实例也需要各自测试。</p>
+<p>同样，普通值和 Promise 返回可以共用等待方式，却不表示成功的内容形状相同。一个插件返回行数组，另一个返回包含分页信息的对象，适配完成后仍需按正式接口判断。若只是因为 await 没报错就让下游继续读取行数，类型问题会在另一个位置暴露。</p>
+<p>部署前检查项目实际运行环境。当前 Node 实跑确认这一版本支持该方法，不能外推到所有旧浏览器。若项目已有相同语义的适配器，可以保留已测试入口；若改用新的方法，就把现有普通返回、异步返回与同步抛错用例都跑一轮。不要从方法名称推断行为完全相同。</p>
+<p>如果真正的目标是让入口一次性捕获所有准备步骤，可以把输入读取、必要校验和插件调用放在明确的回调体里，并分别保留是哪一步失败。统一返回 Promise 之后不必把所有错误都变成相同的一句失败文案。缺少输入和插件服务拒绝，需要的修正方式可能不同。</p>
+<p>测试还可使用一个返回拒绝 Promise 的插件作为第三类完成方式。对照时使用已有的固定错误，确认同步抛错与异步拒绝最终都归到调用方设计的失败处理，但记录各自起点。将两种结果统一等待，不要求抹掉问题原本来自哪一个步骤。本文的运行脚本只验证同步抛错、普通值和时序，新增异步路径属于项目回归建议。</p>
+<p>还有一个应该独立保护的输入是重复调用。每次 try 都会实际调用传入函数，不能将它当成缓存已运行结果的容器。如果插件有写入行为，一次失败后再执行会产生另一轮工作。要让使用者恢复，先按业务合同判断这轮是否允许重试，并保留各轮的操作身份。</p>
+<h2 id="传入参数本身抛错，也会变成拒绝吗？"><a href="#传入参数本身抛错，也会变成拒绝吗？" class="headerlink" title="传入参数本身抛错，也会变成拒绝吗？"></a>传入参数本身抛错，也会变成拒绝吗？</h2><p>不一定。新条件是参数表达式先执行，例如 Promise.try(load, makeInput())。如果 makeInput 同步抛错，JavaScript 在调用 try 之前就无法求得参数。这次异常没有进入方法内部的回调调用，不能靠它返回拒绝来承接。</p>
+<p>若希望连输入构造也在统一的边界中，可以把整步放在回调里，让它调用 load(makeInput())。这改变了错误被捕获的位置，依旧需要保留同一输入失败的实际用例。两种写法表面上都出现 try，真正的判断是哪个调用阶段包含了可能抛错的动作。</p>
+<p>关于旧回调接口还需要怎样保存接收者，可另读 <a href="/zh-CN/2026/10/25/node-promisify-receiver-custom/">promisify 的对象方法和自定义转换合同</a>。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://tc39.es/ecma262/multipage/control-abstraction-objects.html#sec-promise.try" rel="noopener">ECMAScript Promise.try</a></li><li><a target="_blank" href="https://tc39.es/ecma262/multipage/control-abstraction-objects.html#sec-promise.resolve" rel="noopener">ECMAScript Promise.resolve</a></li><li><a target="_blank" href="https://tc39.es/ecma262/multipage/ecmascript-language-expressions.html#sec-evaluatecall" rel="noopener">ECMAScript EvaluateCall</a></li><li><a target="_blank" href="https://nodejs.org/docs/latest-v24.x/api/" rel="noopener">Node.js runtime documentation — environment reference for local fixture</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--javascript" href="/zh-CN/tags/JavaScript/">JavaScript</a>
+          
+            <a class="tag tag--promise" href="/zh-CN/tags/Promise/">Promise</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%8F%92%E4%BB%B6/">插件</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F19%2Fjavascript-promise-try-sync-invocation%2F&text=Promise.resolve(load())%20%E4%B8%BA%E4%BB%80%E4%B9%88%E6%8E%A5%E4%B8%8D%E4%BD%8F%20load%20%E7%9A%84%E5%90%8C%E6%AD%A5%E6%8A%9B%E9%94%99%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F19%2Fjavascript-promise-try-sync-invocation%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Promise.resolve(load())%20%E4%B8%BA%E4%BB%80%E4%B9%88%E6%8E%A5%E4%B8%8D%E4%BD%8F%20load%20%E7%9A%84%E5%90%8C%E6%AD%A5%E6%8A%9B%E9%94%99%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F19%2Fjavascript-promise-try-sync-invocation%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/19/kubernetes-cronjob-start-deadline-window/">
+              <span>上一篇</span>
+              <strong>CronJob 晚到一分钟，为什么这次 Job 没补出来？</strong>
+              <small>2026-11-19</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/19/javascript-array-at-negative-fraction/">
+              <span>下一篇</span>
+              <strong>at(-0.5) 为什么读到第一项，而不是最后一项？</strong>
+              <small>2026-11-19</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#抛错发生在谁的调用里面">抛错发生在谁的调用里面</a>
+          
+            <a class="toc-link toc-link--h2" href="#把错误身份和执行顺序都留下">把错误身份和执行顺序都留下</a>
+          
+            <a class="toc-link toc-link--h2" href="#适配入口不改变插件的其余合同">适配入口不改变插件的其余合同</a>
+          
+            <a class="toc-link toc-link--h2" href="#传入参数本身抛错，也会变成拒绝吗？">传入参数本身抛错，也会变成拒绝吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>249</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>208</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/13/array-fromasync-mapper-serial-pull/">Array.fromAsync 在等待 mapper 时，会先读取下一项吗？</a></h3>
+          <p>2026-11-13</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/12/promise-withresolvers-settlement-owner/">用 withResolvers 封装回调时，谁能结算？</a></h3>
+          <p>2026-11-12</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/24/promise-any-fulfillment-aggregateerror/">Promise.any 等到的是成功请求，还是业务有效结果？</a></h3>
+          <p>2026-10-24</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

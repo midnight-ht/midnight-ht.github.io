@@ -1,0 +1,425 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why can SQLite integrity_check return ok with an orphan row? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Compare structural success with a foreign-key violation in an isolated database, then verify the repaired relationship and preserved child.">
+  
+  
+    <meta name="keywords" content="integrity_check,foreign_key_check,orphan rows">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why can SQLite integrity_check return ok with an orphan row? | Midnight blog">
+    <meta property="og:description" content="Compare structural success with a foreign-key violation in an isolated database, then verify the repaired relationship and preserved child.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/#webpage","url":"https://www.zyweb.vip/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/","name":"Why can SQLite integrity_check return ok with an orphan row? | Midnight blog","description":"Compare structural success with a foreign-key violation in an isolated database, then verify the repaired relationship and preserved child.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/","headline":"Why can SQLite integrity_check return ok with an orphan row?","description":"Compare structural success with a foreign-key violation in an isolated database, then verify the repaired relationship and preserved child.","inLanguage":"en","datePublished":"2026-11-18T19:25:15.000Z","dateModified":"2026-11-18T19:25:15.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.sqlite.org/pragma.html"],"keywords":"SQLite, Data checks, Restore validation"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why can SQLite integrity_check return ok with an orphan row?","item":"https://www.zyweb.vip/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/">zh-CN</option><option value="/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/">zh-CN</option><option value="/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--sqlite">SQLite</span>
+      <time datetime="2026-11-18T19:25:15.000Z">2026-11-19</time>
+    </div>
+
+    <h1>Why can SQLite integrity_check return ok with an orphan row?</h1>
+
+    
+      <p class="post-hero__summary">Compare structural success with a foreign-key violation in an isolated database, then verify the repaired relationship and preserved child.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-18T19:25:15.000Z">2026-11-19</time> · Estimated read 13 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>integrity_check excludes foreign-key violations.</li><li>Use the four foreign_key_check columns to locate a failing relationship.</li><li>Parse structural and relationship checks using their distinct success results.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>SQLite integrity_check can return ok while an order references a missing customer. That check excludes foreign-key errors. A restore acceptance procedure that needs relationship validation should also run foreign_key_check and interpret its child table, row identifier, parent table, and constraint number.</p>
+<h2 id="Structure-and-references-can-have-different-results"><a href="#Structure-and-references-can-have-different-results" class="headerlink" title="Structure and references can have different results"></a>Structure and references can have different results</h2><p>Suppose a migrated database has parent customers and child orders. Customer one exists, while order ten references customer 999. Pages, indexes, and storage can be structurally normal while the relationship is broken. Stopping at ok leaves the problem for business code trying to read the customer later.</p>
+<p>The integrity check covers many internal problems and can find UNIQUE, CHECK, and NOT NULL errors. The official documentation explicitly excludes foreign keys and directs callers to foreign_key_check. Preserve the names of individual checks in a report so its recipient can identify which conditions were tested.</p>
+<p>foreign_key_check returns one row for each violation. It reports the referencing child table, usually the child&#39;s rowid, the referenced parent table, and a foreign-key number. The last column is not the missing parent identifier. Match it to foreign_key_list when a child table has several constraints. Misreading the child rowid as the referenced value would send someone looking for customer ten in this fixture.</p>
+<h2 id="Produce-ok-and-a-relationship-error-on-the-same-database"><a href="#Produce-ok-and-a-relationship-error-on-the-same-database" class="headerlink" title="Produce ok and a relationship error on the same database"></a>Produce ok and a relationship error on the same database</h2><p>The local fixture explicitly disables foreign-key enforcement on its connection and reads the setting back. It uses a disposable in-memory database to construct an existing bad reference, with no project database involved. After setup, it checks both results, supplies the missing parent, and checks the relationship again.</p>
+<pre><code class="python">import sqlite3
+from contextlib import closing
+
+def rows(db, sql):
+    return list(db.execute(sql))
+
+with closing(sqlite3.connect(&quot;:memory:&quot;)) as db:
+    db.execute(&quot;PRAGMA foreign_keys=OFF&quot;)
+    assert rows(db, &quot;PRAGMA foreign_keys&quot;)[0] == (0,)
+    db.executescript(&quot;&quot;&quot;
+        CREATE TABLE parent(id INTEGER PRIMARY KEY);
+        CREATE TABLE child(
+            id INTEGER PRIMARY KEY,
+            parent_id INTEGER REFERENCES parent(id)
+        );
+        INSERT INTO parent VALUES(1);
+        INSERT INTO child VALUES(10, 999);
+    &quot;&quot;&quot;)
+    assert rows(db, &quot;PRAGMA integrity_check&quot;) == [(&quot;ok&quot;,)]
+    assert rows(db, &quot;PRAGMA foreign_key_check&quot;) == [
+        (&quot;child&quot;, 10, &quot;parent&quot;, 0)
+    ]
+    db.execute(&quot;INSERT INTO parent VALUES(999)&quot;)
+    db.commit()
+    assert rows(db, &quot;PRAGMA integrity_check&quot;) == [(&quot;ok&quot;,)]
+    assert rows(db, &quot;PRAGMA foreign_key_check&quot;) == []
+    assert rows(db, &quot;SELECT id,parent_id FROM child&quot;) == [(10, 999)]
+    print(sqlite3.sqlite_version, &quot;structural ok; FK orphan found; parent repair verified&quot;)
+</code></pre>
+<p>The initial oracle requires one ok row from integrity_check and exactly child, ten, parent, zero from foreign_key_check. Inserting parent 999 empties the violation result while integrity_check still returns ok. Finally, order ten must remain and still reference 999. That guards against a repair that merely deletes the child. Two identical structural results and two different relationship results establish the checks&#39; different scope.</p>
+<p>Adding a customer is a controlled test repair, with no claim that it is the correct business action. A missing parent might indicate a bad migration mapping. The right action could change the reference, isolate the record, or supply a verified parent. This fixture changes only the relational condition and preserves the child. A business restore needs its own repair decision and data provenance.</p>
+<p>Turning on foreign_keys at a connection cannot serve as a record of scanning existing data. The site&#39;s <a href="/en/2026/10/13/sqlite-foreign-key-connection/">SQLite foreign-key connection article</a> covers enforcement scope. This fixture adds a diagnostic comparison with a specific location for an existing orphan. Keep command names and their actual results in the restore report.</p>
+<h2 id="Leave-enough-information-for-the-next-operator"><a href="#Leave-enough-information-for-the-next-operator" class="headerlink" title="Leave enough information for the next operator"></a>Leave enough information for the next operator</h2><p>A violation report can retain child table, child location, parent table, and constraint definition alongside the database or connection identity checked. Checking a temporary copy and then querying the original says nothing about whether the copy was repaired. Complete the same checks on the restore target and retain before and after evidence with stable business identifiers.</p>
+<p>An error count can show that problems remain but cannot tell retries apart. One remaining violation might be the old one or a different one. For this fixed fixture, compare all four columns. Larger reports should preserve sufficient controlled identifiers to locate failures. These are teaching integers, with no real customer data.</p>
+<p>This in-memory setup has no concurrent writer, so the inserted parent explains the changed result. A live database can change after the check. Tie the report to an observation time and scope. A migration can place the check before opening writes; a continuously updated system needs to explain which changes occurred afterward. Passing both checks provides no guarantee about every future write.</p>
+<p>If reports are written to files, retain the target database identity and backup batch. Before comparing a later diagnostic, check those identities so an empty result from an earlier restore cannot be counted as this run passing.</p>
+<p>Parse the two success shapes independently in automation. integrity_check succeeds with an ok row; foreign_key_check succeeds with no rows. Treating success as no output would reject the structural success. Treating any returned row as success would accept an orphan report. The initial state above is a useful negative control for the latter mistake.</p>
+<h2 id="Does-a-WITHOUT-ROWID-child-report-its-business-key-in-the-second-column"><a href="#Does-a-WITHOUT-ROWID-child-report-its-business-key-in-the-second-column" class="headerlink" title="Does a WITHOUT ROWID child report its business key in the second column?"></a>Does a WITHOUT ROWID child report its business key in the second column?</h2><p>For that table kind, the second foreign_key_check column is NULL. SQLite does not substitute the business primary key for rowid. A diagnostic consumer needs another controlled lookup of stable fields using the relation definition. A null row identifier does not erase the violation described by the other columns. The executed fixture uses an ordinary rowid table and leaves this variation unexecuted. Add a violating WITHOUT ROWID sample when that schema is actually supported and verify that the report still locates the row for remediation.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.sqlite.org/pragma.html" rel="noopener">Pragma statements supported by SQLite</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--sqlite" href="/en/tags/SQLite/">SQLite</a>
+          
+            <a class="tag tag--data-checks" href="/en/tags/Data-checks/">Data checks</a>
+          
+            <a class="tag tag--restore-validation" href="/en/tags/Restore-validation/">Restore validation</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--quality" href="/en/categories/Quality/">Quality</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F19%2Fsqlite-integrity-check-foreign-key-scope%2F&text=Why%20can%20SQLite%20integrity_check%20return%20ok%20with%20an%20orphan%20row%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F19%2Fsqlite-integrity-check-foreign-key-scope%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20can%20SQLite%20integrity_check%20return%20ok%20with%20an%20orphan%20row%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F19%2Fsqlite-integrity-check-foreign-key-scope%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/19/systemd-memory-high-versus-max/">
+              <span>Previous Post</span>
+              <strong>Why can a service exceed MemoryHigh without being killed immediately?</strong>
+              <small>2026-11-19</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/19/python-unittest-docleanups-early-drain/">
+              <span>Next Post</span>
+              <strong>How can unittest release registered resources before the test ends?</strong>
+              <small>2026-11-19</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Structure-and-references-can-have-different-results">Structure and references can have different results</a>
+          
+            <a class="toc-link toc-link--h2" href="#Produce-ok-and-a-relationship-error-on-the-same-database">Produce ok and a relationship error on the same database</a>
+          
+            <a class="toc-link toc-link--h2" href="#Leave-enough-information-for-the-next-operator">Leave enough information for the next operator</a>
+          
+            <a class="toc-link toc-link--h2" href="#Does-a-WITHOUT-ROWID-child-report-its-business-key-in-the-second-column">Does a WITHOUT ROWID child report its business key in the second column?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>249</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>208</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>90</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/15/python-sqlite-backup-wal-committed-state/">Why can copying only the main SQLite file miss a committed row?</a></h3>
+          <p>2026-11-15</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/14/sqlite-table-xinfo-generated-columns/">Why does a SQLite schema diff miss a generated column?</a></h3>
+          <p>2026-11-14</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/13/sqlite-json-value-argument-provenance/">Why did SQLite put quotes around an array inside JSON?</a></h3>
+          <p>2026-11-13</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,425 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>integrity_check 返回 ok，SQLite 为什么仍有孤儿行？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="在独立内存库上对照结构正常与外键错误，核对诊断四列和修复后仍保留的子行。">
+  
+  
+    <meta name="keywords" content="integrity_check,foreign_key_check,孤儿行">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="integrity_check 返回 ok，SQLite 为什么仍有孤儿行？ | Midnight blog">
+    <meta property="og:description" content="在独立内存库上对照结构正常与外键错误，核对诊断四列和修复后仍保留的子行。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/","name":"integrity_check 返回 ok，SQLite 为什么仍有孤儿行？ | Midnight blog","description":"在独立内存库上对照结构正常与外键错误，核对诊断四列和修复后仍保留的子行。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/","headline":"integrity_check 返回 ok，SQLite 为什么仍有孤儿行？","description":"在独立内存库上对照结构正常与外键错误，核对诊断四列和修复后仍保留的子行。","inLanguage":"zh-CN","datePublished":"2026-11-18T19:25:15.000Z","dateModified":"2026-11-18T19:25:15.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.sqlite.org/pragma.html"],"keywords":"SQLite, 数据检查, 恢复验收"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"integrity_check 返回 ok，SQLite 为什么仍有孤儿行？","item":"https://www.zyweb.vip/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/" selected>zh-CN</option><option value="/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/" selected>zh-CN</option><option value="/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--sqlite">SQLite</span>
+      <time datetime="2026-11-18T19:25:15.000Z">2026-11-19</time>
+    </div>
+
+    <h1>integrity_check 返回 ok，SQLite 为什么仍有孤儿行？</h1>
+
+    
+      <p class="post-hero__summary">在独立内存库上对照结构正常与外键错误，核对诊断四列和修复后仍保留的子行。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-18T19:25:15.000Z">2026-11-19</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>integrity_check 不检查外键违反。</li><li>用 foreign_key_check 的四列定位失败关系。</li><li>结构与关系检查各自解析不同的成功结果。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>SQLite 的 integrity_check 返回 ok，订单仍可能引用不存在的客户。这条检查不检测外键错误。恢复验收要检查关系时，应另外运行 foreign_key_check，并读取它报告的子表、行标识、父表和外键编号。</p>
+<h2 id="结构正常与引用有效可以同时有不同结果"><a href="#结构正常与引用有效可以同时有不同结果" class="headerlink" title="结构正常与引用有效可以同时有不同结果"></a>结构正常与引用有效可以同时有不同结果</h2><p>假设一个迁入的数据库里有客户表 parent 和订单表 child。客户一存在，订单十却指向客户九百九十九。库的页、索引与存储结构可以正常，错误发生在两张表的引用关系。检查者看到 ok 后结束验收，就会把这个错误留给后来读取客户信息的业务代码。</p>
+<p>SQLite 的完整性检查涵盖多种数据库内部问题，也检测 UNIQUE、CHECK 和 NOT NULL 等错误。但官方文档明确把外键排除在这条命令之外，并指向 foreign_key_check。这里不能把单词完整性按日常含义扩展成所有数据约束都已检验。不同检查的输出应该保留自己的名字，让后续报告能看出哪些条件真的执行过。</p>
+<p>foreign_key_check 每发现一项外键违反就返回一行。第一列是声明引用的子表，第二列通常是出错子行的 rowid，第三列是被引用的父表，第四列是外键编号。这不是父表缺失记录的编号。对于一个有多条外键的子表，应拿第四列与 foreign_key_list 的编号对应，才能知道具体哪条关系失败。把第二列看成业务引用目标，会把本例订单十误当成客户十。</p>
+<h2 id="让同一个库同时产生-ok-和关系错误"><a href="#让同一个库同时产生-ok-和关系错误" class="headerlink" title="让同一个库同时产生 ok 和关系错误"></a>让同一个库同时产生 ok 和关系错误</h2><p>下面的本地夹具显式关闭当前连接的外键执行，并立即读取配置确认。这个设置只用于隔离的内存库，目的是造一条已存在的坏关系；没有修改任何项目数据库。创建和插入完成后，分别检查两项结果，再补上缺失父行，确认关系诊断消失。</p>
+<pre><code class="python">import sqlite3
+from contextlib import closing
+
+def rows(db, sql):
+    return list(db.execute(sql))
+
+with closing(sqlite3.connect(&quot;:memory:&quot;)) as db:
+    db.execute(&quot;PRAGMA foreign_keys=OFF&quot;)
+    assert rows(db, &quot;PRAGMA foreign_keys&quot;)[0] == (0,)
+    db.executescript(&quot;&quot;&quot;
+        CREATE TABLE parent(id INTEGER PRIMARY KEY);
+        CREATE TABLE child(
+            id INTEGER PRIMARY KEY,
+            parent_id INTEGER REFERENCES parent(id)
+        );
+        INSERT INTO parent VALUES(1);
+        INSERT INTO child VALUES(10, 999);
+    &quot;&quot;&quot;)
+    assert rows(db, &quot;PRAGMA integrity_check&quot;) == [(&quot;ok&quot;,)]
+    assert rows(db, &quot;PRAGMA foreign_key_check&quot;) == [
+        (&quot;child&quot;, 10, &quot;parent&quot;, 0)
+    ]
+    db.execute(&quot;INSERT INTO parent VALUES(999)&quot;)
+    db.commit()
+    assert rows(db, &quot;PRAGMA integrity_check&quot;) == [(&quot;ok&quot;,)]
+    assert rows(db, &quot;PRAGMA foreign_key_check&quot;) == []
+    assert rows(db, &quot;SELECT id,parent_id FROM child&quot;) == [(10, 999)]
+    print(sqlite3.sqlite_version, &quot;structural ok; FK orphan found; parent repair verified&quot;)
+</code></pre>
+<p>初始独立预期是完整性检查只有 ok，外键检查恰有 child、十、parent、零这一行。之后只增加父记录九百九十九，外键结果变成空列表；完整性检查仍然是 ok。最后确认订单十仍指向九百九十九，防止所谓修复其实偷偷删掉了订单。两次相同的结构结果与两次不同的关系结果，共同证明两条命令检验的条件不同。</p>
+<p>这份修复控制没有声称补客户是业务上正确的处理。现实里引用九百九十九也可能来自迁移映射错误，正确动作可能是修正引用、隔离记录或补齐经过核验的父对象。测试只用插入父行把关系从违反变成满足，并保留同一子行。业务恢复需要保存谁选择了这种修复，以及新父行属于哪份数据来源。</p>
+<p>如果只是把当前连接的 foreign_keys 开关打开，也不能把它当作扫描历史记录的回执。本站的<a href="/zh-CN/2026/10/13/sqlite-foreign-key-connection/">SQLite 外键连接配置</a>已经解释连接执行范围；本例进一步比较诊断入口，让已有孤儿行有明确的输出位置。生产恢复报告应分别写检查命令及其结果，避免拿一个执行开关替代一份数据检查。</p>
+<h2 id="报告应让接手者找到哪一行"><a href="#报告应让接手者找到哪一行" class="headerlink" title="报告应让接手者找到哪一行"></a>报告应让接手者找到哪一行</h2><p>可以把每个违反项整理成子表、子行定位、父表和关系定义，并附上检查针对的数据库文件或连接身份。对临时副本完成检查后，再回到原库查询一遍不能证明副本已经修好。对于恢复演练，应在目标副本完成相同检查，保存变化前后的诊断和相关稳定业务标识。</p>
+<p>有些团队只保存错误条数。数目能判断是否还有问题，却无法支持两个重试之间的定位比较。假设修复后仍有一条错误，可能是原来那条没修好，也可能是另一条刚暴露出来。固定样本最好同时检查完整四列；大数据报告也应留下足够定位的信息，按实际访问规则处理敏感字段。这里只用整数教学标识，没有真实客户内容。</p>
+<p>还要说明验收如何面对业务写入。这个内存样例没有其他连接，所以前后变化可以明确归到刚才的插入。活库在诊断之后仍可继续变化，一份检查结果应绑定观察时间与范围。若迁入流程需要在开放写入前完成检查，可以把这个时点设为门禁；若边接入边检查，则需要另外解释哪些写入处在检查之后。两条命令通过，都不能推断未来入口永远不会产生关系错误。</p>
+<p>检查报告若被保留到文件，还应记录这次目标数据库的受控路径和对应备份批次。下一轮拿新副本复查时，先确认这两个身份，再比较四列诊断，避免把旧报告的空列表误算成本次恢复通过。</p>
+<p>在自动化里，应分别解析结构检查与外键检查的成功形状。前者是一个含 ok 的单行结果，后者是空结果。把两种成功统一写成“没有输出”，可能把正常结构结果误判为错误；把只要出现一行就当成成功，又会把关系错误行误判为通过。两种解析器都可以用上面的初始状态作负控制。</p>
+<h2 id="子表使用-WITHOUT-ROWID，第二列还能定位业务主键吗？"><a href="#子表使用-WITHOUT-ROWID，第二列还能定位业务主键吗？" class="headerlink" title="子表使用 WITHOUT ROWID，第二列还能定位业务主键吗？"></a>子表使用 WITHOUT ROWID，第二列还能定位业务主键吗？</h2><p>这种表在 foreign_key_check 的第二列返回 NULL。它没有用业务主键自动替代 rowid。因此诊断报告需要按关系定义另外查询稳定的业务字段，或者保留可供受控查询的定位条件。不能把一个空 rowid 当成没有违反项，其他三列仍然在描述错误。这是子表存储方式改变后的新条件；上面的执行夹具使用普通 rowid 表，没有验证这份变体。真实 schema 包含这种表时，应另建一条违反关系的输入，检查报告仍能定位和处理。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.sqlite.org/pragma.html" rel="noopener">Pragma statements supported by SQLite</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--sqlite" href="/zh-CN/tags/SQLite/">SQLite</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%95%B0%E6%8D%AE%E6%A3%80%E6%9F%A5/">数据检查</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%81%A2%E5%A4%8D%E9%AA%8C%E6%94%B6/">恢复验收</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--quality" href="/zh-CN/categories/Quality/">Quality</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F19%2Fsqlite-integrity-check-foreign-key-scope%2F&text=integrity_check%20%E8%BF%94%E5%9B%9E%20ok%EF%BC%8CSQLite%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E6%9C%89%E5%AD%A4%E5%84%BF%E8%A1%8C%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F19%2Fsqlite-integrity-check-foreign-key-scope%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=integrity_check%20%E8%BF%94%E5%9B%9E%20ok%EF%BC%8CSQLite%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E6%9C%89%E5%AD%A4%E5%84%BF%E8%A1%8C%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F19%2Fsqlite-integrity-check-foreign-key-scope%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/19/systemd-memory-high-versus-max/">
+              <span>上一篇</span>
+              <strong>服务内存超过 MemoryHigh，为什么没被立即杀掉？</strong>
+              <small>2026-11-19</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/19/python-unittest-docleanups-early-drain/">
+              <span>下一篇</span>
+              <strong>测试还没结束，unittest 怎样先归还一批已登记资源？</strong>
+              <small>2026-11-19</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#结构正常与引用有效可以同时有不同结果">结构正常与引用有效可以同时有不同结果</a>
+          
+            <a class="toc-link toc-link--h2" href="#让同一个库同时产生-ok-和关系错误">让同一个库同时产生 ok 和关系错误</a>
+          
+            <a class="toc-link toc-link--h2" href="#报告应让接手者找到哪一行">报告应让接手者找到哪一行</a>
+          
+            <a class="toc-link toc-link--h2" href="#子表使用-WITHOUT-ROWID，第二列还能定位业务主键吗？">子表使用 WITHOUT ROWID，第二列还能定位业务主键吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>249</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>208</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/">SQLite 开着 WAL 时，只复制数据库文件会漏掉哪条记录？</a></h3>
+          <p>2026-11-15</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/14/sqlite-table-xinfo-generated-columns/">SQLite 表里有生成列，为什么 schema diff 看不见？</a></h3>
+          <p>2026-11-14</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/13/sqlite-json-value-argument-provenance/">SQLite 拼 JSON 时，数组为什么多了一层引号？</a></h3>
+          <p>2026-11-13</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
