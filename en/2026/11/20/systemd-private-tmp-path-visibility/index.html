@@ -1,0 +1,432 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why can a service and the host see different files at the same tmp path? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Read distinct temporary markers from host and service views to explain PrivateTmp visibility and cleanup boundaries.">
+  
+  
+    <meta name="keywords" content="PrivateTmp,temporary directories,filesystem namespace">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/20/systemd-private-tmp-path-visibility/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/20/systemd-private-tmp-path-visibility/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why can a service and the host see different files at the same tmp path? | Midnight blog">
+    <meta property="og:description" content="Read distinct temporary markers from host and service views to explain PrivateTmp visibility and cleanup boundaries.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/20/systemd-private-tmp-path-visibility/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/20/systemd-private-tmp-path-visibility/#webpage","url":"https://www.zyweb.vip/en/2026/11/20/systemd-private-tmp-path-visibility/","name":"Why can a service and the host see different files at the same tmp path? | Midnight blog","description":"Read distinct temporary markers from host and service views to explain PrivateTmp visibility and cleanup boundaries.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/20/systemd-private-tmp-path-visibility/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/20/systemd-private-tmp-path-visibility/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/20/systemd-private-tmp-path-visibility/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/20/systemd-private-tmp-path-visibility/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/20/systemd-private-tmp-path-visibility/","headline":"Why can a service and the host see different files at the same tmp path?","description":"Read distinct temporary markers from host and service views to explain PrivateTmp visibility and cleanup boundaries.","inLanguage":"en","datePublished":"2026-11-19T19:30:20.000Z","dateModified":"2026-11-19T19:30:20.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html","https://www.freedesktop.org/software/systemd/man/latest/systemd.journal-fields.html"],"keywords":"systemd, File handoff"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/20/systemd-private-tmp-path-visibility/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why can a service and the host see different files at the same tmp path?","item":"https://www.zyweb.vip/en/2026/11/20/systemd-private-tmp-path-visibility/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/">zh-CN</option><option value="/en/2026/11/20/systemd-private-tmp-path-visibility/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/">zh-CN</option><option value="/en/2026/11/20/systemd-private-tmp-path-visibility/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--systemd">systemd</span>
+      <time datetime="2026-11-19T19:30:20.000Z">2026-11-20</time>
+    </div>
+
+    <h1>Why can a service and the host see different files at the same tmp path?</h1>
+
+    
+      <p class="post-hero__summary">Read distinct temporary markers from host and service views to explain PrivateTmp visibility and cleanup boundaries.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-19T19:30:20.000Z">2026-11-20</time> · Estimated read 11 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/20/systemd-private-tmp-path-visibility/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>One path string can identify different views.</li><li>Associate file evidence with its actual reader.</li><li>Verify cleanup in each relevant view.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>A service and its host can use the same <code>/tmp</code> path and read different files. With <code>PrivateTmp=yes</code>, systemd gives the service a private temporary-directory view. Identify which view supplies a reading before investigating a missing file.</p>
+<p>An operator may write a preparation marker on the host, then start a service that cannot open the same path. Matching path strings can lead to repeated permission changes while the views still differ.</p>
+<h3 id="Give-each-view-a-different-marker"><a href="#Give-each-view-a-different-marker" class="headerlink" title="Give each view a different marker"></a>Give each view a different marker</h3><p>This unexecuted Linux system-service exercise requires PrivateTmp and a usable filesystem namespace environment. Use a disposable machine with unused fixture paths. Save the script as <code>/run/zy20-private/worker.sh</code>.</p>
+<pre><code class="sh">marker=/tmp/zy20-private-marker
+if test -e &quot;$marker&quot;; then
+  printf &#39;before=&#39;
+  cat &quot;$marker&quot;
+else
+  printf &#39;before=absent\n&#39;
+fi
+printf &#39;service-marker\n&#39; &gt; &quot;$marker&quot;
+printf &#39;inside=&#39;
+cat &quot;$marker&quot;
+exec /bin/sleep 60
+</code></pre>
+<p>Save the unit at <code>/etc/systemd/system/zy20-private.service</code>. Confirm its shell and script path exist. Type=exec startup evidence does not replace the script&#39;s markers.</p>
+<pre><code class="ini">[Service]
+Type=exec
+PrivateTmp=yes
+ExecStart=/bin/sh /run/zy20-private/worker.sh
+</code></pre>
+<p>After installing both files, run from a privileged host terminal. Inspect the logs for the current start while the service remains alive.</p>
+<pre><code class="sh">set -eu
+marker=/tmp/zy20-private-marker
+printf &#39;host-marker\n&#39; &gt; &quot;$marker&quot;
+systemctl daemon-reload
+systemctl start zy20-private.service
+systemctl show zy20-private.service -p ActiveState -p PrivateTmp
+invocation=$(systemctl show zy20-private.service -p InvocationID --value)
+test -n &quot;$invocation&quot;
+seen=no
+for attempt in $(seq 1 30); do
+  if journalctl &quot;_SYSTEMD_INVOCATION_ID=$invocation&quot; --no-pager -o cat |
+    grep -F &#39;inside=service-marker&#39;; then
+    seen=yes
+    break
+  fi
+  sleep 1
+done
+test &quot;$seen&quot; = yes
+test &quot;$(cat &quot;$marker&quot;)&quot; = host-marker
+</code></pre>
+<p>Expect before=absent and inside=service-marker in the service log, while the host still reads host-marker. Together they show different contents at one path string in different views. A successful start alone cannot establish that result. If markers are missing, retain the logs and state and investigate whether the script reached them. No Linux manager run was performed. <a target="_blank" rel="noopener" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html#PrivateTmp=">PrivateTmp documentation</a></p>
+<h3 id="Associate-the-reading-with-its-reader"><a href="#Associate-the-reading-with-its-reader" class="headerlink" title="Associate the reading with its reader"></a>Associate the reading with its reader</h3><p>A file handoff must identify where its writer and consumer run. If the service needs the file as input, choose an agreed shared or configuration path and verify its view and permissions. A host read cannot establish service input availability. Private storage may also be intentional, making host invisibility consistent with correct behavior.</p>
+<p>A service readback cannot establish the host file&#39;s contents either. Tie each reading to its unit and start. Identical markers in both places would provide weak evidence of sharing; this fixture uses distinct values deliberately. A real handoff can add invocation identity and provenance, then read through the actual consumer.</p>
+<p>PrivateTmp addresses temporary directories. Other mounts, credentials, and permissions have their own configuration. The fixture does not establish general isolation from host data or application compatibility.</p>
+<h3 id="Account-for-the-stop-boundary"><a href="#Account-for-the-stop-boundary" class="headerlink" title="Account for the stop boundary"></a>Account for the stop boundary</h3><p>The manual says the service&#39;s private temporary files are removed after stop. A script that exits immediately could cross that boundary before inspection. The sleep here leaves an observation window without guaranteeing an overloaded host will complete every command in time. Use state and log timestamps when interpreting readings.</p>
+<p>The host marker belongs to another view. Cleanup of service-private files cannot establish cleanup of the host file. After the exercise, stop the unit, remove its definition and script, clear the fixture&#39;s host marker, and reload. Repeated runs need distinct content or an explicit start association so stale logs cannot satisfy a new check.</p>
+<p>An unexecuted control can set PrivateTmp=no while keeping the rest fixed. Expect the service to read host-marker first, then replace it so the host reads service-marker. This changes sharing only. Choose the real service setting based on its intended file contract and validate it in the actual environment.</p>
+<p>Wait for the service readback before asserting that the host still retains its own value. The script filters journal records by the current InvocationID so an earlier marker cannot satisfy the wait. If the marker does not appear within thirty attempts, fail and preserve that invocation’s log and state. This waiting logic was not executed; check field availability and journal permissions on the target host. The association establishes evidence identity without promising a log-delivery deadline.</p>
+<h3 id="Can-two-services-share-private-temporary-storage"><a href="#Can-two-services-share-private-temporary-storage" class="headerlink" title="Can two services share private temporary storage?"></a>Can two services share private temporary storage?</h3><p>For ordinary PrivateTmp=true, the manual describes <code>JoinsNamespaceOf=</code> for joining a private temporary namespace, subject to the relevant unit configuration and lifecycle. PrivateTmp=disconnected uses an independent tmpfs and does not share with other units even through that relationship. This adds a second service and another mode to the host-versus-one-service example. Neither comparison was executed.</p>
+<p><a href="/en/2026/11/13/systemd-runtime-directory-preserve-restart/">Related reading on systemd runtime-directory retention</a></p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html" rel="noopener">systemd.exec — PrivateTmp</a></li><li><a target="_blank" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.journal-fields.html" rel="noopener">systemd.journal-fields — _SYSTEMD_INVOCATION_ID</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--systemd" href="/en/tags/systemd/">systemd</a>
+          
+            <a class="tag tag--file-handoff" href="/en/tags/File-handoff/">File handoff</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--delivery" href="/en/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F20%2Fsystemd-private-tmp-path-visibility%2F&text=Why%20can%20a%20service%20and%20the%20host%20see%20different%20files%20at%20the%20same%20tmp%20path%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F20%2Fsystemd-private-tmp-path-visibility%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20can%20a%20service%20and%20the%20host%20see%20different%20files%20at%20the%20same%20tmp%20path%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F20%2Fsystemd-private-tmp-path-visibility%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/20/wcag-motion-actuation-alternative-disable/">
+              <span>Previous Post</span>
+              <strong>Why must motion actuation be disableable even when an Undo button exists?</strong>
+              <small>2026-11-20</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/20/sqlite-changes-trigger-exclusion/">
+              <span>Next Post</span>
+              <strong>Why does changes return one when a trigger wrote two more rows?</strong>
+              <small>2026-11-20</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h3" href="#Give-each-view-a-different-marker">Give each view a different marker</a>
+          
+            <a class="toc-link toc-link--h3" href="#Associate-the-reading-with-its-reader">Associate the reading with its reader</a>
+          
+            <a class="toc-link toc-link--h3" href="#Account-for-the-stop-boundary">Account for the stop boundary</a>
+          
+            <a class="toc-link toc-link--h3" href="#Can-two-services-share-private-temporary-storage">Can two services share private temporary storage?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>248</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>207</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>91</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/19/systemd-memory-high-versus-max/">Why can a service exceed MemoryHigh without being killed immediately?</a></h3>
+          <p>2026-11-19</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/18/systemd-exit-type-cgroup-main-process/">Why can a systemd service still run after its main process exits?</a></h3>
+          <p>2026-11-18</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/17/systemd-assert-condition-job-outcome/">Why does a missing file skip one systemd unit but fail another start?</a></h3>
+          <p>2026-11-17</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

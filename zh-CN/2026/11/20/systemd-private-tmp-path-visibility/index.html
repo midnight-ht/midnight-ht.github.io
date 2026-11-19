@@ -1,0 +1,432 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>服务写了 /tmp 文件，宿主终端为什么读不到同一路径？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="从宿主和服务分别读写同名临时标记，解释 PrivateTmp 的文件可见性与停止清理边界。">
+  
+  
+    <meta name="keywords" content="PrivateTmp,临时目录,命名空间">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/20/systemd-private-tmp-path-visibility/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="服务写了 /tmp 文件，宿主终端为什么读不到同一路径？ | Midnight blog">
+    <meta property="og:description" content="从宿主和服务分别读写同名临时标记，解释 PrivateTmp 的文件可见性与停止清理边界。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/","name":"服务写了 /tmp 文件，宿主终端为什么读不到同一路径？ | Midnight blog","description":"从宿主和服务分别读写同名临时标记，解释 PrivateTmp 的文件可见性与停止清理边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/","headline":"服务写了 /tmp 文件，宿主终端为什么读不到同一路径？","description":"从宿主和服务分别读写同名临时标记，解释 PrivateTmp 的文件可见性与停止清理边界。","inLanguage":"zh-CN","datePublished":"2026-11-19T19:30:20.000Z","dateModified":"2026-11-19T19:30:20.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html","https://www.freedesktop.org/software/systemd/man/latest/systemd.journal-fields.html"],"keywords":"systemd, 文件交接"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"服务写了 /tmp 文件，宿主终端为什么读不到同一路径？","item":"https://www.zyweb.vip/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/" selected>zh-CN</option><option value="/en/2026/11/20/systemd-private-tmp-path-visibility/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/" selected>zh-CN</option><option value="/en/2026/11/20/systemd-private-tmp-path-visibility/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--systemd">systemd</span>
+      <time datetime="2026-11-19T19:30:20.000Z">2026-11-20</time>
+    </div>
+
+    <h1>服务写了 /tmp 文件，宿主终端为什么读不到同一路径？</h1>
+
+    
+      <p class="post-hero__summary">从宿主和服务分别读写同名临时标记，解释 PrivateTmp 的文件可见性与停止清理边界。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-19T19:30:20.000Z">2026-11-20</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/20/systemd-private-tmp-path-visibility/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>相同路径名可能属于不同视图。</li><li>文件回执要注明实际读取者。</li><li>停止后的清理需要按视图核对。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>服务和宿主都访问同一个 <code>/tmp</code> 路径，却可能读到不同文件。启用 <code>PrivateTmp=yes</code> 后，systemd 为服务设置私有临时目录视图，服务内的路径与外部进程看到的路径不再共享。先确认从哪一个视图读取，再查文件是否丢失。</p>
+<p>这种差异会出现在启动准备里。运维人员先在宿主临时目录写好一份探针，服务随后按相同字面路径打开。终端能读到，服务却报告不存在。若只核对字符串相同，就可能反复改权限，仍然无法解决。需要先判断这两个路径是否指向同一份文件系统内容，而不是把可见性问题直接归给访问权限。</p>
+<h3 id="让宿主与服务各写自己的标记"><a href="#让宿主与服务各写自己的标记" class="headerlink" title="让宿主与服务各写自己的标记"></a>让宿主与服务各写自己的标记</h3><p>下面是一份未运行的 Linux 系统服务练习。需要支持 PrivateTmp 的 systemd 和允许创建文件系统命名空间的实验环境。使用可丢弃主机，先确认指定的单元、脚本与临时文件路径没有被其他工作使用。脚本保存为 <code>/run/zy20-private/worker.sh</code>。它先记录自己是否能看到已有标记，再写入自己的内容，保持存活以供观察。</p>
+<pre><code class="sh">marker=/tmp/zy20-private-marker
+if test -e &quot;$marker&quot;; then
+  printf &#39;before=&#39;
+  cat &quot;$marker&quot;
+else
+  printf &#39;before=absent\n&#39;
+fi
+printf &#39;service-marker\n&#39; &gt; &quot;$marker&quot;
+printf &#39;inside=&#39;
+cat &quot;$marker&quot;
+exec /bin/sleep 60
+</code></pre>
+<p>把以下定义保存到 <code>/etc/systemd/system/zy20-private.service</code>。脚本不需要执行权限，因为由 shell 读取，路径与解释器必须在实验机上可用。Type=exec 的启动结果不能替代脚本自己的读写标记。</p>
+<pre><code class="ini">[Service]
+Type=exec
+PrivateTmp=yes
+ExecStart=/bin/sh /run/zy20-private/worker.sh
+</code></pre>
+<p>在有管理权限的宿主终端先写 host-marker，再重新加载和启动。读回时要在服务还活着的窗口内操作，并按本次启动时间核对日志。下面的脚本只表达这一轮顺序，应用前仍需先安装前两份文件。</p>
+<pre><code class="sh">set -eu
+marker=/tmp/zy20-private-marker
+printf &#39;host-marker\n&#39; &gt; &quot;$marker&quot;
+systemctl daemon-reload
+systemctl start zy20-private.service
+systemctl show zy20-private.service -p ActiveState -p PrivateTmp
+invocation=$(systemctl show zy20-private.service -p InvocationID --value)
+test -n &quot;$invocation&quot;
+seen=no
+for attempt in $(seq 1 30); do
+  if journalctl &quot;_SYSTEMD_INVOCATION_ID=$invocation&quot; --no-pager -o cat |
+    grep -F &#39;inside=service-marker&#39;; then
+    seen=yes
+    break
+  fi
+  sleep 1
+done
+test &quot;$seen&quot; = yes
+test &quot;$(cat &quot;$marker&quot;)&quot; = host-marker
+</code></pre>
+<p>预计服务日志先显示 before=absent，随后显示 inside=service-marker。宿主仍读到 host-marker。三条内容共同证明同一字面路径在两个视图下有不同内容。只看到服务 successfully started，尚未得到这份证据；日志没等到预期标记时，应保留原始输出和当前状态，再查脚本是否执行到对应行。本文没有 Linux 管理器运行回执，三个标记均为按配置推导的预期。<a target="_blank" rel="noopener" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html#PrivateTmp=">systemd.exec 的 PrivateTmp 定义</a></p>
+<h3 id="路径存在的证据属于哪个读取者"><a href="#路径存在的证据属于哪个读取者" class="headerlink" title="路径存在的证据属于哪个读取者"></a>路径存在的证据属于哪个读取者</h3><p>真正的文件交接应说明写入者与读取者在哪里运行。如果目的就是给服务提供输入，把它放到约定的共享路径或配置目录，并核对该服务的完整文件系统视图与权限。不要因为宿主的临时文件能读，就给服务写“输入已准备”。如果目的只是服务内部临时存储，则私有视图可以符合原设计，宿主看不到同一路径也不意味着写入失败。</p>
+<p>反过来，服务日志里读回了 service-marker，也不能用来覆盖宿主文件的内容断言。回执应明确该读数出自哪个单元、哪次启动。两个观察者写了同名标记，内容又碰巧一致时，仅比较内容还不足以证明共享；实验刻意用两个不同值，让视图差异容易判定。真实共享需求可以再给文件加入运行身份和来源记录，然后由实际消费者读取确认。</p>
+<p>使用 PrivateTmp 也不表示服务拥有整个文件系统的隔离保证。这个设置针对临时目录，其他挂载、凭据和权限仍按各自配置生效。不要从这份样例推导服务无法访问任何宿主数据。它只验特定路径的可见性，不执行安全渗透检查，也没有证明某个应用可以在隔离下正常工作。</p>
+<h3 id="服务停止以后再读取，已经换了问题"><a href="#服务停止以后再读取，已经换了问题" class="headerlink" title="服务停止以后再读取，已经换了问题"></a>服务停止以后再读取，已经换了问题</h3><p>手册说明，服务停止后会清理它在私有临时目录创建的文件。若脚本写完立刻退出，等操作者打开日志后再去找文件，看到的状态可能已经跨过这条生命周期边界。因此本例保留六十秒的进程窗口；它为观察留时间，并不保证主机忙时每次命令都赶得上。先看当次状态与日志时间，再解释读取结果。</p>
+<p>宿主终端的 host-marker 是另一份文件，服务停止的私有临时清理不应被当成宿主标记清理的证明。练习后停止实验单元，撤掉本轮定义与脚本，并在宿主视图清除自己创建的标记，再重载管理器。只从一个位置发现没有文件，无法证明两边都已收尾。对于多轮验证，每轮换不同标记或保留明确的内容与启动关联，避免旧日志满足新的断言。</p>
+<p>还可以保留一个对照，把唯一配置改成 PrivateTmp=no，在同样干净的宿主路径重新执行。预计服务先看到 host-marker，再写入后宿主也读到 service-marker。这个对照没有运行。它只改变视图共享，不能由此判断日常服务是否应该关闭隔离。先按需要交接的文件与应用合同选择，再用实际环境回执验证。</p>
+<p>先等服务内部读回出现，再断言宿主仍保留自己的值，才能说明两个动作确实发生在这次观察中。脚本按本轮 InvocationID 过滤日志，避免上一轮同样的文字命中等待。如果服务没有到达内部写入，三十次等待后必须让检查失败，并保留该轮日志与状态。等待脚本本身未经运行；实际验收还应确认日志字段与权限在目标环境可读。这里的同轮关联用于收窄证据归属，不给日志延迟或服务完成时间作承诺。</p>
+<h3 id="两个服务可以共享同一份私有临时目录吗？"><a href="#两个服务可以共享同一份私有临时目录吗？" class="headerlink" title="两个服务可以共享同一份私有临时目录吗？"></a>两个服务可以共享同一份私有临时目录吗？</h3><p>对普通 PrivateTmp=true，手册提供通过 <code>JoinsNamespaceOf=</code> 让单元加入同一个私有临时命名空间的方式，需要按相关单元配置与生命周期验证。但 <code>PrivateTmp=disconnected</code> 使用完全独立的 tmpfs，手册说明即使设置加入关系也不与其他单元共享。这一问加入的是第二个服务和不同模式，主例只比较宿主与一个 yes 单元，没有运行共享或 disconnected 对照。</p>
+<p><a href="/zh-CN/2026/11/13/systemd-runtime-directory-preserve-restart/">相关站内阅读：systemd 运行时目录的停止与保留</a></p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html" rel="noopener">systemd.exec — PrivateTmp</a></li><li><a target="_blank" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.journal-fields.html" rel="noopener">systemd.journal-fields — _SYSTEMD_INVOCATION_ID</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--systemd" href="/zh-CN/tags/systemd/">systemd</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%96%87%E4%BB%B6%E4%BA%A4%E6%8E%A5/">文件交接</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F20%2Fsystemd-private-tmp-path-visibility%2F&text=%E6%9C%8D%E5%8A%A1%E5%86%99%E4%BA%86%20%2Ftmp%20%E6%96%87%E4%BB%B6%EF%BC%8C%E5%AE%BF%E4%B8%BB%E7%BB%88%E7%AB%AF%E4%B8%BA%E4%BB%80%E4%B9%88%E8%AF%BB%E4%B8%8D%E5%88%B0%E5%90%8C%E4%B8%80%E8%B7%AF%E5%BE%84%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F20%2Fsystemd-private-tmp-path-visibility%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E6%9C%8D%E5%8A%A1%E5%86%99%E4%BA%86%20%2Ftmp%20%E6%96%87%E4%BB%B6%EF%BC%8C%E5%AE%BF%E4%B8%BB%E7%BB%88%E7%AB%AF%E4%B8%BA%E4%BB%80%E4%B9%88%E8%AF%BB%E4%B8%8D%E5%88%B0%E5%90%8C%E4%B8%80%E8%B7%AF%E5%BE%84%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F20%2Fsystemd-private-tmp-path-visibility%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/20/wcag-motion-actuation-alternative-disable/">
+              <span>上一篇</span>
+              <strong>摇动撤销已有按钮，为什么还要能关闭摇动？</strong>
+              <small>2026-11-20</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/">
+              <span>下一篇</span>
+              <strong>触发器又写了两行，changes 为什么还只返回一？</strong>
+              <small>2026-11-20</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h3" href="#让宿主与服务各写自己的标记">让宿主与服务各写自己的标记</a>
+          
+            <a class="toc-link toc-link--h3" href="#路径存在的证据属于哪个读取者">路径存在的证据属于哪个读取者</a>
+          
+            <a class="toc-link toc-link--h3" href="#服务停止以后再读取，已经换了问题">服务停止以后再读取，已经换了问题</a>
+          
+            <a class="toc-link toc-link--h3" href="#两个服务可以共享同一份私有临时目录吗？">两个服务可以共享同一份私有临时目录吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>248</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>207</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/19/systemd-memory-high-versus-max/">服务内存超过 MemoryHigh，为什么没被立即杀掉？</a></h3>
+          <p>2026-11-19</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/18/systemd-exit-type-cgroup-main-process/">主进程退出后，systemd 为什么还认为服务在运行？</a></h3>
+          <p>2026-11-18</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/17/systemd-assert-condition-job-outcome/">同样缺文件，systemd 为什么一次跳过、一次启动失败？</a></h3>
+          <p>2026-11-17</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

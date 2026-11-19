@@ -1,0 +1,424 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why does changes return one when a trigger wrote two more rows? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Check one direct INSERT, two trigger audit rows, and their state after rollback in an isolated SQLite transaction.">
+  
+  
+    <meta name="keywords" content="changes,trigger,audit rows">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/20/sqlite-changes-trigger-exclusion/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/20/sqlite-changes-trigger-exclusion/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why does changes return one when a trigger wrote two more rows? | Midnight blog">
+    <meta property="og:description" content="Check one direct INSERT, two trigger audit rows, and their state after rollback in an isolated SQLite transaction.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/20/sqlite-changes-trigger-exclusion/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/20/sqlite-changes-trigger-exclusion/#webpage","url":"https://www.zyweb.vip/en/2026/11/20/sqlite-changes-trigger-exclusion/","name":"Why does changes return one when a trigger wrote two more rows? | Midnight blog","description":"Check one direct INSERT, two trigger audit rows, and their state after rollback in an isolated SQLite transaction.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/20/sqlite-changes-trigger-exclusion/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/20/sqlite-changes-trigger-exclusion/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/20/sqlite-changes-trigger-exclusion/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/20/sqlite-changes-trigger-exclusion/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/20/sqlite-changes-trigger-exclusion/","headline":"Why does changes return one when a trigger wrote two more rows?","description":"Check one direct INSERT, two trigger audit rows, and their state after rollback in an isolated SQLite transaction.","inLanguage":"en","datePublished":"2026-11-19T19:30:20.000Z","dateModified":"2026-11-19T19:30:20.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://www.sqlite.org/c3ref/changes.html","https://www.sqlite.org/lang_corefunc.html","https://www.sqlite.org/lang_transaction.html"],"keywords":"SQLite, Triggers, Change counts"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/20/sqlite-changes-trigger-exclusion/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why does changes return one when a trigger wrote two more rows?","item":"https://www.zyweb.vip/en/2026/11/20/sqlite-changes-trigger-exclusion/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/">zh-CN</option><option value="/en/2026/11/20/sqlite-changes-trigger-exclusion/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/">zh-CN</option><option value="/en/2026/11/20/sqlite-changes-trigger-exclusion/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--sqlite">SQLite</span>
+      <time datetime="2026-11-19T19:30:20.000Z">2026-11-20</time>
+    </div>
+
+    <h1>Why does changes return one when a trigger wrote two more rows?</h1>
+
+    
+      <p class="post-hero__summary">Check one direct INSERT, two trigger audit rows, and their state after rollback in an isolated SQLite transaction.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-19T19:30:20.000Z">2026-11-20</time> · Estimated read 12 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/20/sqlite-changes-trigger-exclusion/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>changes excludes auxiliary writes in lower-level triggers.</li><li>Check direct counts and audit identities separately.</li><li>A zero count on a view write does not establish no business effect.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>An INSERT creates one task and an AFTER INSERT trigger writes two audit rows. SELECT changes() still returns one. It counts the direct statement and excludes auxiliary writes in lower-level triggers. Read the audit records separately to establish whether they were produced.</p>
+<h2 id="One-statement-and-its-wider-effects"><a href="#One-statement-and-its-wider-effects" class="headerlink" title="One statement and its wider effects"></a>One statement and its wider effects</h2><p>A local task table writes illustrative start and end audit markers for each new identifier. Expecting an affected-row count of three combines the direct INSERT and the trigger program. SQLite&#39;s changes result reports the former.</p>
+<p>The SQL changes() function wraps changes64 and follows its counting rules. Trigger writes, foreign-key actions, and REPLACE conflict-resolution effects are excluded auxiliary changes. Both audit rows here belong to the trigger. A result of one says neither that the trigger wrote one row nor that it failed to run.</p>
+<p>The result also belongs to a connection&#39;s most recently completed write statement. A later unrelated INSERT can change what a subsequent query observes. Associate the result with its statement promptly. A SELECT does not turn those separate effects into a business-wide aggregate.</p>
+<h2 id="Assert-one-direct-row-and-two-audit-rows"><a href="#Assert-one-direct-row-and-two-audit-rows" class="headerlink" title="Assert one direct row and two audit rows"></a>Assert one direct row and two audit rows</h2><p>The fixture creates real tables and a trigger in a fresh in-memory database. An explicit transaction allows before-and-after-rollback observations. The helper materializes query results as lists.</p>
+<pre><code class="python">import sqlite3
+from contextlib import closing
+
+def rows(db, sql):
+    return list(db.execute(sql))
+
+with closing(sqlite3.connect(&quot;:memory:&quot;, isolation_level=None)) as db:
+    db.executescript(&quot;&quot;&quot;
+        CREATE TABLE task(id INTEGER PRIMARY KEY);
+        CREATE TABLE audit(task_id INTEGER, phase TEXT);
+        CREATE TRIGGER task_added AFTER INSERT ON task BEGIN
+            INSERT INTO audit VALUES(new.id, &#39;start&#39;);
+            INSERT INTO audit VALUES(new.id, &#39;end&#39;);
+        END;
+    &quot;&quot;&quot;)
+    rows(db, &quot;BEGIN&quot;)
+    rows(db, &quot;INSERT INTO task VALUES(7)&quot;)
+    assert rows(db, &quot;SELECT changes()&quot;) == [(1,)]
+    assert rows(db, &quot;SELECT id FROM task&quot;) == [(7,)]
+    assert rows(db, &quot;SELECT task_id,phase FROM audit ORDER BY phase&quot;) == [
+        (7, &quot;end&quot;), (7, &quot;start&quot;)
+    ]
+    rows(db, &quot;ROLLBACK&quot;)
+    assert rows(db, &quot;SELECT id FROM task&quot;) == []
+    assert rows(db, &quot;SELECT task_id,phase FROM audit&quot;) == []
+    print(sqlite3.sqlite_version, &quot;direct=1; audit=2; rollback removed both tables&#39; rows&quot;)
+</code></pre>
+<p>After insertion, changes is one, the task identifier is seven, and the audit table has both markers for seven. Ordering audit output by phase puts end before start alphabetically. That stabilizes comparison; it does not describe trigger execution time. Execution order needs its own evidence.</p>
+<p>Each assertion matters. Without a trigger, the direct count can still be one. A count of two audit rows can also be misleading if they belong to another task or an old fixture. This fresh database checks the task identifier and both concrete phases. A service needs corresponding business identities to correlate audit with an operation.</p>
+<p>Rollback then removes the new rows from both tables. It is a secondary failure control showing that a statement count is no commit receipt. The central question remains trigger exclusion. The example implements no transaction retries and supplies no guarantee about retracting external effects.</p>
+<h2 id="Read-the-audit-contract-directly"><a href="#Read-the-audit-contract-directly" class="headerlink" title="Read the audit contract directly"></a>Read the audit contract directly</h2><p>Define whether every task needs two audit rows or only certain transitions need an entry. Conditional triggers need inputs on both sides, with expected present and absent audit records. Treating the direct count as proof of trigger execution leaves those branches untested.</p>
+<p>An application receipt can retain the direct count and a separate business check, such as having read both markers for task seven from the target database. Fill that check only after reading them. If an asynchronous worker continues the task, its completion belongs to a later event. This fixture has no worker or queue.</p>
+<p>Batch writes need their own expected identities. Different tasks can invoke different rules, and a trigger can update existing rows. A one-to-two ratio in this example cannot define every production audit metric. Specify whether a metric counts direct rows, auxiliary rows, or business events before choosing its evidence source.</p>
+<p>The site&#39;s <a href="/en/2026/10/29/sqlite-replace-delete-identity/">REPLACE identity article</a> covers another observation boundary around internal conflict-resolution deletion. Here an ordinary INSERT with two explicit trigger writes isolates the direct-count rule. It gives no reason to infer that a trigger failed from a displayed count.</p>
+<p>An independently empty target database can serve as a negative control: it must not supply task seven or its audit. That rejects an accidental query sent to another database even if an unrelated direct count matches. This cross-database control is unexecuted.</p>
+<p>Also record which connection invocation produced the result. A coincidentally matching number from another pooled connection proves nothing about this request. All fixture operations run sequentially on one connection; pool and concurrent-sharing behavior remain untested.</p>
+<h2 id="What-if-the-INSERT-targets-a-view-with-an-INSTEAD-OF-trigger"><a href="#What-if-the-INSERT-targets-a-view-with-an-INSTEAD-OF-trigger" class="headerlink" title="What if the INSERT targets a view with an INSTEAD OF trigger?"></a>What if the INSERT targets a view with an INSTEAD OF trigger?</h2><p>Changes made through that view yield a direct changes result of zero even when the trigger writes a real table. A consumer cannot interpret every zero as no business effect. Read the real target under the view&#39;s contract. This variation is unexecuted; the main fixture uses real tables. A supported view entry point needs a separate view and trigger control, expecting a zero direct count and the specified real-table identifier together.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://www.sqlite.org/c3ref/changes.html" rel="noopener">Count The Number Of Rows Modified</a></li><li><a target="_blank" href="https://www.sqlite.org/lang_corefunc.html" rel="noopener">Built-In Scalar SQL Functions</a></li><li><a target="_blank" href="https://www.sqlite.org/lang_transaction.html" rel="noopener">Transaction</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--sqlite" href="/en/tags/SQLite/">SQLite</a>
+          
+            <a class="tag tag--triggers" href="/en/tags/Triggers/">Triggers</a>
+          
+            <a class="tag tag--change-counts" href="/en/tags/Change-counts/">Change counts</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F20%2Fsqlite-changes-trigger-exclusion%2F&text=Why%20does%20changes%20return%20one%20when%20a%20trigger%20wrote%20two%20more%20rows%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F20%2Fsqlite-changes-trigger-exclusion%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20does%20changes%20return%20one%20when%20a%20trigger%20wrote%20two%20more%20rows%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F20%2Fsqlite-changes-trigger-exclusion%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/20/systemd-private-tmp-path-visibility/">
+              <span>Previous Post</span>
+              <strong>Why can a service and the host see different files at the same tmp path?</strong>
+              <small>2026-11-20</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/20/redis-srandmember-count-sign-repetition/">
+              <span>Next Post</span>
+              <strong>Why can SRANDMEMBER return A three times from a set?</strong>
+              <small>2026-11-20</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#One-statement-and-its-wider-effects">One statement and its wider effects</a>
+          
+            <a class="toc-link toc-link--h2" href="#Assert-one-direct-row-and-two-audit-rows">Assert one direct row and two audit rows</a>
+          
+            <a class="toc-link toc-link--h2" href="#Read-the-audit-contract-directly">Read the audit contract directly</a>
+          
+            <a class="toc-link toc-link--h2" href="#What-if-the-INSERT-targets-a-view-with-an-INSTEAD-OF-trigger">What if the INSERT targets a view with an INSTEAD OF trigger?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>248</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>207</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>126</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>91</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/19/sqlite-integrity-check-foreign-key-scope/">Why can SQLite integrity_check return ok with an orphan row?</a></h3>
+          <p>2026-11-19</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/15/python-sqlite-backup-wal-committed-state/">Why can copying only the main SQLite file miss a committed row?</a></h3>
+          <p>2026-11-15</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/14/sqlite-table-xinfo-generated-columns/">Why does a SQLite schema diff miss a generated column?</a></h3>
+          <p>2026-11-14</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

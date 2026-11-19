@@ -1,0 +1,447 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>PostStart 里生成配置，为什么主进程仍可能先读不到？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="对照 PostStart 并发准备与显式串行入口，检查容器第一次读取是否已经拿到配置。">
+  
+  
+    <meta name="keywords" content="PostStart,ENTRYPOINT,初始化顺序">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/20/kubernetes-poststart-entrypoint-order/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/20/kubernetes-poststart-entrypoint-order/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/20/kubernetes-poststart-entrypoint-order/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/20/kubernetes-poststart-entrypoint-order/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="PostStart 里生成配置，为什么主进程仍可能先读不到？ | Midnight blog">
+    <meta property="og:description" content="对照 PostStart 并发准备与显式串行入口，检查容器第一次读取是否已经拿到配置。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/20/kubernetes-poststart-entrypoint-order/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/20/kubernetes-poststart-entrypoint-order/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/20/kubernetes-poststart-entrypoint-order/","name":"PostStart 里生成配置，为什么主进程仍可能先读不到？ | Midnight blog","description":"对照 PostStart 并发准备与显式串行入口，检查容器第一次读取是否已经拿到配置。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/20/kubernetes-poststart-entrypoint-order/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/20/kubernetes-poststart-entrypoint-order/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/20/kubernetes-poststart-entrypoint-order/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/20/kubernetes-poststart-entrypoint-order/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/20/kubernetes-poststart-entrypoint-order/","headline":"PostStart 里生成配置，为什么主进程仍可能先读不到？","description":"对照 PostStart 并发准备与显式串行入口，检查容器第一次读取是否已经拿到配置。","inLanguage":"zh-CN","datePublished":"2026-11-19T19:30:20.000Z","dateModified":"2026-11-19T19:30:20.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/"],"keywords":"Kubernetes, 启动准备"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/20/kubernetes-poststart-entrypoint-order/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"PostStart 里生成配置，为什么主进程仍可能先读不到？","item":"https://www.zyweb.vip/zh-CN/2026/11/20/kubernetes-poststart-entrypoint-order/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/20/kubernetes-poststart-entrypoint-order/" selected>zh-CN</option><option value="/en/2026/11/20/kubernetes-poststart-entrypoint-order/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/20/kubernetes-poststart-entrypoint-order/" selected>zh-CN</option><option value="/en/2026/11/20/kubernetes-poststart-entrypoint-order/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--kubernetes">Kubernetes</span>
+      <time datetime="2026-11-19T19:30:20.000Z">2026-11-20</time>
+    </div>
+
+    <h1>PostStart 里生成配置，为什么主进程仍可能先读不到？</h1>
+
+    
+      <p class="post-hero__summary">对照 PostStart 并发准备与显式串行入口，检查容器第一次读取是否已经拿到配置。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-19T19:30:20.000Z">2026-11-20</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/20/kubernetes-poststart-entrypoint-order/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/20/kubernetes-poststart-entrypoint-order/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>PostStart 与主进程没有先后保证。</li><li>必需准备要用明确的完成条件串联。</li><li>保留首次读取与容器尝试身份。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>PostStart 不能保证先于容器主进程完成。Kubernetes 会并发触发钩子与 ENTRYPOINT，因此把必需配置的生成放进 PostStart，主进程仍可能先尝试读取。需要明确的准备顺序时，让准备完成和应用启动进入同一条受控流程。</p>
+<p>例如应用启动的第一步是打开配置文件，部署清单同时声明一个负责写配置的 PostStart。两项都在同一个容器里，不代表文件先写好。某次调度恰好让钩子先完成，应用就能起来；另一次应用先读，出现缺文件。单次成功只说明当时的执行顺序可以工作，还没有建立下一次启动也成立的合同。</p>
+<h3 id="给第一次读取留下证据"><a href="#给第一次读取留下证据" class="headerlink" title="给第一次读取留下证据"></a>给第一次读取留下证据</h3><p>下面是未运行的集群练习，在隔离命名空间中创建两份 Pod。第一份把准备写入放在钩子里，特意加两秒延迟方便观察，但不承诺每次都能制造特定顺序。主进程先读一次，再等待文件出现并读第二次。它保持存活，避免把脚本立刻退出也混进初始次序的观察。</p>
+<pre><code class="yaml">apiVersion: v1
+kind: Pod
+metadata:
+  name: hook-preparation
+spec:
+  restartPolicy: Never
+  containers:
+  - name: app
+    image: busybox:1.36
+    command:
+    - sh
+    - -c
+    - |
+      file=/tmp/prepared-config
+      if test -f &quot;$file&quot;; then
+        printf &#39;initial=&#39;
+        cat &quot;$file&quot;
+      else
+        echo initial=missing
+      fi
+      while ! test -f &quot;$file&quot;; do sleep 1; done
+      printf &#39;later=&#39;
+      cat &quot;$file&quot;
+      sleep 60
+    lifecycle:
+      postStart:
+        exec:
+          command:
+          - sh
+          - -ec
+          - sleep 2; printf &#39;prepared\n&#39; &gt; /tmp/prepared-config.tmp; mv /tmp/prepared-config.tmp /tmp/prepared-config
+</code></pre>
+<p>第二份独立对象把生成和读取放到同一段 shell 中。没有 PostStart 准备动作，写入成功才继续读取。这里用短命令代表准备，真正应用应在准备步骤失败时保留错误并停止启动。</p>
+<pre><code class="yaml">apiVersion: v1
+kind: Pod
+metadata:
+  name: ordered-preparation
+spec:
+  restartPolicy: Never
+  containers:
+  - name: app
+    image: busybox:1.36
+    command:
+    - sh
+    - -ec
+    - |
+      file=/tmp/prepared-config
+      printf &#39;prepared\n&#39; &gt; &quot;$file&quot;
+      echo preparation-complete
+      printf &#39;initial=&#39;
+      cat &quot;$file&quot;
+      sleep 60
+</code></pre>
+<p>保存两份清单后，在一次性测试上下文执行创建，分别采集各 Pod 的日志和状态。运行环境需要镜像可拉取并允许这些 Pod 的字段与写入路径。记录 UID、容器当前状态和 restartCount，确认日志属于本次对象、同一次容器尝试。本文没有连接 API、创建 Pod 或运行上述容器，清单只做本地格式核查。</p>
+<p>第一份可能输出 initial=missing，随后 later=prepared；也可能第一次就读到 prepared。两种都符合钩子与主进程没有顺序保证。第二份若命令成功执行，日志应先有 preparation-complete，再有 initial=prepared。这个独立 oracle 来自一段 shell 的显式控制流。若两份对象没有启动成功，先查实际事件和错误，不要把没有日志写成没有竞态。<a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/">容器生命周期钩子的顺序</a></p>
+<h3 id="决定配置由谁完成准备"><a href="#决定配置由谁完成准备" class="headerlink" title="决定配置由谁完成准备"></a>决定配置由谁完成准备</h3><p>如果应用每次启动都必须取得一份本地配置，最直接的边界是准备函数成功返回以后才打开它。可由应用本身管理这一步，或由受控入口脚本完成后再 exec 应用。两者都需要检查准备成功的真实条件。比如请求返回成功但文件仍未落盘，入口脚本还要按约定读回内容或等待明确的完成信号，不能只把时间延迟换成启动合同。</p>
+<p>如果准备动作适合独立容器，需要按 init 容器的语义和共享卷合同另行设计。共享的应是约定目录及文件身份，不能因为两个容器都写同样的字符串路径就推定看到同一文件。这里的两份样例各只有一个容器，不验证跨容器文件交接，也没有把生成配置交给探针。探针可以观察条件，应用输入的生产仍需要明确所有者。</p>
+<p>修复也不一定等于把所有初始化移到更早阶段。有些 PostStart 工作本来不构成主进程的输入前提，例如登记可独立完成的状态。先列出它与应用之间有没有必需的先后关系。若没有，允许并发可以符合原设计；若有，就用能建立顺序的流程表达，并将这个关系加入验收。不要用一次没失败就证明两项动作之间从来没有依赖。</p>
+<h3 id="让故障记录保留第一次读取"><a href="#让故障记录保留第一次读取" class="headerlink" title="让故障记录保留第一次读取"></a>让故障记录保留第一次读取</h3><p>容器后来读到了配置，不会改写第一次 missing 的事实。排障时可以给初始读取与后续读取分别加阶段标记，避免只保存最后一条成功日志。实际应用若第一次缺文件就退出，更应保留该次尝试的原始错误，并核对是否发生过新容器尝试。下一次启动成功与原来那次读取失败应各有自己的身份。</p>
+<p>还要确认修复后的用例真的会拒绝准备失败。可以在独立环境让准备步骤明确返回错误，再验证入口没有启动应用。随后恢复准备，确认应用读到本轮正确内容。这个负向扩展未运行；它对应的独立判断是“准备未完成时不继续”，而不只是成功路径里日志顺序好看。</p>
+<p>对例子里的两秒延迟也应这样理解。它帮助拉开观测窗口，不保证 kubelet、容器运行时和应用得到精确时间表。生产配置要用真实完成信号建立关系。看到第一次读取缺失，就有证据调查依赖顺序；一次都没看到，也仍然需要按官方语义决定这份设计是否成立。</p>
+<p>文件发布步骤也要有清楚的成功条件。钩子先写临时路径，写入成功后才移到应用读取路径，错误则中止。这样比较集中在发布前后读取，避免把尚未写完的普通文件当成已经准备。真实配置如果还要校验，应在发布前完成，再把本轮内容身份交给应用。这个步骤没有验证异常掉电后的持久性，样例也没有测试断电；它约束的是准备的普通执行顺序。</p>
+<h3 id="PostStart-成功过，就能假定只执行一次吗？"><a href="#PostStart-成功过，就能假定只执行一次吗？" class="headerlink" title="PostStart 成功过，就能假定只执行一次吗？"></a>PostStart 成功过，就能假定只执行一次吗？</h3><p>不能。Kubernetes 把钩子交付描述为至少一次，处理动作有可能重复发生。若动作会产生业务副作用，应给它自己的幂等身份与结果核对。成功一次只能说明那次调用完成。这个问答加入重复交付条件，主例只比较同一容器尝试内的准备次序，没有运行重复钩子实验。<a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/#hook-delivery-guarantees">钩子交付保证</a></p>
+<p><a href="/zh-CN/2026/10/09/kubernetes-probe-responsibilities/">相关站内阅读：探针观察的状态与恢复动作</a></p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/" rel="noopener">Container Lifecycle Hooks — Kubernetes — PostStart and hook delivery</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--kubernetes" href="/zh-CN/tags/Kubernetes/">Kubernetes</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%90%AF%E5%8A%A8%E5%87%86%E5%A4%87/">启动准备</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F20%2Fkubernetes-poststart-entrypoint-order%2F&text=PostStart%20%E9%87%8C%E7%94%9F%E6%88%90%E9%85%8D%E7%BD%AE%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%BB%E8%BF%9B%E7%A8%8B%E4%BB%8D%E5%8F%AF%E8%83%BD%E5%85%88%E8%AF%BB%E4%B8%8D%E5%88%B0%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F20%2Fkubernetes-poststart-entrypoint-order%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=PostStart%20%E9%87%8C%E7%94%9F%E6%88%90%E9%85%8D%E7%BD%AE%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%BB%E8%BF%9B%E7%A8%8B%E4%BB%8D%E5%8F%AF%E8%83%BD%E5%85%88%E8%AF%BB%E4%B8%8D%E5%88%B0%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F20%2Fkubernetes-poststart-entrypoint-order%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/20/ml-group-shuffle-size-groups-not-rows/">
+              <span>上一篇</span>
+              <strong>GroupShuffleSplit 设一半，为什么测试行数不是一半？</strong>
+              <small>2026-11-20</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/20/javascript-padstart-filler-prefix/">
+              <span>下一篇</span>
+              <strong>padStart 用 ab 补三位，为什么得到 aba？</strong>
+              <small>2026-11-20</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h3" href="#给第一次读取留下证据">给第一次读取留下证据</a>
+          
+            <a class="toc-link toc-link--h3" href="#决定配置由谁完成准备">决定配置由谁完成准备</a>
+          
+            <a class="toc-link toc-link--h3" href="#让故障记录保留第一次读取">让故障记录保留第一次读取</a>
+          
+            <a class="toc-link toc-link--h3" href="#PostStart-成功过，就能假定只执行一次吗？">PostStart 成功过，就能假定只执行一次吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>248</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>207</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/19/kubernetes-cronjob-start-deadline-window/">CronJob 晚到一分钟，为什么这次 Job 没补出来？</a></h3>
+          <p>2026-11-19</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/">一个 Pending Pod 明明有空闲节点，为什么不开始调度？</a></h3>
+          <p>2026-11-18</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/17/kubernetes-job-suspend-active-pod-replacement/">暂停 Kubernetes Job，正在运行的 Pod 会原地等吗？</a></h3>
+          <p>2026-11-17</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

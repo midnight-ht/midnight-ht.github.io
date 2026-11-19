@@ -1,0 +1,424 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>触发器又写了两行，changes 为什么还只返回一？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="在隔离 SQLite 事务里检查一次直接插入与两条触发器审计，并核对回滚后的两表状态。">
+  
+  
+    <meta name="keywords" content="changes,trigger,审计记录">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/20/sqlite-changes-trigger-exclusion/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="触发器又写了两行，changes 为什么还只返回一？ | Midnight blog">
+    <meta property="og:description" content="在隔离 SQLite 事务里检查一次直接插入与两条触发器审计，并核对回滚后的两表状态。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/","name":"触发器又写了两行，changes 为什么还只返回一？ | Midnight blog","description":"在隔离 SQLite 事务里检查一次直接插入与两条触发器审计，并核对回滚后的两表状态。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/","headline":"触发器又写了两行，changes 为什么还只返回一？","description":"在隔离 SQLite 事务里检查一次直接插入与两条触发器审计，并核对回滚后的两表状态。","inLanguage":"zh-CN","datePublished":"2026-11-19T19:30:20.000Z","dateModified":"2026-11-19T19:30:20.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.sqlite.org/c3ref/changes.html","https://www.sqlite.org/lang_corefunc.html","https://www.sqlite.org/lang_transaction.html"],"keywords":"SQLite, 触发器, 变更计数"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"触发器又写了两行，changes 为什么还只返回一？","item":"https://www.zyweb.vip/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/" selected>zh-CN</option><option value="/en/2026/11/20/sqlite-changes-trigger-exclusion/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/" selected>zh-CN</option><option value="/en/2026/11/20/sqlite-changes-trigger-exclusion/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--sqlite">SQLite</span>
+      <time datetime="2026-11-19T19:30:20.000Z">2026-11-20</time>
+    </div>
+
+    <h1>触发器又写了两行，changes 为什么还只返回一？</h1>
+
+    
+      <p class="post-hero__summary">在隔离 SQLite 事务里检查一次直接插入与两条触发器审计，并核对回滚后的两表状态。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-19T19:30:20.000Z">2026-11-20</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/20/sqlite-changes-trigger-exclusion/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/20/sqlite-changes-trigger-exclusion/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>changes 不累加下层触发器的辅助写入。</li><li>直接计数与审计身份分别检查。</li><li>作用于视图的语句不能用零计数推断无业务变化。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>插入一条任务，AFTER INSERT 触发器又写了两条审计记录，SELECT changes() 仍然返回一。它统计最近完成的那条直接写语句，不把下层触发器造成的辅助变更加进来。核对审计是否执行，需要另外读取审计记录。</p>
+<h2 id="一条语句与整个副作用范围不同"><a href="#一条语句与整个副作用范围不同" class="headerlink" title="一条语句与整个副作用范围不同"></a>一条语句与整个副作用范围不同</h2><p>假设本地任务表每增加一个编号，就在 audit 表写开始和结束两个教学标记。调用者看见任务插入成功，也知道审计表应该出现两行，于是期待影响行数是三。这个期待把直接操作与触发器程序混成了一个计数。数据库的 changes 接口保留的是前者，不能用它当成所有表受影响行数的总和。</p>
+<p>SQLite 的 SQL changes() 包装底层 changes64 接口，遵循同一计数规则。官方文档明确排除触发器、外键动作和 REPLACE 冲突处理等辅助变化。这里的两行审计都发生在下层触发器中，所以外部插入完成后读到一是正常结果。它没有表示触发器只写了一行，也没有表示触发器没运行。</p>
+<p>计数还属于具体连接和最近一条完成的写语句。若同一条连接稍后又执行另一条 INSERT，再读取 changes，就可能观察另一项操作。应用应该在对应语句之后及时关联结果，而不是跨几个无关写入再用同一个数字解释最早的任务。SELECT 观察本身没有把三行变化重新聚合成一份业务统计。</p>
+<h2 id="一条直接行，两条审计行，各有断言"><a href="#一条直接行，两条审计行，各有断言" class="headerlink" title="一条直接行，两条审计行，各有断言"></a>一条直接行，两条审计行，各有断言</h2><p>下面的夹具在独立内存库建立普通表和触发器，用显式事务观察插入之后与回滚之后的状态。连接不参与项目数据。辅助查询函数只把游标读成列表，便于所有预期使用相同的结果形状。</p>
+<pre><code class="python">import sqlite3
+from contextlib import closing
+
+def rows(db, sql):
+    return list(db.execute(sql))
+
+with closing(sqlite3.connect(&quot;:memory:&quot;, isolation_level=None)) as db:
+    db.executescript(&quot;&quot;&quot;
+        CREATE TABLE task(id INTEGER PRIMARY KEY);
+        CREATE TABLE audit(task_id INTEGER, phase TEXT);
+        CREATE TRIGGER task_added AFTER INSERT ON task BEGIN
+            INSERT INTO audit VALUES(new.id, &#39;start&#39;);
+            INSERT INTO audit VALUES(new.id, &#39;end&#39;);
+        END;
+    &quot;&quot;&quot;)
+    rows(db, &quot;BEGIN&quot;)
+    rows(db, &quot;INSERT INTO task VALUES(7)&quot;)
+    assert rows(db, &quot;SELECT changes()&quot;) == [(1,)]
+    assert rows(db, &quot;SELECT id FROM task&quot;) == [(7,)]
+    assert rows(db, &quot;SELECT task_id,phase FROM audit ORDER BY phase&quot;) == [
+        (7, &quot;end&quot;), (7, &quot;start&quot;)
+    ]
+    rows(db, &quot;ROLLBACK&quot;)
+    assert rows(db, &quot;SELECT id FROM task&quot;) == []
+    assert rows(db, &quot;SELECT task_id,phase FROM audit&quot;) == []
+    print(sqlite3.sqlite_version, &quot;direct=1; audit=2; rollback removed both tables&#39; rows&quot;)
+</code></pre>
+<p>插入后 changes 恰好一，任务表恰好编号七，审计表则是两份带七的标记。审计查询按 phase 排序，所以预期先 end 再 start；这个排序只是稳定比较结果，没有把字母顺序解释成实际触发时间。要观察触发器执行顺序，必须另定义对应证据，而不是借展示顺序推断。</p>
+<p>这三条检查独立承担责任。如果只看计数，触发器根本没建好时也可能得到一。只看审计有两行，旧样本遗留的记录也可能误过。夹具检查任务编号与两个具体阶段，且内存库从空白开始，防止借别的任务的审计通过。生产验收同样应带业务标识，至少能把任务和审计关联回同一操作。</p>
+<p>随后回滚，两张表里这次新增的行都消失。这个控制说明语句计数不能当作提交回执，不过它只是这里的辅助失败路径。本文主问题是下层触发器是否计入直接行数，既不实现事务重试，也不推断所有外部副作用都会随数据库回滚。触发器若调用别的系统，是否可以撤回还需要另外设计与验证。</p>
+<h2 id="审计验收应该读到什么"><a href="#审计验收应该读到什么" class="headerlink" title="审计验收应该读到什么"></a>审计验收应该读到什么</h2><p>先确定审计合同是每条任务两份阶段记录，还是只有某一种状态变化才需要记录。如果触发器带条件，测试要同时覆盖满足和不满足条件的输入，分别核对审计应该出现或不出现。把 changes 的一当作触发器执行的证据，会让有条件分支一直处于未知状态。</p>
+<p>应用可把直接语句结果与业务验收结果放在不同字段里，例如记录直接插入一条，同时标明任务七的两份审计已经从目标库读出。只有确实完成读取才填写后者。如果任务由异步服务继续处理，应在相应完成事件之后更新状态，不能拿一条数据库触发器的完成外推整个任务已经结束。当前例子没有队列或工作进程。</p>
+<p>对于批量写入，直接行数与审计条数也未必存在固定倍数关系。不同任务可能触发不同规则，触发器也可能更新已有记录。验收应依据具体输入列出预期标识与状态，不能看到这份样例是一比二，就把所有生产写入乘二当成审计数量。要做统计指标，先说明它统计直接行、辅助行还是业务事件，再选择对应来源。</p>
+<p>本站的<a href="/zh-CN/2026/10/29/sqlite-replace-delete-identity/">REPLACE 删除与身份</a>讨论冲突解决中内部删除的另一份观察边界。这里不使用替换语句，只用一次普通 INSERT 和明确的两条触发器写入，使计数范围能单独被验证。两篇都要求核对最终记录，但不能从那篇的删除特例推断所有触发器都没执行。</p>
+<p>可以另开一个空白目标库作为验收负控制，要求它不能提供任务七及其审计。这样即使实际查询误发到另一个库，身份断言也不会因一个相同的行数而通过。这份跨库控制没有执行。</p>
+<p>日志还需要保留结果属于哪次连接调用。若把池里另一条连接的数字贴到本次请求，数值碰巧是一也不构成证据。实际服务可以在受控回执里关联操作标识、执行入口与读取时点；样例的所有操作在同一连接顺序完成，没有验证连接池或并发共享。</p>
+<h2 id="如果-INSERT-的对象是有-INSTEAD-OF-触发器的视图呢？"><a href="#如果-INSERT-的对象是有-INSTEAD-OF-触发器的视图呢？" class="headerlink" title="如果 INSERT 的对象是有 INSTEAD OF 触发器的视图呢？"></a>如果 INSERT 的对象是有 INSTEAD OF 触发器的视图呢？</h2><p>直接作用于视图的 INSERT、UPDATE 或 DELETE，其 changes 结果为零，即使 INSTEAD OF 触发器对真实表做了写入。这又增加了一个需要知道目标对象种类的条件。接收方不能把零一律解释成业务没有发生，应按实际视图合同去读对应真实行。上面的夹具只操作真实表，视图变体未运行。支持此入口时，另建视图与触发器，要求直接计数零、真实目标出现指定编号，两份预期同时成立。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.sqlite.org/c3ref/changes.html" rel="noopener">Count The Number Of Rows Modified</a></li><li><a target="_blank" href="https://www.sqlite.org/lang_corefunc.html" rel="noopener">Built-In Scalar SQL Functions</a></li><li><a target="_blank" href="https://www.sqlite.org/lang_transaction.html" rel="noopener">Transaction</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--sqlite" href="/zh-CN/tags/SQLite/">SQLite</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E8%A7%A6%E5%8F%91%E5%99%A8/">触发器</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%8F%98%E6%9B%B4%E8%AE%A1%E6%95%B0/">变更计数</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F20%2Fsqlite-changes-trigger-exclusion%2F&text=%E8%A7%A6%E5%8F%91%E5%99%A8%E5%8F%88%E5%86%99%E4%BA%86%E4%B8%A4%E8%A1%8C%EF%BC%8Cchanges%20%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E5%8F%AA%E8%BF%94%E5%9B%9E%E4%B8%80%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F20%2Fsqlite-changes-trigger-exclusion%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E8%A7%A6%E5%8F%91%E5%99%A8%E5%8F%88%E5%86%99%E4%BA%86%E4%B8%A4%E8%A1%8C%EF%BC%8Cchanges%20%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E5%8F%AA%E8%BF%94%E5%9B%9E%E4%B8%80%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F20%2Fsqlite-changes-trigger-exclusion%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/20/systemd-private-tmp-path-visibility/">
+              <span>上一篇</span>
+              <strong>服务写了 /tmp 文件，宿主终端为什么读不到同一路径？</strong>
+              <small>2026-11-20</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/20/redis-srandmember-count-sign-repetition/">
+              <span>下一篇</span>
+              <strong>集合没有重复成员，SRANDMEMBER 为什么回了三次 A？</strong>
+              <small>2026-11-20</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#一条语句与整个副作用范围不同">一条语句与整个副作用范围不同</a>
+          
+            <a class="toc-link toc-link--h2" href="#一条直接行，两条审计行，各有断言">一条直接行，两条审计行，各有断言</a>
+          
+            <a class="toc-link toc-link--h2" href="#审计验收应该读到什么">审计验收应该读到什么</a>
+          
+            <a class="toc-link toc-link--h2" href="#如果-INSERT-的对象是有-INSTEAD-OF-触发器的视图呢？">如果 INSERT 的对象是有 INSTEAD OF 触发器的视图呢？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>248</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>207</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>124</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/19/sqlite-integrity-check-foreign-key-scope/">integrity_check 返回 ok，SQLite 为什么仍有孤儿行？</a></h3>
+          <p>2026-11-19</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/15/python-sqlite-backup-wal-committed-state/">SQLite 开着 WAL 时，只复制数据库文件会漏掉哪条记录？</a></h3>
+          <p>2026-11-15</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/14/sqlite-table-xinfo-generated-columns/">SQLite 表里有生成列，为什么 schema diff 看不见？</a></h3>
+          <p>2026-11-14</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
