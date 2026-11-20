@@ -1,0 +1,427 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>range 顺序会变，Marshal 的 map JSON 为什么仍按键排好？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="对照不同赋值顺序的普通 map，检查 Go JSON 编码排序及整数键先转文本的条件。">
+  
+  
+    <meta name="keywords" content="Marshal,map key,键排序">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/21/go-json-marshal-map-key-order/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/21/go-json-marshal-map-key-order/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/21/go-json-marshal-map-key-order/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/21/go-json-marshal-map-key-order/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="range 顺序会变，Marshal 的 map JSON 为什么仍按键排好？ | Midnight blog">
+    <meta property="og:description" content="对照不同赋值顺序的普通 map，检查 Go JSON 编码排序及整数键先转文本的条件。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/21/go-json-marshal-map-key-order/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/21/go-json-marshal-map-key-order/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/21/go-json-marshal-map-key-order/","name":"range 顺序会变，Marshal 的 map JSON 为什么仍按键排好？ | Midnight blog","description":"对照不同赋值顺序的普通 map，检查 Go JSON 编码排序及整数键先转文本的条件。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/21/go-json-marshal-map-key-order/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/21/go-json-marshal-map-key-order/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/21/go-json-marshal-map-key-order/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/21/go-json-marshal-map-key-order/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/21/go-json-marshal-map-key-order/","headline":"range 顺序会变，Marshal 的 map JSON 为什么仍按键排好？","description":"对照不同赋值顺序的普通 map，检查 Go JSON 编码排序及整数键先转文本的条件。","inLanguage":"zh-CN","datePublished":"2026-11-20T19:29:43.000Z","dateModified":"2026-11-20T19:29:43.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://pkg.go.dev/encoding/json#Marshal","https://go.dev/ref/spec"],"keywords":"Go, JSON, 序列化"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/21/go-json-marshal-map-key-order/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"range 顺序会变，Marshal 的 map JSON 为什么仍按键排好？","item":"https://www.zyweb.vip/zh-CN/2026/11/21/go-json-marshal-map-key-order/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/21/go-json-marshal-map-key-order/" selected>zh-CN</option><option value="/en/2026/11/21/go-json-marshal-map-key-order/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/21/go-json-marshal-map-key-order/" selected>zh-CN</option><option value="/en/2026/11/21/go-json-marshal-map-key-order/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--go">Go</span>
+      <time datetime="2026-11-20T19:29:43.000Z">2026-11-21</time>
+    </div>
+
+    <h1>range 顺序会变，Marshal 的 map JSON 为什么仍按键排好？</h1>
+
+    
+      <p class="post-hero__summary">对照不同赋值顺序的普通 map，检查 Go JSON 编码排序及整数键先转文本的条件。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-20T19:29:43.000Z">2026-11-21</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/21/go-json-marshal-map-key-order/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/21/go-json-marshal-map-key-order/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>普通 map 的 JSON 编码按转换后的键排序。</li><li>map 遍历顺序与编码排序是不同合同。</li><li>整数键转成文本后排序，不是数值次序。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Go 的 map 迭代顺序没有保证，但普通 map 交给 encoding/json 的 Marshal 时，编码器会排序键。两份用不同赋值顺序建立的字符串键 map，可以按同一份独立 JSON 文本验收。这里检查编码器合同，不靠反复观察 range 猜测输出规律。</p>
+<h2 id="迭代入口与编码入口各遵守什么"><a href="#迭代入口与编码入口各遵守什么" class="headerlink" title="迭代入口与编码入口各遵守什么"></a>迭代入口与编码入口各遵守什么</h2><p>假设导出工具把 a 对应一、z 对应二的配置写成 JSON。有一份 map 先放 z，另一份先放 a。开发者担心语言里的 map 顺序不稳定，于是把快照测试改成接受任意文本。实际上，对这个明确的标准库编码入口，文档已经给出键排序合同，可以直接写下预期。</p>
+<p>Go 语言规范说，map 的迭代顺序未指定，也不保证每次相同。这不要求每次遍历都表现出不同顺序，更不能用某次碰巧按字母排列来证明 map 自身有序。测试若要求两次 range 必须不同，也是在加入规范没有提供的承诺。正确的被测对象应该是应用实际调用的序列化入口。</p>
+<p>本篇限定普通的 encoding/json v1 Marshal、字符串键与整数值，不使用自定义编码方法。该文档说明 map 值编码成 JSON 对象，支持的键类型经过规定转换后排序。排序动作属于编码过程，没有把源 map 转成一个随后可以有序 range 的容器。编码完再遍历，仍不能借 JSON 的顺序外推 map 的遍历保证。</p>
+<h2 id="不同赋值顺序，同一个完整文本预期"><a href="#不同赋值顺序，同一个完整文本预期" class="headerlink" title="不同赋值顺序，同一个完整文本预期"></a>不同赋值顺序，同一个完整文本预期</h2><p>下面的 Go 夹具未执行。两份独立 map 有相同键值对，创建步骤次序不同。程序用固定字面预期比较完整输出，最后一组整数键留给追问，不依赖任何 range 轨迹。</p>
+<pre><code class="go">package main
+
+import &quot;encoding/json&quot;
+
+func encode(value any) string {
+    data, err := json.Marshal(value)
+    if err != nil {
+        panic(err)
+    }
+    return string(data)
+}
+
+func main() {
+    first := map[string]int{}
+    first[&quot;z&quot;] = 2
+    first[&quot;a&quot;] = 1
+    second := map[string]int{}
+    second[&quot;a&quot;] = 1
+    second[&quot;z&quot;] = 2
+    want := &quot;{\&quot;a\&quot;:1,\&quot;z\&quot;:2}&quot;
+    if encode(first) != want || encode(second) != want {
+        panic(&quot;ordinary string-map key order mismatch&quot;)
+    }
+    numbers := map[int]string{2: &quot;B&quot;, 10: &quot;J&quot;}
+    if encode(numbers) != &quot;{\&quot;10\&quot;:\&quot;J\&quot;,\&quot;2\&quot;:\&quot;B\&quot;}&quot; {
+        panic(&quot;integer key conversion order mismatch&quot;)
+    }
+}
+</code></pre>
+<p>两份字符串键 map 都应得到 a 在前、z 在后的紧凑文本，值分别是一和二。测试不仅比较两份输出彼此相等，还分别与独立预期比较。如果实现把两份输入都错误编码成空对象，它们仍然可以相等，后一个条件才能拒绝这类共同错误。</p>
+<p>完整文本也能保护值与键的关联。把 a 与 z 的值交换，键顺序依然正确，内容却已经不符合配置。只扫描开头是不是 a，或者只数有两个成员，都无法发现。对快照是否采用字节级比较，应该由接口决定：若只关心语义，可比较解析后的结构；若这个入口承诺指定表示，可以针对其支持范围检查文本。</p>
+<p>还可以把 z 的值单独改成三，要求输出保持同样键顺序但不再匹配原快照。这条未执行的负控制用于确认测试没有只抽取键名，也没有把所有整数都当成可以忽略的表示差异。真正需要保护的是完整键值关系。</p>
+<p>这不是跨语言 JSON 规范化实现。键顺序只是完整表示的一个条件，数值写法、字符串转义以及用户自定义编码都可能需要另外的协议约定。若业务要给表示签名或制作跨系统一致的摘要，应选择明确的规范化方案并按真实入口验证，不能从这两份简单 map 的结果升级成所有 JSON 都有同一份字节表示。</p>
+<h2 id="快照测试应把允许变化的范围写清"><a href="#快照测试应把允许变化的范围写清" class="headerlink" title="快照测试应把允许变化的范围写清"></a>快照测试应把允许变化的范围写清</h2><p>对一个只保存简单配置的 Go 内部工具，可以固定使用这个编码入口和输入类型，为完整输出保留一条明确的回归。若以后加了自定义类型，应先检查其编码方法，再调整范围。不要因为新增分支仍返回合法 JSON，就默认原先的字面快照还能覆盖它。</p>
+<p>如果业务并不在意对象成员顺序，解析后比较结构能表达这个需求。但解析路径也要保存数字类型、重复成员与格式拒绝等相关政策。把所有文本差异都忽略，可能连数据变化一起放过；把所有差异都当错误，又可能把接口允许的表示变动变成无意义失败。先写所需合同，再选比较层。</p>
+<p>对于诊断，可以同时保留输入键值的受控快照、采用的编码器版本和实际输出。源 map 之后被修改时，旧输出仍代表当时那次编码。若只留下一个以后再展开的对象引用，读者看到的可能已经是新配置。当前夹具没有并发修改，快照何时取得仍由应用协调，键排序没有提供并发一致性。</p>
+<p>本站的<a href="/zh-CN/2026/11/09/javascript-json-tojson-replacer-order/">JSON 自定义转换顺序</a>讨论 JavaScript 的 toJSON 与 replacer 如何改变字段。这个 Go 例子没有那些钩子，关心普通 map 键的输出次序。二者都提醒评审者从真正的编码入口追踪输入，不能因为都生成 JSON，就把一个实现的处理顺序复制到另一份接口。</p>
+<p>还可以给服务端与命令行工具分别使用同一份固定输入，检查它们实际导出的文件是否来自相同入口。单元夹具里的 Marshal 输出准确，并不能证明外层工具没有加缩进、包裹字段或后续转换。需要字节级合同的消费者，应从最终交付文件核对；当前样例只构造字符串，没有保存文件或调用 API。</p>
+<h2 id="整数键二和十，会按数值大小排列吗？"><a href="#整数键二和十，会按数值大小排列吗？" class="headerlink" title="整数键二和十，会按数值大小排列吗？"></a>整数键二和十，会按数值大小排列吗？</h2><p>整数键先转换为字符串，再作为 JSON 对象键排序，所以十的文本 10 排在 2 前面。夹具最后一条预期为 10 对应 J、2 对应 B，这不同于按整数从小到大展示。接收方拿到的对象键本身也是字符串，不能把这个顺序当作数字榜单。</p>
+<p>如果界面需要二在十前面，应在展示时采用明确的数值排序，或者使用能表达业务顺序的数组。这个追问新增键类型转换条件。它没有改变字符串键的主例，也没有承诺所有实现都按同一方式处理自定义键类型。支持这些类型时，应另按文档规则验证其转换结果和冲突处理。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://pkg.go.dev/encoding/json#Marshal" rel="noopener">json package - encoding/json - Go Packages</a></li><li><a target="_blank" href="https://go.dev/ref/spec" rel="noopener">The Go Programming Language Specification - The Go Programming Language</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--go" href="/zh-CN/tags/Go/">Go</a>
+          
+            <a class="tag tag--json" href="/zh-CN/tags/JSON/">JSON</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%BA%8F%E5%88%97%E5%8C%96/">序列化</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F21%2Fgo-json-marshal-map-key-order%2F&text=range%20%E9%A1%BA%E5%BA%8F%E4%BC%9A%E5%8F%98%EF%BC%8CMarshal%20%E7%9A%84%20map%20JSON%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E6%8C%89%E9%94%AE%E6%8E%92%E5%A5%BD%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F21%2Fgo-json-marshal-map-key-order%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=range%20%E9%A1%BA%E5%BA%8F%E4%BC%9A%E5%8F%98%EF%BC%8CMarshal%20%E7%9A%84%20map%20JSON%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E6%8C%89%E9%94%AE%E6%8E%92%E5%A5%BD%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F21%2Fgo-json-marshal-map-key-order%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/21/go-time-equal-operator-map-key/">
+              <span>上一篇</span>
+              <strong>两个 Time 表示同一瞬间，map 为什么收成两把键？</strong>
+              <small>2026-11-21</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/21/git-ls-files-eol-index-worktree/">
+              <span>下一篇</span>
+              <strong>Git 说文件是 LF，编辑器为什么仍看到 CRLF？</strong>
+              <small>2026-11-21</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#迭代入口与编码入口各遵守什么">迭代入口与编码入口各遵守什么</a>
+          
+            <a class="toc-link toc-link--h2" href="#不同赋值顺序，同一个完整文本预期">不同赋值顺序，同一个完整文本预期</a>
+          
+            <a class="toc-link toc-link--h2" href="#快照测试应把允许变化的范围写清">快照测试应把允许变化的范围写清</a>
+          
+            <a class="toc-link toc-link--h2" href="#整数键二和十，会按数值大小排列吗？">整数键二和十，会按数值大小排列吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>247</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>207</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/21/go-time-equal-operator-map-key/">两个 Time 表示同一瞬间，map 为什么收成两把键？</a></h3>
+          <p>2026-11-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/20/go-csv-fields-per-record-first-read/">CSV Reader 为什么把第二行判成字段数错误？</a></h3>
+          <p>2026-11-20</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/20/go-strings-trim-cutset-prefix/">Trim 想删 .zip，为什么把合法字母也删了？</a></h3>
+          <p>2026-11-20</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

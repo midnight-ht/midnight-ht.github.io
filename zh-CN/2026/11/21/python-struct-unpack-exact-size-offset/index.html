@@ -1,0 +1,429 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>头字段只有两字节，unpack 为什么拒绝更大的完整帧？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="比较固定二字节头的精确缓冲和偏移读取，检查短头、载荷边界与固定记录余数。">
+  
+  
+    <meta name="keywords" content="unpack,unpack_from,offset">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/21/python-struct-unpack-exact-size-offset/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/21/python-struct-unpack-exact-size-offset/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/21/python-struct-unpack-exact-size-offset/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/21/python-struct-unpack-exact-size-offset/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="头字段只有两字节，unpack 为什么拒绝更大的完整帧？ | Midnight blog">
+    <meta property="og:description" content="比较固定二字节头的精确缓冲和偏移读取，检查短头、载荷边界与固定记录余数。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/21/python-struct-unpack-exact-size-offset/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/21/python-struct-unpack-exact-size-offset/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/21/python-struct-unpack-exact-size-offset/","name":"头字段只有两字节，unpack 为什么拒绝更大的完整帧？ | Midnight blog","description":"比较固定二字节头的精确缓冲和偏移读取，检查短头、载荷边界与固定记录余数。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/21/python-struct-unpack-exact-size-offset/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/21/python-struct-unpack-exact-size-offset/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/21/python-struct-unpack-exact-size-offset/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/21/python-struct-unpack-exact-size-offset/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/21/python-struct-unpack-exact-size-offset/","headline":"头字段只有两字节，unpack 为什么拒绝更大的完整帧？","description":"比较固定二字节头的精确缓冲和偏移读取，检查短头、载荷边界与固定记录余数。","inLanguage":"zh-CN","datePublished":"2026-11-20T19:29:43.000Z","dateModified":"2026-11-20T19:29:43.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.14/library/struct.html"],"keywords":"Python, 二进制解析, struct"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/21/python-struct-unpack-exact-size-offset/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"头字段只有两字节，unpack 为什么拒绝更大的完整帧？","item":"https://www.zyweb.vip/zh-CN/2026/11/21/python-struct-unpack-exact-size-offset/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/21/python-struct-unpack-exact-size-offset/" selected>zh-CN</option><option value="/en/2026/11/21/python-struct-unpack-exact-size-offset/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/21/python-struct-unpack-exact-size-offset/" selected>zh-CN</option><option value="/en/2026/11/21/python-struct-unpack-exact-size-offset/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--python">Python</span>
+      <time datetime="2026-11-20T19:29:43.000Z">2026-11-21</time>
+    </div>
+
+    <h1>头字段只有两字节，unpack 为什么拒绝更大的完整帧？</h1>
+
+    
+      <p class="post-hero__summary">比较固定二字节头的精确缓冲和偏移读取，检查短头、载荷边界与固定记录余数。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-20T19:29:43.000Z">2026-11-21</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/21/python-struct-unpack-exact-size-offset/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/21/python-struct-unpack-exact-size-offset/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>unpack 要求缓冲区恰好匹配格式尺寸。</li><li>unpack_from 从偏移处要求足够字节。</li><li>完整帧和固定记录尾部需要额外验证。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>完整帧的开头明明有两字节头字段，struct.unpack 却因为后面还带着载荷而报大小不符。unpack 要求整个缓冲区恰好符合格式尺寸。若要从较大的缓冲区指定位置读字段，可以使用 unpack_from，并另外核对头字段与载荷边界。</p>
+<h2 id="两字节足够，不代表整份输入必须只有两字节"><a href="#两字节足够，不代表整份输入必须只有两字节" class="headerlink" title="两字节足够，不代表整份输入必须只有两字节"></a>两字节足够，不代表整份输入必须只有两字节</h2><p>假设本地教学帧先放一个标记 X，再放两字节长度，最后是 abc 三个载荷字节。格式 !H 表示按网络字节序处理无符号短整数，长度字段固定两字节，不采用本机默认对齐。长度三从索引一开始，载荷从索引三开始。这个明确布局使测试不必猜测解释器运行在哪种机器上。</p>
+<p>unpack 面对的是一份完整的格式输入。调用者给它一整个帧，它看到的大小超过两个字节，因此拒绝；这并不意味着长度三无法表示。先切出头字段再调用 unpack，就能满足恰好两字节的条件。另一条路径是让 unpack_from 从偏移一开始读取，只要求从该处往后有足够字节，允许后面继续存在载荷。</p>
+<p>这种宽松只针对供字段读取的缓冲范围。它没有证明标记正确、长度合理或声明的载荷真的全部存在。解析器得到一个整数以后，还要检查格式允许的范围和后续数据量。若只看字段读取成功就把整帧当成合法，可能把截断消息交给业务模块。应在接口里给这几个结果分别留出位置。</p>
+<h2 id="对照整帧、头切片和偏移读取"><a href="#对照整帧、头切片和偏移读取" class="headerlink" title="对照整帧、头切片和偏移读取"></a>对照整帧、头切片和偏移读取</h2><p>下面的夹具构造完整固定字节，分别走两种成功读取和两个尺寸错误路径。它只在内存中工作，没有读取套接字，也没有接受外部消息。最后的固定记录迭代用于后面的新条件。</p>
+<pre><code class="python">from struct import Struct, error, iter_unpack
+
+header = Struct(&quot;!H&quot;)
+pack = header.pack
+decode = header.unpack
+decode_from = header.unpack_from
+assert header.size == 2
+frame = b&quot;X&quot; + pack(3) + b&quot;abc&quot;
+try:
+    decode(frame)
+except error:
+    pass
+else:
+    raise AssertionError(&quot;unpack must reject an oversized buffer&quot;)
+assert decode(frame[1:3]) == (3,)
+assert decode_from(frame, 1) == (3,)
+assert frame[3:] == b&quot;abc&quot;
+try:
+    decode_from(b&quot;X\x00&quot;, 1)
+except error:
+    pass
+else:
+    raise AssertionError(&quot;only one header byte remains&quot;)
+assert list(iter_unpack(&quot;!H&quot;, pack(3) + pack(4))) == [(3,), (4,)]
+try:
+    list(iter_unpack(&quot;!H&quot;, pack(3) + b&quot;X&quot;))
+except error:
+    pass
+else:
+    raise AssertionError(&quot;fixed records require a size multiple&quot;)
+print(&quot;exact buffer and offset controls passed; incomplete headers/records rejected&quot;)
+</code></pre>
+<p>整帧调用 decode 预期进入 struct.error 分支。头切片与偏移读取都得到单项元组三，载荷切片必须恰好为 abc。单个字段仍返回元组，调用者如果直接拿它与整数比较，会误判业务值。夹具明确写出括号和逗号，保存真实返回形状。</p>
+<p>负例在偏移一后只剩一个头字节，必须报错。它能阻止把“缓冲区总共有两个字节”误当作偏移之后也有两个字节。正例又保留后面的 abc，确认 unpack_from 没有继承整个输入必须恰好两字节的限制。两个控制共同锁住真正的尺寸条件，而不是只证明某份输入碰巧读对。</p>
+<p>这些断言没有执行网络分帧。实际服务可能一次收到半个头，也可能一个缓冲区里有多帧；读取层要先定义何时等更多字节，何时认定输入已经结束。把当前缓存短当作最终错误，和收到终止输入后确实截断，可能对应不同处理。这里的短样本只是给定完整缓冲区时的库调用失败。</p>
+<h2 id="把字段尺寸与消息完整性分别验证"><a href="#把字段尺寸与消息完整性分别验证" class="headerlink" title="把字段尺寸与消息完整性分别验证"></a>把字段尺寸与消息完整性分别验证</h2><p>应用可在得到长度后，计算这份协议的载荷起点与结束位置，再比较实际可用量。对当前布局，头结束在三，声明长度三，预期消息结束在六。若缓冲区只有五字节，头仍能正确读成三，载荷却缺一个字节。若多出后续字节，应按协议决定它们属于下一帧、允许的尾部还是错误，不能由 unpack_from 自动替你选择。</p>
+<p>验收应从独立的完整字节开始，给正常帧、头短一字节、载荷短一字节和相邻两帧各一项预期。检查的不只是返回整数，还包括实际消费了多少字节、剩余哪一段、错误被交给谁。若读取代码只返回一个长度值，下游就无法区分它是否已确认整帧完整。这个输入表是应用验收设计，主夹具没有模拟连续网络读取。</p>
+<p>格式串也属于接口合同。若一处写 !H，另一处用默认本机格式，字节序或填充解释可能不一致。应在协议定义与代码中保存同一份明确格式，再从其他实现生成的固定样本交叉检查。当前例子只验证 Python 的明确格式，没有声称兼容某个外部设备，也没有把一个平台上的尺寸测量推广到所有本机格式。</p>
+<p>本站的<a href="/zh-CN/2026/11/20/python-gzip-concatenated-members/">连续 gzip 成员</a>讨论另一种边界：解压器可以处理多成员，但还原字节之后的业务记录仍需另验。这里没有压缩层，关注固定头字段怎样从更大的缓冲区取得。正确拆出头同样只是下一层验证的输入，不能作为业务对象已经可用的回执。</p>
+<p>本例所有偏移都是明确的非负常数，未覆盖从缓冲区末尾计数的负偏移。若公开接口允许调用者选择偏移，应把越界、负值及边界位置也列入自己的输入合同，再确认失败如何返回。</p>
+<p>调试时保留偏移值尤其有帮助。头字段从一开始，若维护者忘掉前面的标记，改成从零读取，可能仍得到一个合法范围内的整数。只检查没有异常会漏掉这一位错位。可以让标记、长度和载荷使用明显不同的字节，并核对完整预期；不要用全零缓冲区检测偏移，许多错读都会一样得到零。</p>
+<h2 id="iter-unpack-会忽略最后不足一条记录的字节吗？"><a href="#iter-unpack-会忽略最后不足一条记录的字节吗？" class="headerlink" title="iter_unpack 会忽略最后不足一条记录的字节吗？"></a>iter_unpack 会忽略最后不足一条记录的字节吗？</h2><p>它要求缓冲区长度是记录尺寸的整数倍。夹具用两个 !H 字段得到三和四两个元组，再在一个完整字段后多加 X，预期报错。它不会把最后一个字节默默丢掉。这个新条件针对等长记录的整体迭代，与允许较大载荷存在的 unpack_from 不同。若协议确实允许单独尾部，就先验证尾部合同，再把完整记录区传给迭代接口，避免通过截掉余数让坏输入表面成功。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/struct.html" rel="noopener">struct — Interpret bytes as packed binary data — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E4%BA%8C%E8%BF%9B%E5%88%B6%E8%A7%A3%E6%9E%90/">二进制解析</a>
+          
+            <a class="tag tag--struct" href="/zh-CN/tags/struct/">struct</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F21%2Fpython-struct-unpack-exact-size-offset%2F&text=%E5%A4%B4%E5%AD%97%E6%AE%B5%E5%8F%AA%E6%9C%89%E4%B8%A4%E5%AD%97%E8%8A%82%EF%BC%8Cunpack%20%E4%B8%BA%E4%BB%80%E4%B9%88%E6%8B%92%E7%BB%9D%E6%9B%B4%E5%A4%A7%E7%9A%84%E5%AE%8C%E6%95%B4%E5%B8%A7%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F21%2Fpython-struct-unpack-exact-size-offset%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E5%A4%B4%E5%AD%97%E6%AE%B5%E5%8F%AA%E6%9C%89%E4%B8%A4%E5%AD%97%E8%8A%82%EF%BC%8Cunpack%20%E4%B8%BA%E4%BB%80%E4%B9%88%E6%8B%92%E7%BB%9D%E6%9B%B4%E5%A4%A7%E7%9A%84%E5%AE%8C%E6%95%B4%E5%B8%A7%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F21%2Fpython-struct-unpack-exact-size-offset%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/21/redis-lpos-negative-rank-original-index/">
+              <span>上一篇</span>
+              <strong>LPOS 从尾部找，为什么仍返回正向下标？</strong>
+              <small>2026-11-21</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/21/python-itertools-product-input-pooling/">
+              <span>下一篇</span>
+              <strong>product 还没取第一项，为什么输入已经读完了？</strong>
+              <small>2026-11-21</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#两字节足够，不代表整份输入必须只有两字节">两字节足够，不代表整份输入必须只有两字节</a>
+          
+            <a class="toc-link toc-link--h2" href="#对照整帧、头切片和偏移读取">对照整帧、头切片和偏移读取</a>
+          
+            <a class="toc-link toc-link--h2" href="#把字段尺寸与消息完整性分别验证">把字段尺寸与消息完整性分别验证</a>
+          
+            <a class="toc-link toc-link--h2" href="#iter-unpack-会忽略最后不足一条记录的字节吗？">iter_unpack 会忽略最后不足一条记录的字节吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>247</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>207</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/21/python-hashlib-copy-prefix-branches/">同一个 hash 轮流加 A 和 B，为什么第二份摘要串上了 A？</a></h3>
+          <p>2026-11-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/21/python-heapreplace-heappushpop-retention/">新值比堆顶还小，heapreplace 为什么仍把旧值赶走？</a></h3>
+          <p>2026-11-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/21/python-itertools-product-input-pooling/">product 还没取第一项，为什么输入已经读完了？</a></h3>
+          <p>2026-11-21</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

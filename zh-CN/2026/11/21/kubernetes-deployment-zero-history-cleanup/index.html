@@ -1,0 +1,461 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>revisionHistoryLimit 已是零，为什么旧 ReplicaSet 还在？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="先核对 Deployment 本轮完成状态，再解释零历史保留与旧 ReplicaSet 的关系；集群演练待执行。">
+  
+  
+    <meta name="keywords" content="revisionHistoryLimit,ReplicaSet 清理,Deployment 完成">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/21/kubernetes-deployment-zero-history-cleanup/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/21/kubernetes-deployment-zero-history-cleanup/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/21/kubernetes-deployment-zero-history-cleanup/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/21/kubernetes-deployment-zero-history-cleanup/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="revisionHistoryLimit 已是零，为什么旧 ReplicaSet 还在？ | Midnight blog">
+    <meta property="og:description" content="先核对 Deployment 本轮完成状态，再解释零历史保留与旧 ReplicaSet 的关系；集群演练待执行。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/21/kubernetes-deployment-zero-history-cleanup/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/21/kubernetes-deployment-zero-history-cleanup/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/21/kubernetes-deployment-zero-history-cleanup/","name":"revisionHistoryLimit 已是零，为什么旧 ReplicaSet 还在？ | Midnight blog","description":"先核对 Deployment 本轮完成状态，再解释零历史保留与旧 ReplicaSet 的关系；集群演练待执行。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/21/kubernetes-deployment-zero-history-cleanup/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/21/kubernetes-deployment-zero-history-cleanup/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/21/kubernetes-deployment-zero-history-cleanup/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/21/kubernetes-deployment-zero-history-cleanup/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/21/kubernetes-deployment-zero-history-cleanup/","headline":"revisionHistoryLimit 已是零，为什么旧 ReplicaSet 还在？","description":"先核对 Deployment 本轮完成状态，再解释零历史保留与旧 ReplicaSet 的关系；集群演练待执行。","inLanguage":"zh-CN","datePublished":"2026-11-20T19:29:43.000Z","dateModified":"2026-11-20T19:29:43.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://kubernetes.io/docs/concepts/workloads/controllers/deployment/"],"keywords":"Kubernetes, 发布回执"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/21/kubernetes-deployment-zero-history-cleanup/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"revisionHistoryLimit 已是零，为什么旧 ReplicaSet 还在？","item":"https://www.zyweb.vip/zh-CN/2026/11/21/kubernetes-deployment-zero-history-cleanup/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/21/kubernetes-deployment-zero-history-cleanup/" selected>zh-CN</option><option value="/en/2026/11/21/kubernetes-deployment-zero-history-cleanup/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/21/kubernetes-deployment-zero-history-cleanup/" selected>zh-CN</option><option value="/en/2026/11/21/kubernetes-deployment-zero-history-cleanup/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--kubernetes">Kubernetes</span>
+      <time datetime="2026-11-20T19:29:43.000Z">2026-11-21</time>
+    </div>
+
+    <h1>revisionHistoryLimit 已是零，为什么旧 ReplicaSet 还在？</h1>
+
+    
+      <p class="post-hero__summary">先核对 Deployment 本轮完成状态，再解释零历史保留与旧 ReplicaSet 的关系；集群演练待执行。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-20T19:29:43.000Z">2026-11-21</time> · 预计阅读 10 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/21/kubernetes-deployment-zero-history-cleanup/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/21/kubernetes-deployment-zero-history-cleanup/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>零不意味着立即删除旧对象。</li><li>按 UID 与当前代次检查发布状态。</li><li>模板变化与扩缩副本需分别理解。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p><code>revisionHistoryLimit: 0</code> 不表示旧 ReplicaSet 会立即消失。Deployment 要完成以后才开始清理旧历史；一次滚动发布还没完成，尤其是新副本无法就绪时，不能只拿零这个配置值判定旧对象本应被删。<a target="_blank" rel="noopener" href="https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy">官方清理策略</a>明确说明了这个时点。</p>
+<p>例如运维把历史保留设成零，发布新镜像后仍看到旧 ReplicaSet，便怀疑控制器没有读取配置。先看这轮 Deployment 是否完成：旧副本可能还在支撑服务，新模板对应的副本却没有可用。此时旧对象留下，与“完成后不保留历史”并不矛盾。</p>
+<h3 id="用一次未完成发布检查推断"><a href="#用一次未完成发布检查推断" class="headerlink" title="用一次未完成发布检查推断"></a>用一次未完成发布检查推断</h3><p>下面给出隔离集群的复验输入，本文没有连接 Kubernetes 集群，也没有执行 kubectl。对象列表、拉取失败、完成和清理均是待观察的预期，不是本地实测结果。运行需要能创建命名空间的隔离上下文、可用控制器与镜像获取条件；不要把例子直接指向生产。</p>
+<p>将以下内容保存为 deployment.yaml。它有两个副本、零历史保留，并用 HTTP 就绪探测检查教学容器。镜像标签是例子的输入，复验前应确认它在目标环境能取得；这里没有证明任何业务镜像可用，也没有提供不可变镜像身份保证。</p>
+<pre><code class="yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zy21-history
+spec:
+  replicas: 2
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app: zy21-history
+  template:
+    metadata:
+      labels:
+        app: zy21-history
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.28.0
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+</code></pre>
+<p>保存下面的脚本。先替换 context 占位值，保持命名空间专用于本次演练，且不存在同名旧命名空间。首次创建失败就停止，别忽略错误继续操作。脚本先等初始发布，再改为用于制造失败的镜像地址，保留当前对象与事件；恢复时原子修改模板中的镜像和注解，使恢复模板有明确身份。</p>
+<pre><code class="sh">set -eu
+context=REPLACE_WITH_ISOLATED_CONTEXT
+namespace=zy21-history-lab
+k() { kubectl --context &quot;$context&quot; --namespace &quot;$namespace&quot; &quot;$@&quot;; }
+k create namespace &quot;$namespace&quot;
+k apply -f deployment.yaml
+k rollout status deployment/zy21-history --timeout=120s
+k get deployment zy21-history -o json &gt; initial-deployment.json
+k get replicasets -o json &gt; initial-replicasets.json
+k set image deployment/zy21-history web=example.invalid/zy21-history:unavailable
+status=0
+k rollout status deployment/zy21-history --timeout=30s || status=$?
+printf &#39;bad-rollout-status=%s\n&#39; &quot;$status&quot;
+k get deployment zy21-history -o json &gt; blocked-deployment.json
+k get replicasets -o json &gt; blocked-replicasets.json
+k describe deployment zy21-history
+k get pods -o wide
+k get events --sort-by=.metadata.creationTimestamp
+k patch deployment zy21-history --type=merge -p &#39;{&quot;spec&quot;:{&quot;template&quot;:{&quot;metadata&quot;:{&quot;annotations&quot;:{&quot;zy21-recovery&quot;:&quot;v2&quot;}},&quot;spec&quot;:{&quot;containers&quot;:[{&quot;name&quot;:&quot;web&quot;,&quot;image&quot;:&quot;nginx:1.28.0&quot;}]}}}}&#39;
+k rollout status deployment/zy21-history --timeout=120s
+k get deployment zy21-history -o json &gt; recovered-deployment.json
+k get replicasets -o json &gt; recovered-replicasets.json
+</code></pre>
+<p>不可用地址用于让新 Pod 无法取得镜像，但检查时仍要读 Pod 与事件，确认本次实际阻塞原因。rollout 命令非零也可能由连接、权限或其他问题引起，不能仅凭退出值说已经证实拉取失败。若初始镜像也无法取得，就没有形成“先完成再阻塞”的前提，应先修环境并重新记录，而不是把两次失败混成预期对照。</p>
+<h3 id="看自己的对象，而不是数同名字符串"><a href="#看自己的对象，而不是数同名字符串" class="headerlink" title="看自己的对象，而不是数同名字符串"></a>看自己的对象，而不是数同名字符串</h3><p>将下列脚本保存为 inspect.py，分别执行 <code>python3 inspect.py initial</code>、<code>python3 inspect.py blocked</code> 和 <code>python3 inspect.py recovered</code>。它通过 Deployment UID 与控制器 ownerReference 过滤 ReplicaSet，输出代次、状态与各对象记录，避免将命名空间里无关工作负载也计入历史数量。</p>
+<pre><code class="python">import json
+import sys
+
+prefix = sys.argv[1]
+with open(prefix + &quot;-deployment.json&quot;) as stream:
+    deployment = json.load(stream)
+with open(prefix + &quot;-replicasets.json&quot;) as stream:
+    replicasets = json.load(stream)
+uid = deployment[&quot;metadata&quot;][&quot;uid&quot;]
+print(&quot;deployment&quot;, uid, deployment[&quot;metadata&quot;][&quot;generation&quot;],
+      deployment.get(&quot;status&quot;, {}))
+for item in replicasets[&quot;items&quot;]:
+    if any(owner.get(&quot;uid&quot;) == uid and owner.get(&quot;controller&quot;) is True
+           for owner in item[&quot;metadata&quot;].get(&quot;ownerReferences&quot;, [])):
+        print(item[&quot;metadata&quot;][&quot;name&quot;],
+              item[&quot;metadata&quot;].get(&quot;annotations&quot;, {}),
+              item[&quot;spec&quot;].get(&quot;replicas&quot;), item.get(&quot;status&quot;, {}))
+</code></pre>
+<p>阻塞阶段预期新模板尚未形成完整可用副本，而旧 ReplicaSet 仍存在并可能承担副本。这个状态应由对象快照证明，不能预先把固定数量写成必然结果。控制器推进、额外尝试或已有环境差异都会影响观察到的数量；本例更关注对象归属、模板身份和发布是否完成。</p>
+<p>恢复以后，先核对控制器已观察到当前代次，再看全部副本是否更新到目标模板、可用，以及旧模板是否不再运行副本。rollout status 是一个方便入口，归档的 Deployment 状态与 ReplicaSet 快照能让同事重建判断。不要拿旧代次的完成记录替代当前发布完成，也不要把单个 Pod Running 当作整个 Deployment 已完成。</p>
+<p>完成后再观察旧对象清理。清理由控制器异步推进，本文不承诺某个精确秒数内只剩一个对象。若恢复快照仍含旧对象，可在保留时间戳的情况下重新读取，并核对同一个 UID 与当前代次。没有实际集群回执时，只能写“等待验证”，不能从 YAML 语法正确推导出清理已经发生。</p>
+<h3 id="零历史保留也有交付代价"><a href="#零历史保留也有交付代价" class="headerlink" title="零历史保留也有交付代价"></a>零历史保留也有交付代价</h3><p>官方说明设置为零会清掉历史，因此无法依靠这些旧历史回滚；这不等于根本不创建新 ReplicaSet。新模板仍需要对应的新对象推进发布，清理发生在完成之后。把保留数设为零，不能替代发布状态检查，也不能用它修复卡住的新模板。</p>
+<p>要采用这个策略，先确认团队的恢复方式。若依赖回到旧模板，应将它所需的输入、镜像身份和配置来源固定，别假设控制器必定保有旧对象。本文只讨论历史清理时点，没有执行任何恢复到真实业务版本的演练。教学脚本中的恢复只是换回可用示例镜像并产生一个带注解的新模板。</p>
+<p>清理演练环境前先保存三阶段对象、事件和命令结果，再确认该命名空间仅含本次资源。随后可使用同一明确 context 删除该专用命名空间。保留原始失败事件比只留最后一次绿色 rollout 更有助于说明为何旧历史曾存在。跨命名空间、换 context 或重新创建同名 Deployment 后，必须重新关联 UID，不能拼接成一条连续发布证据。</p>
+<p>多人交接时，截图中的一个总数尤其容易丢掉前提。接手者需要看到取样时使用的上下文、命名空间、对象身份、模板内容和状态，而不只是“还有两个旧对象”。将配置输入与三阶段快照放在同一记录，明确哪些是命令直接读数、哪些是基于读数作出的判断；没有取到的数据留空，并说明中断原因。不要为了补齐时间线而用另一次演练的对象替代。</p>
+<p>人工处置也应另作决定。发现旧对象仍在时，先读当前副本承载与控制器状态，不要立即按保留数删除它。本文的复验只读取对象和改变专用教学模板，没有给出清理生产历史的授权。若团队最终需要手工处理，应先核对当时的依赖和恢复输入，并重新保存处理前后证据，让“等待控制器完成”与“人为改变对象”两条路径可以区分。</p>
+<h3 id="如果只调整副本数，会增加一个修订吗？"><a href="#如果只调整副本数，会增加一个修订吗？" class="headerlink" title="如果只调整副本数，会增加一个修订吗？"></a>如果只调整副本数，会增加一个修订吗？</h3><p>不会仅因扩缩副本就创建新修订。官方说明，修订由 Pod 模板变化触发，单纯调整副本数不是模板变化。这是与主例不同的新条件：主例改变了镜像和注解，而扩缩容只改变期望数量。复验时可保持模板不变，单独调整 replicas，再对照修订注解与对象身份；本文未运行这个分支，也不把代次变化自动等同于新增修订。</p>
+<p><a href="/zh-CN/2026/11/12/kubernetes-deployment-min-ready-seconds/">相关站内阅读：Deployment 的最短就绪时间</a></p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://kubernetes.io/docs/concepts/workloads/controllers/deployment/" rel="noopener">Deployments — Kubernetes — Clean up policy</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--kubernetes" href="/zh-CN/tags/Kubernetes/">Kubernetes</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%8F%91%E5%B8%83%E5%9B%9E%E6%89%A7/">发布回执</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F21%2Fkubernetes-deployment-zero-history-cleanup%2F&text=revisionHistoryLimit%20%E5%B7%B2%E6%98%AF%E9%9B%B6%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E6%97%A7%20ReplicaSet%20%E8%BF%98%E5%9C%A8%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F21%2Fkubernetes-deployment-zero-history-cleanup%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=revisionHistoryLimit%20%E5%B7%B2%E6%98%AF%E9%9B%B6%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E6%97%A7%20ReplicaSet%20%E8%BF%98%E5%9C%A8%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F21%2Fkubernetes-deployment-zero-history-cleanup%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/21/ml-r2-constant-target-force-finite/">
+              <span>上一篇</span>
+              <strong>目标全是5，R²为什么默认只得到0或1？</strong>
+              <small>2026-11-21</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/21/javascript-split-regexp-capture-items/">
+              <span>下一篇</span>
+              <strong>split 用正则括号后，分隔数字为什么也进了数组？</strong>
+              <small>2026-11-21</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h3" href="#用一次未完成发布检查推断">用一次未完成发布检查推断</a>
+          
+            <a class="toc-link toc-link--h3" href="#看自己的对象，而不是数同名字符串">看自己的对象，而不是数同名字符串</a>
+          
+            <a class="toc-link toc-link--h3" href="#零历史保留也有交付代价">零历史保留也有交付代价</a>
+          
+            <a class="toc-link toc-link--h3" href="#如果只调整副本数，会增加一个修订吗？">如果只调整副本数，会增加一个修订吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>247</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>207</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/20/kubernetes-poststart-entrypoint-order/">PostStart 里生成配置，为什么主进程仍可能先读不到？</a></h3>
+          <p>2026-11-20</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/19/kubernetes-cronjob-start-deadline-window/">CronJob 晚到一分钟，为什么这次 Job 没补出来？</a></h3>
+          <p>2026-11-19</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/18/kubernetes-pod-scheduling-gate-add-remove/">一个 Pending Pod 明明有空闲节点，为什么不开始调度？</a></h3>
+          <p>2026-11-18</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

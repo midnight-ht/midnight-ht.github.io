@@ -1,0 +1,423 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>同一个 hash 轮流加 A 和 B，为什么第二份摘要串上了 A？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用独立完整字节重算，对照 hash 状态复制、别名累计与读取摘要后的继续更新。">
+  
+  
+    <meta name="keywords" content="hash.copy,update,共享前缀">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/21/python-hashlib-copy-prefix-branches/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/21/python-hashlib-copy-prefix-branches/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/21/python-hashlib-copy-prefix-branches/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/21/python-hashlib-copy-prefix-branches/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="同一个 hash 轮流加 A 和 B，为什么第二份摘要串上了 A？ | Midnight blog">
+    <meta property="og:description" content="用独立完整字节重算，对照 hash 状态复制、别名累计与读取摘要后的继续更新。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/21/python-hashlib-copy-prefix-branches/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/21/python-hashlib-copy-prefix-branches/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/21/python-hashlib-copy-prefix-branches/","name":"同一个 hash 轮流加 A 和 B，为什么第二份摘要串上了 A？ | Midnight blog","description":"用独立完整字节重算，对照 hash 状态复制、别名累计与读取摘要后的继续更新。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/21/python-hashlib-copy-prefix-branches/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/21/python-hashlib-copy-prefix-branches/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/21/python-hashlib-copy-prefix-branches/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/21/python-hashlib-copy-prefix-branches/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/21/python-hashlib-copy-prefix-branches/","headline":"同一个 hash 轮流加 A 和 B，为什么第二份摘要串上了 A？","description":"用独立完整字节重算，对照 hash 状态复制、别名累计与读取摘要后的继续更新。","inLanguage":"zh-CN","datePublished":"2026-11-20T19:29:43.000Z","dateModified":"2026-11-20T19:29:43.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.14/library/hashlib.html"],"keywords":"Python, hashlib, 状态隔离"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/21/python-hashlib-copy-prefix-branches/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"同一个 hash 轮流加 A 和 B，为什么第二份摘要串上了 A？","item":"https://www.zyweb.vip/zh-CN/2026/11/21/python-hashlib-copy-prefix-branches/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/21/python-hashlib-copy-prefix-branches/" selected>zh-CN</option><option value="/en/2026/11/21/python-hashlib-copy-prefix-branches/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/21/python-hashlib-copy-prefix-branches/" selected>zh-CN</option><option value="/en/2026/11/21/python-hashlib-copy-prefix-branches/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--python">Python</span>
+      <time datetime="2026-11-20T19:29:43.000Z">2026-11-21</time>
+    </div>
+
+    <h1>同一个 hash 轮流加 A 和 B，为什么第二份摘要串上了 A？</h1>
+
+    
+      <p class="post-hero__summary">用独立完整字节重算，对照 hash 状态复制、别名累计与读取摘要后的继续更新。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-20T19:29:43.000Z">2026-11-21</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/21/python-hashlib-copy-prefix-branches/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/21/python-hashlib-copy-prefix-branches/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>赋另一个变量名仍可能共享同一累计状态。</li><li>copy 从当前前缀创建独立分支。</li><li>读取摘要后，原对象仍可继续更新。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>两份数据共享前缀，代码轮流在同一个 hash 对象上追加 A 和 B，第二份摘要却包含了 A。update 会继续累计已有状态。要从同样前缀独立计算两份结果，可以先用 copy 分出两个对象，再各自追加后缀。</p>
+<h2 id="变量换了名字，累计输入并没有重新开始"><a href="#变量换了名字，累计输入并没有重新开始" class="headerlink" title="变量换了名字，累计输入并没有重新开始"></a>变量换了名字，累计输入并没有重新开始</h2><p>假设导出器要核对 prefix:A 和 prefix:B 两份教学字节。前缀相同，开发想先计算前缀，再把结果分别交给两个步骤。若只是把对象赋给另一个变量，两个名字仍引用同一累计状态。第一个步骤加入 A，第二个再加入 B，最终表示的是 prefix:AB。这份摘要计算可以完全正确，只是输入已经偏离第二份数据。</p>
+<p>hashlib 文档说明，多次 update 等价于把这些参数按顺序拼接后更新。对象保留的是到当前为止已经提供的字节流状态，下一次 update 没有自动分出新任务。因此排查摘要不符时，除了查看原始字节，还应核对各步骤持有的对象是否独立，以及上一份任务是否已经在它上面追加内容。</p>
+<p>copy 返回 hash 对象当前状态的副本。两份副本从同一前缀出发，分别添加 A 和 B，可以得到各自完整输入的摘要。保留前缀对象还可以服务下一份后缀，但要约定它是否继续只代表前缀。若有代码又向这个基线写入，后来新建的副本就会继承更多字节。共享基线的所有权同样需要明确。</p>
+<h2 id="用完整输入重算，核对三份状态"><a href="#用完整输入重算，核对三份状态" class="headerlink" title="用完整输入重算，核对三份状态"></a>用完整输入重算，核对三份状态</h2><p>下面的预期从完整字节分别新建 SHA256 对象，而不是拿其中一个分支的输出充当另一个分支的正确答案。它比较前缀、两个分支与别名错误路径。示例没有读取文件，也没有参与任何认证协议。</p>
+<pre><code class="python">from hashlib import sha256
+
+def hex_of(state):
+    return state.hexdigest()
+
+base = sha256(b&quot;prefix:&quot;)
+left, right = [base.copy() for _ in range(2)]
+for state, suffix in [(left, b&quot;A&quot;), (right, b&quot;B&quot;)]:
+    state.update(suffix)
+for state, complete in [
+    (base, b&quot;prefix:&quot;), (left, b&quot;prefix:A&quot;), (right, b&quot;prefix:B&quot;)
+]:
+    assert hex_of(state) == hex_of(sha256(complete))
+bad = sha256(b&quot;prefix:&quot;)
+alias = bad
+alias.update(b&quot;A&quot;)
+bad.update(b&quot;B&quot;)
+assert hex_of(bad) == hex_of(sha256(b&quot;prefix:AB&quot;))
+assert hex_of(bad) != hex_of(right)
+before = hex_of(left)
+left.update(b&quot;C&quot;)
+assert before == hex_of(sha256(b&quot;prefix:A&quot;))
+assert hex_of(left) == hex_of(sha256(b&quot;prefix:AC&quot;))
+assert hex_of(base) == hex_of(sha256(b&quot;prefix:&quot;))
+print(&quot;A/B branches independent; alias accumulated AB; digest observation did not freeze AC update&quot;)
+</code></pre>
+<p>两份独立分支分别等于一次性处理 prefix:A 和 prefix:B 的结果，基线仍等于 prefix:。错误别名路径则等于 prefix:AB，并且与正确 B 分支不同。这些输入刻意不同，使相同对象被继续累计时有可观察后果。只查看有没有返回一串十六进制文本，无法发现这种错误，因为所有路径都能产生格式正常的摘要。</p>
+<p>还要核对基线本身。若两份结果恰好都从已经带 A 的错误基线复制，分支对象彼此确实不同，第二份输入仍然错误。测试因此既检查各分支，也检查最初对象到最后是否还是那段前缀。对象独立是隔离条件，正确初始状态则是另一个条件，二者不能只用一条身份断言替代。</p>
+<p>这里使用单向完整重算作为参考，是为了给测试一个简单、可审查的输入构造。它没有用预先猜测的摘要常量，也没有比较算法实现之间的密码学性质。生产若从文件读取，还需要保存这次实际读取的文件身份与范围，避免拿生成端的数据重算成功，误认为接收端已保存同样字节。</p>
+<p>还可以用空后缀检查分支起点。独立副本不追加任何新字节时，预期摘要与前缀基线相同；这不表示两个对象相同，只说明它们目前处理了相同输入。再给其中一份加入字节，另一份应仍保持原值。这个变体适合排查错误的复制时点，属于尚未执行的额外验收设计。</p>
+<h2 id="先决定状态是交给下一段，还是分给下一份"><a href="#先决定状态是交给下一段，还是分给下一份" class="headerlink" title="先决定状态是交给下一段，还是分给下一份"></a>先决定状态是交给下一段，还是分给下一份</h2><p>若程序本来就在读一份文件，分块调用 update 正是把同一输入继续累计，这时候不该在每块前重置。若在处理两个独立文件，前一个文件末尾之后又加入下一份，就把文件边界消掉了。接口名称可以区分继续当前流和创建新分支，调用者也应提供相应输入身份，减少两种用途混用。</p>
+<p>共享前缀的分支可以在前缀固定后创建。每份后缀由自己的对象处理，结果与原输入标识一起返回。若前缀也可能变化，应先为它定义版本，再让每个任务记录采用哪版。这个样例只用一份固定字节，没有检查多个线程同时修改、跨进程传递或外部任务调度，因此不会为这些场景声明隔离已经成立。</p>
+<p>本站的<a href="/zh-CN/2026/10/29/python-hmac-compare-digest-representation/">摘要字节与十六进制表示</a>讨论比较结果时两端的格式。当前故障更早发生在输入累计阶段：即使双方都用 hexdigest，累计多了 A 仍然不匹配。诊断应先核对输入组成和状态归属，再判断输出表示，不能通过把格式改成另一种来修正已经混入的字节。</p>
+<p>分支结果也没有为输入提供来源认证。两份完全相同的字节在同一算法下会有同样摘要，但这不说明是谁生成它们。若业务要求批准版本、可信发送者或请求新鲜度，应采用相应协议和证据。本文只示范状态复制，没实现签名、消息认证或重放判断，也没测性能收益。</p>
+<h2 id="调用过-digest-后，还能继续-update-吗？"><a href="#调用过-digest-后，还能继续-update-吗？" class="headerlink" title="调用过 digest 后，还能继续 update 吗？"></a>调用过 digest 后，还能继续 update 吗？</h2><p>可以。摘要读取描述的是当前已经提供的内容，并没有把对象变成结束状态。夹具先保存 A 分支的十六进制结果，再追加 C；保存的字符串仍对应 prefix:A，当前对象则对应 prefix:AC。这个新条件区分了一次观测与状态冻结。</p>
+<p>若日志保存的是那条旧字符串，它能保留当时结果；如果代码只保存一个仍会继续更新的对象引用，后来读取就可能看见新状态。报告应说明摘要在哪个时点产生，避免把任务中间的检查点当作最终文件摘要。主例验证了这一个继续更新场景，没有把它推广为任意自定义摘要对象都有同样接口。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/hashlib.html" rel="noopener">hashlib — Secure hashes and message digests — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+            <a class="tag tag--hashlib" href="/zh-CN/tags/hashlib/">hashlib</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E7%8A%B6%E6%80%81%E9%9A%94%E7%A6%BB/">状态隔离</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F21%2Fpython-hashlib-copy-prefix-branches%2F&text=%E5%90%8C%E4%B8%80%E4%B8%AA%20hash%20%E8%BD%AE%E6%B5%81%E5%8A%A0%20A%20%E5%92%8C%20B%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E7%AC%AC%E4%BA%8C%E4%BB%BD%E6%91%98%E8%A6%81%E4%B8%B2%E4%B8%8A%E4%BA%86%20A%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F21%2Fpython-hashlib-copy-prefix-branches%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E5%90%8C%E4%B8%80%E4%B8%AA%20hash%20%E8%BD%AE%E6%B5%81%E5%8A%A0%20A%20%E5%92%8C%20B%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E7%AC%AC%E4%BA%8C%E4%BB%BD%E6%91%98%E8%A6%81%E4%B8%B2%E4%B8%8A%E4%BA%86%20A%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F21%2Fpython-hashlib-copy-prefix-branches%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/21/python-heapreplace-heappushpop-retention/">
+              <span>上一篇</span>
+              <strong>新值比堆顶还小，heapreplace 为什么仍把旧值赶走？</strong>
+              <small>2026-11-21</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/21/pytest-pyargs-installed-package-location/">
+              <span>下一篇</span>
+              <strong>想测已安装的包，pytest 为什么只把包名当路径找？</strong>
+              <small>2026-11-21</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#变量换了名字，累计输入并没有重新开始">变量换了名字，累计输入并没有重新开始</a>
+          
+            <a class="toc-link toc-link--h2" href="#用完整输入重算，核对三份状态">用完整输入重算，核对三份状态</a>
+          
+            <a class="toc-link toc-link--h2" href="#先决定状态是交给下一段，还是分给下一份">先决定状态是交给下一段，还是分给下一份</a>
+          
+            <a class="toc-link toc-link--h2" href="#调用过-digest-后，还能继续-update-吗？">调用过 digest 后，还能继续 update 吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>247</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>207</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/21/python-heapreplace-heappushpop-retention/">新值比堆顶还小，heapreplace 为什么仍把旧值赶走？</a></h3>
+          <p>2026-11-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/21/python-itertools-product-input-pooling/">product 还没取第一项，为什么输入已经读完了？</a></h3>
+          <p>2026-11-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/21/python-struct-unpack-exact-size-offset/">头字段只有两字节，unpack 为什么拒绝更大的完整帧？</a></h3>
+          <p>2026-11-21</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
