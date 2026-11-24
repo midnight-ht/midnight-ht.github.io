@@ -29,10 +29,10 @@
     <link rel="apple-touch-icon" href="/img/favicon.ico">
   
   
-    <meta name="description" content="时间输入偏移是否参与解释取决于类型；区分时间点、本地时间、显示时区与历史来源。">
+    <meta name="description" content="PostgreSQL 先按字段类型解释带偏移的字符串：timestamp without time zone 保留日历字段并忽略偏移，timestamptz 才表达时间点。本文区分类型化字面量、会话 TimeZone、AT TIME ZONE 的两个方向、夏令时歧义和历史迁移假设。">
   
   
-    <meta name="keywords" content="PostgreSQL18,timestamp,时区">
+    <meta name="keywords" content="PostgreSQL 19,timestamp,time zones">
   
   
     <meta name="robots" content="index,follow,max-image-preview:large">
@@ -55,7 +55,7 @@
   
   
     <meta property="og:title" content="时间字符串带偏移，数据库为什么没有按时区转换？ | Midnight blog">
-    <meta property="og:description" content="时间输入偏移是否参与解释取决于类型；区分时间点、本地时间、显示时区与历史来源。">
+    <meta property="og:description" content="PostgreSQL 先按字段类型解释带偏移的字符串：timestamp without time zone 保留日历字段并忽略偏移，timestamptz 才表达时间点。本文区分类型化字面量、会话 TimeZone、AT TIME ZONE 的两个方向、夏令时歧义和历史迁移假设。">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/14/postgres-timestamp-without-zone/">
     <meta property="og:site_name" content="Midnight blog">
@@ -64,7 +64,7 @@
     <meta name="twitter:card" content="summary">
   
   
-    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/14/postgres-timestamp-without-zone/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/14/postgres-timestamp-without-zone/","name":"时间字符串带偏移，数据库为什么没有按时区转换？ | Midnight blog","description":"时间输入偏移是否参与解释取决于类型；区分时间点、本地时间、显示时区与历史来源。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/14/postgres-timestamp-without-zone/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/14/postgres-timestamp-without-zone/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/14/postgres-timestamp-without-zone/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/14/postgres-timestamp-without-zone/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/14/postgres-timestamp-without-zone/","headline":"时间字符串带偏移，数据库为什么没有按时区转换？","description":"时间输入偏移是否参与解释取决于类型；区分时间点、本地时间、显示时区与历史来源。","inLanguage":"zh-CN","datePublished":"2026-10-13T19:17:29.000Z","dateModified":"2026-10-13T19:17:29.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/14/postgres-timestamp-without-zone/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"时间字符串带偏移，数据库为什么没有按时区转换？","item":"https://www.zyweb.vip/zh-CN/2026/10/14/postgres-timestamp-without-zone/"}]}]}</script>
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/14/postgres-timestamp-without-zone/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/14/postgres-timestamp-without-zone/","name":"时间字符串带偏移，数据库为什么没有按时区转换？ | Midnight blog","description":"PostgreSQL 先按字段类型解释带偏移的字符串：timestamp without time zone 保留日历字段并忽略偏移，timestamptz 才表达时间点。本文区分类型化字面量、会话 TimeZone、AT TIME ZONE 的两个方向、夏令时歧义和历史迁移假设。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/14/postgres-timestamp-without-zone/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/14/postgres-timestamp-without-zone/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/14/postgres-timestamp-without-zone/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/14/postgres-timestamp-without-zone/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/14/postgres-timestamp-without-zone/","headline":"时间字符串带偏移，数据库为什么没有按时区转换？","description":"PostgreSQL 先按字段类型解释带偏移的字符串：timestamp without time zone 保留日历字段并忽略偏移，timestamptz 才表达时间点。本文区分类型化字面量、会话 TimeZone、AT TIME ZONE 的两个方向、夏令时歧义和历史迁移假设。","inLanguage":"zh-CN","datePublished":"2026-10-13T19:17:29.000Z","dateModified":"2026-11-24T23:44:48.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/19/datatype-datetime.html","https://www.postgresql.org/docs/19/functions-datetime.html#FUNCTIONS-DATETIME-ZONECONVERT","https://www.postgresql.org/docs/19/datetime-invalid-input.html","https://www.postgresql.org/docs/19/release-19.html"],"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/14/postgres-timestamp-without-zone/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"时间字符串带偏移，数据库为什么没有按时区转换？","item":"https://www.zyweb.vip/zh-CN/2026/10/14/postgres-timestamp-without-zone/"}]}]}</script>
   
   <meta name="theme-color" content="#080b10">
   
@@ -144,7 +144,7 @@
     <h1>时间字符串带偏移，数据库为什么没有按时区转换？</h1>
 
     
-      <p class="post-hero__summary">时间输入偏移是否参与解释取决于类型；区分时间点、本地时间、显示时区与历史来源。</p>
+      <p class="post-hero__summary">PostgreSQL 先按字段类型解释带偏移的字符串：timestamp without time zone 保留日历字段并忽略偏移，timestamptz 才表达时间点。本文区分类型化字面量、会话 TimeZone、AT TIME ZONE 的两个方向、夏令时歧义和历史迁移假设。</p>
     
 
     <div class="post-hero__meta">
@@ -163,7 +163,7 @@
         
 
 
-        <small>更新于 <time datetime="2026-10-13T19:17:29.000Z">2026-10-14</time> · 预计阅读 2 分钟</small>
+        <small>更新于 <time datetime="2026-11-24T23:44:48.000Z">2026-11-25</time> · 预计阅读 9 分钟</small>
       </div>
     </div>
 
@@ -195,22 +195,40 @@
 
       
 
-      
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>TIMESTAMP 类型化字面量在读取字符串内容前就定型；无时区类型忽略偏移，timestamptz 解析为时间点。</li><li>AT TIME ZONE 对无时区字段是“按地区解释”，对 timestamptz 是“按地区显示”；两者返回类型相反。</li><li>迁移和重复预约要处理会话时区、DST 间隙/重叠与地区意图；本文 SQL 和检查方案未执行。</li></ul></section>
       <!--email_off-->
       <div class="article-content">
-        <p>时间输入带有时区偏移，不代表保存时一定按偏移转换。PostgreSQL 先依据目标类型解释值；timestamp without time zone 会忽略输入中的时区提示。要保存真实时间点，或保存某地墙上显示的日期时间，需要先确定不同的数据含义，而不是只检查字符串是否带了偏移。</p>
-<h2 id="类型决定偏移是否参与解释"><a href="#类型决定偏移是否参与解释" class="headerlink" title="类型决定偏移是否参与解释"></a>类型决定偏移是否参与解释</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/datatype-datetime.html">PostgreSQL 十八版本日期时间文档</a>说明，无时区时间戳会忽略时区指示；带时区时间戳则转换为内部时间点，输出时按当前会话时区显示，但不保留原始时区名称。因而不能把数据库里显示的本地时间当作原始用户时区的永久记录。</p>
-<p>假设接口收到带偏移的事件发生时间，保存列却采用无时区类型。客户端认为发送的是全球唯一时间点，存储端保留的可能只是日期时间字段。后续按另一个环境解释这些字段，就可能发生含义变化。本文没有执行插入或转换，这个场景用于说明接口与存储类型的契约不一致。</p>
-<p>相反，预约中“当地上午开始”也不一定只需要一个全球时间点。它可能还依赖城市、时区规则和业务对日期的理解。把所有输入都改成带时区时间戳，不能自动恢复原来没有保存的地点或规则。字段选择应从要回答的问题出发，而不是从某个类型看起来更完整出发。</p>
-<h2 id="显示时区与原始时区分开保存"><a href="#显示时区与原始时区分开保存" class="headerlink" title="显示时区与原始时区分开保存"></a>显示时区与原始时区分开保存</h2><p>若需要知道用户选择了哪个命名时区，应以清楚字段保存，而不能期待带时区时间戳替自己保留它。显示转换只是把时间点按某种规则呈现，并没有说明当初为什么选择那个时间。审计或后续重复安排若需要这些原因，应在数据模型中明确。</p>
-<p>会话配置同样影响没有明确偏移的输入怎样被解释，以及输出如何显示。迁移工具、应用连接和后台任务如果使用不同配置，测试要覆盖实际入口。看到两台机器显示不同文字，不必然表示内部时间点不同；看到相同文字，也不能独自证明它们表达同一时间点。</p>
-<h2 id="迁移不能凭猜测补回含义"><a href="#迁移不能凭猜测补回含义" class="headerlink" title="迁移不能凭猜测补回含义"></a>迁移不能凭猜测补回含义</h2><p>历史无时区数据如果没有记录它原来代表哪个区域，转换前需要寻找业务与来源证据。直接假定全部属于某一时区，可能让转换执行成功却改变事件含义。无法确认的记录应明确保持未知或进入核对流程，不为了让迁移报告变绿而编造统一规则。</p>
-<p>拟议检查可覆盖明确偏移、缺失偏移、不同会话时区和历史未知来源，分别核对存储与显示目标。未经执行不报告转换成功。有关每日重复安排为什么还需要时区意图，可阅读<a href="/zh-CN/2026/10/10/timestamps-recurring-intent/">时间点与重复时间规则</a>。类型解决表示问题，业务仍要负责时间究竟意味着什么。</p>
+        <p>PostgreSQL 没有按输入字符串里的 <code>+02:00</code> 转换，首先要检查值的类型：<code>timestamp without time zone</code> 保存的是日历日期和钟表字段，不代表全球唯一的时间点；<code>timestamp with time zone</code> 才把输入解释成时间点。最容易误判的情况是 SQL 写成 <code>TIMESTAMP &#39;2026-04-01 09:00:00+02&#39;</code>：类型关键字已经明确指定无时区时间戳，字符串中的偏移不会把它变成另一类型。若要表达瞬间，必须让列和输入都使用能表达瞬间的类型，并明确缺少偏移时应采用什么时区。</p>
+<h2 id="偏移被忽略，先看值已经是什么类型"><a href="#偏移被忽略，先看值已经是什么类型" class="headerlink" title="偏移被忽略，先看值已经是什么类型"></a>偏移被忽略，先看值已经是什么类型</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/19/datatype-datetime.html">PostgreSQL 19 日期与时间类型文档</a>把 <code>timestamp without time zone</code> 描述为不进行时区转换的日期和时间，把 <code>timestamp with time zone</code> 描述为带时区转换的日期和时间。这里“带时区”容易让人以为数据库会把用户写的 <code>Asia/Shanghai</code> 或 <code>America/New_York</code> 原样存下来；它实际表示转换输入并存一个时间点，原始时区标识不会作为值的一部分保留。显示这个时间点时，PostgreSQL 再按当前会话 <code>TimeZone</code> 把它渲染成本地日期与时钟字段。</p>
+<p>类型在解析时就很关键。SQL 标准允许使用 <code>TIMESTAMP &#39;...&#39;</code> 这种类型化字面量。PostgreSQL 文档特别指出，它不会先读引号内容再推断类型，而会把 <code>TIMESTAMP</code> 类型名解析为无时区类型；即使 SQL 标准对带偏移字面量另有类型判定约定，也不能把那条约定套用到 PostgreSQL。因此，下面的写法不能因为文本带偏移就被理解成“带时区时间点”：</p>
+<pre><code class="sql">TIMESTAMP &#39;2026-04-01 09:00:00+02&#39;
+</code></pre>
+<p>相对地，明确写 <code>TIMESTAMP WITH TIME ZONE &#39;2026-04-01 09:00:00+02&#39;</code> 才要求将偏移用于解释输入。上面两行是对官方解析规则的说明，本文没有连接 PostgreSQL 执行它们。应用参数也应检查驱动绑定类型、ORM 字段类型和服务端列类型；不能从 JSON 字符串长相推断参数最终以哪一种 PostgreSQL 类型进入表达式。先查看接口契约与 schema，再检查实际参数绑定和连接配置，才能确定转换发生在哪里。</p>
+<p>时间问题至少有三个概念。第一是“瞬间”：例如一条已经发生的付款事件，需要与其他地区的事件按先后排序。第二是“本地日历时间”：例如某门店每日开门的 09:00，它首先是地点钟表上的读数，并不天然指向唯一的 UTC 瞬间。第三是“时区意图”：例如用户指定了 <code>America/New_York</code>，未来每周的预约要继续遵循该地当时有效的时区规则。单一时间戳字段无法保证同时保留这三者。</p>
+<h2 id="AT-TIME-ZONE-的方向取决于左侧类型"><a href="#AT-TIME-ZONE-的方向取决于左侧类型" class="headerlink" title="AT TIME ZONE 的方向取决于左侧类型"></a><code>AT TIME ZONE</code> 的方向取决于左侧类型</h2><p>PostgreSQL 19 的 <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/19/functions-datetime.html#FUNCTIONS-DATETIME-ZONECONVERT"><code>AT TIME ZONE</code> 文档</a>给出两种方向。对无时区的本地字段执行 <code>timestamp AT TIME ZONE zone</code>，数据库把这些字段解释为指定地区的当地时间，并返回一个 <code>timestamp with time zone</code> 时间点。对一个已确定的时间点执行 <code>timestamptz AT TIME ZONE zone</code>，数据库则按该地区规则显示它，返回不带时区的本地日期时间字段。</p>
+<pre><code class="sql">-- 解释：把本地钟表字段解释为某个地区的时间点
+local_meeting_time AT TIME ZONE &#39;America/New_York&#39;
+
+-- 显示：把已有时间点渲染为某地区的本地钟表字段
+occurred_at AT TIME ZONE &#39;America/New_York&#39;
+</code></pre>
+<p>这两句表达相反的数据方向，不能看到 <code>AT TIME ZONE</code> 就统一称为“转换成 UTC”。第一句需要输入被视作当地字段；第二句需要输入已经是确定时间点。若只保存第二句返回的无时区字段，返回值不会告诉后来的读者它来自纽约、东京还是另一个地区。若保存第一句生成的 <code>timestamptz</code>，它保留了时间点，但不会记住用户当初选了哪个地区名称。代码审查时应把表达式左右两边的真实类型写在旁边，这比只看字段名称是否包含 <code>utc</code> 更可靠。</p>
+<p>会话设置会在一些隐式边界介入。向 <code>timestamptz</code> 输入没有偏移的文本时，PostgreSQL 按连接的 <code>TimeZone</code> 假定其所在地区；输出 <code>timestamptz</code> 时，也按该设置显示。把 <code>timestamp without time zone</code> 转成 <code>timestamptz</code>、把二者相互比较，也需要有一个解释无时区字段的时区；如果没有在转换表达式中明确给出，文档规定使用会话时区。于是同一段迁移脚本在两个连接设置下可能把相同日历字段解释成不同瞬间，而同一个内部瞬间在两个会话里也可能显示成不同钟表时间。</p>
+<p>例如，假设一行写着 <code>2026-04-01 09:00:00</code>，历史接口不曾发送地区或偏移。迁移连接若设为一个地区，数据库可以按那个地区生成一个时间点；换到另一地区，所生成的瞬间会不同。SQL 执行成功、行数不变、字段类型转换完成，都不能证明旧字段原本表示这个地区的上午九点。这个例子是假设说明，没有在数据库运行；实际迁移必须先找输入来源、旧系统配置、用户地区字段或导入批次等证据。</p>
+<h2 id="夏令时让本地时间无法总是唯一定位"><a href="#夏令时让本地时间无法总是唯一定位" class="headerlink" title="夏令时让本地时间无法总是唯一定位"></a>夏令时让本地时间无法总是唯一定位</h2><p>命名时区不等于固定的 UTC 偏移。<code>America/New_York</code> 这样的完整名称带有地区规则；规则可能随着日期从标准时切换为夏令时，也可能因政治决策在未来变化。相反，<code>-05:00</code> 是一个明确的固定偏移，不包含某地区全年如何改变的政策。要重现地点行为，应使用合适的命名时区；若业务事件已发生并提供数值偏移，那个偏移则能直接确定该次输入对应的时间点。</p>
+<p>时钟向前跳时，有些本地读数根本没有出现；向后拨时，同一读数会出现两次。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/19/datetime-invalid-input.html">PostgreSQL 19 对无效或歧义时间戳的说明</a>指出，这些输入并不总会被当作错误拒绝。遇到春季跳时的不存在时间，PostgreSQL 使用切换前的偏移解释；遇到秋季回拨的重复时间，默认选切换后的偏移。需要另一种解释时，要提供足以消歧的偏移或规则。这个默认处理是数据库的输入规则，不自动等于预约产品的正确政策。</p>
+<p>假设用户在纽约预约“跳时日 02:30”。这是当地时钟没有走到的读数；系统可能按文档规则解释为另一个时刻，但产品也可能希望提示用户改选。假设用户选择回拨日的 01:30，当地钟表当天会显示两次；若允许用户区分第一次和第二次，就必须让这项选择成为输入，而不能寄希望于 <code>timestamptz</code> 保存一个事后无法重建的命名地区。对已发生的事件，数值偏移可消除这次时间点歧义；对未来的本地重复安排，通常还需要保存地区名称和重复规则。</p>
+<h2 id="根据业务含义决定保存字段"><a href="#根据业务含义决定保存字段" class="headerlink" title="根据业务含义决定保存字段"></a>根据业务含义决定保存字段</h2><p>若字段表示已经发生的事件、消息接收时间或审计事件，核心问题通常是“它何时发生”，适合使用可确定瞬间的时间戳，例如 <code>timestamptz</code>。API 需要约定所有输入带 <code>Z</code> 或明确偏移，或定义缺少偏移时由谁提供地区；仅把列名写成 <code>created_at_utc</code> 并不能确保输入转换正确。原始请求文本是否需要留存用于合规或对账，是另一个明确的数据保留决策。</p>
+<p>若字段表示“某个地区日历上的 09:00”，例如每周营业时段或每月本地缴费截止时刻，应保存本地日期/时钟规则，并按业务需要另存 IANA 时区名。单次预约可以同时保留用户选择的当地时间与地区，再计算一次确定的瞬间；周期预约则需保存重复规则，因为未来地区时区政策可能变化，未来应执行的是按新规则重新解释本地时间，还是保持预先计算好的 UTC 瞬间，取决于产品承诺。保存 <code>timestamptz</code> 但丢掉地区名称，无法从瞬间逆推出用户想遵循的未来地区规则。</p>
+<p>因此，列的选择应在 API 与业务对象层共同完成：列是时间点、当地钟表字段，还是某个地区的日历规则？缺失偏移是否可接受？地区名称是否影响未来计算？DST 间隙和重复时刻让用户选什么？新时区规则发布后，预约是随当地时钟移动还是保持原瞬间？这些答案应写进字段约束、接口校验和产品状态，而不是靠每个调用方自行猜测。</p>
+<h2 id="迁移时先验证假设，不要直接统一-CAST"><a href="#迁移时先验证假设，不要直接统一-CAST" class="headerlink" title="迁移时先验证假设，不要直接统一 CAST"></a>迁移时先验证假设，不要直接统一 CAST</h2><p>迁移规划可以先盘点每条旧记录的来源：旧字段当年由哪个客户端写入、该客户端是否发送偏移、数据库会话 <code>TimeZone</code> 如何设置、数据是否曾被多个地区的任务写入。若证据足以证明所有旧值都是同一地区的当地字段，转换可以显式给出该地区并抽样对照来源记录；若旧值其实是 UTC 字段但未声明，应按经过确认的 UTC 解释；若来源混合或已无法确认，应把这些行列为待核对，避免一次无差别转换伪造精确性。不能把数据库当前时区当成历史事实。</p>
+<p>上线前的验证矩阵至少要包含：带 <code>Z</code> 的时间点、带正负偏移的时间点、明确类型为无时区的偏移字符串、没有偏移的 <code>timestamptz</code> 输入、两种不同 session <code>TimeZone</code>、两个方向的 <code>AT TIME ZONE</code>、春季不存在时间、秋季重复时间，以及旧数据中已知和未知来源的行。比较的不只是查询显示文本，还要比较类型、是否代表同一瞬间、往返转换后丢失了什么地区信息，并记录会话设置。若是应用参数，测试还应走实际驱动或 ORM 绑定方式，而非仅测试手写 SQL 字面量。</p>
+<p>这是一份验证计划，不是已经执行的 SQL 教程；本文没有运行 PostgreSQL、迁移或比较输出。正式迁移应在隔离副本对照源记录，确认业务负责人接受模糊历史记录的处理方式，再分阶段改列或新增字段、双写核验并监控差异。独立地建模未来重复安排，可参见<a href="/zh-CN/2026/10/10/timestamps-recurring-intent/">时间点与重复时间规则</a>。关键结论不是“全部用 UTC”，而是让每个字段保存它真正承诺的意义，并在本地时间转成瞬间时显式交代地区规则。</p>
 
       </div>
       <!--/email_off-->
 
-      
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/19/datatype-datetime.html" rel="noopener">PostgreSQL 19 Documentation — Date/Time Types</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/19/functions-datetime.html#FUNCTIONS-DATETIME-ZONECONVERT" rel="noopener">PostgreSQL 19 Documentation — AT TIME ZONE</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/19/datetime-invalid-input.html" rel="noopener">PostgreSQL 19 Documentation — Handling Invalid or Ambiguous Timestamps</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/19/release-19.html" rel="noopener">PostgreSQL 19 Release Notes</a></li></ol></section>
       
         <footer class="article-taxonomy">
           <span>标签</span>
@@ -271,11 +289,15 @@
 
         
           
-            <a class="toc-link toc-link--h2" href="#类型决定偏移是否参与解释">类型决定偏移是否参与解释</a>
+            <a class="toc-link toc-link--h2" href="#偏移被忽略，先看值已经是什么类型">偏移被忽略，先看值已经是什么类型</a>
           
-            <a class="toc-link toc-link--h2" href="#显示时区与原始时区分开保存">显示时区与原始时区分开保存</a>
+            <a class="toc-link toc-link--h2" href="#AT-TIME-ZONE-的方向取决于左侧类型">AT TIME ZONE 的方向取决于左侧类型</a>
           
-            <a class="toc-link toc-link--h2" href="#迁移不能凭猜测补回含义">迁移不能凭猜测补回含义</a>
+            <a class="toc-link toc-link--h2" href="#夏令时让本地时间无法总是唯一定位">夏令时让本地时间无法总是唯一定位</a>
+          
+            <a class="toc-link toc-link--h2" href="#根据业务含义决定保存字段">根据业务含义决定保存字段</a>
+          
+            <a class="toc-link toc-link--h2" href="#迁移时先验证假设，不要直接统一-CAST">迁移时先验证假设，不要直接统一 CAST</a>
           
         
       </nav></details>
