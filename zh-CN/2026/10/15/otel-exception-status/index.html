@@ -12,7 +12,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
-  <title>记录异常事件后，Span 状态为什么仍不是错误？ | Midnight blog</title>
+  <title>记录异常后，Span 为什么仍是 Unset？先判断这段操作是否失败 | Midnight blog</title>
   
     <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
     
@@ -29,10 +29,10 @@
     <link rel="apple-touch-icon" href="/img/favicon.ico">
   
   
-    <meta name="description" content="手动埋点分别处理异常事件与操作状态；恢复结果、上下文归属和敏感内容仍需明确判断。">
+    <meta name="description" content="`recordException` 写入异常事件，不会自动把 Span 状态设成 Error。按 Span 的操作边界、最终结果和当前语义约定，决定是否记录异常、设置错误状态或保留 Unset。">
   
   
-    <meta name="keywords" content="OpenTelemetry,异常事件,Span状态">
+    <meta name="keywords" content="OpenTelemetry,RecordException,Span Status,错误语义,重试">
   
   
     <meta name="robots" content="index,follow,max-image-preview:large">
@@ -54,8 +54,8 @@
     <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
   
   
-    <meta property="og:title" content="记录异常事件后，Span 状态为什么仍不是错误？ | Midnight blog">
-    <meta property="og:description" content="手动埋点分别处理异常事件与操作状态；恢复结果、上下文归属和敏感内容仍需明确判断。">
+    <meta property="og:title" content="记录异常后，Span 为什么仍是 Unset？先判断这段操作是否失败 | Midnight blog">
+    <meta property="og:description" content="`recordException` 写入异常事件，不会自动把 Span 状态设成 Error。按 Span 的操作边界、最终结果和当前语义约定，决定是否记录异常、设置错误状态或保留 Unset。">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/15/otel-exception-status/">
     <meta property="og:site_name" content="Midnight blog">
@@ -64,7 +64,7 @@
     <meta name="twitter:card" content="summary">
   
   
-    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/15/otel-exception-status/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/15/otel-exception-status/","name":"记录异常事件后，Span 状态为什么仍不是错误？ | Midnight blog","description":"手动埋点分别处理异常事件与操作状态；恢复结果、上下文归属和敏感内容仍需明确判断。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/15/otel-exception-status/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/15/otel-exception-status/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/15/otel-exception-status/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/15/otel-exception-status/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/15/otel-exception-status/","headline":"记录异常事件后，Span 状态为什么仍不是错误？","description":"手动埋点分别处理异常事件与操作状态；恢复结果、上下文归属和敏感内容仍需明确判断。","inLanguage":"zh-CN","datePublished":"2026-10-15T01:40:01.000Z","dateModified":"2026-10-15T01:40:01.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Delivery, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/15/otel-exception-status/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"记录异常事件后，Span 状态为什么仍不是错误？","item":"https://www.zyweb.vip/zh-CN/2026/10/15/otel-exception-status/"}]}]}</script>
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/15/otel-exception-status/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/15/otel-exception-status/","name":"记录异常后，Span 为什么仍是 Unset？先判断这段操作是否失败 | Midnight blog","description":"`recordException` 写入异常事件，不会自动把 Span 状态设成 Error。按 Span 的操作边界、最终结果和当前语义约定，决定是否记录异常、设置错误状态或保留 Unset。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/15/otel-exception-status/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/15/otel-exception-status/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/15/otel-exception-status/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/15/otel-exception-status/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/15/otel-exception-status/","headline":"记录异常后，Span 为什么仍是 Unset？先判断这段操作是否失败","description":"`recordException` 写入异常事件，不会自动把 Span 状态设成 Error。按 Span 的操作边界、最终结果和当前语义约定，决定是否记录异常、设置错误状态或保留 Unset。","inLanguage":"zh-CN","datePublished":"2026-10-15T01:40:01.000Z","dateModified":"2026-11-24T15:32:19.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://opentelemetry.io/docs/specs/otel/trace/api/","https://opentelemetry.io/docs/languages/js/instrumentation/","https://opentelemetry.io/docs/specs/otel/trace/exceptions/","https://opentelemetry.io/docs/specs/semconv/general/recording-errors/","https://opentelemetry.io/docs/specs/semconv/exceptions/exceptions-spans/","https://opentelemetry.io/docs/specs/semconv/exceptions/"],"keywords":"Delivery, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/15/otel-exception-status/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"记录异常后，Span 为什么仍是 Unset？先判断这段操作是否失败","item":"https://www.zyweb.vip/zh-CN/2026/10/15/otel-exception-status/"}]}]}</script>
   
   <meta name="theme-color" content="#080b10">
   
@@ -141,10 +141,10 @@
       <time datetime="2026-10-15T01:40:01.000Z">2026-10-15</time>
     </div>
 
-    <h1>记录异常事件后，Span 状态为什么仍不是错误？</h1>
+    <h1>记录异常后，Span 为什么仍是 Unset？先判断这段操作是否失败</h1>
 
     
-      <p class="post-hero__summary">手动埋点分别处理异常事件与操作状态；恢复结果、上下文归属和敏感内容仍需明确判断。</p>
+      <p class="post-hero__summary">`recordException` 写入异常事件，不会自动把 Span 状态设成 Error。按 Span 的操作边界、最终结果和当前语义约定，决定是否记录异常、设置错误状态或保留 Unset。</p>
     
 
     <div class="post-hero__meta">
@@ -163,7 +163,7 @@
         
 
 
-        <small>更新于 <time datetime="2026-10-15T01:40:01.000Z">2026-10-15</time> · 预计阅读 3 分钟</small>
+        <small>更新于 <time datetime="2026-11-24T15:32:19.000Z">2026-11-24</time> · 预计阅读 10 分钟</small>
       </div>
     </div>
 
@@ -195,23 +195,78 @@
 
       
 
-      
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>RecordException 只记录事件，Span status 需独立设置；默认 Unset 不等同于显式 Ok。</li><li>先定义 Span 代表的操作，再按最终结果和适用语义分类；已恢复尝试不会自动成为整个请求的失败。</li><li>Recording errors 当前标为 Development；Span 异常语义约定页已标为 Deprecated 并指向日志，具体处理需核对 SDK 版本与迁移配置。</li></ul></section>
       <!--email_off-->
       <div class="article-content">
-        <p>记录异常事件与设置 Span 错误状态是两项需要明确的动作。手动埋点中，看到异常事件不应直接作为错误状态已设置的证据；应根据操作最终结果核对状态处理。捕获并恢复的异常，也不能只凭出现过一个异常，就推断整段业务已经失败。</p>
-<h2 id="事件与状态表达不同信息"><a href="#事件与状态表达不同信息" class="headerlink" title="事件与状态表达不同信息"></a>事件与状态表达不同信息</h2><p><a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/languages/js/instrumentation/">OpenTelemetry 的 JavaScript 埋点指南</a>建议记录异常时结合设置 Span 状态，示例分别调用记录与状态接口。事件保留发生了什么，状态表达这段操作的结果判断。自动埋点库可能已有自己的行为，需要核对具体实现，不能把手动示例的责任直接扩展为所有库都相同。</p>
-<p>假设请求内部先尝试一个可选来源，失败后使用允许的替代路径完成任务。异常值得记录以便调查，但整段操作是否算错误，应依据该 Span 表达的范围与产品契约决定。反过来，异常被捕获后若没有完成任务，也不能因为程序没有继续抛出，就把状态视为成功。例子未运行，不报告任何真实链路状态。</p>
-<p>状态与业务范围要一起定义。一个内部步骤失败，与面向用户的整体任务失败，可以属于不同层次。团队应知道每个 Span 代表什么，否则同一条异常可能在不同地方被重复放大，或被完全隐藏。工具显示一个错误图标，并不自动提供足够的业务解释。</p>
-<h2 id="异常内容需要信息边界"><a href="#异常内容需要信息边界" class="headerlink" title="异常内容需要信息边界"></a>异常内容需要信息边界</h2><p>异常信息可能携带输入、路径或其他敏感上下文。记录时应依据资料处理规则检查内容，不因为遥测有帮助就无条件上传所有对象。本文不提供某个 SDK 已经自动清理全部秘密的保证；实际采集、导出和存储范围仍需核对。</p>
-<p>也要确认状态写到正确的 Span。异步任务的当前上下文、结束时机和实际对象如果不一致，记录函数被调用也可能无法提供预期证据。需要检查哪个操作拥有该事件，以及状态是否与它的生命周期协调，而不是仅在源码里搜索一次接口名称。</p>
-<h2 id="用可恢复与不可恢复两类结果验收"><a href="#用可恢复与不可恢复两类结果验收" class="headerlink" title="用可恢复与不可恢复两类结果验收"></a>用可恢复与不可恢复两类结果验收</h2><p>拟议测试可覆盖异常后恢复、异常后失败、没有异常但业务拒绝，以及自动和手动埋点并存，核对事件、状态和用户结果。具体应如何标记由语义与业务规则决定，不能为了让错误率看起来低而一律清除状态，也不能为了保留线索一律把全部操作设成失败。</p>
-<p>记录与状态设置的时机也应处于所支持的生命周期内。操作结束以后再补写证据，是否会被采集需要实际核对；不能把一次函数返回当成导出和存储都已完成。</p>
-<p>这些检查没有执行，不提供遥测已经准确分类的结论。关于日志身份与链路是否可见，可阅读<a href="/zh-CN/2026/10/14/otel-log-trace-correlation/">日志关联与链路保留</a>。记录了什么、如何分类以及能否找到对应内容，是三项需要分别验证的证据，任何一项都不应被界面上的单一信号替代。</p>
+        <p>在 OpenTelemetry JavaScript 手动埋点里，<code>span.recordException(ex)</code> 记录的是一个异常事件；它不会替你调用 <code>span.setStatus({ code: SpanStatusCode.ERROR })</code>。所以控制台仍显示 <code>Unset</code>，可能是漏设状态，也可能是这段 Span 描述的操作恢复成功。先问 Span 代表哪项操作、操作结束时结果如何，再决定要写入哪些信号。</p>
+<h2 id="两个-API-写入的是不同证据"><a href="#两个-API-写入的是不同证据" class="headerlink" title="两个 API 写入的是不同证据"></a>两个 API 写入的是不同证据</h2><p><code>RecordException</code> 是 <code>AddEvent</code> 的专用形式。它把一个名为 <code>exception</code> 的事件及异常属性加入 Span；<code>SetStatus</code> 则修改 Span 的状态字段。OpenTelemetry API 将它们定义成两个独立操作，因此前一个调用不会暗中执行后一个。JavaScript 官方<a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/languages/js/instrumentation/">埋点指南</a>也把两步分开演示：在 catch 中调用 <code>recordException</code>，再将状态设为 <code>SpanStatusCode.ERROR</code>。这是 API 层的分工。Trace 的<a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/specs/otel/trace/exceptions/">异常语义页面</a>说，异常若在 Span 结束时仍未处理并导致 Error，才建议作为该 Span 的事件记录；而当前<a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/specs/semconv/exceptions/exceptions-spans/">Span 异常语义约定</a>已标为 Deprecated 并转向日志信号。具体自动埋点库是否另外处理异常，仍要看该库版本与迁移配置。</p>
+<p><code>Unset</code> 是 Span 的默认状态，不能直接翻译成“明确成功”。<a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/specs/otel/trace/api/">Trace API 的 Set Status 章节</a>说明，状态通常保持 Unset；需要表达错误时按语义约定设为 Error，应用开发者可以在确实验证成功时显式设为 Ok。因而排查面板时要分别看：事件是否存在、状态是否设置、该 Span 描述的操作是什么，以及它是否被采样并成功导出。只搜到 <code>recordException</code> 这行代码，不能证明后面几项都成立。</p>
+<h2 id="先定操作边界，再定错误状态"><a href="#先定操作边界，再定错误状态" class="headerlink" title="先定操作边界，再定错误状态"></a>先定操作边界，再定错误状态</h2><p>异常对象回答“发生了什么”，状态回答“这一段操作最终怎样”。真正容易出错的不是 API，而是 Span 的边界含混：一个 Span 可能描述单次下游尝试，也可能覆盖带重试的完整请求；这两段的结论并不必然相同。</p>
+<p>设想一个订单服务先访问主库存源，第一次请求超时，随后从允许的备用源取到一致数据，订单最终成功。若外层 Span 定义为“完成一次订单读取”，只凭第一次异常就把它设为 Error，会让外层错误率把成功回退误算为失败。若确实为每次尝试建立独立 Span，团队需要为“尝试”这个操作定义是否失败，并遵守该操作对应的语义约定；不能简单把子 Span 的判断复制到父 Span。这个例子是假设情形，没有运行代码或采集数据。</p>
+<p>相反，如果备用源也失败，订单读取没有返回可用结果，那么外层操作结束时确实失败，即使代码把异常 catch 住并转换成错误对象返回。是否抛出异常不是唯一标准：OpenTelemetry 当前的 Recording errors 页面也把错误码等其他错误返回纳入“操作失败”的判断。<a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/specs/semconv/general/recording-errors/">Recording errors</a>页面标记为 Development，团队应记录采用的版本和领域约定，不能把这条建议写成所有库的强制自动行为。</p>
+<table>
+<thead>
+<tr>
+<th>Span 所代表的操作结束结果</th>
+<th>事件与状态的判断</th>
+<th>需要避免的误读</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>异常未处理并导致这段操作失败</td>
+<td>依当前语义约定记录异常；将该 Span 设为 Error</td>
+<td>不能只记录事件而假设状态自动改变</td>
+</tr>
+<tr>
+<td>某次异常被重试或回退处理，完整操作正常完成</td>
+<td>描述完整操作的 Span 不应仅因瞬态异常被归为失败；诊断细节按适用信号和规范处理</td>
+<td>不能为了“留下异常”把已完成操作的错误率抬高</td>
+</tr>
+<tr>
+<td>业务上的预期拒绝，例如资源已存在</td>
+<td>按该操作定义分类；可能是业务结果而非错误</td>
+<td>不能把所有语言层面的 Exception 都当故障</td>
+</tr>
+<tr>
+<td>没有异常，但操作通过错误码或结果类型失败</td>
+<td>可按领域约定设为 Error，并设置适用的错误类型信息</td>
+<td>不能把“没有 catch”当成成功证明</td>
+</tr>
+</tbody></table>
+<p>表格不是把所有异常归入同一处置规则。OpenTelemetry 的 Recording errors 示例区分了已处理的 <code>ResourceAlreadyExistsException</code> 与向调用方传播的 <code>IOException</code>：前者示例不把操作 Span 标为 Error，后者设置 Error 和 <code>error.type</code>。这说明业务上下文和 Span 所代表的范围会改变判断。一个“未找到”在查询资源是否存在时可能是正常答案，在必须读取该资源的请求中则可能意味着失败。</p>
+<h2 id="JavaScript-手动埋点应该在哪儿设状态"><a href="#JavaScript-手动埋点应该在哪儿设状态" class="headerlink" title="JavaScript 手动埋点应该在哪儿设状态"></a>JavaScript 手动埋点应该在哪儿设状态</h2><p>若应用自行管理 Span，可以把结束判断集中在操作所有者处，而不是在每个底层 catch 块里无条件标错。下面是用于说明生命周期的伪代码，未在某个 SDK、运行时或后端执行；导入路径和具体异常类型须按项目锁定版本核实。它显式等待异步操作结束后才调用 <code>end()</code>，但省略了 Context 激活与子 Span 传播；真实代码需要按语言 API 的 context 机制补齐。</p>
+<pre><code class="js">const readInventory = async () =&gt; {
+  const span = tracer.startSpan(&#39;inventory.read&#39;);
+  try {
+    try {
+      return await readPrimary();
+    } catch (primaryError) {
+      // 是否记录尝试级诊断，取决于尝试 Span 与日志约定。
+      return await readReplica();
+    }
+  } catch (finalError) {
+    if (finalError instanceof Error) span.recordException(finalError);
+    span.setStatus({ code: SpanStatusCode.ERROR });
+    throw finalError;
+  } finally {
+    span.end();
+  }
+};
+</code></pre>
+<p>示例的意图是把外层状态留给最终失败分支。真实实现还必须回答：主源失败是否有独立子 Span；两次尝试是否都属于 <code>inventory.read</code>；备用源返回空值是业务拒绝还是故障；错误最终通过异常、错误对象还是响应码交给调用方；状态设置发生在 <code>end()</code> 之前吗。若这些答案缺失，把状态设置塞进通用异常处理器通常会让不同业务操作被同一规则误分类。</p>
+<p>另一个反例是 catch 中记录异常但继续正常返回，同时外层随后又无条件设为 Error。异常可能只是一次被容错吸收的尝试；这样的埋点把内部过程当成最终结果。反方向也会发生：catch 后返回 <code>{ ok: false }</code>，但只有 <code>recordException</code>，Span 留在 Unset；调用链最终失败，后端却没有 Span 错误状态。修复应先给每个 Span 写清操作名、输入输出、结束条件和失败定义，再把这些条件映射到代码路径，而不是先看平台上的红色图标。</p>
+<h2 id="有事件，不代表事件已经出现在查询结果里"><a href="#有事件，不代表事件已经出现在查询结果里" class="headerlink" title="有事件，不代表事件已经出现在查询结果里"></a>有事件，不代表事件已经出现在查询结果里</h2><p>从调用到可查询数据，中间至少有几道边界。所用 Span 必须处于可记录状态；异常记录必须发生在正确 Span 上，并与该操作的生命周期相符；采样决策可能让数据不进入导出；处理器、导出器、传输和后端存储也可能丢弃或延迟记录。Trace API 还指出，<code>End</code> 后继续调用 Span 方法通常应被忽略，虽然后端实现存在流式场景的例外。因此“源代码执行了方法”不是“后端已显示事件”的同义句。</p>
+<p>排查时可按顺序核对：应用捕获到的对象是不是语言层的 Error；当前上下文取到的 Span 是否就是预期操作；事件和 status 是否都在结束前写入；Span 是否 recording；采样和处理器如何配置；导出响应和后端查询使用了什么时间范围与过滤条件。若自动与手动埋点同时启用，还要检查同一异常是否被记录多次。这里还要区分 API 与语义约定：<a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/specs/otel/trace/api/">Trace API</a>仍定义 <code>RecordException</code> 这一 Span 事件操作；但当前<a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/specs/semconv/exceptions/exceptions-spans/">exceptions on spans 语义约定</a>页面标为 Deprecated，并指向日志信号。迁移说明允许既有仪表库暂时保留旧行为，甚至提供阶段性双写；具体某个库是否启用哪种路径，要核对版本和配置。不要据一个 API 方法存在，就推断新旧仪表库都应把异常写成 Span 事件。</p>
+<p>异常消息可能包含用户输入或业务数据；OpenTelemetry 的<a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/specs/semconv/exceptions/exceptions-spans/">异常属性约定</a>明确提示 <code>exception.message</code> 可能含敏感信息。堆栈和其他上下文也应按本系统的数据分类规则处理。<a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/specs/semconv/exceptions/exceptions-spans/">异常 Span 属性约定</a>给出了异常类型、消息和堆栈等属性约定，也提示消息可能包含敏感信息；这不意味着 SDK 会自动替所有采集链路脱敏。团队要在记录前核对属性白名单、采集配置、导出器和存储权限；必要时保留错误类型和关联标识，避免复制原始敏感文本。不能为获得更完整的调试信息而默认上传整个异常对象。</p>
+<h2 id="如何验证“状态没变”是哪一层的问题？"><a href="#如何验证“状态没变”是哪一层的问题？" class="headerlink" title="如何验证“状态没变”是哪一层的问题？"></a>如何验证“状态没变”是哪一层的问题？</h2><p>先用单元级测试断言不同结果分支：未处理异常最终失败时，预期的异常事件与 Error 状态是否存在；回退后完整操作成功时，外层 Span 是否没有被瞬态异常错误污染；业务拒绝是否按明确契约分类；只有错误码的失败是否也能被检测。断言要针对同一个 Span ID，并记录哪个层级的操作被测，不能只断言导出数据里“有一个 exception 字符串”。</p>
+<p>然后再分别验证 SDK 与导出链路。使用可控的内存或测试导出器检查事件、状态、属性、结束时间和重复记录；确认 Span 在调用期间仍 recording；最后用集成环境检查采样、批处理、网络、后端索引和查询过滤。每一层都回答不同问题：单元测试证明代码分支写入了预期字段，导出测试证明 SDK 输出结构包含这些字段，后端检查才说明实际查询可见。本文没有运行这些测试，也没有观测真实生产链路，不能据此声称任何特定数据已被修正。</p>
+<p><strong>异常事件应当放在父 Span 还是子 Span？</strong> 先看问题要回答什么：若要解释一次具体尝试，就需要让该尝试有可区分的边界，并按它的语义记录；若要判断整次用户请求是否成功，父 Span 应以用户请求结束时的契约分类。一次子操作的失败可以成为父操作恢复过程中的诊断材料，但不因此自动成为父操作的最终错误。若所用语义约定要求已处理异常不记在描述完整操作的 Span/指标上，需按该约定执行；若团队需要保留重试尝试的痕迹，应明确它属于尝试级诊断，并检查是否与当前异常日志迁移规则冲突。</p>
+<p>错误状态的可读性来自边界清楚，而不是把每个 catch 都涂成红色。团队可以在埋点约定里为每个 Span 写一句“什么结果算失败”，再为恢复、业务拒绝、错误码失败和最终抛出分别补测试。相关的日志身份与链路关联也会影响排查，可参阅<a href="/zh-CN/2026/10/14/otel-log-trace-correlation/">日志关联与链路保留</a>；但这类关联同样需要结合实际 SDK、采样和后端查询配置验证。</p>
 
       </div>
       <!--/email_off-->
 
-      
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://opentelemetry.io/docs/specs/otel/trace/api/" rel="noopener">Tracing API — OpenTelemetry, Record Exception and Set Status</a></li><li><a target="_blank" href="https://opentelemetry.io/docs/languages/js/instrumentation/" rel="noopener">Instrumentation — OpenTelemetry JavaScript</a></li><li><a target="_blank" href="https://opentelemetry.io/docs/specs/otel/trace/exceptions/" rel="noopener">Exceptions — OpenTelemetry Trace Semantic Conventions</a></li><li><a target="_blank" href="https://opentelemetry.io/docs/specs/semconv/general/recording-errors/" rel="noopener">Recording errors — OpenTelemetry Semantic Conventions (Development)</a></li><li><a target="_blank" href="https://opentelemetry.io/docs/specs/semconv/exceptions/exceptions-spans/" rel="noopener">Semantic conventions for exceptions on spans — OpenTelemetry Semantic Conventions</a></li><li><a target="_blank" href="https://opentelemetry.io/docs/specs/semconv/exceptions/" rel="noopener">Semantic conventions for exceptions — OpenTelemetry Semantic Conventions</a></li></ol></section>
       
         <footer class="article-taxonomy">
           <span>标签</span>
@@ -236,11 +291,11 @@
         <span>分享</span>
         <div>
           
-            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F15%2Fotel-exception-status%2F&text=%E8%AE%B0%E5%BD%95%E5%BC%82%E5%B8%B8%E4%BA%8B%E4%BB%B6%E5%90%8E%EF%BC%8CSpan%20%E7%8A%B6%E6%80%81%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E4%B8%8D%E6%98%AF%E9%94%99%E8%AF%AF%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F15%2Fotel-exception-status%2F&text=%E8%AE%B0%E5%BD%95%E5%BC%82%E5%B8%B8%E5%90%8E%EF%BC%8CSpan%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E6%98%AF%20Unset%EF%BC%9F%E5%85%88%E5%88%A4%E6%96%AD%E8%BF%99%E6%AE%B5%E6%93%8D%E4%BD%9C%E6%98%AF%E5%90%A6%E5%A4%B1%E8%B4%A5" aria-label="分享到 X" title="分享到 X">X</a>
           
             <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F15%2Fotel-exception-status%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
           
-            <a href="mailto:?subject=%E8%AE%B0%E5%BD%95%E5%BC%82%E5%B8%B8%E4%BA%8B%E4%BB%B6%E5%90%8E%EF%BC%8CSpan%20%E7%8A%B6%E6%80%81%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E4%B8%8D%E6%98%AF%E9%94%99%E8%AF%AF%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F15%2Fotel-exception-status%2F" aria-label="邮件分享" title="邮件分享">@</a>
+            <a href="mailto:?subject=%E8%AE%B0%E5%BD%95%E5%BC%82%E5%B8%B8%E5%90%8E%EF%BC%8CSpan%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E6%98%AF%20Unset%EF%BC%9F%E5%85%88%E5%88%A4%E6%96%AD%E8%BF%99%E6%AE%B5%E6%93%8D%E4%BD%9C%E6%98%AF%E5%90%A6%E5%A4%B1%E8%B4%A5&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F15%2Fotel-exception-status%2F" aria-label="邮件分享" title="邮件分享">@</a>
           
         </div>
       </section>
@@ -272,11 +327,15 @@
 
         
           
-            <a class="toc-link toc-link--h2" href="#事件与状态表达不同信息">事件与状态表达不同信息</a>
+            <a class="toc-link toc-link--h2" href="#两个-API-写入的是不同证据">两个 API 写入的是不同证据</a>
           
-            <a class="toc-link toc-link--h2" href="#异常内容需要信息边界">异常内容需要信息边界</a>
+            <a class="toc-link toc-link--h2" href="#先定操作边界，再定错误状态">先定操作边界，再定错误状态</a>
           
-            <a class="toc-link toc-link--h2" href="#用可恢复与不可恢复两类结果验收">用可恢复与不可恢复两类结果验收</a>
+            <a class="toc-link toc-link--h2" href="#JavaScript-手动埋点应该在哪儿设状态">JavaScript 手动埋点应该在哪儿设状态</a>
+          
+            <a class="toc-link toc-link--h2" href="#有事件，不代表事件已经出现在查询结果里">有事件，不代表事件已经出现在查询结果里</a>
+          
+            <a class="toc-link toc-link--h2" href="#如何验证“状态没变”是哪一层的问题？">如何验证“状态没变”是哪一层的问题？</a>
           
         
       </nav></details>
