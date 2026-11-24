@@ -1,0 +1,440 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>OpenFile 加 O_CREATE 后，旧文件后半段为什么还在？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="以独立临时文件的完整内容预期，区分创建、从头覆盖、截断与追加；Go 程序尚未执行。">
+  
+  
+    <meta name="keywords" content="O_CREATE,O_TRUNC,OpenFile">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/22/go-os-create-existing-file-truncation/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/22/go-os-create-existing-file-truncation/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/22/go-os-create-existing-file-truncation/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/22/go-os-create-existing-file-truncation/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="OpenFile 加 O_CREATE 后，旧文件后半段为什么还在？ | Midnight blog">
+    <meta property="og:description" content="以独立临时文件的完整内容预期，区分创建、从头覆盖、截断与追加；Go 程序尚未执行。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/22/go-os-create-existing-file-truncation/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/22/go-os-create-existing-file-truncation/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/22/go-os-create-existing-file-truncation/","name":"OpenFile 加 O_CREATE 后，旧文件后半段为什么还在？ | Midnight blog","description":"以独立临时文件的完整内容预期，区分创建、从头覆盖、截断与追加；Go 程序尚未执行。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/22/go-os-create-existing-file-truncation/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/22/go-os-create-existing-file-truncation/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/22/go-os-create-existing-file-truncation/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/22/go-os-create-existing-file-truncation/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/22/go-os-create-existing-file-truncation/","headline":"OpenFile 加 O_CREATE 后，旧文件后半段为什么还在？","description":"以独立临时文件的完整内容预期，区分创建、从头覆盖、截断与追加；Go 程序尚未执行。","inLanguage":"zh-CN","datePublished":"2026-11-21T19:41:35.000Z","dateModified":"2026-11-21T19:41:35.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://pkg.go.dev/os#OpenFile"],"keywords":"Go, 文件"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/22/go-os-create-existing-file-truncation/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"OpenFile 加 O_CREATE 后，旧文件后半段为什么还在？","item":"https://www.zyweb.vip/zh-CN/2026/11/22/go-os-create-existing-file-truncation/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/22/go-os-create-existing-file-truncation/" selected>zh-CN</option><option value="/en/2026/11/22/go-os-create-existing-file-truncation/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/22/go-os-create-existing-file-truncation/" selected>zh-CN</option><option value="/en/2026/11/22/go-os-create-existing-file-truncation/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--go">Go</span>
+      <time datetime="2026-11-21T19:41:35.000Z">2026-11-22</time>
+    </div>
+
+    <h1>OpenFile 加 O_CREATE 后，旧文件后半段为什么还在？</h1>
+
+    
+      <p class="post-hero__summary">以独立临时文件的完整内容预期，区分创建、从头覆盖、截断与追加；Go 程序尚未执行。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-21T19:41:35.000Z">2026-11-22</time> · 预计阅读 8 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/22/go-os-create-existing-file-truncation/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/22/go-os-create-existing-file-truncation/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>O_CREATE 只负责缺失时创建文件。</li><li>os.Create 会截断已有文件，单独 O_CREATE 不会。</li><li>最终完整内容应与写入字节数分别验收。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>在已有文件 abcdef 上，用 O_CREATE 打开后从头写 XY，结果可能是 XYcdef。这个标志负责缺失时创建，不负责把已有内容清空。需要重写整个普通文件时，应明确选择截断行为；os.Create 自带的截断合同，也不能只凭名字类推给同名标志。</p>
+<h2 id="写入成功，为什么文件还多四个字节？"><a href="#写入成功，为什么文件还多四个字节？" class="headerlink" title="写入成功，为什么文件还多四个字节？"></a>写入成功，为什么文件还多四个字节？</h2><p>设一个教学工具每次生成较短的本地文本。旧文件有六个字节，新内容只有两个。调用者检查写入返回值为二，没有报错，就认为文件已经完整替换。然而从当前起点写两个字节只覆盖前两个位置；若打开时没有截断，也没有随后明确调整长度，后面的旧字节仍然保留。成功写入本次内容和文件最终只含本次内容，是两项不同验收。</p>
+<p><a target="_blank" rel="noopener" href="https://pkg.go.dev/os#pkg-constants">Go os 包的打开标志文档</a>分别列出创建与截断：前者在不存在时创建文件，后者在打开可写普通文件时截断。本文核对 go1.27.4、二〇二六年十一月十日发布的包文档。官方也提示某些标志在不同系统上不一定都实现，因此示例限定普通临时文件，不推断设备文件、网络文件系统或平台特有行为。</p>
+<p>这里最容易混淆的是函数和标志。Create 函数明确承诺创建或截断；OpenFile 是通用入口，按传入的标志组合打开。看到两者都有 create 这个词，不表示默认行为相同。评审时应核对实际调用函数、访问模式和其他标志，而不是只在变更里找一个“创建”选项就认定旧内容会消失。</p>
+<h2 id="用独立文件比较四种写入政策"><a href="#用独立文件比较四种写入政策" class="headerlink" title="用独立文件比较四种写入政策"></a>用独立文件比较四种写入政策</h2><p>完整程序先创建专属临时目录，每项使用不同文件名，并写入同样的六字节种子。预期分别是保留旧后缀、清空后重写、便捷函数重写，以及读者追问里的追加。缺失文件还有一个不带创建标志的负控制。当前环境没有 Go 工具链，以下程序未执行；所有结果是按官方合同预先写定的教学预期，不是本机测试通过记录。</p>
+<pre><code class="go">package main
+
+import (
+    &quot;errors&quot;
+    &quot;fmt&quot;
+    &quot;os&quot;
+    &quot;path/filepath&quot;
+)
+
+func must(err error) { if err != nil { panic(err) } }
+func main() {
+    directory, err := os.MkdirTemp(&quot;&quot;, &quot;create-contract-&quot;)
+    must(err)
+    defer os.RemoveAll(directory)
+    ordinary := os.O_WRONLY | os.O_CREATE
+    samples := []struct { name string; flags int; want string; useCreate bool }{
+        {&quot;keep&quot;, ordinary, &quot;XYcdef&quot;, false},
+        {&quot;clear&quot;, ordinary | os.O_TRUNC, &quot;XY&quot;, false},
+        {&quot;helper&quot;, 0, &quot;XY&quot;, true},
+        {&quot;append&quot;, ordinary | os.O_APPEND, &quot;abcdefXY&quot;, false},
+    }
+    for _, sample := range samples {
+        path := filepath.Join(directory, sample.name)
+        must(os.WriteFile(path, []byte(&quot;abcdef&quot;), 0600))
+        var file *os.File
+        if sample.useCreate { file, err = os.Create(path) } else {
+            file, err = os.OpenFile(path, sample.flags, 0600)
+        }
+        must(err)
+        n, writeErr := file.WriteString(&quot;XY&quot;)
+        closeErr := file.Close()
+        must(writeErr); must(closeErr)
+        if n != 2 { panic(&quot;short write&quot;) }
+        content, readErr := os.ReadFile(path)
+        must(readErr)
+        if string(content) != sample.want { panic(sample.name + &quot;: wrong content&quot;) }
+    }
+    missing := filepath.Join(directory, &quot;missing&quot;)
+    file, openErr := os.OpenFile(missing, os.O_WRONLY, 0600)
+    if file != nil { file.Close(); panic(&quot;unexpected file&quot;) }
+    if !errors.Is(openErr, os.ErrNotExist) { panic(&quot;missing-file control failed&quot;) }
+    fmt.Println(&quot;creation, truncation, append and missing-file expectations checked&quot;)
+}
+</code></pre>
+<p>前两项的差别只有是否显式截断。第三项调用便捷函数作独立正控制，避免只用我们自己组合出来的标志解释标志。每次写完还检查写入数量、关闭错误和最终全部内容；只检查某个前缀会漏掉这次最关心的旧后缀。程序不会打开仓库文件，也不会修改真实服务配置。</p>
+<p>缺失路径用仅写模式打开时，预期返回不存在错误，而非自动创建。这个控制回答的是另一半合同：是否创建取决于标志，而不能由“准备写入”自动推导。错误用标准错误匹配检查，不比较不同系统可能变化的完整报错字符串。教学输入固定为短 ASCII 文本，让字节长度和显示字符数暂时相同，避免编码问题掩盖文件长度问题。</p>
+<p>各文件必须独立准备。如果先在同一路径上运行截断案例，再运行保留案例，第二项看到的旧文件已经变短，可能让错误实现偶然通过。测试初始状态是 oracle 的一部分。还应让临时目录清理只作用于本程序自己创建的目录；不能把教学清理代码改成删除一个外部传入的共享目录。</p>
+<h2 id="想覆盖整个文件，应怎样写验收？"><a href="#想覆盖整个文件，应怎样写验收？" class="headerlink" title="想覆盖整个文件，应怎样写验收？"></a>想覆盖整个文件，应怎样写验收？</h2><p>对于允许直接清空并重写的小型临时产物，可以显式使用截断标志或便捷函数。但截断发生在打开时，后续写入若失败，旧内容已经不在。这是选择这种政策必须承担的后果。本文只解释普通文件长度行为，不把“最后内容是两个字节”升级为发生故障时也能保留旧版本的保证。</p>
+<p>如果要求失败后仍保有旧版本，应另行设计替换协议并检查平台条件。写临时文件再改名涉及路径、权限、同步和并发观察等不同问题，不能用本程序的最终内容断言代替。这里不提供部署配置替换工具，也没有验证崩溃、断电或多个进程同时写入时的结果。</p>
+<p>在实际修复中，先列出文件已存在与不存在两种输入，再分别写出允许的最终内容。对前者使用比旧内容更短的新数据，可以直接暴露遗漏截断；对后者检查没有误把不存在错误吞成成功。日志中的写入字节数可以帮助定位，但最终完整文件内容才是这道验收要判断的对象。</p>
+<p>权限也有自己的条件。创建参数描述新文件的权限并受进程掩码影响，不应假定它会替已有文件重设权限。本稿没有断言权限位，也没有测试权限不足的目录；要把这段示例用于项目，应为权限失败另设环境和预期，而不是把演示中的权限数值当作所有业务都适用的默认。</p>
+<p>本站的<a href="/zh-CN/2026/10/29/python-namedtemporaryfile-reopen-cleanup/">临时文件交接与清理</a>讨论文件在消费者读取时是否还存活。本题限定在文件仍存在的前提下，写入以后哪些旧字节继续留下。生命周期正确也可能写出错误长度，两份合同都需要自己的断言。</p>
+<h2 id="换成-O-APPEND，是不是每次都会替换旧内容？"><a href="#换成-O-APPEND，是不是每次都会替换旧内容？" class="headerlink" title="换成 O_APPEND，是不是每次都会替换旧内容？"></a>换成 O_APPEND，是不是每次都会替换旧内容？</h2><p>新增条件是追加模式。它让写入追加到文件末尾，不是清空，也不是从开头覆盖。夹具在独立文件上预先写入六字节，追加两个字节后，完整预期是八字节的 abcdefXY。这个控制刻意与第一项从头覆盖后的 XYcdef 区分，两者都保留旧内容，但保留的位置和含义不同。</p>
+<p>因此，追加适合允许积累记录的合同，不适合期望每次只保留最新一份文本的导出。也不要从这个单次教学写入推断跨进程整条记录的原子性或持久性；这些性质需要单独规定和验证。在装有 Go 的环境运行时，应先保存版本、程序哈希、标准输出及退出状态，再检查四项内容和缺失路径错误，不能只把一次无报错当作所有文件写入政策都已验证。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://pkg.go.dev/os#OpenFile" rel="noopener">os package - os - Go Packages</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--go" href="/zh-CN/tags/Go/">Go</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%96%87%E4%BB%B6/">文件</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F22%2Fgo-os-create-existing-file-truncation%2F&text=OpenFile%20%E5%8A%A0%20O_CREATE%20%E5%90%8E%EF%BC%8C%E6%97%A7%E6%96%87%E4%BB%B6%E5%90%8E%E5%8D%8A%E6%AE%B5%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E5%9C%A8%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F22%2Fgo-os-create-existing-file-truncation%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=OpenFile%20%E5%8A%A0%20O_CREATE%20%E5%90%8E%EF%BC%8C%E6%97%A7%E6%96%87%E4%BB%B6%E5%90%8E%E5%8D%8A%E6%AE%B5%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E5%9C%A8%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F22%2Fgo-os-create-existing-file-truncation%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/22/go-strings-reader-readat-cursor/">
+              <span>上一篇</span>
+              <strong>ReadAt 读过 cd，下一次 Read 为什么还从 ab 开始？</strong>
+              <small>2026-11-22</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/22/go-base64-strict-padding-crlf/">
+              <span>下一篇</span>
+              <strong>Base64 Strict 为什么仍接受输入里的换行？</strong>
+              <small>2026-11-22</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#写入成功，为什么文件还多四个字节？">写入成功，为什么文件还多四个字节？</a>
+          
+            <a class="toc-link toc-link--h2" href="#用独立文件比较四种写入政策">用独立文件比较四种写入政策</a>
+          
+            <a class="toc-link toc-link--h2" href="#想覆盖整个文件，应怎样写验收？">想覆盖整个文件，应怎样写验收？</a>
+          
+            <a class="toc-link toc-link--h2" href="#换成-O-APPEND，是不是每次都会替换旧内容？">换成 O_APPEND，是不是每次都会替换旧内容？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>246</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>206</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/22/go-base64-strict-padding-crlf/">Base64 Strict 为什么仍接受输入里的换行？</a></h3>
+          <p>2026-11-22</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/22/go-strings-reader-readat-cursor/">ReadAt 读过 cd，下一次 Read 为什么还从 ab 开始？</a></h3>
+          <p>2026-11-22</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/21/go-json-marshal-map-key-order/">range 顺序会变，Marshal 的 map JSON 为什么仍按键排好？</a></h3>
+          <p>2026-11-21</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

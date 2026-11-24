@@ -1,0 +1,472 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why do files written to a writable RUN bind mount vanish in the next step? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Verify RUN bind-write lifetime with separate output paths, a read-only failure, and a stage-source control.">
+  
+  
+    <meta name="keywords" content="RUN bind mount,discarded writes,build output paths">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/22/docker-run-bind-mount-write-discard/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/22/docker-run-bind-mount-write-discard/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/22/docker-run-bind-mount-write-discard/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/22/docker-run-bind-mount-write-discard/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why do files written to a writable RUN bind mount vanish in the next step? | Midnight blog">
+    <meta property="og:description" content="Verify RUN bind-write lifetime with separate output paths, a read-only failure, and a stage-source control.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/22/docker-run-bind-mount-write-discard/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/22/docker-run-bind-mount-write-discard/#webpage","url":"https://www.zyweb.vip/en/2026/11/22/docker-run-bind-mount-write-discard/","name":"Why do files written to a writable RUN bind mount vanish in the next step? | Midnight blog","description":"Verify RUN bind-write lifetime with separate output paths, a read-only failure, and a stage-source control.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/22/docker-run-bind-mount-write-discard/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/22/docker-run-bind-mount-write-discard/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/22/docker-run-bind-mount-write-discard/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/22/docker-run-bind-mount-write-discard/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/22/docker-run-bind-mount-write-discard/","headline":"Why do files written to a writable RUN bind mount vanish in the next step?","description":"Verify RUN bind-write lifetime with separate output paths, a read-only failure, and a stage-source control.","inLanguage":"en","datePublished":"2026-11-21T19:41:35.000Z","dateModified":"2026-11-21T19:41:35.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://docs.docker.com/build/cache/optimize/","https://docs.docker.com/reference/dockerfile/"],"keywords":"Docker, Build mounts"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/22/docker-run-bind-mount-write-discard/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why do files written to a writable RUN bind mount vanish in the next step?","item":"https://www.zyweb.vip/en/2026/11/22/docker-run-bind-mount-write-discard/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/22/docker-run-bind-mount-write-discard/">zh-CN</option><option value="/en/2026/11/22/docker-run-bind-mount-write-discard/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/22/docker-run-bind-mount-write-discard/">zh-CN</option><option value="/en/2026/11/22/docker-run-bind-mount-write-discard/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--docker">Docker</span>
+      <time datetime="2026-11-21T19:41:35.000Z">2026-11-22</time>
+    </div>
+
+    <h1>Why do files written to a writable RUN bind mount vanish in the next step?</h1>
+
+    
+      <p class="post-hero__summary">Verify RUN bind-write lifetime with separate output paths, a read-only failure, and a stage-source control.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-21T19:41:35.000Z">2026-11-22</time> · Estimated read 20 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/22/docker-run-bind-mount-write-discard/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/22/docker-run-bind-mount-write-discard/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>rw permits current-step writes without persisting them.</li><li>Write retained outputs outside the mount.</li><li>from changes the mount source identity.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>A writable <code>RUN</code> bind mount retains its writes only until that instruction ends; rw does not commit them to an image layer. Write retained artifacts outside the mount. Seeing a file during generation and reading it in a later step or export are different facts.</p>
+<p>A generator may process input under /input and report success, yet a later instruction finds no result. Inspect whether the output landed inside the mount instead of repeatedly rebuilding. Writable does not mean persistent build output.</p>
+<h3 id="Compare-temporary-writes-with-retained-output"><a href="#Compare-temporary-writes-with-retained-output" class="headerlink" title="Compare temporary writes with retained output"></a>Compare temporary writes with retained output</h3><p>This exercise builds locally and exports a file without running nginx, starting a service, or pushing an image. Its existing base supplies the shell tools. Record the resolved image identity rather than treating a tag as permanent byte identity. The context contains harmless teaching inputs only.</p>
+<p>Save Dockerfile. The build stage required by the default artifact target changes mounted input.txt, creates temporary.txt, and copies the processed bytes outside the mount to /out. The next RUN checks that the temporary file is gone while the external result remains generated. A scratch stage exports only that result. Cross-step assertions are essential; successful current-step writes cannot replace them.</p>
+<pre><code class="dockerfile">ARG BASE
+FROM ${BASE} AS readonly
+RUN --mount=type=bind,source=.,target=/input \
+    printf &#39;unexpected\n&#39; &gt; /input/temporary.txt
+FROM ${BASE} AS build
+RUN --mount=type=bind,source=.,target=/input,rw \
+    printf &#39;generated\n&#39; &gt; /input/input.txt \
+    &amp;&amp; printf &#39;temporary\n&#39; &gt; /input/temporary.txt \
+    &amp;&amp; mkdir -p /out \
+    &amp;&amp; cp /input/input.txt /out/result.txt
+RUN test ! -e /input/temporary.txt &amp;&amp; \
+    test &quot;$(cat /out/result.txt)&quot; = generated
+FROM scratch AS artifact
+COPY --from=build /out/result.txt /result.txt
+</code></pre>
+<p>The same file provides readonly as a negative target. Without rw, the default read-only mount should reject creation. The default artifact depends only on build; the script explicitly selects readonly for its rejection control. BASE is a fixed build argument shared by the relevant FROM instructions, not a Dockerfile generator.</p>
+<p>Run the script from the Dockerfile directory. It creates a fresh context containing source in input.txt, then compares source and exported result independently and checks that temporary.txt was not written back. The expected source remains source while the artifact is generated. These are deliberately different byte expectations, not guesses from an old output directory.</p>
+<pre><code class="sh">set -eu
+work=$(mktemp -d)
+base=docker.m.daocloud.io/library/nginx:1.28.0-alpine
+context=&quot;$work/context&quot;
+source_file=&quot;$context/input.txt&quot;
+result_file=&quot;$work/out/result.txt&quot;
+source_expected=&quot;$work/expected-source.txt&quot;
+result_expected=&quot;$work/expected-result.txt&quot;
+mkdir &quot;$context&quot;
+printf &#39;source\n&#39; &gt; &quot;$source_file&quot;
+cp Dockerfile &quot;$context/Dockerfile&quot;
+docker version --format &#39;{{.Client.Version}} / {{.Server.Version}}&#39;
+docker buildx version
+docker image inspect &quot;$base&quot; --format &#39;{{.Id}}&#39;
+docker buildx build --pull=false --build-arg &quot;BASE=$base&quot; --progress=plain --output &quot;type=local,dest=$work/out&quot; &quot;$context&quot;
+printf &#39;source\n&#39; &gt; &quot;$source_expected&quot;
+printf &#39;generated\n&#39; &gt; &quot;$result_expected&quot;
+cmp &quot;$source_expected&quot; &quot;$source_file&quot;
+cmp &quot;$result_expected&quot; &quot;$result_file&quot;
+test ! -e &quot;$context/temporary.txt&quot;
+status=0
+docker buildx build --pull=false --build-arg &quot;BASE=$base&quot; --target readonly --progress=plain --output &quot;type=local,dest=$work/rejected&quot; &quot;$context&quot; &gt; &quot;$work/readonly.stdout&quot; 2&gt; &quot;$work/readonly.stderr&quot; || status=$?
+test &quot;$status&quot; -ne 0
+rg -i &#39;read-only file system&#39; &quot;$work/readonly.stderr&quot;
+printf &#39;fixture=%s\nreadonly-exit=%s\n&#39; &quot;$work&quot; &quot;$status&quot;
+</code></pre>
+<p>Docker client and server were both 29.8.2, with Buildx 0.37.2. The actual matching build passed its cross-step assertions and external byte comparison, leaving source unchanged. The read-only branch exited one with Read-only file system. Image retrieval, syntax, or network errors were not substituted for that rejection.</p>
+<p>The <a target="_blank" rel="noopener" href="https://docs.docker.com/build/cache/optimize/#use-bind-mounts">build-cache bind documentation</a> distinguishes default read-only access, discarded rw writes, and retained external output. The <a target="_blank" rel="noopener" href="https://docs.docker.com/reference/dockerfile/#run---mounttypebind">Dockerfile option table</a> likewise says mount writes are not committed. This is a build-time RUN mount, not a runtime host-bind editing workflow.</p>
+<h3 id="Why-can-the-source-remain-unchanged-while-the-result-changes"><a href="#Why-can-the-source-remain-unchanged-while-the-result-changes" class="headerlink" title="Why can the source remain unchanged while the result changes?"></a>Why can the source remain unchanged while the result changes?</h3><p>The instruction gets a temporary writable view. It reads modified bytes there and copies them to an ordinary layer path that later steps can read. The retained object is the explicitly written artifact, not the entire mounted input tree. Configure the generator&#39;s output location and verify that it actually uses it.</p>
+<p>If output location cannot be configured, generate and copy the required result outside the mount within the same RUN, then inspect contents. The copy must happen while the mount exists. A later instruction cannot recover its vanished temporary file. The example&#39;s cp follows that order without claiming every generator supports separate output directly.</p>
+<p>A filename called result has no special persistence property. Actual paths and mount boundaries determine ownership. Inventory inputs, temporary workspace, and retained artifacts, then check expanded command paths. A generic generation-success line cannot explain a missing final file.</p>
+<h3 id="Keep-failure-and-cache-evidence-distinct"><a href="#Keep-failure-and-cache-evidence-distinct" class="headerlink" title="Keep failure and cache evidence distinct"></a>Keep failure and cache evidence distinct</h3><p>Without the expected read-only diagnostic, preserve the actual error. An unavailable base, unsupported frontend, or absent command never exercised write permission. Restore prerequisites and rerun the same negative branch instead of relabeling any nonzero result as a passed read-only check.</p>
+<p>Report cache use from logs. Reuse may provide an existing result without running generation again. This exercise retains build output and an independent exported-file cmp. On a cached repeat, do not describe it as fresh network retrieval or full tool execution. Positive output, negative rejection, and readback have different evidentiary roles.</p>
+<p>The final main and stage-source reruns both logged cached steps, so neither is described as executing every generation command afresh. The external source and exported-byte comparisons still ran in this invocation, and the read-only target produced its specific rejection again.</p>
+<p>Output must belong to the current invocation too. Fresh temporary directories avoid mistaking old result.txt for a failed build&#39;s new artifact. Define output ownership and cleanup when integrating with an existing pipeline rather than recycling a public directory without identity.</p>
+<h3 id="This-does-not-verify-application-execution"><a href="#This-does-not-verify-application-execution" class="headerlink" title="This does not verify application execution"></a>This does not verify application execution</h3><p>The scratch stage contains a file and no service process. Matching bytes do not establish startup or downstream parsing. An executable artifact still needs its intended architecture and runtime dependencies plus behavior checks. No product execution, speedup, or release availability was established here.</p>
+<p>Temporary writes do not decide source trust either. Public text, generated code, and dependencies need their own provenance and content review. A mount does not automatically constrain the generator&#39;s entire input access. This minimal harmless context is not an audit of a real project&#39;s inputs.</p>
+<p>Before cleanup, retain Dockerfiles, input, resolved image identity, versions, outputs, and exported-byte checks. Remove only the printed fixture directory rather than other caches or outputs by a broad prefix. A reviewer should reconstruct unchanged source, discarded temporary writes, and explicitly retained output separately.</p>
+<h3 id="What-if-the-source-must-come-from-another-build-stage"><a href="#What-if-the-source-must-come-from-another-build-stage" class="headerlink" title="What if the source must come from another build stage?"></a>What if the source must come from another build stage?</h3><p>This new condition selects the source with from. The independent Dockerfile below creates stage-source in seed and mounts /seeds from that stage instead of the context root. It was built and exported too: the result was stage-source while a same-named context file contained context-source and remained unchanged. Equal names are not equal source identities.</p>
+<pre><code class="dockerfile">ARG BASE
+FROM ${BASE} AS seed
+RUN mkdir -p /seeds &amp;&amp; printf &#39;stage-source\n&#39; &gt; /seeds/input.txt &amp;&amp; \
+    test &quot;$(cat /seeds/input.txt)&quot; = stage-source
+FROM ${BASE} AS build
+RUN --mount=type=bind,from=seed,source=/seeds,target=/input \
+    mkdir -p /out &amp;&amp; cp /input/input.txt /out/result.txt
+FROM scratch
+COPY --from=build /out/result.txt /result.txt
+</code></pre>
+<p>Save it as stage.Dockerfile. These complete commands use a fresh context and local export and compare exact stage-source bytes.</p>
+<pre><code class="sh">set -eu
+work=$(mktemp -d)
+base=docker.m.daocloud.io/library/nginx:1.28.0-alpine
+context=&quot;$work/context&quot;
+source_file=&quot;$context/input.txt&quot;
+result_file=&quot;$work/out/result.txt&quot;
+expected=&quot;$work/expected.txt&quot;
+mkdir &quot;$context&quot;
+cp stage.Dockerfile &quot;$context/Dockerfile&quot;
+printf &#39;context-source\n&#39; &gt; &quot;$source_file&quot;
+docker buildx build --pull=false --build-arg &quot;BASE=$base&quot; --progress=plain --output &quot;type=local,dest=$work/out&quot; &quot;$context&quot;
+printf &#39;stage-source\n&#39; &gt; &quot;$expected&quot;
+cmp &quot;$expected&quot; &quot;$result_file&quot;
+test &quot;$(cat &quot;$source_file&quot;)&quot; = context-source
+printf &#39;STAGE_SOURCE_OK\nfixture=%s\n&#39; &quot;$work&quot;
+</code></pre>
+<p> The current reference allows stages, contexts, or images as from sources. Retain the chosen source&#39;s identity; the main context readback cannot certify this new stage-source case.</p>
+<p><a href="/en/2026/10/28/docker-bind-mount-obscured-files/">Related reading on runtime binds obscuring image contents</a></p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://docs.docker.com/build/cache/optimize/" rel="noopener">Optimize cache usage in builds — Use bind mounts</a></li><li><a target="_blank" href="https://docs.docker.com/reference/dockerfile/" rel="noopener">Dockerfile reference — RUN --mount=type=bind options</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--docker" href="/en/tags/docker/">Docker</a>
+          
+            <a class="tag tag--build-mounts" href="/en/tags/Build-mounts/">Build mounts</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--delivery" href="/en/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F22%2Fdocker-run-bind-mount-write-discard%2F&text=Why%20do%20files%20written%20to%20a%20writable%20RUN%20bind%20mount%20vanish%20in%20the%20next%20step%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F22%2Fdocker-run-bind-mount-write-discard%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20do%20files%20written%20to%20a%20writable%20RUN%20bind%20mount%20vanish%20in%20the%20next%20step%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F22%2Fdocker-run-bind-mount-write-discard%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/22/git-check-ignore-no-index-rule-diagnosis/">
+              <span>Previous Post</span>
+              <strong>How can check-ignore explain a rule match for an already-tracked file?</strong>
+              <small>2026-11-22</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/22/ctest-fixture-required-selected-cleanup/">
+              <span>Next Post</span>
+              <strong>How can a selected CTest test bring its setup and cleanup along?</strong>
+              <small>2026-11-22</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h3" href="#Compare-temporary-writes-with-retained-output">Compare temporary writes with retained output</a>
+          
+            <a class="toc-link toc-link--h3" href="#Why-can-the-source-remain-unchanged-while-the-result-changes">Why can the source remain unchanged while the result changes?</a>
+          
+            <a class="toc-link toc-link--h3" href="#Keep-failure-and-cache-evidence-distinct">Keep failure and cache evidence distinct</a>
+          
+            <a class="toc-link toc-link--h3" href="#This-does-not-verify-application-execution">This does not verify application execution</a>
+          
+            <a class="toc-link toc-link--h3" href="#What-if-the-source-must-come-from-another-build-stage">What if the source must come from another build stage?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>246</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>206</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>125</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>92</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/21/docker-add-checksum-remote-content/">How can Docker ADD verify the expected content after a remote download?</a></h3>
+          <p>2026-11-21</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/15/docker-stopsignal-timeout-distinction/">Why did Docker kill the container after sending its stop signal?</a></h3>
+          <p>2026-11-15</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/13/docker-copy-link-layer-independence/">Can Docker reuse a copy layer after the base changes?</a></h3>
+          <p>2026-11-13</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

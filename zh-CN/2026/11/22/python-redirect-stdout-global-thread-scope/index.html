@@ -1,0 +1,426 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>只想抓当前函数，为什么另一个线程的 print 也进来了？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="以主动 join 的线程夹具区分全局输出替换、退出恢复和显式流；另验 stderr 的独立目标。">
+  
+  
+    <meta name="keywords" content="redirect_stdout,sys.stdout,StringIO">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/22/python-redirect-stdout-global-thread-scope/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/22/python-redirect-stdout-global-thread-scope/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/22/python-redirect-stdout-global-thread-scope/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/22/python-redirect-stdout-global-thread-scope/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="只想抓当前函数，为什么另一个线程的 print 也进来了？ | Midnight blog">
+    <meta property="og:description" content="以主动 join 的线程夹具区分全局输出替换、退出恢复和显式流；另验 stderr 的独立目标。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/22/python-redirect-stdout-global-thread-scope/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/22/python-redirect-stdout-global-thread-scope/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/22/python-redirect-stdout-global-thread-scope/","name":"只想抓当前函数，为什么另一个线程的 print 也进来了？ | Midnight blog","description":"以主动 join 的线程夹具区分全局输出替换、退出恢复和显式流；另验 stderr 的独立目标。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/22/python-redirect-stdout-global-thread-scope/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/22/python-redirect-stdout-global-thread-scope/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/22/python-redirect-stdout-global-thread-scope/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/22/python-redirect-stdout-global-thread-scope/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/22/python-redirect-stdout-global-thread-scope/","headline":"只想抓当前函数，为什么另一个线程的 print 也进来了？","description":"以主动 join 的线程夹具区分全局输出替换、退出恢复和显式流；另验 stderr 的独立目标。","inLanguage":"zh-CN","datePublished":"2026-11-21T19:41:35.000Z","dateModified":"2026-11-21T19:41:35.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.14/library/contextlib.html"],"keywords":"Python, 并发"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/22/python-redirect-stdout-global-thread-scope/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"只想抓当前函数，为什么另一个线程的 print 也进来了？","item":"https://www.zyweb.vip/zh-CN/2026/11/22/python-redirect-stdout-global-thread-scope/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/22/python-redirect-stdout-global-thread-scope/" selected>zh-CN</option><option value="/en/2026/11/22/python-redirect-stdout-global-thread-scope/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/22/python-redirect-stdout-global-thread-scope/" selected>zh-CN</option><option value="/en/2026/11/22/python-redirect-stdout-global-thread-scope/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--python">Python</span>
+      <time datetime="2026-11-21T19:41:35.000Z">2026-11-22</time>
+    </div>
+
+    <h1>只想抓当前函数，为什么另一个线程的 print 也进来了？</h1>
+
+    
+      <p class="post-hero__summary">以主动 join 的线程夹具区分全局输出替换、退出恢复和显式流；另验 stderr 的独立目标。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-21T19:41:35.000Z">2026-11-22</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/22/python-redirect-stdout-global-thread-scope/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/22/python-redirect-stdout-global-thread-scope/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>redirect_stdout 修改全局 sys.stdout。</li><li>退出恢复不等于期间只有当前函数能写入。</li><li>显式流参数和 stderr 目标应分别验收。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>只想收集当前函数的输出，另一个线程的 print 却也进了 StringIO。redirect_stdout 临时改的是全局 sys.stdout，不是给当前函数划出一个专属输出通道。退出 with 会恢复入口，但恢复时点不能证明期间只有这个函数使用过它。</p>
+<h2 id="上下文限定了时间，没有限定所有调用者"><a href="#上下文限定了时间，没有限定所有调用者" class="headerlink" title="上下文限定了时间，没有限定所有调用者"></a>上下文限定了时间，没有限定所有调用者</h2><p>设一个小工具把原本直接打印的报告抓成字符串。工具本身在主线程运行，同一进程还有一个工作线程打印进度。主线程以为捕获范围只是自己的调用栈，结果保存的报告里混入 worker。若随后把这份文本当作机器可解析结果，问题看起来可能像报告格式随机坏了，实际却是输出入口被共同使用。</p>
+<p><a target="_blank" rel="noopener" href="https://docs.python.org/3.14/library/contextlib.html#contextlib.redirect_stdout">contextlib.redirect_stdout 官方说明</a>明确指出，对 sys.stdout 的修改有全局副作用，因此不适合库代码和大多数多线程应用。这里核对 Python 三点十四点十文档，并不把普通 with 块当成线程隔离机制。它适合某些受控工具脚本，这和在共享运行环境里随意替换输出入口，是不同选择。</p>
+<p>关键要分开“何时恢复”和“谁能观察到修改”。上下文管理器可以在退出时恢复原目标，同时在整个进入期间让其他使用当前全局入口的代码看到新目标。两份性质可以同时成立，不能因为清理写得正确，就判定并发作用范围也符合预期。异常后的恢复也不会把已经写入捕获流的其他文本自动分离出来。</p>
+<h2 id="用主动加入的线程构造确定顺序"><a href="#用主动加入的线程构造确定顺序" class="headerlink" title="用主动加入的线程构造确定顺序"></a>用主动加入的线程构造确定顺序</h2><p>完整夹具先保存原输出对象，再打印 main，随后启动一个只打印 worker 的线程并等待它结束。顺序由主线程先打印和主动等待决定，不依赖延时碰运气。它已在本机 Python 三点十一点十五执行，实际源码、运行时、标准输出和退出状态归档；文档版本仍与运行版本分开记录。</p>
+<pre><code class="python">import sys
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
+from threading import Thread
+
+read_capture = StringIO.getvalue
+original = sys.stdout
+captured = StringIO()
+with redirect_stdout(captured):
+    print(&quot;main&quot;)
+    worker = Thread(target=lambda: print(&quot;worker&quot;))
+    worker.start()
+    worker.join()
+assert read_capture(captured) == &quot;main\nworker\n&quot;
+assert sys.stdout is original
+
+def emit(stream, message):
+    stream.write(message + &quot;\n&quot;)
+
+explicit = StringIO()
+emit(explicit, &quot;owned&quot;)
+assert read_capture(explicit) == &quot;owned\n&quot;
+out, err = StringIO(), StringIO()
+with redirect_stdout(out), redirect_stderr(err):
+    print(&quot;out&quot;)
+    print(&quot;err&quot;, file=sys.stderr)
+assert read_capture(out) == &quot;out\n&quot;
+assert read_capture(err) == &quot;err\n&quot;
+print(&quot;global capture, restoration, explicit stream and stderr separation checked&quot;)
+</code></pre>
+<p>捕获文本的完整预期是两行，依次为 main 和 worker。这个预期不是说任何真实服务都必然按同样顺序输出，而是证明在本例中，另一个线程在重定向期间使用当前全局入口，其输出同样被捕获。退出后还检查输出对象的身份确实恢复，避免把“混入其他线程”与“没有恢复”混成同一个故障。</p>
+<p>这里没有做任意并发读写压力测试。工作线程只有一个简单动作，而且在作用域退出之前已经结束；没有后台任务继续使用流，也没有日志框架、自定义线程局部输出代理或其他捕获器参与。真实应用若已经替换过输出对象，应检查那一层合同，不能从这个标准环境演示推断所有进程输出都完全一样。</p>
+<p>还应注意，保存过旧流引用的代码可能不再查找当前入口。本题说明使用当前 sys.stdout 的打印会受到修改，不宣称所有写入路径都会被强制改道。文件描述符写入、子进程输出和已配置目标的日志处理器也不能只凭一次 print 捕获实验推导结果。官方另说明它不影响子进程输出；本机夹具没有启动子进程，不能把这条文档结论写成实测。</p>
+<h2 id="工具函数能改时，先把接收者显式传进去"><a href="#工具函数能改时，先把接收者显式传进去" class="headerlink" title="工具函数能改时，先把接收者显式传进去"></a>工具函数能改时，先把接收者显式传进去</h2><p>夹具的 emit 接收一个流对象，只向指定目标写入 owned 一行。它不需要临时替换全局入口，也不假设当前调用者拥有整个进程的打印。对于自己维护的报告函数，这样能让测试直接传入内存流，让命令行入口传入其实际输出目标，各层的责任更容易判断。</p>
+<p>这不是自动给任意旧库添加隔离的包装器。如果第三方函数内部硬编码 print，修改外层函数签名并不会改变它；需要库本身支持流参数、返回文本或其他受控输出接口。无法修改时，应根据工具是否独占运行环境作选择，不能承诺一个全局替换就能安全包住所有并发代码。本文没有接入第三方库或生产报告系统。</p>
+<p>项目验收还要分别看谁拥有流的生命周期。示例由测试自己创建内存流并读取结果，不替被调用者关闭它；实际文件或网络输出可能有额外的关闭与错误规则。给函数传入流，不意味着它就可以随意关闭调用方提供的对象。这里没有实现复杂资源协议，只展示显式接收者能够消除哪一种全局修改。</p>
+<p>本站的<a href="/zh-CN/2026/11/14/python-asyncio-contextvar-task-snapshot/">ContextVar 任务快照</a>说明另一类上下文状态如何在任务创建时传播。名称都含上下文，不代表 sys.stdout 会因此变成任务变量。判断隔离应看实际存放位置、读取入口和传播合同，而不是看语法是否用了 with 或函数名是否含 context。</p>
+<p>对捕获文本做验证时，也别只搜索 main 是否出现。混入额外内容时，这个包含检查仍然通过。应按用途检查完整文本、结构或明确允许的附加内容；本题用完整两行预期，是为了把共享入口这个现象直接显露出来，而非把额外行偷偷过滤掉后报告成功。</p>
+<h2 id="stdout-被重定向，stderr-也会自动进去吗？"><a href="#stdout-被重定向，stderr-也会自动进去吗？" class="headerlink" title="stdout 被重定向，stderr 也会自动进去吗？"></a>stdout 被重定向，stderr 也会自动进去吗？</h2><p>新增条件是另一个标准错误流。夹具使用独立的两个内存对象，分别重定向输出与错误，再让两次打印明确选择不同目标。预期 out 只包含 out 行，err 只包含 err 行。错误流需要自己的重定向，不会因为输出流被换掉就自动使用相同对象。</p>
+<p>这份控制也不是建议把两类文本永远分开：有的工具有意合并它们，但应该把合并写成明确选择。若要收集结构化报告，可以让报告数据走返回值或指定流，让诊断走另外的目标，再按各自合同验收。不要把退出后恢复成功当作内容来源已经隔离的凭据；先确认谁在那个时段共同使用了入口，再决定能否接受这类捕获。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.14/library/contextlib.html" rel="noopener">contextlib — Utilities for with-statement contexts — Python 3.14.10 documentation</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%B9%B6%E5%8F%91/">并发</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F22%2Fpython-redirect-stdout-global-thread-scope%2F&text=%E5%8F%AA%E6%83%B3%E6%8A%93%E5%BD%93%E5%89%8D%E5%87%BD%E6%95%B0%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%8F%A6%E4%B8%80%E4%B8%AA%E7%BA%BF%E7%A8%8B%E7%9A%84%20print%20%E4%B9%9F%E8%BF%9B%E6%9D%A5%E4%BA%86%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F22%2Fpython-redirect-stdout-global-thread-scope%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E5%8F%AA%E6%83%B3%E6%8A%93%E5%BD%93%E5%89%8D%E5%87%BD%E6%95%B0%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%8F%A6%E4%B8%80%E4%B8%AA%E7%BA%BF%E7%A8%8B%E7%9A%84%20print%20%E4%B9%9F%E8%BF%9B%E6%9D%A5%E4%BA%86%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F22%2Fpython-redirect-stdout-global-thread-scope%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/22/python-str-casefold-lower-normalization/">
+              <span>上一篇</span>
+              <strong>lower 后仍不匹配，casefold 为什么能找到 Straße？</strong>
+              <small>2026-11-22</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/22/python-re-fullmatch-window-anchor-origin/">
+              <span>下一篇</span>
+              <strong>fullmatch 限定了窗口，^ 为什么仍看原字符串开头？</strong>
+              <small>2026-11-22</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#上下文限定了时间，没有限定所有调用者">上下文限定了时间，没有限定所有调用者</a>
+          
+            <a class="toc-link toc-link--h2" href="#用主动加入的线程构造确定顺序">用主动加入的线程构造确定顺序</a>
+          
+            <a class="toc-link toc-link--h2" href="#工具函数能改时，先把接收者显式传进去">工具函数能改时，先把接收者显式传进去</a>
+          
+            <a class="toc-link toc-link--h2" href="#stdout-被重定向，stderr-也会自动进去吗？">stdout 被重定向，stderr 也会自动进去吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>246</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>206</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/18/python-asyncio-bounded-semaphore-overrelease/">并发上限设成 1，为什么 Semaphore 后来可以进两次？</a></h3>
+          <p>2026-11-18</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/22/python-re-fullmatch-window-anchor-origin/">fullmatch 限定了窗口，^ 为什么仍看原字符串开头？</a></h3>
+          <p>2026-11-22</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/22/python-str-casefold-lower-normalization/">lower 后仍不匹配，casefold 为什么能找到 Straße？</a></h3>
+          <p>2026-11-22</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

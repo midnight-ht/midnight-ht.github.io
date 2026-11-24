@@ -1,0 +1,434 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Base64 Strict 为什么仍接受输入里的换行？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用正确尾位、错误尾位、CRLF 和无填充输入，核对 Strict 的具体边界；Go 程序未执行。">
+  
+  
+    <meta name="keywords" content="Strict,padding bits,CRLF">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/22/go-base64-strict-padding-crlf/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/22/go-base64-strict-padding-crlf/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/22/go-base64-strict-padding-crlf/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/22/go-base64-strict-padding-crlf/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Base64 Strict 为什么仍接受输入里的换行？ | Midnight blog">
+    <meta property="og:description" content="用正确尾位、错误尾位、CRLF 和无填充输入，核对 Strict 的具体边界；Go 程序未执行。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/22/go-base64-strict-padding-crlf/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/22/go-base64-strict-padding-crlf/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/22/go-base64-strict-padding-crlf/","name":"Base64 Strict 为什么仍接受输入里的换行？ | Midnight blog","description":"用正确尾位、错误尾位、CRLF 和无填充输入，核对 Strict 的具体边界；Go 程序未执行。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/22/go-base64-strict-padding-crlf/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/22/go-base64-strict-padding-crlf/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/22/go-base64-strict-padding-crlf/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/22/go-base64-strict-padding-crlf/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/22/go-base64-strict-padding-crlf/","headline":"Base64 Strict 为什么仍接受输入里的换行？","description":"用正确尾位、错误尾位、CRLF 和无填充输入，核对 Strict 的具体边界；Go 程序未执行。","inLanguage":"zh-CN","datePublished":"2026-11-21T19:41:35.000Z","dateModified":"2026-11-21T19:41:35.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://pkg.go.dev/encoding/base64#Encoding.Strict"],"keywords":"Go, Base64"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/22/go-base64-strict-padding-crlf/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Base64 Strict 为什么仍接受输入里的换行？","item":"https://www.zyweb.vip/zh-CN/2026/11/22/go-base64-strict-padding-crlf/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/22/go-base64-strict-padding-crlf/" selected>zh-CN</option><option value="/en/2026/11/22/go-base64-strict-padding-crlf/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/22/go-base64-strict-padding-crlf/" selected>zh-CN</option><option value="/en/2026/11/22/go-base64-strict-padding-crlf/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--go">Go</span>
+      <time datetime="2026-11-21T19:41:35.000Z">2026-11-22</time>
+    </div>
+
+    <h1>Base64 Strict 为什么仍接受输入里的换行？</h1>
+
+    
+      <p class="post-hero__summary">用正确尾位、错误尾位、CRLF 和无填充输入，核对 Strict 的具体边界；Go 程序未执行。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-21T19:41:35.000Z">2026-11-22</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/22/go-base64-strict-padding-crlf/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/22/go-base64-strict-padding-crlf/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>Strict 要求未使用的尾部填充位为零。</li><li>CR 和 LF 在严格模式下仍被忽略。</li><li>无填充格式与外层单行规则应单独选择。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Go 的 Base64 解码器开启 Strict 后，输入中间带换行仍可能成功。这个严格模式要求尾部未使用的填充位为零，却继续忽略回车和换行。如果上层协议明确要求单行文本，就必须另验字符格式，不能把一个方法名当成全部输入政策。</p>
+<h2 id="严格究竟严格在哪一层？"><a href="#严格究竟严格在哪一层？" class="headerlink" title="严格究竟严格在哪一层？"></a>严格究竟严格在哪一层？</h2><p>考虑两段很短的编码文本 Zg== 和 Zh==。普通解码下，两者都能产生字节 f；后者的尾部位却不满足严格解码要求。再把第一段中间加一个换行，它的尾部位没有变，严格解码仍能成功。看似矛盾的三种结果，其实分别在检查有效数据位、未使用的尾位和被忽略的字符。</p>
+<p><a target="_blank" rel="noopener" href="https://pkg.go.dev/encoding/base64#Encoding.Strict">encoding/base64 的 Strict 文档</a>明确规定尾部填充位必须为零，并紧接着说明回车与换行仍被忽略。本文核对 go1.27.4、二〇二六年十一月十日发布的包文档；该方法从一点八版加入。文档引用的尾位规则不能扩成一个没有明确写出的“只接受我想要的所有文本形式”。</p>
+<p>因此先把接收合同写成两部分。解码器要验证它负责的编码规则；应用还要决定传入文本是否可以折行，采用哪套字母表，以及是否允许省略填充字符。只给函数加上严格开关，却不列出这些条件，后来另一个调用者很难知道这次成功究竟保证了什么。</p>
+<h2 id="一个完整表格，分别看成功和失败"><a href="#一个完整表格，分别看成功和失败" class="headerlink" title="一个完整表格，分别看成功和失败"></a>一个完整表格，分别看成功和失败</h2><p>程序以独立的字面输入和预期组成表格，不把普通解码器的结果当成严格解码器的正确性来源。它包含标准输入、非零尾位、两种换行形式和后面追问的无填充模式。当前机器没有 Go 工具链，下面程序未执行；断言和输出是根据文档制定的教学验收方案，不是实际通过证明。</p>
+<pre><code class="go">package main
+
+import (
+    &quot;encoding/base64&quot;
+    &quot;fmt&quot;
+    &quot;strings&quot;
+)
+
+func main() {
+    standard := base64.StdEncoding
+    raw := base64.RawStdEncoding
+    strict := standard.Strict()
+    strictRaw := raw.Strict()
+    cases := []struct {
+        encoding *base64.Encoding
+        text, want string
+        wantError bool
+    }{
+        {standard, &quot;Zg==&quot;, &quot;f&quot;, false},
+        {standard, &quot;Zh==&quot;, &quot;f&quot;, false},
+        {strict, &quot;Zg==&quot;, &quot;f&quot;, false},
+        {strict, &quot;Zh==&quot;, &quot;&quot;, true},
+        {strict, &quot;Z\ng==&quot;, &quot;f&quot;, false},
+        {strict, &quot;Z\r\ng==&quot;, &quot;f&quot;, false},
+        {raw, &quot;Zg&quot;, &quot;f&quot;, false},
+        {standard, &quot;Zg&quot;, &quot;&quot;, true},
+        {strictRaw, &quot;Zh&quot;, &quot;&quot;, true},
+    }
+    for _, item := range cases {
+        decoded, err := item.encoding.DecodeString(item.text)
+        failed := err != nil
+        if failed != item.wantError { panic(&quot;wrong error status&quot;) }
+        if !failed &amp;&amp; string(decoded) != item.want { panic(&quot;wrong decoded bytes&quot;) }
+    }
+    containsLineEnd := strings.ContainsAny(&quot;Z\ng==&quot;, &quot;\r\n&quot;)
+    if !containsLineEnd { panic(&quot;outer grammar control&quot;) }
+    fmt.Println(&quot;zero pad bits, ignored CRLF, unpadded input and outer grammar checked&quot;)
+}
+</code></pre>
+<p>第一组普通模式下的两项成功，说明最终字节相同不足以证明原始编码文本满足同一规范。严格模式接受 Zg==，拒绝 Zh==，把尾位条件单独显露出来。接下来的换行样本有正确尾位，所以它们继续成功；如果只运行这两项，就会错以为严格开关完全不起作用。</p>
+<p>程序还单独检查外层单行规则能看到换行。它没有把字符串清理后再声称原输入没有换行，因为那会改变要验收的对象。实际协议若允许折行，可以接受这种输入；若不允许，应在相应边界拒绝并说明原因。示例没有实现网络接口，也没有提供认证、签名或授权规则的替代方案。</p>
+<p>解码失败时还要留意返回数据。官方说明可能返回部分解码结果和输入错误，因此夹具对预期失败只检查确实报错，不使用错误伴随的字节充当有效消息。完整消息需要全部满足合同，不能看到前面已经产出几字节就提前交给业务处理。要调试时可以保留受控错误信息，但本稿没有采集任何真实敏感载荷。</p>
+<h2 id="原始文本与解码字节各有自己的验收"><a href="#原始文本与解码字节各有自己的验收" class="headerlink" title="原始文本与解码字节各有自己的验收"></a>原始文本与解码字节各有自己的验收</h2><p>在仅关心二进制内容的内部工具中，允许不同文本形式表达同一份字节或许完全合理。此时应把这种宽容明确写下，避免下一位维护者把它当成漏洞式异常。在要求固定输入格式的接口中，则要检查原始文本的合同，不能用“解出来一样”替代它。规则选择来自协议，而不是哪个函数名听起来更强。</p>
+<p>如果上层希望输出一种统一形式，可以明确选定编码器，并把这一目标与输入接受范围分开评审。但本文没有建立跨系统规范化文本算法，也没有承诺对任意字母表、填充选项和特殊空白都提供等价转换。看到回车换行被忽略，不代表所有空白字符都被忽略；这里没有将该行为外推给空格、制表符或任意其他字符。</p>
+<p>完整验收还应检查错误处理路径是否丢掉失败标志。一个包装函数如果在返回字节后忘记返回错误，可能让原本被严格解码拒绝的输入继续流转。应对包装层另写失败样本，检查最终业务没有接受部分数据。这个建议超出当前未执行表格，不应写进报告作为已经运行过的服务测试。</p>
+<p>本站的<a href="/zh-CN/2026/10/29/python-hmac-compare-digest-representation/">HMAC 比较中的表示选择</a>解释字节与文本表示为什么不能随意混用。本题不讨论摘要验证，而是对解码器的具体接受条件负责：相同字节、尾位正确和文本符合外层格式，分别需要证据。一个成功布尔值不应承担三个没有拆开的承诺。</p>
+<h2 id="没有等号的-Zg，也应该被标准模式接受吗？"><a href="#没有等号的-Zg，也应该被标准模式接受吗？" class="headerlink" title="没有等号的 Zg，也应该被标准模式接受吗？"></a>没有等号的 Zg，也应该被标准模式接受吗？</h2><p>新增条件是省略填充字符。官方把 RawStdEncoding 定义为标准字母表但不带填充的形式；它与标准模式使用同一批字母，不表示对末尾等号有相同要求。因此表中的 Zg 在原始无填充模式下成功，在标准带填充模式下失败。选择哪种形式应根据发送方与接收方的共同协议。</p>
+<p>去掉等号也没有取消尾位规则。无填充模式再开启严格校验时，Zh 仍因未使用尾位不为零而失败。这里把“是否带填充字符”和“最后那些没有贡献到输出的位是否为零”分开，避免认为没有等号就没有任何尾部条件。若将这份程序移到有 Go 的机器，应保存版本、源码哈希、输出和退出状态，并保持这些独立输入不被预处理步骤悄悄改写。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://pkg.go.dev/encoding/base64#Encoding.Strict" rel="noopener">base64 package - encoding/base64 - Go Packages</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--go" href="/zh-CN/tags/Go/">Go</a>
+          
+            <a class="tag tag--base64" href="/zh-CN/tags/Base64/">Base64</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F22%2Fgo-base64-strict-padding-crlf%2F&text=Base64%20Strict%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E6%8E%A5%E5%8F%97%E8%BE%93%E5%85%A5%E9%87%8C%E7%9A%84%E6%8D%A2%E8%A1%8C%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F22%2Fgo-base64-strict-padding-crlf%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Base64%20Strict%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E6%8E%A5%E5%8F%97%E8%BE%93%E5%85%A5%E9%87%8C%E7%9A%84%E6%8D%A2%E8%A1%8C%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F22%2Fgo-base64-strict-padding-crlf%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/22/go-os-create-existing-file-truncation/">
+              <span>上一篇</span>
+              <strong>OpenFile 加 O_CREATE 后，旧文件后半段为什么还在？</strong>
+              <small>2026-11-22</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/22/git-check-ignore-no-index-rule-diagnosis/">
+              <span>下一篇</span>
+              <strong>check-ignore 对已跟踪文件没输出，怎样核对它会匹配哪条规则？</strong>
+              <small>2026-11-22</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#严格究竟严格在哪一层？">严格究竟严格在哪一层？</a>
+          
+            <a class="toc-link toc-link--h2" href="#一个完整表格，分别看成功和失败">一个完整表格，分别看成功和失败</a>
+          
+            <a class="toc-link toc-link--h2" href="#原始文本与解码字节各有自己的验收">原始文本与解码字节各有自己的验收</a>
+          
+            <a class="toc-link toc-link--h2" href="#没有等号的-Zg，也应该被标准模式接受吗？">没有等号的 Zg，也应该被标准模式接受吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>246</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>206</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/22/go-os-create-existing-file-truncation/">OpenFile 加 O_CREATE 后，旧文件后半段为什么还在？</a></h3>
+          <p>2026-11-22</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/22/go-strings-reader-readat-cursor/">ReadAt 读过 cd，下一次 Read 为什么还从 ab 开始？</a></h3>
+          <p>2026-11-22</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/21/go-json-marshal-map-key-order/">range 顺序会变，Marshal 的 map JSON 为什么仍按键排好？</a></h3>
+          <p>2026-11-21</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

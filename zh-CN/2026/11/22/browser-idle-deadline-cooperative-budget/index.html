@@ -1,0 +1,446 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>放进 requestIdleCallback，为什么长循环仍会挡住页面？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="用四项有界队列解释空闲预算为何不会自动打断同步工作，区分未运行页面与已执行的超时策略纯函数。">
+  
+  
+    <meta name="keywords" content="requestIdleCallback,timeRemaining,有界分块">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/22/browser-idle-deadline-cooperative-budget/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/22/browser-idle-deadline-cooperative-budget/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/22/browser-idle-deadline-cooperative-budget/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/22/browser-idle-deadline-cooperative-budget/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="放进 requestIdleCallback，为什么长循环仍会挡住页面？ | Midnight blog">
+    <meta property="og:description" content="用四项有界队列解释空闲预算为何不会自动打断同步工作，区分未运行页面与已执行的超时策略纯函数。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/22/browser-idle-deadline-cooperative-budget/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/22/browser-idle-deadline-cooperative-budget/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/22/browser-idle-deadline-cooperative-budget/","name":"放进 requestIdleCallback，为什么长循环仍会挡住页面？ | Midnight blog","description":"用四项有界队列解释空闲预算为何不会自动打断同步工作，区分未运行页面与已执行的超时策略纯函数。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/22/browser-idle-deadline-cooperative-budget/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/22/browser-idle-deadline-cooperative-budget/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/22/browser-idle-deadline-cooperative-budget/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/22/browser-idle-deadline-cooperative-budget/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/22/browser-idle-deadline-cooperative-budget/","headline":"放进 requestIdleCallback，为什么长循环仍会挡住页面？","description":"用四项有界队列解释空闲预算为何不会自动打断同步工作，区分未运行页面与已执行的超时策略纯函数。","inLanguage":"zh-CN","datePublished":"2026-11-21T19:41:35.000Z","dateModified":"2026-11-21T19:41:35.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.w3.org/TR/requestidlecallback/#the-idledeadline-interface","https://www.w3.org/TR/requestidlecallback/#the-requestidlecallback-method","https://www.w3.org/TR/requestidlecallback/#invoke-idle-callback-timeout-algorithm","https://nodejs.org/docs/latest-v24.x/api/"],"keywords":"JavaScript, 浏览器, 调度"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/22/browser-idle-deadline-cooperative-budget/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"放进 requestIdleCallback，为什么长循环仍会挡住页面？","item":"https://www.zyweb.vip/zh-CN/2026/11/22/browser-idle-deadline-cooperative-budget/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/22/browser-idle-deadline-cooperative-budget/" selected>zh-CN</option><option value="/en/2026/11/22/browser-idle-deadline-cooperative-budget/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/22/browser-idle-deadline-cooperative-budget/" selected>zh-CN</option><option value="/en/2026/11/22/browser-idle-deadline-cooperative-budget/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--javascript">JavaScript</span>
+      <time datetime="2026-11-21T19:41:35.000Z">2026-11-22</time>
+    </div>
+
+    <h1>放进 requestIdleCallback，为什么长循环仍会挡住页面？</h1>
+
+    
+      <p class="post-hero__summary">用四项有界队列解释空闲预算为何不会自动打断同步工作，区分未运行页面与已执行的超时策略纯函数。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-21T19:41:35.000Z">2026-11-22</time> · 预计阅读 8 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/22/browser-idle-deadline-cooperative-budget/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/22/browser-idle-deadline-cooperative-budget/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>空闲预算是估计而非自动抢占</li><li>工作单元本身需要有界</li><li>预约成功不等于队列完成</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>requestIdleCallback 只给回调一个空闲预算估计，不会在预算用完时自动打断长循环。把大量同步工作整体搬进去，仍可能挡住输入和渲染。工作需要先拆成有界单元，在单元之间检查 timeRemaining，剩下的另行预约；一次读到有空闲，不等于下一项任意长工作都安全。</p>
+<h2 id="预算估计不是抢占式执行"><a href="#预算估计不是抢占式执行" class="headerlink" title="预算估计不是抢占式执行"></a>预算估计不是抢占式执行</h2><p>IdleDeadline 的 timeRemaining 返回预计截止时刻与当前时刻的差，负数夹成零。它是调用时的一次读数，不是给 JavaScript 装上一个到点必停的开关。函数读到还有一点时间后，如果立刻进入一整段昂贵计算，浏览器不会因为这份估计就替应用把那段代码切成小块。</p>
+<p><a target="_blank" rel="noopener" href="https://www.w3.org/TR/requestidlecallback/#the-idledeadline-interface">requestIdleCallback 工作草案的 IdleDeadline 定义</a>列出了这个计算。当前核对版本为二〇二六年十一月十二日工作草案，不是已对所有设备完成的调度实测。空闲时段怎样确定由用户代理决定，应用不能从一个读数推出固定批次数或固定完成延迟。</p>
+<p>因此要同时控制两个尺度：每次最多做多少项，以及一项本身可能花多久。最多两项并没有给耗时建立绝对上限；若每项就是一次庞大的同步解析，两项仍可能过长。分块策略要从实际工作单元开始设计，必要时进一步拆分。这里的教学单元只是一个小整数的平方，不把它包装成真实索引构建的性能证据。</p>
+<p>剩余时间也需要给后续工作留空间。规范的空闲时段说明提醒，布局或解析 Promise 等操作可能引出后续工作。回调中最后一行结束，不等于它触发的所有成本已经结束。给阈值留余量是应用策略，不能据此声称某个固定毫秒数在所有页面都足够。真正的任务需要记录自己的单元成本和响应表现。</p>
+<h2 id="四个小任务的完整页面"><a href="#四个小任务的完整页面" class="headerlink" title="四个小任务的完整页面"></a>四个小任务的完整页面</h2><p>下面的 HTML 尚未在浏览器运行。它按顺序平方一、二、三、四，每次最多处理两项，还要求当前预算大于一个教学阈值。没有网络、数据库或真实索引。开始后暂时禁用开始按钮，避免第二次点击在第一条请求链未结束时重置同一队列。</p>
+<pre><code class="html">&lt;!doctype html&gt;
+&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;title&gt;Cooperative idle chunks&lt;/title&gt;
+&lt;button id=&quot;start&quot; type=&quot;button&quot;&gt;Start four teaching items&lt;/button&gt;
+&lt;pre id=&quot;out&quot;&gt;&lt;/pre&gt;
+&lt;script&gt;
+const get = document.getElementById.bind(document);
+const output = get(&#39;out&#39;);
+const button = get(&#39;start&#39;);
+let pending = [];
+const completed = [];
+function runChunk(deadline) {
+  let count = 0;
+  while (pending.length &amp;&amp; count &lt; 2 &amp;&amp; deadline.timeRemaining() &gt; 1) {
+    const item = pending.shift();
+    completed.push(item * item);
+    count += 1;
+  }
+  output.textContent = JSON.stringify({count, pending: pending.length, completed});
+  if (pending.length) requestIdleCallback(runChunk);
+  else button.disabled = false;
+}
+button.onclick = () =&gt; {
+  if (!(&#39;requestIdleCallback&#39; in window)) {
+    output.textContent = &#39;This environment does not provide requestIdleCallback.&#39;;
+    return;
+  }
+  button.disabled = true;
+  pending = [1, 2, 3, 4];
+  completed.length = 0;
+  requestIdleCallback(runChunk);
+};
+&lt;/script&gt;
+</code></pre>
+<p>独立最终预期是完成序列一、四、九、十六，没有重复或遗漏。每批实际拿到几项则不固定：预算较少时可以一项都不处理，稍后再次预约。不能把这份规范预期写成「两帧完成」，更不能把一次排队成功当成全部计算结束。只有 pending 为空，页面才按这个教学合同重新开放开始按钮。</p>
+<p>这条路径没有设置等待期限，页面繁忙或不可见时不能保证及时完成。规范允许用户代理没有可用空闲时段，甚至可能长时间不交付这样的回调。示例适合解释愿意等待的后台工作，不适合承担一个必须在明确时间内结束的用户提交。需要即时结果的任务，应按真实延迟合同另选执行和反馈方案。</p>
+<p>若环境没有这项方法，页面会给出不支持的说明，不自动假装另一种计时器拥有同样空闲语义。产品可以设计自己的回退，但要说清楚回退调度不再由这个 API 提供预算。为了让演示按钮能点而悄悄换成普通定时器，会让日志看起来完整，却把要验证的机制换掉。</p>
+<h2 id="同时保留剩余队列与本次进度"><a href="#同时保留剩余队列与本次进度" class="headerlink" title="同时保留剩余队列与本次进度"></a>同时保留剩余队列与本次进度</h2><p>输出里的 count 是这次处理项数，pending 是未处理数量，completed 是累积结果。三者可以识别不同错误：结果重复可能来自重复请求链，剩余不减少可能是预算始终不足，提前开放按钮可能是完成条件检查错误。只看回调触发了几次，无法区分这些情况。</p>
+<p>已有 <a href="/zh-CN/2026/11/09/dom-requestanimationframe-elapsed-progress/">按经过时间计算动画进度</a>解决的是刷新率与位移关系。这里的 count 不用于推导动画速度，也没有把空闲回调当成每帧通知。两种预约都需要明确后续生命周期，但选择哪种机会，取决于工作是要跟随呈现还是等待空闲，不由函数名里都有 callback 决定。</p>
+<p>真实回归可以先测有界工作函数，再在目标浏览器记录回调预算、每批输入与最终序列。纯函数传入一个假的 deadline，只能说明应用怎样处理这个参数，不能测出浏览器何时会给出预算。语法检查同样不能证明输入不卡顿。应把这几类证据分开，避免一份本地数组通过就替代页面调度和响应验证。</p>
+<h2 id="timeout-触发时预算是零，还应该完全不做吗？"><a href="#timeout-触发时预算是零，还应该完全不做吗？" class="headerlink" title="timeout 触发时预算是零，还应该完全不做吗？"></a>timeout 触发时预算是零，还应该完全不做吗？</h2><p>这里新增超时路径。规范的 <a target="_blank" rel="noopener" href="https://www.w3.org/TR/requestidlecallback/#invoke-idle-callback-timeout-algorithm">超时调用算法</a>给新的 deadline 设置当前时刻作为截止值，并把 didTimeout 设为 true。稍后读取剩余时间会得到零。它表达这次是因等待超过选项而执行，不表示额外获得了一段空闲时间。</p>
+<p>应用可以选择在这种路径最多推进一个已知有界单元，再为剩余工作安排后续机会。下面只验证这个应用策略，使用手工 deadline 对象，不调用浏览器 API。普通零预算不推进，超时零预算推进一个，两个队列都独立初始化。这个选择不是规范要求必须做一个，更不是要求把整队列无上限做完。</p>
+<pre><code class="js">import assert from &#39;node:assert/strict&#39;;
+function takeChunk(queue, deadline) {
+  const results = [];
+  const cap = deadline.didTimeout ? 1 : 2;
+  while (queue.length &amp;&amp; results.length &lt; cap
+    &amp;&amp; (deadline.didTimeout || deadline.timeRemaining() &gt; 1)) {
+    const item = queue.shift();
+    results.push(item * item);
+  }
+  return results;
+}
+const timedOutQueue = [1, 2, 3];
+const normalQueue = [1, 2, 3];
+const timeoutResult = takeChunk(timedOutQueue, {didTimeout: true, timeRemaining: () =&gt; 0});
+const normalResult = takeChunk(normalQueue, {didTimeout: false, timeRemaining: () =&gt; 0});
+assert.deepEqual([timeoutResult, timedOutQueue, normalResult, normalQueue], [
+  [1], [2, 3], [], [1, 2, 3]
+]);
+console.log(JSON.stringify({timeoutResult, timedOutQueue, normalResult, normalQueue}));
+</code></pre>
+<p>这份纯函数脚本已在本机 Node 执行。独立预期为超时结果一、余下二和三，普通结果为空、原三项仍在。它证明有界分支符合这里写定的策略，没有证明浏览器会在设定期限的精确时刻调用。超时等待后仍需排队，还可能被用户代理延后；真正有截止承诺的任务不能靠一个 timeout 选项宣称准点完成。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.w3.org/TR/requestidlecallback/#the-idledeadline-interface" rel="noopener">requestIdleCallback Working Draft §4.3 IdleDeadline timeRemaining</a></li><li><a target="_blank" href="https://www.w3.org/TR/requestidlecallback/#the-requestidlecallback-method" rel="noopener">requestIdleCallback Working Draft §4.1 one-shot callback continuation</a></li><li><a target="_blank" href="https://www.w3.org/TR/requestidlecallback/#invoke-idle-callback-timeout-algorithm" rel="noopener">requestIdleCallback Working Draft §5.3 timeout invocation</a></li><li><a target="_blank" href="https://nodejs.org/docs/latest-v24.x/api/" rel="noopener">Node.js runtime documentation — environment reference for local fixture</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--javascript" href="/zh-CN/tags/JavaScript/">JavaScript</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%B5%8F%E8%A7%88%E5%99%A8/">浏览器</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E8%B0%83%E5%BA%A6/">调度</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F22%2Fbrowser-idle-deadline-cooperative-budget%2F&text=%E6%94%BE%E8%BF%9B%20requestIdleCallback%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E9%95%BF%E5%BE%AA%E7%8E%AF%E4%BB%8D%E4%BC%9A%E6%8C%A1%E4%BD%8F%E9%A1%B5%E9%9D%A2%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F22%2Fbrowser-idle-deadline-cooperative-budget%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E6%94%BE%E8%BF%9B%20requestIdleCallback%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E9%95%BF%E5%BE%AA%E7%8E%AF%E4%BB%8D%E4%BC%9A%E6%8C%A1%E4%BD%8F%E9%A1%B5%E9%9D%A2%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F22%2Fbrowser-idle-deadline-cooperative-budget%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/22/ctest-fixture-required-selected-cleanup/">
+              <span>上一篇</span>
+              <strong>CTest 只选一项测试，怎样让它的准备和清理也被执行？</strong>
+              <small>2026-11-22</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#预算估计不是抢占式执行">预算估计不是抢占式执行</a>
+          
+            <a class="toc-link toc-link--h2" href="#四个小任务的完整页面">四个小任务的完整页面</a>
+          
+            <a class="toc-link toc-link--h2" href="#同时保留剩余队列与本次进度">同时保留剩余队列与本次进度</a>
+          
+            <a class="toc-link toc-link--h2" href="#timeout-触发时预算是零，还应该完全不做吗？">timeout 触发时预算是零，还应该完全不做吗？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>246</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>206</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>123</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>87</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/22/javascript-json-parse-reviver-postorder-delete/">JSON reviver 为什么先处理子字段，再把对象交给父回调？</a></h3>
+          <p>2026-11-22</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/22/javascript-string-raw-substitution-boundary/">String.raw 里插入换行，为什么结果仍有真正的换行？</a></h3>
+          <p>2026-11-22</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/22/javascript-string-wellformed-surrogates/">字符串能存下来，isWellFormed 为什么仍是 false？</a></h3>
+          <p>2026-11-22</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
