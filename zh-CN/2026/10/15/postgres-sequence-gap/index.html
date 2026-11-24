@@ -12,7 +12,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
-  <title>事务回滚了，序列编号为什么没有退回去？ | Midnight blog</title>
+  <title>PostgreSQL 序列出现空号，不能据此认定记录丢失 | Midnight blog</title>
   
     <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
     
@@ -29,10 +29,10 @@
     <link rel="apple-touch-icon" href="/img/favicon.ico">
   
   
-    <meta name="description" content="序列值不随回滚回收，空洞不等于已提交记录丢失；业务编号、统计和外部交付需独立确认。">
+    <meta name="description" content="nextval 的分配不会随事务回滚回收，ON CONFLICT 和序列缓存也会留下空号。用已提交记录与业务状态排查，不要把主键当完成计数。">
   
   
-    <meta name="keywords" content="PostgreSQL18,序列,编号空洞">
+    <meta name="keywords" content="PostgreSQL 19,sequence,nextval,编号空洞">
   
   
     <meta name="robots" content="index,follow,max-image-preview:large">
@@ -54,8 +54,8 @@
     <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
   
   
-    <meta property="og:title" content="事务回滚了，序列编号为什么没有退回去？ | Midnight blog">
-    <meta property="og:description" content="序列值不随回滚回收，空洞不等于已提交记录丢失；业务编号、统计和外部交付需独立确认。">
+    <meta property="og:title" content="PostgreSQL 序列出现空号，不能据此认定记录丢失 | Midnight blog">
+    <meta property="og:description" content="nextval 的分配不会随事务回滚回收，ON CONFLICT 和序列缓存也会留下空号。用已提交记录与业务状态排查，不要把主键当完成计数。">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/">
     <meta property="og:site_name" content="Midnight blog">
@@ -64,7 +64,7 @@
     <meta name="twitter:card" content="summary">
   
   
-    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/","name":"事务回滚了，序列编号为什么没有退回去？ | Midnight blog","description":"序列值不随回滚回收，空洞不等于已提交记录丢失；业务编号、统计和外部交付需独立确认。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/","headline":"事务回滚了，序列编号为什么没有退回去？","description":"序列值不随回滚回收，空洞不等于已提交记录丢失；业务编号、统计和外部交付需独立确认。","inLanguage":"zh-CN","datePublished":"2026-10-15T01:40:01.000Z","dateModified":"2026-10-15T01:40:01.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"事务回滚了，序列编号为什么没有退回去？","item":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/"}]}]}</script>
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/","name":"PostgreSQL 序列出现空号，不能据此认定记录丢失 | Midnight blog","description":"nextval 的分配不会随事务回滚回收，ON CONFLICT 和序列缓存也会留下空号。用已提交记录与业务状态排查，不要把主键当完成计数。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/","headline":"PostgreSQL 序列出现空号，不能据此认定记录丢失","description":"nextval 的分配不会随事务回滚回收，ON CONFLICT 和序列缓存也会留下空号。用已提交记录与业务状态排查，不要把主键当完成计数。","inLanguage":"zh-CN","datePublished":"2026-10-15T01:40:01.000Z","dateModified":"2026-11-24T16:35:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/19/functions-sequence.html","https://www.postgresql.org/docs/19/sql-createsequence.html","https://www.postgresql.org/docs/19/transaction-iso.html"],"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"PostgreSQL 序列出现空号，不能据此认定记录丢失","item":"https://www.zyweb.vip/zh-CN/2026/10/15/postgres-sequence-gap/"}]}]}</script>
   
   <meta name="theme-color" content="#080b10">
   
@@ -141,10 +141,10 @@
       <time datetime="2026-10-15T01:40:01.000Z">2026-10-15</time>
     </div>
 
-    <h1>事务回滚了，序列编号为什么没有退回去？</h1>
+    <h1>PostgreSQL 序列出现空号，不能据此认定记录丢失</h1>
 
     
-      <p class="post-hero__summary">序列值不随回滚回收，空洞不等于已提交记录丢失；业务编号、统计和外部交付需独立确认。</p>
+      <p class="post-hero__summary">nextval 的分配不会随事务回滚回收，ON CONFLICT 和序列缓存也会留下空号。用已提交记录与业务状态排查，不要把主键当完成计数。</p>
     
 
     <div class="post-hero__meta">
@@ -163,7 +163,7 @@
         
 
 
-        <small>更新于 <time datetime="2026-10-15T01:40:01.000Z">2026-10-15</time> · 预计阅读 2 分钟</small>
+        <small>更新于 <time datetime="2026-11-24T16:35:00.000Z">2026-11-25</time> · 预计阅读 6 分钟</small>
       </div>
     </div>
 
@@ -195,22 +195,30 @@
 
       
 
-      
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>序列是并发安全的编号分配器，不是已提交行数或业务完成计数。</li><li>回滚、冲突处理与缓存都会造成空号；空号本身不能证明已提交数据丢失。</li><li>真正需要连续业务编号时，要另行设计串行分配、作废记录和恢复流程，并接受并发成本。</li></ul></section>
       <!--email_off-->
       <div class="article-content">
-        <p>PostgreSQL 的序列值取得后，不会因为调用事务回滚就重新回收。序列编号因此可能出现空洞，不能把它当成连续业务完成计数。需要连续业务编号的场景，应单独定义分配、确认和恢复过程，而不是期待序列替自己实现全部规则。</p>
-<h2 id="分配编号与提交记录不是同一动作"><a href="#分配编号与提交记录不是同一动作" class="headerlink" title="分配编号与提交记录不是同一动作"></a>分配编号与提交记录不是同一动作</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-sequence.html">PostgreSQL 十八版本序列函数文档</a>说明，为避免并发事务相互阻塞，nextval 取得的值不因事务中止而回收；冲突处理等情况也可能消耗值。因此序列不提供无空洞保证。文档还区分序列状态变化与事务提交，不能仅凭拿到一个数字就证明业务已经完成。</p>
-<p>假设创建任务先取得编号，随后校验或写入失败，事务回滚。下一个任务使用更后的编号是正常行为，不表示中间一定丢失了一条已经提交的任务。排查需要实际业务记录、事务结果和失败证据，而不是只根据数字差推断数据损坏。这是机制示例，本文没有执行数据库故障实验。</p>
-<p>编号之间的距离也不能直接当作新增记录数量。批量操作、失败和并发可能让分配顺序与完成顺序不同。若报表用当前最大编号减去旧编号计算业务吞吐，得到的只是某种编号变化，不能替代对已完成记录的准确统计。产品需要先定义统计事件，再选择数据来源。</p>
-<h2 id="不要为了补空洞重新使用身份"><a href="#不要为了补空洞重新使用身份" class="headerlink" title="不要为了补空洞重新使用身份"></a>不要为了补空洞重新使用身份</h2><p>发现缺号以后，手动回调序列或重复利用旧值，可能与已有数据、并发分配或外部引用冲突。是否需要改变序列状态应由明确迁移和维护方案决定，不能把填满数字作为日常修复目标。本文不会在用户数据库运行重置或补号操作，也不给未经验证的安全命令。</p>
-<p>如果业务要求某种严格编号，应说明何时正式分配、作废如何记录、失败如何恢复以及谁有权修改。这样的业务规则可能有额外合规或流程条件，数据库主键只承担其中一部分。不要把主键唯一与业务编号连续混为一谈，也不把这里的存储解释当作任何行业规则的替代。</p>
-<p>向数据库之外交付编号时，还需要知道相应分配与业务状态是否已经持久确认。序列文档提醒外部持久使用前确认提交；但提交编号也不表示外部工作已经完成。两个系统之间仍需自己的结果交接和恢复证据，不能只靠双方都看到了同一个数字。</p>
-<p>拟议检查可以覆盖回滚、冲突、并发和外部交付失败，核对每个编号对应的真实状态。未执行前不报告连续性或恢复保证。有关数据库提交与外部通知之间的交接，可阅读<a href="/zh-CN/2026/10/09/postgres-transaction-outbox/">事务与通知写入</a>。编号是追踪线索，业务是否完成需要独立记录。</p>
+        <p>调用 <code>nextval</code> 时，PostgreSQL 序列就消耗该编号；事务回滚不会把它交还。因此缺号只能说明编号曾被分配，不能单独证明已提交记录丢失。序列提供并发安全的唯一值，不提供事务性的连续计数。若业务真的要求连续号码，那是另一套分配、作废和恢复规则，不能靠主键序列顺手实现。</p>
+<h2 id="nextval-推进的是分配状态，不是已提交行数"><a href="#nextval-推进的是分配状态，不是已提交行数" class="headerlink" title="nextval 推进的是分配状态，不是已提交行数"></a><code>nextval</code> 推进的是分配状态，不是已提交行数</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/19/functions-sequence.html">PostgreSQL 19 的序列函数文档</a>说明，<code>nextval</code> 会原子地推进序列，即使多个会话同时调用也会取得不同的值。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/19/transaction-iso.html">事务隔离文档</a>也把这一点列为序列的特殊行为：序列变化会立即对其他事务可见，调用事务中止也不会回滚。它不会等待调用方事务提交后才决定是否留下这个编号。这样设计让并发插入不必为了“回收刚才用过的数字”彼此阻塞；相应的代价就是序列状态不和普通行更新一起回滚。</p>
+<p>用一个假设的表说明：会话 A 插入任务，先取到 41，随后业务校验失败并回滚。会话 B 再插入一条合法任务，可能取得 42。表里没有 41，但这组观测与“事务 A 分配了号码后失败”完全一致。若只看 <code>max(id) - count(*)</code> 或编号之间的距离，无法判断 A 是否回滚、是否发生冲突处理，还是导入路径使用了另一套编号。它们都不能替代查找已提交行和对应事务结果。</p>
+<p>冲突插入也会消耗号码。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/19/functions-sequence.html">PostgreSQL 19 序列函数文档</a>特别说明，带 <code>ON CONFLICT</code> 的 <code>INSERT</code> 可能先计算候选行并执行所需的 <code>nextval</code>，之后才发现冲突并进入冲突分支。因此“这条语句最后没有新增行”与“序列完全没有变化”不是等价条件。重试请求、唯一约束冲突和批量写入都可能产生已分配但没有落到新行上的值。</p>
+<p>这里的 41 和 42 是解释机制的假设示例，不是从真实数据库或故障现场采集的日志。要判断实际缺号原因，至少需要核对目标表中的已提交记录、相关请求或作业的结果、冲突处理路径与数据库错误信息。只有数字差异而没有这些证据，结论最多是“这个编号没有出现在当前行集合里”。</p>
+<h2 id="缓存会让“最后一个号码”更难解释"><a href="#缓存会让“最后一个号码”更难解释" class="headerlink" title="缓存会让“最后一个号码”更难解释"></a>缓存会让“最后一个号码”更难解释</h2><p>序列缓存改变的是会话预留编号的方式。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/19/sql-createsequence.html">PostgreSQL 19 的 <code>CREATE SEQUENCE</code> 文档</a>说明，<code>CACHE</code> 大于 1 时，每个会话可预取一段值；会话结束时，已预留但没有使用的值会成为空洞。多个会话即使拿到的数都不同，全局看到的发号顺序也不必严格连续。例如，A 预留 1 到 10 后返回 1，B 接着预留 11 到 20 并返回 11；此时 B 已拿到 11，A 后续仍可能再拿 2。</p>
+<p>同一文档还指出，缓存大于 1 时，<code>last_value</code> 可能反映某会话已预留但尚未交付的值。因此把它当作“最后提交的行号”或“当前已经完成到哪里”的水位，会混淆预留、返回、插入和提交四种状态。同一版本的序列函数文档也说明，<code>pg_get_sequence_data</code> 返回的 <code>last_value</code> 在启用缓存时可能大于实际交给调用方的最后值。它是序列状态信息，不是业务完成报表。</p>
+<p>如果一次排查需要知道“当前会话刚从哪条序列拿过值”，<code>currval</code> 只回答当前会话最近一次 <code>nextval</code> 返回什么；它不会告诉你另一个会话已经分配了什么，也不代表那条记录提交了。工具选对了仍要限定问题：会话局部状态不等于全局分配状态，全局分配状态也不等于已提交业务状态。</p>
+<h2 id="怎样排查缺号而不制造第二个问题？"><a href="#怎样排查缺号而不制造第二个问题？" class="headerlink" title="怎样排查缺号而不制造第二个问题？"></a>怎样排查缺号而不制造第二个问题？</h2><p>先把要回答的问题写清楚。如果问题是“编号 41 对应的记录现在是否存在”，查询实际业务表和软删除、归档规则；如果问题是“编号为什么没进入表”，再查对应请求的事务结果、冲突分支和错误记录；如果问题是“外部系统是否已处理 41”，则需要外部交接与结果证据。仅凭 <code>nextval</code> 当前值、<code>last_value</code> 或最大主键，不能推出所有历史调用和提交顺序。</p>
+<p>发现空号后，默认不要把序列往回调，也不要直接复用号码。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/19/functions-sequence.html"><code>setval</code> 会立即改变序列状态，并且调用方事务回滚也不会撤销该变化</a>。并发会话可能已经持有缓存值；文档还提醒，缓存未耗尽时，其他会话未必立刻观察到一次 <code>setval</code> 的新状态。回调后既可能与已有行冲突，也可能被缓存里的旧值再次覆盖预期。除非有明确维护窗口、并发控制和数据核对方案，填空号只是让表面数字好看，不能证明记录状态被修复。</p>
+<p>编号要交给数据库外部持久使用时还有一道边界。关于数据库外的持久用途，PostgreSQL 19 文档建议先确认包含 <code>nextval</code> 的事务已经提交；若数据库在提交前崩溃，序列状态是否已经持久化可能不确定。即使提交已经确认，也只证明数据库事务完成，不证明外部邮件、队列或第三方处理完成。两边之间还需要自己的交接记录、幂等键或可恢复状态；相关设计可参阅<a href="/zh-CN/2026/10/09/postgres-transaction-outbox/">事务与通知写入</a>。</p>
+<h2 id="业务真的要求连续号码时，选择的是不同机制"><a href="#业务真的要求连续号码时，选择的是不同机制" class="headerlink" title="业务真的要求连续号码时，选择的是不同机制"></a>业务真的要求连续号码时，选择的是不同机制</h2><p>普通主键通常只需要唯一且稳定；允许有空洞可以换来并发分配，不应拿它做发票已完成数或任务吞吐量。如果某个业务流程真的要求号码连续，就要先写清规则：号码在哪个状态正式发放，撤销如何留痕，失败后能否重用，谁可以人工更正，以及报表统计的是已发放、已作废还是已完成。这里没有假定某个行业法规要求连续编号，也不把数据库实现当成合规结论。</p>
+<p><code>CREATE SEQUENCE</code> 文档还提到，可以通过对包含计数器的表进行独占锁来构造无空洞分配，但这比序列代价高得多，尤其在大量事务竞争同一编号时。原因很直接：序列能让并发调用快速领取不同号码；事务性计数器则必须让同一时刻只有一个分配动作推进计数，并让回滚是否释放号码与业务规则一致。热点行可能增加等待，也会让吞吐受最慢事务影响。使用前需要用目标负载评估锁等待和失败恢复，而不是默认这种方案更“正确”。</p>
+<p>这类计数器还要避免把“回滚后复用”写成隐含行为。若号码一旦显示给用户或写到外部，就不应简单重新发给另一条业务记录；可以把失败号码标记为作废并保留审计链，也可以在号码正式确认前不对外暴露。选择取决于业务规则与可见时机，而不是 <code>serial</code> 或 <code>identity</code> 列的语法本身。</p>
+<h2 id="怎么验证团队使用的是哪一种编号契约？"><a href="#怎么验证团队使用的是哪一种编号契约？" class="headerlink" title="怎么验证团队使用的是哪一种编号契约？"></a>怎么验证团队使用的是哪一种编号契约？</h2><p>建议在目标 PostgreSQL 主版本、实际缓存设置和全部写入入口上设计验证矩阵：一次拿号后回滚；一次 <code>ON CONFLICT</code> 未插入新行；多个会话在 <code>CACHE 1</code> 与较大缓存下并发拿号；有缓存的会话结束；提交前后将号码交给外部系统。每种情况记录序列观测、表内已提交行、事务结果以及外部交接状态。这样可以区分“号码被分配但没有新行”“缓存预留未使用”和“业务确实缺少预期记录”。</p>
+<p>本文没有在 PostgreSQL 上运行上述测试，也没有实测锁竞争、崩溃恢复或任何系统的实际缺号。测试计划的目的，是让下一步实验能区分每一层状态，而非预先宣称某个原因已经成立。缺号可以是预期的分配结果，也可能值得调查；决定结论的是记录、事务和交接证据，不是编号是否连成一串。</p>
 
       </div>
       <!--/email_off-->
 
-      
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/19/functions-sequence.html" rel="noopener">PostgreSQL 19 Documentation, 9.18 Sequence Manipulation Functions</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/19/sql-createsequence.html" rel="noopener">PostgreSQL 19 Documentation, CREATE SEQUENCE</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/19/transaction-iso.html" rel="noopener">PostgreSQL 19 Documentation, 13.2 Transaction Isolation</a></li></ol></section>
       
         <footer class="article-taxonomy">
           <span>标签</span>
@@ -235,11 +243,11 @@
         <span>分享</span>
         <div>
           
-            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F15%2Fpostgres-sequence-gap%2F&text=%E4%BA%8B%E5%8A%A1%E5%9B%9E%E6%BB%9A%E4%BA%86%EF%BC%8C%E5%BA%8F%E5%88%97%E7%BC%96%E5%8F%B7%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E6%9C%89%E9%80%80%E5%9B%9E%E5%8E%BB%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F15%2Fpostgres-sequence-gap%2F&text=PostgreSQL%20%E5%BA%8F%E5%88%97%E5%87%BA%E7%8E%B0%E7%A9%BA%E5%8F%B7%EF%BC%8C%E4%B8%8D%E8%83%BD%E6%8D%AE%E6%AD%A4%E8%AE%A4%E5%AE%9A%E8%AE%B0%E5%BD%95%E4%B8%A2%E5%A4%B1" aria-label="分享到 X" title="分享到 X">X</a>
           
             <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F15%2Fpostgres-sequence-gap%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
           
-            <a href="mailto:?subject=%E4%BA%8B%E5%8A%A1%E5%9B%9E%E6%BB%9A%E4%BA%86%EF%BC%8C%E5%BA%8F%E5%88%97%E7%BC%96%E5%8F%B7%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E6%9C%89%E9%80%80%E5%9B%9E%E5%8E%BB%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F15%2Fpostgres-sequence-gap%2F" aria-label="邮件分享" title="邮件分享">@</a>
+            <a href="mailto:?subject=PostgreSQL%20%E5%BA%8F%E5%88%97%E5%87%BA%E7%8E%B0%E7%A9%BA%E5%8F%B7%EF%BC%8C%E4%B8%8D%E8%83%BD%E6%8D%AE%E6%AD%A4%E8%AE%A4%E5%AE%9A%E8%AE%B0%E5%BD%95%E4%B8%A2%E5%A4%B1&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F15%2Fpostgres-sequence-gap%2F" aria-label="邮件分享" title="邮件分享">@</a>
           
         </div>
       </section>
@@ -271,9 +279,15 @@
 
         
           
-            <a class="toc-link toc-link--h2" href="#分配编号与提交记录不是同一动作">分配编号与提交记录不是同一动作</a>
+            <a class="toc-link toc-link--h2" href="#nextval-推进的是分配状态，不是已提交行数">nextval 推进的是分配状态，不是已提交行数</a>
           
-            <a class="toc-link toc-link--h2" href="#不要为了补空洞重新使用身份">不要为了补空洞重新使用身份</a>
+            <a class="toc-link toc-link--h2" href="#缓存会让“最后一个号码”更难解释">缓存会让“最后一个号码”更难解释</a>
+          
+            <a class="toc-link toc-link--h2" href="#怎样排查缺号而不制造第二个问题？">怎样排查缺号而不制造第二个问题？</a>
+          
+            <a class="toc-link toc-link--h2" href="#业务真的要求连续号码时，选择的是不同机制">业务真的要求连续号码时，选择的是不同机制</a>
+          
+            <a class="toc-link toc-link--h2" href="#怎么验证团队使用的是哪一种编号契约？">怎么验证团队使用的是哪一种编号契约？</a>
           
         
       </nav></details>
