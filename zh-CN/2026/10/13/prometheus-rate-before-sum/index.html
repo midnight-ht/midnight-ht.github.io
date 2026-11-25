@@ -12,7 +12,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
-  <title>计数器重启过，为什么要先 rate 再 sum？ | Midnight blog</title>
+  <title>先 rate 再 sum：Prometheus 聚合为什么要保留实例的重置 | Midnight blog</title>
   
     <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
     
@@ -29,10 +29,10 @@
     <link rel="apple-touch-icon" href="/img/favicon.ico">
   
   
-    <meta name="description" content="先对每条计数器求 rate，再汇总以保留重置信息；窗口、指标类型与实例排查需要分别解释。">
+    <meta name="description" content="先按原始时间序列处理 counter reset，再按业务维度聚合，才能避免实例重启被合计掩盖；同时说明 rate 外推、标签变更、仪表与直方图的边界。">
   
   
-    <meta name="keywords" content="Prometheus,rate,计数器重置">
+    <meta name="keywords" content="Prometheus rate then sum,PromQL counter reset,Prometheus recording rule">
   
   
     <meta name="robots" content="index,follow,max-image-preview:large">
@@ -54,8 +54,8 @@
     <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
   
   
-    <meta property="og:title" content="计数器重启过，为什么要先 rate 再 sum？ | Midnight blog">
-    <meta property="og:description" content="先对每条计数器求 rate，再汇总以保留重置信息；窗口、指标类型与实例排查需要分别解释。">
+    <meta property="og:title" content="先 rate 再 sum：Prometheus 聚合为什么要保留实例的重置 | Midnight blog">
+    <meta property="og:description" content="先按原始时间序列处理 counter reset，再按业务维度聚合，才能避免实例重启被合计掩盖；同时说明 rate 外推、标签变更、仪表与直方图的边界。">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/13/prometheus-rate-before-sum/">
     <meta property="og:site_name" content="Midnight blog">
@@ -64,7 +64,7 @@
     <meta name="twitter:card" content="summary">
   
   
-    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/13/prometheus-rate-before-sum/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/13/prometheus-rate-before-sum/","name":"计数器重启过，为什么要先 rate 再 sum？ | Midnight blog","description":"先对每条计数器求 rate，再汇总以保留重置信息；窗口、指标类型与实例排查需要分别解释。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/13/prometheus-rate-before-sum/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/13/prometheus-rate-before-sum/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/13/prometheus-rate-before-sum/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/13/prometheus-rate-before-sum/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/13/prometheus-rate-before-sum/","headline":"计数器重启过，为什么要先 rate 再 sum？","description":"先对每条计数器求 rate，再汇总以保留重置信息；窗口、指标类型与实例排查需要分别解释。","inLanguage":"zh-CN","datePublished":"2026-10-12T19:27:26.000Z","dateModified":"2026-10-12T19:27:26.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Delivery, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/13/prometheus-rate-before-sum/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"计数器重启过，为什么要先 rate 再 sum？","item":"https://www.zyweb.vip/zh-CN/2026/10/13/prometheus-rate-before-sum/"}]}]}</script>
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/13/prometheus-rate-before-sum/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/13/prometheus-rate-before-sum/","name":"先 rate 再 sum：Prometheus 聚合为什么要保留实例的重置 | Midnight blog","description":"先按原始时间序列处理 counter reset，再按业务维度聚合，才能避免实例重启被合计掩盖；同时说明 rate 外推、标签变更、仪表与直方图的边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/13/prometheus-rate-before-sum/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/13/prometheus-rate-before-sum/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/13/prometheus-rate-before-sum/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/13/prometheus-rate-before-sum/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/13/prometheus-rate-before-sum/","headline":"先 rate 再 sum：Prometheus 聚合为什么要保留实例的重置","description":"先按原始时间序列处理 counter reset，再按业务维度聚合，才能避免实例重启被合计掩盖；同时说明 rate 外推、标签变更、仪表与直方图的边界。","inLanguage":"zh-CN","datePublished":"2026-10-12T19:27:26.000Z","dateModified":"2026-11-25T08:10:02.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://prometheus.io/docs/prometheus/3.13/querying/functions/","https://prometheus.io/docs/prometheus/2.55/querying/functions/","https://prometheus.io/docs/prometheus/latest/querying/basics/","https://prometheus.io/docs/prometheus/latest/querying/operators/","https://prometheus.io/docs/practices/instrumentation/","https://prometheus.io/docs/practices/histograms/","https://prometheus.io/docs/practices/rules/","https://prometheus.io/docs/prometheus/latest/configuration/unit_testing_rules/"],"keywords":"Delivery, Engineering, Prometheus, Observability"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/13/prometheus-rate-before-sum/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"先 rate 再 sum：Prometheus 聚合为什么要保留实例的重置","item":"https://www.zyweb.vip/zh-CN/2026/10/13/prometheus-rate-before-sum/"}]}]}</script>
   
   <meta name="theme-color" content="#080b10">
   
@@ -141,10 +141,10 @@
       <time datetime="2026-10-12T19:27:26.000Z">2026-10-13</time>
     </div>
 
-    <h1>计数器重启过，为什么要先 rate 再 sum？</h1>
+    <h1>先 rate 再 sum：Prometheus 聚合为什么要保留实例的重置</h1>
 
     
-      <p class="post-hero__summary">先对每条计数器求 rate，再汇总以保留重置信息；窗口、指标类型与实例排查需要分别解释。</p>
+      <p class="post-hero__summary">先按原始时间序列处理 counter reset，再按业务维度聚合，才能避免实例重启被合计掩盖；同时说明 rate 外推、标签变更、仪表与直方图的边界。</p>
     
 
     <div class="post-hero__meta">
@@ -163,7 +163,7 @@
         
 
 
-        <small>更新于 <time datetime="2026-10-12T19:27:26.000Z">2026-10-13</time> · 预计阅读 2 分钟</small>
+        <small>更新于 <time datetime="2026-11-25T08:10:02.000Z">2026-11-25</time> · 预计阅读 9 分钟</small>
       </div>
     </div>
 
@@ -195,22 +195,47 @@
 
       
 
-      
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>rate-before-sum 保留的是每条原始序列识别重置的机会；提前 sum 可能抹掉单实例的下降。</li><li>rate 是有窗口并会外推的估计值，不是单条请求日志的精确计数；假设样本算例不能替代实际查询。</li><li>最终 by/without 标签、counter/gauge 类型和比率分母仍由业务问题决定。</li></ul></section>
       <!--email_off-->
       <div class="article-content">
-        <p>多个实例的计数器需要先分别计算 rate，再汇总速率。先把原始计数器相加，可能掩盖某个实例重启造成的重置，使后续计算失去逐序列判断的依据。聚合顺序是指标含义的一部分，不是两种等价写法之间的排版选择。</p>
-<h2 id="重置发生在各自的序列上"><a href="#重置发生在各自的序列上" class="headerlink" title="重置发生在各自的序列上"></a>重置发生在各自的序列上</h2><p><a target="_blank" rel="noopener" href="https://prometheus.io/docs/prometheus/latest/querying/functions/">Prometheus 查询函数文档</a>要求在把 rate 与聚合结合时先计算速率，再聚合，这样才能识别目标重启时的计数器重置。文档同时把 rate 的适用范围限定为计数器。把同样处理直接用于可以自然升降的仪表值，会给变化赋予错误含义。</p>
-<p>假设两个实例累计处理请求，其中一个重启后计数从较小值重新开始，另一个持续增长。若先汇总，两种变化混在一条总序列里，某个实例的回落可能被另一个实例的增长掩盖。逐序列处理保留了各自的重置信息，再汇总得到业务关注的总体速率。这是解释性场景，本文没有执行查询或提供流量测量。</p>
-<p>因此，先确认指标类型和每条序列的身份，再讨论查询简化。名字看起来像请求数量，不代表它一定遵守计数器契约；采集实现若改变了累加方式，需要重新核对。业务需求关注“目前正在处理多少请求”时，也可能需要的是当前值，而不是累计量的变化速率。</p>
-<h2 id="查询窗口也是解释条件"><a href="#查询窗口也是解释条件" class="headerlink" title="查询窗口也是解释条件"></a>查询窗口也是解释条件</h2><p>rate 的结果是观察窗口中的速率估计，不能把某个显示值描述成逐条日志精确计算的实时请求数。窗口、抓取间隔与数据缺失会影响能够看到什么。排查异常时，应同时保留原始序列与采集状态，而不是只截取一张聚合后的仪表盘图片。</p>
-<p>短窗口有助于看到变化，也可能使结果更受样本可用性的影响；较长窗口提供不同的平滑程度，却可能隐藏短暂波动。这里没有给出通用于所有系统的最佳窗口。应按业务决策需要与实际采集条件选择，并把窗口写进告警或报告说明，避免不同页面的数字被直接比较。</p>
-<h2 id="汇总不能替代实例排查"><a href="#汇总不能替代实例排查" class="headerlink" title="汇总不能替代实例排查"></a>汇总不能替代实例排查</h2><p>总体速率回答总体工作量变化，不会独自解释某个实例为什么掉线或重启。需要诊断时，还应查看实例级序列、部署事件与采集错误。聚合标签选择也要对应业务范围，不能把不同单位或不同操作含义的指标加在一起，再给总数起一个听起来合理的名称。</p>
-<p>拟议检查可以构造一个实例重置、其他实例增长的受控输入，分别比较聚合顺序；未执行前不要声称已经验证两条查询的差异。实际发布查询还应核对所用指标类型和条件。有关指标标签与资源成本，可阅读<a href="/zh-CN/2026/10/10/prometheus-label-budget/">标签基数的预算</a>，正确聚合与可承受的序列规模需要同时考虑。</p>
+        <p>一台实例的请求计数从 10 回到 1，另一台仍从 1,010 增长到 1,020；如果先把两台的原始 counter 相加，合计仍可能继续上升，看不出刚发生的重置。因此官方建议先对每条序列计算 <code>rate()</code>，再按业务维度聚合。这个顺序保留了重置发生在哪条序列上的信息；它不是为了让 PromQL 看起来整齐，也不是所有指标都无条件套用的一条口诀。</p>
+<h2 id="一个被合计遮住的重启"><a href="#一个被合计遮住的重启" class="headerlink" title="一个被合计遮住的重启"></a>一个被合计遮住的重启</h2><p>假设 Prometheus 在四个等间隔时刻观察两个实例。实例 A 的计数是 8、10、1、3；在第二个采样点之后，进程重启并从 0 附近重新计数。实例 B 的计数是 1,000、1,010、1,020、1,030，一直增长。把同一时刻的数据先相加，得到 1,008、1,020、1,021、1,033。这条总序列没有下降。仅从合计值看，查询端无法知道其中一个成员刚从 10 回到 1。</p>
+<p>把 A 和 B 视为独立 counter 序列时，A 的下降可被识别为重置：简化地按边界样本计算，A 在这段观察期内有 2、1、2 的增量，共 5；B 增加 30；合并后的理想化计数增量是 35。若先把原始值相加，首末样本只相差 25。两种结果不相等，差异来自重置前后的序列身份被过早折叠。</p>
+<p>这个表只是用来手算信息丢失的假设例子，不是一次 Prometheus 查询结果。真实 <code>rate()</code> 会根据时间戳、样本间隔、窗口边界和数据缺口进行外推，因此不能直接把这里的 35 除以采样间隔，就声称得到了某个精确的每秒速率。例子的作用只有一个：合计会不会保留原始序列下降这个信号，取决于你何时把序列身份合并。若读者还需要核对整数计数器为何能得到小数，可以接着看<a href="/zh-CN/2026/10/18/prometheus-counter-increase-extrapolation/">窗口外推与 increase 的纸面算例</a>；那篇讨论的是窗口边界，不替代本篇的跨实例重置问题。</p>
+<p>Prometheus 3.13 的官方函数文档和 2.55 版文档都说明，<code>rate()</code> 以 range vector 为输入，按每条时间序列计算每秒平均增长率，能校正计数器重置，并将结果向查询窗口边界外推，以适应漏抓取或采样与窗口未对齐。两个版本的函数说明还明确指出：把 <code>rate()</code> 与聚合操作结合时，应先计算 <code>rate()</code>，否则聚合后的序列可能不再暴露目标重启造成的 reset。若你的服务运行其他版本，应以部署版本对应文档核对；这里没有将两个已查版本扩展成“所有未来版本都相同”的承诺。</p>
+<h2 id="聚合前后，rate-看到的是不同对象"><a href="#聚合前后，rate-看到的是不同对象" class="headerlink" title="聚合前后，rate 看到的是不同对象"></a>聚合前后，rate 看到的是不同对象</h2><p>常见目标是“所有 API 实例每秒处理多少请求，同时按 job 保留分组”。可写为：</p>
+<pre><code class="promql">sum by (job) (
+  rate(http_requests_total{job=&quot;api&quot;}[5m])
+)
+</code></pre>
+<p><code>rate()</code>先看到带有 <code>instance</code>、<code>pod</code> 等标签的原始序列，各自处理重置，再由 <code>sum by (job)</code> 将结果汇总为 job 级别。查询运算符文档说明，<code>by</code> 只保留括号内标签并丢弃其余维度。若你需要保留区域或请求类型，应在标签列表里表达；若目标是“除 instance 与 pod 外，其余维度继续区分”，可用 <code>sum without (instance, pod)</code>。选 <code>by</code> 还是 <code>without</code> 不是格式偏好，它决定了输出向量还能回答哪些问题。</p>
+<p>如果想演示“先 sum 后 rate”，不能写成 <code>rate(sum(...)[5m])</code> 这种不完整表达，因为普通 range selector 直接附在向量选择器后。对聚合表达式使用 range vector 时，需要 PromQL subquery，例如：</p>
+<pre><code class="promql">rate(
+  sum by (job) (http_requests_total{job=&quot;api&quot;})[5m:]
+)
+</code></pre>
+<p>subquery 会在一段时间范围和分辨率上反复计算内部 instant query，再把结果作为 range vector 提供给外层函数。官方基础语法说明，省略 <code>[5m:]</code> 中的分辨率时，会使用全局 evaluation interval。因此，这个反例多了一层子查询评估网格，并非在完全相同的抓取时刻上做一个纯代数换序；真实比较时应把该分辨率条件也固定下来。这里外层 <code>rate()</code>看到的已是 job 合计曲线，而不是各实例 counter。若一台重启、另一台增长使总曲线仍单调，重置就没有机会被识别；若合计曲线也出现下降，外层函数又可能把整条 job 曲线当成一次统一的 reset 修正。两种情况下，它都无法还原每个实例原本发生了什么。</p>
+<p>这也解释了一个看似反例的场景：某些窗口里先聚合再求导可能“看起来没坏”，因为合计仍留着下降或实例根本没有重启。它不证明两种顺序等价。对变化平滑的那段历史，两种写法可能碰巧接近；只有在每条序列独立保留时，<code>rate()</code>才有材料根据各自的下降校正。函数参考把顺序要求直接限定在“否则无法检测目标重启时的 counter reset”这一原因上。</p>
+<h2 id="rate-能校正重置，但不能补回没有采到的数据"><a href="#rate-能校正重置，但不能补回没有采到的数据" class="headerlink" title="rate 能校正重置，但不能补回没有采到的数据"></a>rate 能校正重置，但不能补回没有采到的数据</h2><p>Counter 是累计事件数或累计字节数，进程重启时可以复位；Gauge 表示可上可下的状态，例如当前排队任务数或正在处理的请求数。Instrumentation 指南建议按这种语义区分类型：对累计 counter 使用 <code>rate()</code>，不要把会自然下降的 gauge 当 counter。假如把排队任务数套上 <code>rate()</code>，一次真实的队列排空会被解释成重置，数字并没有因此变成“每秒完成任务数”。</p>
+<p><code>rate()</code>处理的是观察到的样本，不会凭空恢复最后一次抓取后、进程重启前尚未暴露的增量。短窗口会降低平滑程度，也可能因为可用样本较少而没有足够证据；长窗口能平滑短时波动，但会把部署后的新状态和较早历史混在一起。官方指南没有给所有服务规定一个最佳窗口。选择窗口时，应结合 scrape interval、告警需要的响应时间、缺样本模式和规则评估间隔，并在仪表盘说明中保留这个条件。</p>
+<p>实例 label 也不是永恒的进程身份证。若滚动发布给新 Pod 分配新的 <code>instance</code> 或 <code>pod</code> 值，旧序列可能变为 stale，新序列从新的 label set 开始。逐序列求 rate 可以保留两个生命周期各自的样本，再聚合仍存在的速率；但它不会让没有样本的时间段自动补齐，也不会证明一条新序列已积累足够数据。排查时先按实例或 Pod 查看原始值、<code>resets()</code>、<code>up</code> 与部署事件，再检查总速率。只看平滑总线会把“旧实例消失”“新实例刚启动”和“计数器重置”混成一个无法追责的变化。</p>
+<p><code>irate()</code>也不是 <code>rate()</code> 的快速替代品。官方文档说明它使用最后两个数据点，适合观察波动较快的 counter 图形；短时变化可能让告警的 <code>for</code> 条件反复重置，官方建议告警与变化较慢的 counter 优先使用 <code>rate()</code>。因此比较查询时，不只换算子，还要确认用途是看瞬时趋势、做告警还是记录规则。</p>
+<h2 id="直方图的-sum-与-count-不能先算成平均值"><a href="#直方图的-sum-与-count-不能先算成平均值" class="headerlink" title="直方图的 sum 与 count 不能先算成平均值"></a>直方图的 sum 与 count 不能先算成平均值</h2><p>对于经典直方图或 summary，<code>_sum</code> 和 <code>_count</code> 是两组不同的累计序列。若要算一组实例的平均观测时长，Prometheus 的 histogram 指南给出的思路是：先分别对每个 <code>_sum</code> 与 <code>_count</code> 序列求 rate，按需要聚合，再用总和相除。概念上可写为：</p>
+<pre><code class="promql">sum by (job) (rate(http_request_duration_seconds_sum[5m]))
+/
+sum by (job) (rate(http_request_duration_seconds_count[5m]))
+</code></pre>
+<p>不能先算每台实例各自的平均值再做无权平均，因为每台实例的请求数可能不同。也不能把平均值加总成平均值。分子累计时长与分母观测数应分别保留，最终的比率才对应“总体请求的平均时长”。这仍是平均值，不是 p95；分位数需要看直方图桶并按官方表达式计算。本站已有<a href="/zh-CN/2026/10/12/prometheus-quantile-aggregation/">为什么不能把各实例的分位数直接求平均</a>，这篇只补充求 rate 时重置信息与分母的责任边界。</p>
+<p>另一个容易忽略的条件是：如果经典直方图或 summary 接受负值观测，<code>_sum</code> 可以真实下降。Histogram 指南指出，这种下降会触发 counter reset 的解释，从而使 <code>rate(_sum)</code> 结果失真；该问题不适用于以整体形式处理的 native histogram。先 rate 再 sum 并不能修复错误的指标契约。遇到这类观测，应重新设计指标拆分或表达式，而不是把聚合顺序当成万能修补。</p>
+<h2 id="用同一组输入检查查询与-recording-rule"><a href="#用同一组输入检查查询与-recording-rule" class="headerlink" title="用同一组输入检查查询与 recording rule"></a>用同一组输入检查查询与 recording rule</h2><p>改一条生产规则前，可以先用 Prometheus 表格视图分别观察原始 counter、<code>resets(counter[窗口])</code>、每实例 <code>rate(counter[窗口])</code> 和最终聚合结果。把部署时间、采样时间戳和序列 labels 放在同一份诊断记录里。目标不是只验证“总数有值”，而是确认目标维度是否保留、重启那条序列是否被分别处理，以及窗口边缘的缺样本是否影响读数。</p>
+<p>需要固定回归时，可根据官方 <code>promtool test rules</code> 格式构造输入序列：一条 counter 在窗口中下降，另一条持续增加；分别断言 per-series rate、job 聚合和输出 label set。再增加一个负向样例：把 metric 改成会下降的 gauge，或让实例 label 改变，确认测试不会误把没有观测到的数据解释为平稳。文中没有编写或执行这份 fixture，也没有查询实际 Prometheus；这些步骤是建议的验证方案，不是测试通过的报告。</p>
+<p>Recording rule 还需要稳定的输出标签和可理解的名字。规则命名指南建议名称表现出聚合级别、原指标及已执行的操作，并明确被聚合掉的标签。比如规则输出叫 <code>job:http_requests:rate5m</code>，就应检查它的 label set 是否真的只有 job 等承诺保留的维度。若把 <code>instance</code> 删除了，后来就不可能仅凭这个新序列判断是哪台实例发生了重置。把这种信息损失当成设计选择，而不是再去添加临时补丁，排查路径会更清楚。</p>
+<p>实际评审一条查询时，先回答三个问题：原始 metric 是否遵守 counter 契约；counter 的标签是否在重启后仍能区分各序列；聚合后的 <code>by/without</code> 与直方图比率的分母是否对应同一个业务范围。若这三项未核对，就算表达式能执行、图线看起来连续，也不能证明它反映的是目标总速率。rate-before-sum 的价值在于保留可用于重置识别的底层证据；它不替你决定测量对象、标签身份或统计口径。</p>
 
       </div>
       <!--/email_off-->
 
-      
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://prometheus.io/docs/prometheus/3.13/querying/functions/" rel="noopener">Prometheus 3.13 Query functions</a></li><li><a target="_blank" href="https://prometheus.io/docs/prometheus/2.55/querying/functions/" rel="noopener">Prometheus 2.55 Query functions</a></li><li><a target="_blank" href="https://prometheus.io/docs/prometheus/latest/querying/basics/" rel="noopener">Prometheus Querying basics — subqueries and staleness</a></li><li><a target="_blank" href="https://prometheus.io/docs/prometheus/latest/querying/operators/" rel="noopener">Prometheus Operators — aggregation operators</a></li><li><a target="_blank" href="https://prometheus.io/docs/practices/instrumentation/" rel="noopener">Prometheus Instrumentation</a></li><li><a target="_blank" href="https://prometheus.io/docs/practices/histograms/" rel="noopener">Prometheus Histograms and summaries</a></li><li><a target="_blank" href="https://prometheus.io/docs/practices/rules/" rel="noopener">Prometheus Recording rules</a></li><li><a target="_blank" href="https://prometheus.io/docs/prometheus/latest/configuration/unit_testing_rules/" rel="noopener">Prometheus Unit testing for rules</a></li></ol></section>
       
         <footer class="article-taxonomy">
           <span>标签</span>
@@ -218,6 +243,10 @@
             <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
           
             <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+            <a class="tag tag--prometheus" href="/zh-CN/tags/Prometheus/">Prometheus</a>
+          
+            <a class="tag tag--observability" href="/zh-CN/tags/Observability/">Observability</a>
           
         </footer>
       
@@ -235,11 +264,11 @@
         <span>分享</span>
         <div>
           
-            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F13%2Fprometheus-rate-before-sum%2F&text=%E8%AE%A1%E6%95%B0%E5%99%A8%E9%87%8D%E5%90%AF%E8%BF%87%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E5%85%88%20rate%20%E5%86%8D%20sum%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F13%2Fprometheus-rate-before-sum%2F&text=%E5%85%88%20rate%20%E5%86%8D%20sum%EF%BC%9APrometheus%20%E8%81%9A%E5%90%88%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E4%BF%9D%E7%95%99%E5%AE%9E%E4%BE%8B%E7%9A%84%E9%87%8D%E7%BD%AE" aria-label="分享到 X" title="分享到 X">X</a>
           
             <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F13%2Fprometheus-rate-before-sum%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
           
-            <a href="mailto:?subject=%E8%AE%A1%E6%95%B0%E5%99%A8%E9%87%8D%E5%90%AF%E8%BF%87%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E5%85%88%20rate%20%E5%86%8D%20sum%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F13%2Fprometheus-rate-before-sum%2F" aria-label="邮件分享" title="邮件分享">@</a>
+            <a href="mailto:?subject=%E5%85%88%20rate%20%E5%86%8D%20sum%EF%BC%9APrometheus%20%E8%81%9A%E5%90%88%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E4%BF%9D%E7%95%99%E5%AE%9E%E4%BE%8B%E7%9A%84%E9%87%8D%E7%BD%AE&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F13%2Fprometheus-rate-before-sum%2F" aria-label="邮件分享" title="邮件分享">@</a>
           
         </div>
       </section>
@@ -271,11 +300,15 @@
 
         
           
-            <a class="toc-link toc-link--h2" href="#重置发生在各自的序列上">重置发生在各自的序列上</a>
+            <a class="toc-link toc-link--h2" href="#一个被合计遮住的重启">一个被合计遮住的重启</a>
           
-            <a class="toc-link toc-link--h2" href="#查询窗口也是解释条件">查询窗口也是解释条件</a>
+            <a class="toc-link toc-link--h2" href="#聚合前后，rate-看到的是不同对象">聚合前后，rate 看到的是不同对象</a>
           
-            <a class="toc-link toc-link--h2" href="#汇总不能替代实例排查">汇总不能替代实例排查</a>
+            <a class="toc-link toc-link--h2" href="#rate-能校正重置，但不能补回没有采到的数据">rate 能校正重置，但不能补回没有采到的数据</a>
+          
+            <a class="toc-link toc-link--h2" href="#直方图的-sum-与-count-不能先算成平均值">直方图的 sum 与 count 不能先算成平均值</a>
+          
+            <a class="toc-link toc-link--h2" href="#用同一组输入检查查询与-recording-rule">用同一组输入检查查询与 recording rule</a>
           
         
       </nav></details>
@@ -324,20 +357,20 @@
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/25/kubernetes-init-container-resource-requests/">普通 init 容器的资源请求：逐资源比较最大值与应用之和</a></h3>
-          <p>2026-10-25</p>
+          <h3><a href="/zh-CN/2026/11/01/prometheus-metric-relabel-up-boundary/">Prometheus丢弃全部抓取样本后，up为什么还在？</a></h3>
+          <p>2026-11-01</p>
         </article>
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/25/kubernetes-internal-traffic-policy-local/">Service 有健康端点仍访问失败：internalTrafficPolicy Local 的节点边界</a></h3>
-          <p>2026-10-25</p>
+          <h3><a href="/zh-CN/2026/10/24/promql-group-left-vector-matching/">PromQL group_left：保留左侧明细，先证明右侧唯一</a></h3>
+          <p>2026-10-24</p>
         </article>
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/25/otel-log-severity-number-text/">OpenTelemetry 日志等级：保留 SeverityText，用 SeverityNumber 比较</a></h3>
-          <p>2026-10-25</p>
+          <h3><a href="/zh-CN/2026/10/14/prometheus-missing-data-signal/">Prometheus 指标没样本时，怎么区分零值、目标消失和采集失败？</a></h3>
+          <p>2026-10-14</p>
         </article>
       
     </div>
