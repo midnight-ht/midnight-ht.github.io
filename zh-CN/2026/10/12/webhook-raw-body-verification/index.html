@@ -29,10 +29,10 @@
     <link rel="apple-touch-icon" href="/img/favicon.ico">
   
   
-    <meta name="description" content="Webhook 签名针对原始请求内容；先核对中间件、端点秘密与字节，再分别设计去重和完成记录。">
+    <meta name="description" content="Stripe 验签依赖原始请求正文、签名头和当前端点密钥。本文沿着中间件、重试和业务去重排查字段值相同却验签失败的原因，并说明其他供应方的协议边界。">
   
   
-    <meta name="keywords" content="Webhook,签名验证,原始正文">
+    <meta name="keywords" content="Webhook,原始请求体,签名验证,Stripe">
   
   
     <meta name="robots" content="index,follow,max-image-preview:large">
@@ -55,7 +55,7 @@
   
   
     <meta property="og:title" content="Webhook 的 JSON 没变，签名为什么校验失败？ | Midnight blog">
-    <meta property="og:description" content="Webhook 签名针对原始请求内容；先核对中间件、端点秘密与字节，再分别设计去重和完成记录。">
+    <meta property="og:description" content="Stripe 验签依赖原始请求正文、签名头和当前端点密钥。本文沿着中间件、重试和业务去重排查字段值相同却验签失败的原因，并说明其他供应方的协议边界。">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/12/webhook-raw-body-verification/">
     <meta property="og:site_name" content="Midnight blog">
@@ -64,7 +64,7 @@
     <meta name="twitter:card" content="summary">
   
   
-    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/12/webhook-raw-body-verification/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/12/webhook-raw-body-verification/","name":"Webhook 的 JSON 没变，签名为什么校验失败？ | Midnight blog","description":"Webhook 签名针对原始请求内容；先核对中间件、端点秘密与字节，再分别设计去重和完成记录。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/12/webhook-raw-body-verification/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/12/webhook-raw-body-verification/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/12/webhook-raw-body-verification/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/12/webhook-raw-body-verification/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/12/webhook-raw-body-verification/","headline":"Webhook 的 JSON 没变，签名为什么校验失败？","description":"Webhook 签名针对原始请求内容；先核对中间件、端点秘密与字节，再分别设计去重和完成记录。","inLanguage":"zh-CN","datePublished":"2026-10-11T19:19:33.000Z","dateModified":"2026-10-11T19:19:33.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/12/webhook-raw-body-verification/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Webhook 的 JSON 没变，签名为什么校验失败？","item":"https://www.zyweb.vip/zh-CN/2026/10/12/webhook-raw-body-verification/"}]}]}</script>
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/12/webhook-raw-body-verification/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/12/webhook-raw-body-verification/","name":"Webhook 的 JSON 没变，签名为什么校验失败？ | Midnight blog","description":"Stripe 验签依赖原始请求正文、签名头和当前端点密钥。本文沿着中间件、重试和业务去重排查字段值相同却验签失败的原因，并说明其他供应方的协议边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/12/webhook-raw-body-verification/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/12/webhook-raw-body-verification/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/12/webhook-raw-body-verification/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/12/webhook-raw-body-verification/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/12/webhook-raw-body-verification/","headline":"Webhook 的 JSON 没变，签名为什么校验失败？","description":"Stripe 验签依赖原始请求正文、签名头和当前端点密钥。本文沿着中间件、重试和业务去重排查字段值相同却验签失败的原因，并说明其他供应方的协议边界。","inLanguage":"zh-CN","datePublished":"2026-10-11T19:19:33.000Z","dateModified":"2026-11-25T18:40:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.stripe.com/events/manage-webhook-endpoints#signature-errors","https://docs.stripe.com/events/set-up-events#signature-checking","https://docs.stripe.com/events/how-events-work#event-delivery-behaviors"],"keywords":"Development, Engineering, Webhook, Security"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/12/webhook-raw-body-verification/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Webhook 的 JSON 没变，签名为什么校验失败？","item":"https://www.zyweb.vip/zh-CN/2026/10/12/webhook-raw-body-verification/"}]}]}</script>
   
   <meta name="theme-color" content="#080b10">
   
@@ -144,7 +144,7 @@
     <h1>Webhook 的 JSON 没变，签名为什么校验失败？</h1>
 
     
-      <p class="post-hero__summary">Webhook 签名针对原始请求内容；先核对中间件、端点秘密与字节，再分别设计去重和完成记录。</p>
+      <p class="post-hero__summary">Stripe 验签依赖原始请求正文、签名头和当前端点密钥。本文沿着中间件、重试和业务去重排查字段值相同却验签失败的原因，并说明其他供应方的协议边界。</p>
     
 
     <div class="post-hero__meta">
@@ -163,7 +163,7 @@
         
 
 
-        <small>更新于 <time datetime="2026-10-11T19:19:33.000Z">2026-10-12</time> · 预计阅读 2 分钟</small>
+        <small>更新于 <time datetime="2026-11-25T18:40:00.000Z">2026-11-26</time> · 预计阅读 7 分钟</small>
       </div>
     </div>
 
@@ -195,22 +195,30 @@
 
       
 
-      
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>Stripe 验签使用原始请求正文、Stripe-Signature 和当前端点对应的签名密钥；解析后重序列化不能证明输入字节未变。</li><li>Express 的原始正文处理应按 webhook 路由配置，并在普通 JSON 中间件之前；其他框架和供应方须按各自当前协议核对。</li><li>验签通过不代表事件只投递一次或业务已完成；可靠接收、事件去重与业务动作幂等要分别设计。</li></ul></section>
       <!--email_off-->
       <div class="article-content">
-        <p>Webhook 的 JSON 看起来没变，不代表验签输入保持不变。供应方签名验证通常要求其规定的原始正文与正确端点秘密；解析后重新序列化可能改变空白、字段顺序或编码。先完成适用的验签，再把数据交给业务解析流程。</p>
-<h2 id="语义相等不是输入相等"><a href="#语义相等不是输入相等" class="headerlink" title="语义相等不是输入相等"></a>语义相等不是输入相等</h2><p><a target="_blank" rel="noopener" href="https://docs.stripe.com/events/manage-webhook-endpoints#signature-errors">Stripe 的端点维护指南</a>要求验签使用实际发送的 UTF-8 正文，说明框架解析或改写可能导致签名失败。本文以当前 Stripe 指南为具体依据，不把这一实现要求推广为所有供应方完全相同的签名协议，也没有调用真实支付接口。</p>
-<p>假设网关或应用中间件先把请求解析为对象，处理器再输出 JSON 字符串交给验签函数。字段值可能相同，原始表示却已变化。这个设计示例不包含真实事件或密钥。调查时应追踪正文经过哪些层，而不是为了让验签通过就关闭验证，或者用自己猜测的字符串补上缺失输入。</p>
-<h2 id="配置身份也需要一致"><a href="#配置身份也需要一致" class="headerlink" title="配置身份也需要一致"></a>配置身份也需要一致</h2><p>正确正文之外，还需核对事件来源、端点配置与相应秘密的使用范围。开发工具转发与已注册线上端点可能使用不同配置，不能仅根据事件类型相同就假定验签秘密相同。排查资料应记录适当的端点身份和验证失败类别，不输出原始秘密，也不把含私人信息的完整事件随意复制到日志。</p>
-<p>解析顺序不应妨碍其他入口。为了保留回调原文而修改所有请求的处理方式，可能影响普通接口。建议按框架和端点范围配置正文处理，并确认大小限制、错误处理与日志策略。具体中间件顺序需要查阅实际框架文档，本文没有提供未经执行的复制代码或宣称适合所有运行环境的设置。</p>
-<h2 id="验签成功还没有完成业务处理"><a href="#验签成功还没有完成业务处理" class="headerlink" title="验签成功还没有完成业务处理"></a>验签成功还没有完成业务处理</h2><p>来源验证回答的是消息是否满足供应方的认证条件，不证明该事件此前没有处理过。重复投递、重试或处理器中断，仍需要业务侧的记录与恢复契约。事件标识、最终状态与处理责任应能够对应，不能把验签成功后立即写入业务理解成一次性投递保证。</p>
-<p>快速响应也有接受承诺。如果工作转入后台，端点应在什么内容被可靠接收后回复，必须明确设计。只为了避免供应方重试而提前返回成功，可能把未保存的工作静默丢掉。相关的<a href="/zh-CN/2026/10/11/http-202-terminal-state/">异步接受与终态</a>可帮助分清接收、处理中与完成，但不能替代供应方协议。</p>
-<p>可规划原始正文通过、正文改写被拒绝、配置不匹配失败和重复事件不重复产生副作用的检查。本文未运行这些场景，不给出支付或验签成功回执。下一步从入口到验证函数逐层确认输入是否保真，再分别审查来源验证、可靠接收与业务去重；不要以语义看起来相同作为跳过安全检查的理由。</p>
+        <p>如果使用 Stripe，JSON 字段值相同仍可能验签失败。验签输入不是解析后的对象，而是 Stripe 发来的原始 UTF-8 正文、<code>Stripe-Signature</code> 请求头和当前 webhook endpoint 对应的签名密钥；其中任何一项不匹配，官方验证库都无法确认签名。先保留并核对这三个输入，再解析事件、去重和执行业务动作。这里的具体机制依据 Stripe 当前文档，其他供应方的签名协议不能直接照搬。</p>
+<h2 id="字段值相同，为什么不是同一份签名输入？"><a href="#字段值相同，为什么不是同一份签名输入？" class="headerlink" title="字段值相同，为什么不是同一份签名输入？"></a>字段值相同，为什么不是同一份签名输入？</h2><p>JSON 作为数据格式允许多种文本写法表达相同对象。对象字段和值相同，不代表发送端的原始字节相同。比如假设发送内容为带缩进的 <code>{&quot;amount&quot;: 100}</code>，解析后再用 <code>JSON.stringify</code> 输出，空格和换行会消失。字段语义没有变，UTF-8 字节序列已经变了。属性顺序、Unicode 转义形式、数字文本写法或重复键如何处理，也可能让解析再序列化的结果与原文不同。</p>
+<p>签名验证要回答的是“这份输入是否与供应方签名的输入一致”，而不是“把两边解析后是不是得到同一个对象”。因此，不能先将正文变成普通对象，再指望序列化器复原发送端原先的字符选择。即使日志里只打印出相同字段，日志也通常丢掉了空白、转义、编码和字节边界，不能用于证明验签输入没变。</p>
+<p>本次归档的本机小探针用 Node 的 <code>crypto</code> 对一段假设 JSON 文本和解析后重序列化的文本计算同一个演示 HMAC：前者 38 个 UTF-8 字节，后者 31 个，摘要不同。这里使用的是明确标注为 demo 的测试字符串，不是 Stripe SDK、真实 endpoint secret 或线上事件的验签；它只展示“输入字节变了，基于该输入计算的摘要也变了”，不构成生产验收。</p>
+<h2 id="先查哪三项，而不是先改签名校验？"><a href="#先查哪三项，而不是先改签名校验？" class="headerlink" title="先查哪三项，而不是先改签名校验？"></a>先查哪三项，而不是先改签名校验？</h2><p>Stripe 的<a target="_blank" rel="noopener" href="https://docs.stripe.com/events/manage-webhook-endpoints#signature-errors">端点故障指南</a>把验证所需参数列为原始正文、<code>Stripe-Signature</code> 头和 endpoint secret，并指出报错意味着三者至少有一项不正确。按这个顺序核对，比不断改验签代码更容易区分输入变形、头部提取错误和配置选错。</p>
+<p>第一，确认正文来自实际请求流，而不是解析后的对象、日志副本或业务 DTO。对一个仅用于诊断的测试事件，可以比较进入路由的 Buffer 长度与验证函数收到的 Buffer 长度，并记录哈希而不保存完整的敏感载荷。哈希相同能说明这两个观测点的字节一致，但不能证明事件可信；只有官方验证库依据完整协议接受签名，才完成来源认证。</p>
+<p>第二，按框架规定读取原始正文并提取正确请求头。Stripe 给出的 Express 示例把 <code>express.raw({type: &#39;application/json&#39;})</code> 放在 webhook 路由上，再把 <code>request.body</code> 与请求头和 secret 交给库。若全局 <code>express.json()</code> 已先读取并解析流，后面的处理器可能只得到对象，也可能无法再次读取原始流。把 webhook 原始正文配置限制在该路由，通常比全站关闭 JSON 解析更容易控制影响；其他框架应依据其当前请求体生命周期和 Stripe 官方示例选择钩子，不能把 Express 片段直接复制过去。</p>
+<p>第三，确认 secret 属于正在处理的 endpoint。Stripe 文档特别提醒，CLI <code>stripe listen</code> 转发得到的 secret，与 Dashboard/Workbench 中端点使用的 secret 不相同。开发测试拿错 secret 会稳定失败，换成生产密钥“试试看”则可能掩盖环境路由错误并扩大泄露风险。秘密应从受控配置读取；诊断记录只保留环境、endpoint 标识、secret 配置版本或校验类别，不打印密钥本身。</p>
+<h2 id="请求头看起来有内容，为什么仍不能自行拼一个签名？"><a href="#请求头看起来有内容，为什么仍不能自行拼一个签名？" class="headerlink" title="请求头看起来有内容，为什么仍不能自行拼一个签名？"></a>请求头看起来有内容，为什么仍不能自行拼一个签名？</h2><p><code>Stripe-Signature</code> 是协议输入，应交给 Stripe 的正式验证函数解析。头字段可能包含多个版本签名和可选的诊断信息；Stripe 指南说明头的项目顺序和数量不应固定假设。更关键的是，文档指出某些 <code>secret</code>、<code>destination</code>、<code>payload</code> 等 debug metadata 没有被签名，不能拿这些字段充当认证依据。它们最多帮助判断请求经过了哪条调试路径或正文是否被改动，攻击者可以伪造它们。</p>
+<p>失败时也不要采取“只要解析成功就放行”“删掉验签”或“从日志重新拼出 JSON 再验”的补丁。这些改动把传输层 bug 变成来源校验缺口。对 Stripe snapshot event，使用其 SDK <code>constructEvent</code>；对 thin event，按官方当前流程使用 <code>parseEventNotification</code>。两类事件和 SDK 的差异会影响解析入口，但不改变应使用正确签名输入和对应 secret 的原则。升级 SDK 或切换事件格式时，应重新对照当前官方设置文档，而不是只照旧代码猜接口。</p>
+<h2 id="验签成功之后，重试和业务状态还要怎么分？"><a href="#验签成功之后，重试和业务状态还要怎么分？" class="headerlink" title="验签成功之后，重试和业务状态还要怎么分？"></a>验签成功之后，重试和业务状态还要怎么分？</h2><p>验证来源只能证明请求符合该供应方的签名协议，不证明事件只会送达一次、事件按创建顺序到达，或订单动作已经完成。Stripe 的事件文档说明，生产环境失败投递会按指数退避重试最长三天；sandbox 的重试安排不同；事件投递顺序也不保证。因此，处理器要区分“签名通过”“已可靠接收”“正在处理”和“业务终态”，不能把一个 2xx 或一条验签成功日志当成订单已经完成。</p>
+<p>一个假设的订单处理路径可以这样设计：验签通过后，以供应方事件 ID 写入有唯一约束的收件记录；同一数据库事务内保存待处理任务，只有提交成功后才返回 2xx；worker 领取任务时把记录转成处理中，成功后写入完成，暂时性错误则记录可恢复状态并重试。若进程在保存任务前崩溃，不能已回 2xx；若保存任务后、发货动作前崩溃，任务应可重新领取；若发货成功但写终态失败，业务动作需要自己的幂等键或对账方式，单靠事件 ID 唯一约束并不能自动回滚外部副作用。这里是设计示例，不是本站的支付实现或实际 Stripe 测试。</p>
+<p>Stripe 还指出，同一个事件可能重复投递；有时两个不同 Event 对象也可能对应同一个业务对象动作。前者可按 event ID 识别，后者可能需要组合检查对象 ID 与 event type。这个区别影响去重键：只按“订单 ID”去重可能误吞后续合法状态事件；只按 event ID 去重则不一定能避免两个独立事件对同一业务动作重复生效。先定义一次动作的业务身份，再设置唯一约束和状态迁移。相关的<a href="/zh-CN/2026/10/09/api-retry-idempotency/">API 重试与幂等</a>讨论客户端重试的幂等键；Webhook 的供应方事件 ID 与业务动作键是相邻但不同的概念。</p>
+<h2 id="如何验证输入保真，而不把一个成功样例当成保证？"><a href="#如何验证输入保真，而不把一个成功样例当成保证？" class="headerlink" title="如何验证输入保真，而不把一个成功样例当成保证？"></a>如何验证输入保真，而不把一个成功样例当成保证？</h2><p>在测试环境建立一组互相区分的检查：原始请求体和对应测试签名应通过；仅改变空格、字段次序或转义后的正文应按供应方验证器被拒绝；把 CLI secret 错配到 Dashboard endpoint 时应失败；把普通 JSON 中间件移到验签路由之前时，应能观察到原始输入不可用或签名不匹配；同一事件重投时，收件记录不应触发第二次业务动作；处理器在不同提交点中断时，恢复行为应符合状态机。</p>
+<p>每个检查都要指出它观察的边界。正文哈希只覆盖字节一致性，不证明签名有效；官方 SDK 测试只覆盖相应 SDK 与事件格式；本机模拟不证明代理、API Gateway、框架适配或生产 secret 配置无误。本文只实际运行了上述 Node 合成 HMAC 探针，没有启动 Stripe CLI、框架服务、真实 webhook endpoint 或生产付款流程。上线验收仍应按目标框架逐层记录原始输入、头部解析、secret 来源、验证结果、可靠接收和业务终态，并避免把密钥或完整个人数据写入日志。</p>
+<p>如果你还要判断“验证通过后何时返回成功”，可接着看<a href="/zh-CN/2026/10/11/http-202-terminal-state/">HTTP 202 与终态的区别</a>；它用于区分接受异步工作与业务完成，不替代 webhook 协议。最后，<code>express.raw</code> 是 Stripe 在 Express 中展示的一种输入保真做法，不是所有供应方与框架通用的模板。排查应从字节来源、请求头、端点密钥开始，再单独验证可靠入队、事件去重和业务幂等；不要用一次语义相等的 JSON 比较代替这些检查。</p>
 
       </div>
       <!--/email_off-->
 
-      
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.stripe.com/events/manage-webhook-endpoints#signature-errors" rel="noopener">Manage webhook endpoints — Resolve signature verification errors</a></li><li><a target="_blank" href="https://docs.stripe.com/events/set-up-events#signature-checking" rel="noopener">Set up events — Verify signatures and parse event formats</a></li><li><a target="_blank" href="https://docs.stripe.com/events/how-events-work#event-delivery-behaviors" rel="noopener">How events work — Automatic retries and delivery ordering</a></li></ol></section>
       
         <footer class="article-taxonomy">
           <span>标签</span>
@@ -218,6 +226,10 @@
             <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
           
             <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+            <a class="tag tag--webhook" href="/zh-CN/tags/Webhook/">Webhook</a>
+          
+            <a class="tag tag--security" href="/zh-CN/tags/Security/">Security</a>
           
         </footer>
       
@@ -271,11 +283,15 @@
 
         
           
-            <a class="toc-link toc-link--h2" href="#语义相等不是输入相等">语义相等不是输入相等</a>
+            <a class="toc-link toc-link--h2" href="#字段值相同，为什么不是同一份签名输入？">字段值相同，为什么不是同一份签名输入？</a>
           
-            <a class="toc-link toc-link--h2" href="#配置身份也需要一致">配置身份也需要一致</a>
+            <a class="toc-link toc-link--h2" href="#先查哪三项，而不是先改签名校验？">先查哪三项，而不是先改签名校验？</a>
           
-            <a class="toc-link toc-link--h2" href="#验签成功还没有完成业务处理">验签成功还没有完成业务处理</a>
+            <a class="toc-link toc-link--h2" href="#请求头看起来有内容，为什么仍不能自行拼一个签名？">请求头看起来有内容，为什么仍不能自行拼一个签名？</a>
+          
+            <a class="toc-link toc-link--h2" href="#验签成功之后，重试和业务状态还要怎么分？">验签成功之后，重试和业务状态还要怎么分？</a>
+          
+            <a class="toc-link toc-link--h2" href="#如何验证输入保真，而不把一个成功样例当成保证？">如何验证输入保真，而不把一个成功样例当成保证？</a>
           
         
       </nav></details>
