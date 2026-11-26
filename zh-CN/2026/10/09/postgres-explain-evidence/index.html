@@ -29,10 +29,10 @@
     <link rel="apple-touch-icon" href="/img/favicon.ico">
   
   
-    <meta name="description" content="如何用 PostgreSQL 18 EXPLAIN 建立慢查询证据，区分估算偏差、真实执行成本与索引直觉。">
+    <meta name="description" content="先沿 PostgreSQL 计划树定位最早的估算行数偏差，再判断统计信息、查询形状或索引是否是正确修复。">
   
   
-    <meta name="keywords" content="PostgreSQL 18,EXPLAIN,慢查询">
+    <meta name="keywords" content="PostgreSQL EXPLAIN,估算行数,ANALYZE,扩展统计">
   
   
     <meta name="robots" content="index,follow,max-image-preview:large">
@@ -55,7 +55,7 @@
   
   
     <meta property="og:title" content="慢查询先加索引？先看估算行数错在哪里 | Midnight blog">
-    <meta property="og:description" content="如何用 PostgreSQL 18 EXPLAIN 建立慢查询证据，区分估算偏差、真实执行成本与索引直觉。">
+    <meta property="og:description" content="先沿 PostgreSQL 计划树定位最早的估算行数偏差，再判断统计信息、查询形状或索引是否是正确修复。">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/">
     <meta property="og:site_name" content="Midnight blog">
@@ -64,7 +64,7 @@
     <meta name="twitter:card" content="summary">
   
   
-    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/","name":"慢查询先加索引？先看估算行数错在哪里 | Midnight blog","description":"如何用 PostgreSQL 18 EXPLAIN 建立慢查询证据，区分估算偏差、真实执行成本与索引直觉。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/","headline":"慢查询先加索引？先看估算行数错在哪里","description":"如何用 PostgreSQL 18 EXPLAIN 建立慢查询证据，区分估算偏差、真实执行成本与索引直觉。","inLanguage":"zh-CN","datePublished":"2026-10-08T19:18:41.000Z","dateModified":"2026-10-08T19:18:41.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"慢查询先加索引？先看估算行数错在哪里","item":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/"}]}]}</script>
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/","name":"慢查询先加索引？先看估算行数错在哪里 | Midnight blog","description":"先沿 PostgreSQL 计划树定位最早的估算行数偏差，再判断统计信息、查询形状或索引是否是正确修复。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/","headline":"慢查询先加索引？先看估算行数错在哪里","description":"先沿 PostgreSQL 计划树定位最早的估算行数偏差，再判断统计信息、查询形状或索引是否是正确修复。","inLanguage":"zh-CN","datePublished":"2026-10-08T19:18:41.000Z","dateModified":"2026-11-26T21:10:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/using-explain.html","https://www.postgresql.org/docs/19/using-explain.html","https://www.postgresql.org/docs/18/planner-stats.html","https://www.postgresql.org/docs/19/planner-stats.html","https://www.postgresql.org/docs/18/sql-createstatistics.html","https://www.postgresql.org/docs/19/sql-createstatistics.html","https://www.postgresql.org/docs/18/sql-analyze.html","https://www.postgresql.org/docs/19/sql-explain.html"],"keywords":"Development, Engineering, PostgreSQL, Database"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"慢查询先加索引？先看估算行数错在哪里","item":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-explain-evidence/"}]}]}</script>
   
   <meta name="theme-color" content="#080b10">
   
@@ -144,7 +144,7 @@
     <h1>慢查询先加索引？先看估算行数错在哪里</h1>
 
     
-      <p class="post-hero__summary">如何用 PostgreSQL 18 EXPLAIN 建立慢查询证据，区分估算偏差、真实执行成本与索引直觉。</p>
+      <p class="post-hero__summary">先沿 PostgreSQL 计划树定位最早的估算行数偏差，再判断统计信息、查询形状或索引是否是正确修复。</p>
     
 
     <div class="post-hero__meta">
@@ -163,7 +163,7 @@
         
 
 
-        <small>更新于 <time datetime="2026-10-08T19:18:41.000Z">2026-10-09</time> · 预计阅读 3 分钟</small>
+        <small>更新于 <time datetime="2026-11-26T21:10:00.000Z">2026-11-27</time> · 预计阅读 7 分钟</small>
       </div>
     </div>
 
@@ -195,24 +195,36 @@
 
       
 
-      
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>rows 是计划节点预计输出的行数，不等于扫描行数；actual rows 在多次 loops 时通常显示每次执行的平均值。</li><li>同表相关谓词可能需要刷新统计或扩展统计；PostgreSQL 的扩展统计目前不能修复 join 的选择率估算。</li><li>EXPLAIN ANALYZE 会执行语句，且常规计时不覆盖结果发送到客户端的网络时间；必须记录采集边界。</li></ul></section>
       <!--email_off-->
       <div class="article-content">
-        <p>慢查询不应直接等同于缺索引。先看计划中预估与实际行数在哪里分歧，再判断扫描、连接、排序和等待各自的贡献。EXPLAIN ANALYZE 会执行查询，使用前必须确认副作用和资源预算。下面是分析方法，未对本站或其他生产数据库做性能实测。</p>
-<h2 id="计划里的-cost-不是用户等待秒数"><a href="#计划里的-cost-不是用户等待秒数" class="headerlink" title="计划里的 cost 不是用户等待秒数"></a>计划里的 cost 不是用户等待秒数</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/using-explain.html">PostgreSQL 18 的 EXPLAIN 指南</a>解释估算成本与执行计划，并说明 ANALYZE 会实际运行查询、输出真实行数和时间。成本用于优化器比较方案，不能把一个 cost 数字直接解读成请求毫秒数，更不能与另一台不同配置的数据库直接比较。</p>
-<p>假设查询按客户和时间范围筛选订单，再连接明细。若优化器预计返回少量订单，实际却命中大量历史记录，连接方式可能因此不合适。此时先找行数偏差，比仅盯着最上层总耗时更能定位下一步：检查统计信息、数据相关性和筛选条件，而不是立刻增加更多索引。</p>
-<h2 id="从最早的分歧追到后续放大"><a href="#从最早的分歧追到后续放大" class="headerlink" title="从最早的分歧追到后续放大"></a>从最早的分歧追到后续放大</h2><p>建议从基础扫描向上阅读，记录每个关键节点的估算行数、实际行数及执行次数，尤其核对多次执行节点展示的行数口径。一个看起来很便宜的节点，若被外层循环反复调用，累计工作可能很大。不能只凭单次节点时间判断，也不能把所有父子节点的时间简单相加，重复计算包含关系中的工作。</p>
-<p>还要保留查询参数、表规模、数据库版本及采集时的并发条件。同一条语句在不同客户、日期范围和缓存状态下可能呈现不同表现；只保存一张截图，下一位排查者很难判断问题是否复现。敏感参数应脱敏，但保留决定数据分布的类别或范围。</p>
-<p>顺序扫描也不是天然错误。读取表中较大部分数据时，逐页访问可能是合理选择；强制使用索引只是换了访问成本，并没有减少结果规模。相反，窄范围查询仍扫描大量无关行，才值得进一步检查可用索引、表达式和类型转换是否匹配。这里是判断方向，不是对某个执行计划下诊断。</p>
-<h2 id="ANALYZE-带来的风险由谁承担"><a href="#ANALYZE-带来的风险由谁承担" class="headerlink" title="ANALYZE 带来的风险由谁承担"></a>ANALYZE 带来的风险由谁承担</h2><p>对写语句运行 EXPLAIN ANALYZE 会真实触发执行，不能因为前缀叫“解释”就当作只读。即使使用回滚事务，也应评估序列、外部函数和触发逻辑等不完全随事务撤销的效果。读查询也可能消耗大量 CPU、内存和输入输出，生产采集需要明确授权与停止条件。</p>
-<p>没有合适采集窗口时，可以先用普通 EXPLAIN 观察估算计划，再在可控环境中复现。环境差异必须记录，不能把测试库结果写成生产证据。真实等待和应用端连接池排队也可能发生在计划之外，因此应与请求时延、数据库等待信息一起核对。</p>
-<p>修改之后怎样确认有收益？保留同一问题的前后计划、代表性参数和业务指标，说明采集条件。若只比较单次执行，很难区分缓存变热和方案本身的效果；不要在缺乏可比条件时宣称固定比例的提速。上线还应观察写入成本，避免只优化读取而增加其他业务负担。</p>
-<p>先选择一条可复现且重要的查询，找出最早明显的行数偏差，再提出一个可被证据否定的修改假设。需要在线加索引时，把<a href="/zh-CN/2026/10/09/postgres-concurrent-index/">并发构建的等待与清理</a>纳入发布计划，而不是把性能分析结束在一条建索引命令上。</p>
+        <p>慢查询不等于缺索引。先定位计划树里最早出现的明显行数偏差，再判断它来自过期统计、同表字段相关性、查询形状还是连接估算；只有确认访问路径本身是主要成本后，索引才是候选方案。本文以 PostgreSQL 18 为明确基线，并核对了 PostgreSQL 19 文档。下面的订单例子和 SQL 都是诊断模板，没有在数据库实例执行，也没有生产性能数据。</p>
+<h2 id="先读行数，不要把-cost-当成耗时"><a href="#先读行数，不要把-cost-当成耗时" class="headerlink" title="先读行数，不要把 cost 当成耗时"></a>先读行数，不要把 cost 当成耗时</h2><p>计划输出是一棵 EXPLAIN 节点树。底部通常是表扫描；上层可能是过滤、连接、聚合或排序。节点中的 <code>rows</code> 是优化器预计该节点会输出多少行，并不是它扫描了多少行。全表扫描即使只输出很少结果，也可能必须检查表里的大量记录。因此，“估算输出很少”不能推导出扫描工作也很少。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/using-explain.html">PostgreSQL 18 的 EXPLAIN 指南</a>也说明，计划中的 cost 是用于比较候选计划的抽象成本单位，不能直接读成请求花费的毫秒数。</p>
+<p>第一遍先从叶节点向上读：记录关键过滤节点的 <code>rows</code>，找到第一个与其下游结果明显不一致的位置，再沿父节点看这个误差如何影响后续选择。计划估算本来就是近似值，差一两行通常不是问题；当误差跨越数量级，或者重复执行后累计工作很大，才值得优先解释。不要只看顶层总行数，因为错误可能从某个底部谓词开始，并在嵌套循环、哈希构建或排序前被放大。</p>
+<p>打开 <code>ANALYZE</code> 后，PostgreSQL 会实际执行语句，并显示实际输出行数和运行时间。对 <code>loops</code> 大于 1 的节点，显示的 <code>actual rows</code> 和时间通常是每次执行的平均值；理解累计工作时还要结合循环次数。比如内侧索引扫描每次只返回一行，但被外层循环执行数千次，单次看起来轻的节点仍可能累计很重。节点时间彼此包含，不能把父节点和子节点的耗时简单相加。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/using-explain.html">EXPLAIN 文档</a>还提醒，估算行数与实际行数的比较比单独比 cost 更能发现估算问题。</p>
+<p>另一个反例是 <code>LIMIT</code>：计划节点可能按完整执行展示估算行数，而上层 LIMIT 实际只取前几行。这种显示差异不自动证明基数估算错了。读计划要把节点的执行次数、过滤条件和上层停止条件一起看，而不是看见 <code>rows</code> 与 <code>actual rows</code> 不同就马上调统计目标。</p>
+<h2 id="假设订单查询，偏差可能从哪里来？"><a href="#假设订单查询，偏差可能从哪里来？" class="headerlink" title="假设订单查询，偏差可能从哪里来？"></a>假设订单查询，偏差可能从哪里来？</h2><p>假设一个多租户订单表，查询按 <code>tenant_id</code> 和 <code>status</code> 过滤，再按创建时间排序并取最近一页。若某些租户的绝大多数订单都处于 <code>open</code>，而另一些租户很少有未完成订单，那么这两个列并非独立分布。普通单列统计分别知道租户值和状态值的大致频率，却可能无法估计某个租户与某状态组合会留下多少记录。优化器如果因此低估候选行数，可能选择一个对小结果合适、对实际大量行却昂贵的后续方案。</p>
+<p>先确认统计信息是否有机会代表当前数据。<code>pg_class.reltuples</code>、<code>relpages</code> 等目录值不是每次写入实时更新；<code>ANALYZE</code> 和 <code>VACUUM ANALYZE</code> 会更新统计，但常见情况下只抽样，结果仍是近似值。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/planner-stats.html">PostgreSQL 18 统计信息说明</a>建议检查可读性更好的 <code>pg_stats</code>，而不是直接读取受权限限制的 <code>pg_statistic</code>。同一条计划在不同表规模、不同数据分布或一次新的 ANALYZE 后发生变化，并不奇怪。</p>
+<p>可以先在授权的非生产环境，或经过明确评估的采集窗口里，对需要的列执行针对性 <code>ANALYZE orders (tenant_id, status)</code>，随后使用相同 SQL 和代表性参数重新生成普通计划。如果计划估算明显改变，问题可能是统计陈旧或样本不足；如果估算仍系统性偏小，再确认它是否为同表列相关性。不要把一次 ANALYZE 后的计划变好写成稳定提速证据；它只说明这组采集条件下估算发生了变化。</p>
+<p>当同一张表中的强相关列确实是误差来源时，可以评估扩展统计，例如：</p>
+<pre><code class="sql">CREATE STATISTICS orders_tenant_status_stats (dependencies, mcv)
+ON tenant_id, status FROM orders;
+ANALYZE orders (tenant_id, status);
+</code></pre>
+<p>这是供团队审查的示例，不是本文实际执行的命令。<code>dependencies</code> 用于强相关列的依赖关系；<code>mcv</code> 用于常见值组合。统计对象只是声明要收集什么，数据需要由 ANALYZE 收集，采样大小和建模成本也要纳入判断。官方文档建议只为确实强相关的列组创建依赖统计，以免增加 ANALYZE 和后续规划开销。还要注意一个边界：PostgreSQL 18 和 19 的扩展统计文档都说明，目前扩展统计不会用于 join 选择率估算；如果偏差第一次出现在跨表连接处，给单表增加依赖统计不是通用解法。</p>
+<h2 id="估算偏差在哪一层，修复也要对应哪一层"><a href="#估算偏差在哪一层，修复也要对应哪一层" class="headerlink" title="估算偏差在哪一层，修复也要对应哪一层"></a>估算偏差在哪一层，修复也要对应哪一层</h2><p>如果偏差从单表过滤节点开始，检查该表统计更新时间、<code>pg_stats</code> 的常见值和直方图，再判断是否为同表多列相关性。若单表行数估算合理，到了连接节点才开始偏离，就记录连接键分布、两边实际基数和数据倾斜；不能把连接问题简单说成“缺一条索引”。扩展统计当前不覆盖 join 选择率，因此要结合查询结构、数据模型和实际参数另找验证方法。</p>
+<p>如果偏差只对特定租户或时间范围出现，检查参数分布与预处理语句的计划选择。PostgreSQL 19 文档提供 <code>GENERIC_PLAN</code> 选项，可查看不依赖参数值的通用计划；该选项不能与 <code>ANALYZE</code> 同用，所以它不能代替实际执行证据。不同版本的 prepared statement 行为和选项要按目标主版本确认，不能拿一个参数的计划代表所有请求。</p>
+<p>若估算行数接近实际数，但扫描仍读了大量无关数据，再评估过滤条件与索引的列顺序、表达式、类型转换、排序和 LIMIT 是否匹配。顺序扫描也可能是合理选择：当查询需要大部分表时，逐页读取比大量随机访问便宜。建立索引不会减少查询必须返回的结果数量，还会增加存储和写入维护；需要比较读写两侧的代价，而不是把“计划里出现 Seq Scan”直接当成故障。</p>
+<h2 id="实际计划暴露哪些测量边界？"><a href="#实际计划暴露哪些测量边界？" class="headerlink" title="实际计划暴露哪些测量边界？"></a>实际计划暴露哪些测量边界？</h2><p><code>EXPLAIN (ANALYZE, BUFFERS, SETTINGS)</code> 可以把实际行数、循环次数、缓冲区命中/读取以及相关规划设置放在同一份证据里。BUFFERS 的上层节点会包含其子节点的使用量，不能把父子缓冲区计数重复相加。若读查询可能扫描大表，先估算资源消耗、限制参数范围并准备停止条件。</p>
+<p>对写语句运行 <code>EXPLAIN ANALYZE</code> 会真的执行写操作。回滚事务也不一定能撤销序列推进、外部函数调用等所有副作用；生产环境采集应有授权和隔离方案。读查询也会真实消耗 CPU、内存和 I/O。采到的数据需要记录数据库版本、参数类别、统计时间、并发负载和缓存状态，敏感值脱敏后仍保留决定数据分布的信息。</p>
+<p>计划执行时间也不等于用户看到的完整请求耗时。通常结果不会发给客户端，网络传输时间不包含在 EXPLAIN ANALYZE 中；结果类型转换成本默认也可能未测量。PostgreSQL 19 的 EXPLAIN 提供 <code>SERIALIZE</code> 选项测量结果序列化，但它仍不发送结果，因此不测网络成本。应用还可能在连接池、代理和重试队列等待，这些都要用应用侧追踪补充。</p>
+<p>有效的验证不是“改了索引后截图看起来更快”，而是保留前后计划、同一组代表性参数、数据规模、采样和负载条件；检查行数偏差是否缩小、缓冲区读取和执行时间是否变化，并单独观察写入成本。每个假设都要能被结果否定：刷新统计没有修正偏差，就不要把问题归因于统计陈旧；扩展统计只改善过滤节点、连接节点仍偏差，就继续检查连接；行数接近却请求仍慢，就把调查转向真实扫描、排序、序列化、网络或应用等待。本文提出的查询与验证步骤均未执行。</p>
+<p>只有当证据显示访问路径成本是主要问题，才把索引加入候选。需要在线建索引时，再把<a href="/zh-CN/2026/10/09/postgres-concurrent-index/">并发构建的等待、失败状态与验收</a>纳入发布计划。这样，慢查询调查会从“猜一个索引”变成能复核的因果判断，而不是把一次计划变化误写成确定的性能收益。</p>
 
       </div>
       <!--/email_off-->
 
-      
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/using-explain.html" rel="noopener">PostgreSQL 18 — 14.1 Using EXPLAIN</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/19/using-explain.html" rel="noopener">PostgreSQL 19 — 14.1 Using EXPLAIN</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/planner-stats.html" rel="noopener">PostgreSQL 18 — 14.2 Statistics Used by the Planner</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/19/planner-stats.html" rel="noopener">PostgreSQL 19 — 14.2 Statistics Used by the Planner</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-createstatistics.html" rel="noopener">PostgreSQL 18 — CREATE STATISTICS</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/19/sql-createstatistics.html" rel="noopener">PostgreSQL 19 — CREATE STATISTICS</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-analyze.html" rel="noopener">PostgreSQL 18 — ANALYZE</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/19/sql-explain.html" rel="noopener">PostgreSQL 19 — EXPLAIN</a></li></ol></section>
       
         <footer class="article-taxonomy">
           <span>标签</span>
@@ -220,6 +232,10 @@
             <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
           
             <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--database" href="/zh-CN/tags/Database/">Database</a>
           
         </footer>
       
@@ -273,11 +289,13 @@
 
         
           
-            <a class="toc-link toc-link--h2" href="#计划里的-cost-不是用户等待秒数">计划里的 cost 不是用户等待秒数</a>
+            <a class="toc-link toc-link--h2" href="#先读行数，不要把-cost-当成耗时">先读行数，不要把 cost 当成耗时</a>
           
-            <a class="toc-link toc-link--h2" href="#从最早的分歧追到后续放大">从最早的分歧追到后续放大</a>
+            <a class="toc-link toc-link--h2" href="#假设订单查询，偏差可能从哪里来？">假设订单查询，偏差可能从哪里来？</a>
           
-            <a class="toc-link toc-link--h2" href="#ANALYZE-带来的风险由谁承担">ANALYZE 带来的风险由谁承担</a>
+            <a class="toc-link toc-link--h2" href="#估算偏差在哪一层，修复也要对应哪一层">估算偏差在哪一层，修复也要对应哪一层</a>
+          
+            <a class="toc-link toc-link--h2" href="#实际计划暴露哪些测量边界？">实际计划暴露哪些测量边界？</a>
           
         
       </nav></details>
@@ -326,20 +344,20 @@
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/23/css-container-query-size-containment/">屏幕很宽，侧栏卡片为什么仍然挤成一团？</a></h3>
-          <p>2026-10-23</p>
+          <h3><a href="/zh-CN/2026/10/13/postgres-advisory-lock-pool/">连接池里的 PostgreSQL 咨询锁，什么时候才会释放？</a></h3>
+          <p>2026-10-13</p>
         </article>
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/23/grpc-status-trailers-result/">HTTP 已经返回 200，gRPC 调用为什么仍然失败？</a></h3>
-          <p>2026-10-23</p>
+          <h3><a href="/zh-CN/2026/10/12/postgres-skip-locked-queue/">SKIP LOCKED 查不到任务，就代表队列空了吗？</a></h3>
+          <p>2026-10-12</p>
         </article>
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/23/http-content-location-representation/">Content-Location 出现以后，客户端应该跳转吗？</a></h3>
-          <p>2026-10-23</p>
+          <h3><a href="/zh-CN/2026/10/12/postgres-vacuum-space-meaning/">VACUUM 完成了，数据库文件为什么没有变小？</a></h3>
+          <p>2026-10-12</p>
         </article>
       
     </div>
