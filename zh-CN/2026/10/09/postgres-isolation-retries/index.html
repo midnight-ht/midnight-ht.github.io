@@ -29,10 +29,10 @@
     <link rel="apple-touch-icon" href="/img/favicon.ico">
   
   
-    <meta name="description" content="以值班约束分析 PostgreSQL 18 的并发事务：从不变量选择保护方式，并把可串行化重试纳入设计。">
+    <meta name="description" content="用 PostgreSQL 18 的值班人数约束拆解并发写偏差，比较数据库约束、协调锁与可串行化，并说明 40001 应如何整笔重试。">
   
   
-    <meta name="keywords" content="PostgreSQL 18,事务隔离,序列化重试">
+    <meta name="keywords" content="PostgreSQL 18,write skew,Serializable,SQLSTATE 40001">
   
   
     <meta name="robots" content="index,follow,max-image-preview:large">
@@ -55,7 +55,7 @@
   
   
     <meta property="og:title" content="事务都提交了，业务约束为什么仍被破坏？ | Midnight blog">
-    <meta property="og:description" content="以值班约束分析 PostgreSQL 18 的并发事务：从不变量选择保护方式，并把可串行化重试纳入设计。">
+    <meta property="og:description" content="用 PostgreSQL 18 的值班人数约束拆解并发写偏差，比较数据库约束、协调锁与可串行化，并说明 40001 应如何整笔重试。">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/">
     <meta property="og:site_name" content="Midnight blog">
@@ -64,7 +64,7 @@
     <meta name="twitter:card" content="summary">
   
   
-    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/","name":"事务都提交了，业务约束为什么仍被破坏？ | Midnight blog","description":"以值班约束分析 PostgreSQL 18 的并发事务：从不变量选择保护方式，并把可串行化重试纳入设计。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/","headline":"事务都提交了，业务约束为什么仍被破坏？","description":"以值班约束分析 PostgreSQL 18 的并发事务：从不变量选择保护方式，并把可串行化重试纳入设计。","inLanguage":"zh-CN","datePublished":"2026-10-08T19:18:41.000Z","dateModified":"2026-10-08T19:18:41.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"事务都提交了，业务约束为什么仍被破坏？","item":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/"}]}]}</script>
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/","name":"事务都提交了，业务约束为什么仍被破坏？ | Midnight blog","description":"用 PostgreSQL 18 的值班人数约束拆解并发写偏差，比较数据库约束、协调锁与可串行化，并说明 40001 应如何整笔重试。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/","headline":"事务都提交了，业务约束为什么仍被破坏？","description":"用 PostgreSQL 18 的值班人数约束拆解并发写偏差，比较数据库约束、协调锁与可串行化，并说明 40001 应如何整笔重试。","inLanguage":"zh-CN","datePublished":"2026-10-08T19:18:41.000Z","dateModified":"2026-11-26T21:08:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/transaction-iso.html","https://www.postgresql.org/docs/18/ddl-constraints.html","https://www.postgresql.org/docs/18/mvcc-serialization-failure-handling.html","https://www.postgresql.org/docs/18/explicit-locking.html"],"keywords":"Development, Engineering, PostgreSQL, Transactions"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"事务都提交了，业务约束为什么仍被破坏？","item":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-isolation-retries/"}]}]}</script>
   
   <meta name="theme-color" content="#080b10">
   
@@ -144,7 +144,7 @@
     <h1>事务都提交了，业务约束为什么仍被破坏？</h1>
 
     
-      <p class="post-hero__summary">以值班约束分析 PostgreSQL 18 的并发事务：从不变量选择保护方式，并把可串行化重试纳入设计。</p>
+      <p class="post-hero__summary">用 PostgreSQL 18 的值班人数约束拆解并发写偏差，比较数据库约束、协调锁与可串行化，并说明 40001 应如何整笔重试。</p>
     
 
     <div class="post-hero__meta">
@@ -163,7 +163,7 @@
         
 
 
-        <small>更新于 <time datetime="2026-10-08T19:18:41.000Z">2026-10-09</time> · 预计阅读 3 分钟</small>
+        <small>更新于 <time datetime="2026-11-26T21:08:00.000Z">2026-11-27</time> · 预计阅读 8 分钟</small>
       </div>
     </div>
 
@@ -195,24 +195,40 @@
 
       
 
-      
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>事务原子性说明单笔事务整体提交或回滚，不保证并发事务的组合维护所有跨行不变量。</li><li>PostgreSQL Repeatable Read 仍允许序列化异常；Serializable 会拒绝无法证明串行等价的提交，但应用要准备处理 40001。</li><li>40001 应从头重跑读取和业务决策；约束冲突不都可重试，外部副作用也不会因数据库回滚而撤销。</li></ul></section>
       <!--email_off-->
       <div class="article-content">
-        <p>事务提交成功只说明这次事务满足数据库当时执行的规则，不意味着多个并发事务共同维护了全部业务不变量。设计并发更新时，先写出不能被破坏的条件，再选择约束、锁或隔离级别；采用可串行化也要准备处理失败。以下依据 PostgreSQL 18 文档作设计分析，没有运行数据库并发实验。</p>
-<h2 id="先找跨行约束，而不是先选级别"><a href="#先找跨行约束，而不是先选级别" class="headerlink" title="先找跨行约束，而不是先选级别"></a>先找跨行约束，而不是先选级别</h2><p>假设排班要求任何时刻至少保留一位值班人。甲乙同时申请退出，各自读到另一人还在，于是更新自己的记录。单笔更新都合法，却可能共同留下无人值班。这个例子关心的是多行之间的关系，不是某一行有没有完整写入，因此不能只用“事务是原子的”作答。</p>
-<p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/transaction-iso.html">PostgreSQL 18 事务隔离文档</a>说明不同级别的可见性和并发行为，并要求使用可串行化的应用准备重试序列化失败。级别名称要结合具体数据库解释，不能把其他数据库同名级别的行为直接套过来。</p>
-<p>对本例，我会先讨论能否把约束集中到明确的协调对象，或采用能够覆盖相关读取与写入的并发策略。究竟选行锁、事务隔离还是调整数据表示，取决于争用、查询范围与业务复杂度。没有实际负载，不给出哪一种一定更快的结论。</p>
-<h2 id="重试的单位应是完整判断过程"><a href="#重试的单位应是完整判断过程" class="headerlink" title="重试的单位应是完整判断过程"></a>重试的单位应是完整判断过程</h2><p>如果事务因序列化冲突失败，只重发最后一句更新是不够的。此前读取和据此作出的决定可能已经过时；重试应重新计算依赖这些读取的业务分支，应重新开始事务，重新读取并重新判断。应用还需要区分可重试的并发错误和权限、数据格式等永久错误，不能把所有异常都当作暂时冲突。</p>
-<p>重试次数、总期限和等待方式都应有限。高争用下无限立即重试可能把数据库压力继续放大；超出预算后应给用户可解释的失败或排队入口。错误日志记录业务标识、尝试次数和错误类别，但不把敏感数据或数据库内部细节直接暴露给终端用户。</p>
-<p>事务中已经发出的邮件、支付或第三方调用尤其危险。数据库回滚不自动撤销外部效果，再跑一次可能重复发送。候选做法是把外部意图留在可恢复的交接记录中，提交后再处理，或使用外部系统已经明确提供的幂等契约。不能仅靠增加隔离级别覆盖这一问题。</p>
-<h2 id="怎么验证业务没有留下空档"><a href="#怎么验证业务没有留下空档" class="headerlink" title="怎么验证业务没有留下空档"></a>怎么验证业务没有留下空档</h2><p>先写并发测试的目标：退出请求交错执行后，值班人数仍不低于约定值，失败者得到可恢复结果。再设计同时读取、交错提交和重试后重新读取的时序。检查数据库最终状态之外，也应检查界面是否把失败误报为成功，以及后台任务是否重复执行外部操作。</p>
-<p>如果系统还没有这些测试，可以先记录待验证假设，不写成“已经证明没有竞争条件”。锁的覆盖范围、索引变化和新增查询都可能改变交错行为，需要在实际数据库版本和部署方式下复验。本文只提供检查方向，没有成功率或吞吐量实测数据。</p>
-<p>可串行化是否总是最合适？小型管理功能可能优先正确性与实现清晰，而热点计数业务还要评估争用代价；某些约束可以用更直接的唯一约束表达。先让团队指出不变量由哪里保护，再选择具体实现。外部消息交接问题可接着看<a href="/zh-CN/2026/10/09/postgres-transaction-outbox/">事务发件箱</a>。</p>
+        <p>如果两笔事务各自都看到“还有一位值班人员在线”，却分别让自己下线，它们可能都提交，而最终在线人数变成零。事务原子性没有自动把跨行规则变成并发约束；先判断规则能否由 <code>UNIQUE</code> 或 <code>EXCLUDE</code> 表达，再选择受共同锁保护的重查或 PostgreSQL <code>SERIALIZABLE</code>，并准备从头重试被取消的事务。本文以 PostgreSQL 18 文档为依据；排班表和 SQL 都是解释用的假设例子，没有运行数据库并发实验。</p>
+<h2 id="两笔都正确的事务，怎样一起做错"><a href="#两笔都正确的事务，怎样一起做错" class="headerlink" title="两笔都正确的事务，怎样一起做错"></a>两笔都正确的事务，怎样一起做错</h2><p>假设一个值班组由两名值班人员组成，业务规则是“任何时刻至少一人处于值班状态”。表里有两行：A 与 B 的 <code>on_duty</code> 都为真。两个请求几乎同时到达，事务 T1 读取值班人数为二，决定将 A 改成离岗；事务 T2 也读取到人数为二，决定将 B 改成离岗。它们更新的是不同的行，没有写写冲突；如果隔离级别允许各自依据旧读结果继续，两个更新都可能成功，最后两行都为假。</p>
+<p>把这个交错写出来，比只讨论“事务是否原子”更容易发现缺口：</p>
+<pre><code class="text">T1: BEGIN; SELECT count(*) -&gt; 2
+T2: BEGIN; SELECT count(*) -&gt; 2
+T1: UPDATE rota SET on_duty = false WHERE person = &#39;A&#39;
+T2: UPDATE rota SET on_duty = false WHERE person = &#39;B&#39;
+T1: COMMIT
+T2: COMMIT
+</code></pre>
+<p>这里的行名和状态是示意值，不是测试日志。每笔事务都完整地执行了自己的读取、更新和提交；问题在于规则涉及两行，数据库没有因为两个不同的 <code>UPDATE</code> 自动把它们视为同一资源的冲突。原子性只回答“单笔事务的写入是否一起生效”，不回答“所有并发事务的组合是否等价于某种串行顺序”。官方事务隔离文档把后一类不一致称为序列化异常（<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/transaction-iso.html">PostgreSQL 18 事务隔离说明</a>）。</p>
+<p>隔离级别会改变这个结果。默认的 <code>READ COMMITTED</code> 在 PostgreSQL 中于每条语句开始时取得可见数据；两次 <code>SELECT</code> 可以看到不同快照，因此一个事务内重复检查也不能天然锁住某个聚合条件。<code>REPEATABLE READ</code> 固定事务快照，避免不可重复读，但 PostgreSQL 明确说明它仍可能出现 serialization anomaly，见<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/transaction-iso.html">隔离级别矩阵</a>。上面的写偏差属于一种可能的快照交错：两个事务读到相同状态、写入不同记录，因此没有靠同一行版本更新互相阻止。不能把其他数据库的同名隔离级别行为直接套到 PostgreSQL 上。</p>
+<p>在 <code>SERIALIZABLE</code> 下，PostgreSQL 会跟踪并发事务的读写依赖；如果已提交的组合无法对应任何串行执行顺序，服务器会回滚其中一个事务并返回序列化失败。它保证的是成功提交的串行等价，不是“所有事务都必然提交”。应用必须把这种回滚当作正常并发控制路径，而非数据库损坏或偶发的网络错误。</p>
+<h2 id="先看规则形状，再决定保护机制"><a href="#先看规则形状，再决定保护机制" class="headerlink" title="先看规则形状，再决定保护机制"></a>先看规则形状，再决定保护机制</h2><p>一条规则如果只依赖当前行，<code>NOT NULL</code> 或 <code>CHECK</code> 往往最直接。例如“结束时间晚于开始时间”，可以对同一行的两个字段检查。约束手册明确指出，PostgreSQL 不支持用 <code>CHECK</code> 安全地读取其他行来表达“整张表至少有一个值班人”：即使某个触发器式函数在插入时看似可行，别的行后续改变也可能让规则失效，备份恢复时也可能遇到验证问题。官方约束文档特别提醒，<code>CHECK</code> 条件应只依赖新行本身（<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/ddl-constraints.html">PostgreSQL 18 约束说明</a>）。</p>
+<p>若规则是“同一租户下业务编号不能重复”，优先让数据库通过 <code>UNIQUE (tenant_id, code)</code> 执行；若只对有效记录要求唯一，可以评估部分唯一索引。对空间或时间范围不得重叠这类成对关系，可考虑 <code>EXCLUDE</code> 约束。这样的约束由数据库在写入边界强制执行，不依赖每个调用方都记得先查一次。要提前考虑 <code>NULL</code> 语义、约束是否可延迟以及失败时如何映射为业务冲突：约束不是可随意重试的万能开关。</p>
+<p>“至少还保留一个人值班”是聚合型跨行规则，不能直接用普通唯一约束表示。一个选择是增加唯一的协调行，代表值班组的变更入口。所有离岗和加入操作都先在同一事务中锁住这行，再读取当前排班并重新判断，随后更新人员记录。若采用 <code>READ COMMITTED</code>，锁等待结束后下一条读取语句会取得新的语句快照；这依赖所有写入路径都遵循同一个协议。某个后台脚本绕过协调行，或在锁之前读取并沿用旧判断，保护就不完整。锁太粗会把同组变更串行化，组与组之间可用不同协调键减少无关等待。</p>
+<p>另一个选择是让整个业务事务使用 <code>SERIALIZABLE</code>，把读取、判断、更新放在同一事务中。这样无需人为推导每一种读写交错，但成本包括 SSI 依赖跟踪和可能重试。若核心写入简单、热点争用较高，明确的协调行可能更好观察；若规则复杂且多处读写范围难维护，<code>SERIALIZABLE</code> 可能让正确性更容易审计。没有真实负载与冲突率，不应宣称哪一种更快。数据库文档也指出，谓词锁粒度变化、连接池规模和事务长度会影响序列化失败频率；测试环境表现不能直接当生产容量结论。</p>
+<h2 id="40001-的重试必须重放判断"><a href="#40001-的重试必须重放判断" class="headerlink" title="40001 的重试必须重放判断"></a>40001 的重试必须重放判断</h2><p>PostgreSQL 的序列化失败 SQLSTATE 是 <code>40001</code>（见<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/mvcc-serialization-failure-handling.html">官方失败处理说明</a>）。失败事务已经回滚，不能只再次执行最后一条 <code>UPDATE</code>：触发更新的 <code>SELECT</code>、用户选择、额度判断或库存检查可能使用了过期快照。正确的重试单位是完整事务逻辑：开始新事务、重新读取、重新判断，再发出对应写入。对“离岗”操作，重试时若重新读取发现当前只剩一人，应用应返回“不能离岗”或引导改派；不应该把上一次的 <code>on_duty=false</code> 原样重放。</p>
+<p>重试应有上限和总时间预算，并用有界退避，避免热点冲突下多个请求立即循环、进一步增加负载。预算耗尽后要给调用方一个明确的可恢复结果，或者将工作放入队列，而不是无限占用连接。日志适合记录 SQLSTATE、业务对象键、尝试次数和最终结果；不应把完整参数、个人信息或内部 SQL 直接返回用户。</p>
+<p>不要把所有约束错误统称为“可以重试”。对于某些特定生成键冲突场景，官方文档建议考虑重试 <code>23505</code> 或排除冲突 <code>23P01</code>，但这些错误也可能表示持续存在的数据冲突或真实业务拒绝。只有能说明冲突来自并发读后写、且整笔业务逻辑会重新生成选择时，重试才有意义。比如两个请求都先检查某编号不存在，再尝试插入；唯一约束让其中一个失败，但此时应用必须重新选择一个合法编号，而不是机械重放相同 <code>INSERT</code>。如果用户要求的编号本身已被占用，正确结果可能是明确冲突，而非自动换号。</p>
+<p>显式锁也要有失败路径。多个事务以不同顺序锁定多个资源，可能形成死锁；PostgreSQL 会检测死锁并取消其中一个事务（见<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/explicit-locking.html">官方显式锁文档</a>）。若选择锁策略，约定一致的锁定顺序、把事务控制在必要范围内，并为死锁错误设计有界的完整事务重试。事务级 advisory lock 随事务结束释放；会话级 advisory lock 则不会因回滚自动释放，使用它时必须仔细管理连接生命周期。</p>
+<h2 id="数据库回滚不会撤销事务外效果"><a href="#数据库回滚不会撤销事务外效果" class="headerlink" title="数据库回滚不会撤销事务外效果"></a>数据库回滚不会撤销事务外效果</h2><p>假设事务内先更新排班，再直接调用值班通知服务。如果数据库最终因 <code>40001</code> 回滚，外部通知不会自动撤回；整笔事务重试还可能再发一遍。更稳妥的模式是同一数据库事务内写业务状态和待发送事件记录，由事务提交后单独投递通知，再按事件 ID 做幂等处理。这样数据库可以原子地保存“状态变化”和“应该发通知”的意图，但仍要为投递成功后进程崩溃、重复投递和死信处理设计恢复路径。详见<a href="/zh-CN/2026/10/09/postgres-transaction-outbox/">事务发件箱的边界与恢复流程</a>。</p>
+<p>支付、邮件、Webhook 等外部操作若有供应商幂等键，应把请求重试和业务操作关联起来，并核对供应商实际保证的作用域和保留时长。若供应商没有幂等契约，不要假设“HTTP 请求超时”等于“对方没有处理”。重试是重新执行决定，不是把不可逆副作用当成普通 SQL。</p>
+<h2 id="如何验证自己保护了哪条规则"><a href="#如何验证自己保护了哪条规则" class="headerlink" title="如何验证自己保护了哪条规则"></a>如何验证自己保护了哪条规则</h2><p>验证从不变量开始：把“至少一名值班人保持在线”写成可检查的条件，然后列出每个能改变排班的入口，包括用户 API、后台任务、导入脚本和运维命令。随后准备两笔事务的同步屏障，让它们都先读取同一个初始状态再尝试不同的更新。对 <code>REPEATABLE READ</code>，测试目标是观察所声明的隔离级别是否仍允许该交错；对 <code>SERIALIZABLE</code>，目标是确认出现的 <code>40001</code> 被识别，并且重试会重新读取和重新判断；对协调行方案，测试要证明所有入口先争用同一把锁，第二个事务在获得锁后使用新状态再次校验。</p>
+<p>还要把数据库最终状态和用户体验一起检查：失败的请求是否被误报为成功，重试超预算是否有明确状态，通知是否重复，连接是否在退避期间被长期占用。并发测试需要使用项目所部署的 PostgreSQL 版本和实际事务封装；ORM 可能自动开启事务、重试或吞掉某些错误，部署代理也可能影响连接。本文提出的时序和检查均未执行，没有声称某个实现已经通过测试或测得性能。</p>
+<p>选择机制时可以问三个问题：规则能否表达成单行、唯一或互斥约束？如果不能，哪些读写必须共享协调点？调用方能否把一次失败后的完整判断安全重做？答不出来时，不要靠提高隔离级别或增加重试次数掩盖设计缺口。若重试会触发外部副作用，先设计稳定事件身份和恢复协议；如果冲突本来就是用户业务选择相撞，返回冲突可能比重试更正确。有关锁与长事务对运行路径的影响，可结合<a href="/zh-CN/2026/10/09/postgres-explain-evidence/">PostgreSQL 行估算与查询计划的验证边界</a>继续分析。</p>
 
       </div>
       <!--/email_off-->
 
-      
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/transaction-iso.html" rel="noopener">PostgreSQL 18 — 13.2 Transaction Isolation</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/ddl-constraints.html" rel="noopener">PostgreSQL 18 — 5.5 Constraints</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/mvcc-serialization-failure-handling.html" rel="noopener">PostgreSQL 18 — 13.5 Serialization Failure Handling</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/explicit-locking.html" rel="noopener">PostgreSQL 18 — 13.3 Explicit Locking</a></li></ol></section>
       
         <footer class="article-taxonomy">
           <span>标签</span>
@@ -220,6 +236,10 @@
             <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
           
             <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--transactions" href="/zh-CN/tags/Transactions/">Transactions</a>
           
         </footer>
       
@@ -273,11 +293,15 @@
 
         
           
-            <a class="toc-link toc-link--h2" href="#先找跨行约束，而不是先选级别">先找跨行约束，而不是先选级别</a>
+            <a class="toc-link toc-link--h2" href="#两笔都正确的事务，怎样一起做错">两笔都正确的事务，怎样一起做错</a>
           
-            <a class="toc-link toc-link--h2" href="#重试的单位应是完整判断过程">重试的单位应是完整判断过程</a>
+            <a class="toc-link toc-link--h2" href="#先看规则形状，再决定保护机制">先看规则形状，再决定保护机制</a>
           
-            <a class="toc-link toc-link--h2" href="#怎么验证业务没有留下空档">怎么验证业务没有留下空档</a>
+            <a class="toc-link toc-link--h2" href="#40001-的重试必须重放判断">40001 的重试必须重放判断</a>
+          
+            <a class="toc-link toc-link--h2" href="#数据库回滚不会撤销事务外效果">数据库回滚不会撤销事务外效果</a>
+          
+            <a class="toc-link toc-link--h2" href="#如何验证自己保护了哪条规则">如何验证自己保护了哪条规则</a>
           
         
       </nav></details>
@@ -326,20 +350,20 @@
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/23/css-container-query-size-containment/">屏幕很宽，侧栏卡片为什么仍然挤成一团？</a></h3>
-          <p>2026-10-23</p>
+          <h3><a href="/zh-CN/2026/10/13/postgres-advisory-lock-pool/">连接池里的 PostgreSQL 咨询锁，什么时候才会释放？</a></h3>
+          <p>2026-10-13</p>
         </article>
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/23/grpc-status-trailers-result/">HTTP 已经返回 200，gRPC 调用为什么仍然失败？</a></h3>
-          <p>2026-10-23</p>
+          <h3><a href="/zh-CN/2026/10/12/postgres-skip-locked-queue/">SKIP LOCKED 查不到任务，就代表队列空了吗？</a></h3>
+          <p>2026-10-12</p>
         </article>
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/23/http-content-location-representation/">Content-Location 出现以后，客户端应该跳转吗？</a></h3>
-          <p>2026-10-23</p>
+          <h3><a href="/zh-CN/2026/10/12/postgres-vacuum-space-meaning/">VACUUM 完成了，数据库文件为什么没有变小？</a></h3>
+          <p>2026-10-12</p>
         </article>
       
     </div>
