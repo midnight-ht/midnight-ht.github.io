@@ -12,7 +12,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
-  <title>加了行锁仍然死锁：所有入口是否按同一顺序拿锁？ | Midnight blog</title>
+  <title>加了行锁仍然死锁：为什么相关写入路径要统一锁顺序？ | Midnight blog</title>
   
     <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
     
@@ -29,10 +29,10 @@
     <link rel="apple-touch-icon" href="/img/favicon.ico">
   
   
-    <meta name="description" content="PostgreSQL 18 会中止死锁中的一个事务；一致拿锁顺序需要覆盖全部写入入口，重试应回到完整业务事务边界。">
+    <meta name="description" content="PostgreSQL 19 会检测并解除死锁等待环，但不会替应用保证业务成功。本文说明如何统一多资源锁顺序、识别 40P01，并在完整事务边界安全重试。">
   
   
-    <meta name="keywords" content="PostgreSQL18,死锁,锁顺序">
+    <meta name="keywords" content="PostgreSQL 19 死锁,40P01,行锁顺序">
   
   
     <meta name="robots" content="index,follow,max-image-preview:large">
@@ -54,8 +54,8 @@
     <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
   
   
-    <meta property="og:title" content="加了行锁仍然死锁：所有入口是否按同一顺序拿锁？ | Midnight blog">
-    <meta property="og:description" content="PostgreSQL 18 会中止死锁中的一个事务；一致拿锁顺序需要覆盖全部写入入口，重试应回到完整业务事务边界。">
+    <meta property="og:title" content="加了行锁仍然死锁：为什么相关写入路径要统一锁顺序？ | Midnight blog">
+    <meta property="og:description" content="PostgreSQL 19 会检测并解除死锁等待环，但不会替应用保证业务成功。本文说明如何统一多资源锁顺序、识别 40P01，并在完整事务边界安全重试。">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/">
     <meta property="og:site_name" content="Midnight blog">
@@ -64,7 +64,7 @@
     <meta name="twitter:card" content="summary">
   
   
-    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/","name":"加了行锁仍然死锁：所有入口是否按同一顺序拿锁？ | Midnight blog","description":"PostgreSQL 18 会中止死锁中的一个事务；一致拿锁顺序需要覆盖全部写入入口，重试应回到完整业务事务边界。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/","headline":"加了行锁仍然死锁：所有入口是否按同一顺序拿锁？","description":"PostgreSQL 18 会中止死锁中的一个事务；一致拿锁顺序需要覆盖全部写入入口，重试应回到完整业务事务边界。","inLanguage":"zh-CN","datePublished":"2026-10-09T19:23:32.000Z","dateModified":"2026-10-09T19:23:32.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Development, Engineering, PostgreSQL18"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"加了行锁仍然死锁：所有入口是否按同一顺序拿锁？","item":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/"}]}]}</script>
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/","name":"加了行锁仍然死锁：为什么相关写入路径要统一锁顺序？ | Midnight blog","description":"PostgreSQL 19 会检测并解除死锁等待环，但不会替应用保证业务成功。本文说明如何统一多资源锁顺序、识别 40P01，并在完整事务边界安全重试。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/","headline":"加了行锁仍然死锁：为什么相关写入路径要统一锁顺序？","description":"PostgreSQL 19 会检测并解除死锁等待环，但不会替应用保证业务成功。本文说明如何统一多资源锁顺序、识别 40P01，并在完整事务边界安全重试。","inLanguage":"zh-CN","datePublished":"2026-10-09T19:23:32.000Z","dateModified":"2026-11-25T16:00:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Development, Engineering, PostgreSQL19"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"加了行锁仍然死锁：为什么相关写入路径要统一锁顺序？","item":"https://www.zyweb.vip/zh-CN/2026/10/10/postgres-deadlock-order/"}]}]}</script>
   
   <meta name="theme-color" content="#080b10">
   
@@ -141,10 +141,10 @@
       <time datetime="2026-10-09T19:23:32.000Z">2026-10-10</time>
     </div>
 
-    <h1>加了行锁仍然死锁：所有入口是否按同一顺序拿锁？</h1>
+    <h1>加了行锁仍然死锁：为什么相关写入路径要统一锁顺序？</h1>
 
     
-      <p class="post-hero__summary">PostgreSQL 18 会中止死锁中的一个事务；一致拿锁顺序需要覆盖全部写入入口，重试应回到完整业务事务边界。</p>
+      <p class="post-hero__summary">PostgreSQL 19 会检测并解除死锁等待环，但不会替应用保证业务成功。本文说明如何统一多资源锁顺序、识别 40P01，并在完整事务边界安全重试。</p>
     
 
     <div class="post-hero__meta">
@@ -163,7 +163,7 @@
         
 
 
-        <small>更新于 <time datetime="2026-10-09T19:23:32.000Z">2026-10-10</time> · 预计阅读 3 分钟</small>
+        <small>更新于 <time datetime="2026-11-25T16:00:00.000Z">2026-11-26</time> · 预计阅读 9 分钟</small>
       </div>
     </div>
 
@@ -198,15 +198,27 @@
       
       <!--email_off-->
       <div class="article-content">
-        <p>行锁能协调对同一数据的写入，却不能保证多项资源的获取顺序不会形成等待环。排查死锁时，应看所有写入入口怎样排序资源，而不只看报错语句是否已经加锁。失败后的重试也需要回到业务事务边界，不能只把最后一条语句再发一次。本文讨论假设的库存调拨，没有执行并发实验。</p>
-<h2 id="每个入口都合理，组合仍可能互相等待"><a href="#每个入口都合理，组合仍可能互相等待" class="headerlink" title="每个入口都合理，组合仍可能互相等待"></a>每个入口都合理，组合仍可能互相等待</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/explicit-locking.html#LOCKING-DEADLOCKS">PostgreSQL 十八版显式锁文档</a>说明数据库会检测死锁并中止其中一个事务，不能依赖它总是选择某个确定的事务。原文建议多个对象使用一致的拿锁顺序，并避免长时间保持事务。本篇描述该机制，不推断实际系统中哪一条请求会失败。</p>
-<p>假设甲流程先减少仓库甲库存，再增加仓库乙；乙流程反向调拨，先减少仓库乙，再增加仓库甲。两边都遵守了“更新前锁定库存”，却可能各持有一个对方需要的锁。业务操作顺序与拿锁顺序不必相同：可以先按稳定资源标识获取需要的锁，再在已锁定范围内执行业务变化。这是设计建议，不是所有库存模型的完整实现。</p>
-<p>排序规则需要被所有入口采用。在线接口按仓库编号排序，补偿任务按消息顺序更新，批量管理工具按文件顺序处理，仍然可能产生相反顺序。列出接口、后台任务、管理脚本和数据修复路径，检查它们是否共享同一个资源比较规则。只修改最常见入口可能降低出现机会，但不能据此宣称死锁已经消失。</p>
-<h2 id="缩短事务，不靠延长等待掩盖问题"><a href="#缩短事务，不靠延长等待掩盖问题" class="headerlink" title="缩短事务，不靠延长等待掩盖问题"></a>缩短事务，不靠延长等待掩盖问题</h2><p>外部接口调用、用户确认和慢速文件读取不宜无条件放在持锁事务里。可以预先准备输入，再进入短事务检查当前状态并写入；需要写后发消息时，还应单独设计消息交接。把超时时间调长可能让等待堆积更久，却不会删除等待环本身。选择等待策略时也要考虑请求预算和调用者恢复能力。</p>
-<p>死锁发生后，应用应识别事务失败，回滚并根据明确的策略重新读取必要状态，再尝试完整操作。已有的外部副作用不能因为数据库回滚就被当作没有发生。若发送通知或扣款在事务外完成，重试必须尊重对应幂等规则；相关问题见<a href="/zh-CN/2026/10/09/postgres-transaction-outbox/">事务与消息交接</a>。</p>
-<p>重试次数、间隔和最终提示应有上限及所有者。无限重试可能把一次竞争变成持续负载；直接吞掉错误又会让调用者误以为库存已经移动。业务能够接受延迟时可以异步恢复，但需要可查询的状态，不能把排队成功写成调拨成功。这里没有测得最佳间隔，也不提供适用于所有负载的固定数值。</p>
-<h2 id="用等待关系验证修复"><a href="#用等待关系验证修复" class="headerlink" title="用等待关系验证修复"></a>用等待关系验证修复</h2><p>建议在测试环境构造相反方向的调拨、批量更新与补偿并发，保存实际等待对象和事务入口。修复后不仅看错误计数，还要确认业务结果、重试上限和失败提示符合预期。测试规模和调度条件会限制结论，没复现不等于所有真实竞争都被覆盖。</p>
-<p>本文没有运行这些测试。生产排查应保留可关联的请求与事务信息，避免把敏感业务字段直接写进日志。评审时要求每个写入入口解释资源顺序与失败恢复边界，才能判断行锁承担的是一致性责任，还是只增加了一个看起来安全的步骤。</p>
+        <p>PostgreSQL 19 能检测死锁并中止其中一个事务，但这只是解除等待环，不等于业务操作已经完成。即使每条 SQL 都正确使用行锁，只要两个事务按相反顺序取得多行或多类锁，仍可能互相等待。修复时要把所有写入入口纳入一条可检查的资源排序规则；捕获 <code>40P01</code> 后，也要从重新读取业务状态开始重跑完整事务，而不是孤立重放报错语句。下面用假设的库存调拨解释机制，没有执行数据库或并发测试。</p>
+<p>本文以 2026 年 11 月 19 日发布的 PostgreSQL 19 官方文档为版本基线。锁等待、死锁和 SQLSTATE 的机制沿用 PostgreSQL 19 文档描述；若部署运行其他主版本，应查对应版本文档并核对驱动如何暴露错误码。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/19/release-19.html">PostgreSQL 19 发布说明</a>列明发布日期；本文不声称已在 19 上运行示例。</p>
+<h2 id="行锁保护行，不会替事务安排顺序"><a href="#行锁保护行，不会替事务安排顺序" class="headerlink" title="行锁保护行，不会替事务安排顺序"></a>行锁保护行，不会替事务安排顺序</h2><p>行锁的工作范围是明确的：<code>SELECT ... FOR UPDATE</code> 会锁住查询返回的行，其他尝试更新或以冲突模式锁定相同行的事务需要等待；事务结束或回滚时锁释放。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/19/explicit-locking.html#LOCKING-ROWS">PostgreSQL 19 行级锁文档</a>说明了这一行为。它让同一行的并发改写互相协调，却不会自动为一组行选择全局统一的取得顺序。</p>
+<p>设库存表有两个仓库：仓库 17 有 8 件商品，仓库 42 有 3 件。请求 A 把 2 件从 17 调到 42，请求 B 把 1 件从 42 调回 17。A 先锁 17，再锁 42；B 先锁 42，再锁 17。A 持有 17 等待 42，B 持有 42 等待 17，等待关系成环。给两条路径都加上 <code>FOR UPDATE</code> 并不能拆掉这个环，因为锁起作用了，问题恰好是它们以不同顺序起作用。</p>
+<p>官方文档给出同类例子：两个事务先分别锁定不同账户，再互相请求对方的账户行；服务端会检测并中止其中一个事务，且不保证固定选择哪个事务。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/19/explicit-locking.html#LOCKING-DEADLOCKS">显式锁与死锁</a>还建议，对多个对象的锁请求保持一致顺序，并在同一对象需要多种模式时先取得最终需要的更强模式。这里的关键不是“多加锁”，而是让所有参与者遵守同一个部分顺序。</p>
+<h2 id="把业务操作顺序与锁顺序分开"><a href="#把业务操作顺序与锁顺序分开" class="headerlink" title="把业务操作顺序与锁顺序分开"></a>把业务操作顺序与锁顺序分开</h2><p>在假设的调拨中，业务上仍然是“从来源仓减 2，再向目的仓加 2”；锁顺序则可按仓库主键升序取得。概念流程是：开始事务；规范化并验证来源、目的和数量；按仓库 ID 排序；按排序逐个锁定两行；重新读取锁定后的库存并检查条件；再执行两项更新；最后提交。这样，无论转移方向如何，涉及 17 和 42 的事务都会先申请 17，再申请 42。</p>
+<p>这只是设计示例，具体 SQL、隔离级别、约束和更新策略需按表结构验证。不要仅凭一条 <code>UPDATE ... WHERE id IN (...)</code> 就假设执行器会按某种业务想象中的顺序逐行取得锁；若顺序是正确性的防线，应采用在本系统里可以证实的锁定路径，并通过实际执行与并发测试确认。排序也必须处理重复 ID、空资源集、父子资源及跨表锁，规则应定义在“资源键”上，而不是散落在各入口里的临时比较方式。</p>
+<p>写入入口清单往往比逐条抄 SQL 更有诊断价值：用户 API、批处理、补偿 worker、管理端操作、定时任务和数据修复脚本，只要会锁同一批资源，就属于同一个竞争域。假设在线请求按仓库 ID 排序，但补偿任务按消息里的行项目顺序更新，另一个后台重算流程先锁订单再锁库存；数据库看到的仍是多个互不知情的参与者。只修主 API 后，等待关系可能变少，却没有形成全局不变量。</p>
+<p>顺序还要覆盖不同锁类型。事务可能先取得表级锁，再取得行级锁；触发器、外键检查或扩展逻辑也可能使写操作访问调用者未直接列出的对象。表锁、行锁和 advisory lock 各有不同机制；应用自定义的 advisory lock 也要由所有相关路径共同遵守。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/19/explicit-locking.html#ADVISORY-LOCKS">官方 advisory lock 说明</a>指出，锁的含义由应用定义，数据库不会强制每个写入者都先取它。因此，设计一张资源顺序图时，至少应记录锁类别、资源键、获取时点和释放边界；若两种顺序不能统一，必须解释它们为何不会进入同一等待环。</p>
+<h2 id="等待变长不是死锁修复"><a href="#等待变长不是死锁修复" class="headerlink" title="等待变长不是死锁修复"></a>等待变长不是死锁修复</h2><p>死锁与普通锁等待不同。普通等待只有阻塞链，通常存在一个事务可以继续并最终释放锁；死锁则形成等待环，参与者都在等环内其他参与者释放资源。官方死锁说明指出，只要没有检测到死锁，冲突锁请求可能一直等待，因此让事务跨越网络请求、人工确认、文件读取或不受控的外部调用，会扩大持锁窗口。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/19/explicit-locking.html#LOCKING-DEADLOCKS">死锁章节</a>建议避免长时间保持事务。延长客户端超时只能改变调用者等待多久，不会消除数据库中的循环依赖；缩短事务可以降低暴露窗口，但也不能替代锁顺序规则。</p>
+<p>另一个常见误区是把 <code>SERIALIZABLE</code> 当成消灭死锁的总开关。隔离级别定义并发事务可观察到的数据一致性，不保证没有锁等待、死锁或事务重试。在 PostgreSQL 19 中，<code>40001</code> 表示 serialization failure，<code>40P01</code> 表示 deadlock detected；官方建议遇到序列化失败时重试完整事务，也指出死锁失败可能适合重试。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/19/mvcc-serialization-failure-handling.html">PostgreSQL 19 的序列化失败处理</a>明确说重试必须包含决定发出哪些 SQL、使用哪些值的全部逻辑。服务端不会替应用自动重试，因为它无法保证重放正确。</p>
+<p>因此，日志和驱动处理应优先读取 SQLSTATE，而不是解析本地化错误消息中的英文句子。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/19/errcodes-appendix.html">错误码附录</a>列出 PostgreSQL 19 的五字符错误码。应用可把 <code>40P01</code> 和 <code>40001</code> 分开计数、采集事务类型及脱敏后的请求关联 ID，随后查看对应事务的语句路径和等待对象。生产排障可结合 <code>pg_locks</code> 等官方视图，但快照只能显示观察时点，不能单凭某次快照断言整个服务都遵循同一顺序。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/19/monitoring-locks.html">锁管理文档</a></p>
+<h2 id="为什么只重放最后一条语句会写错业务"><a href="#为什么只重放最后一条语句会写错业务" class="headerlink" title="为什么只重放最后一条语句会写错业务"></a>为什么只重放最后一条语句会写错业务</h2><p>事务因死锁被中止后，其数据库修改会回滚。若应用只捕获异常并重发最后一条 SQL，它可能跳过事务开头的余额、状态或权限检查，也可能继续使用第一次事务读到的旧值。正确的重试单位是从事务开始重新读取必要状态、重新验证条件、再按同一规则取得锁和执行更新。重试应有有限次数、可控的退避与清晰的最终失败反馈；这些属于应用策略，并非数据库提供的固定默认重试次数或最佳等待时间。</p>
+<p>重跑完整事务仍不能让数据库回滚事务外已经发生的副作用。假设一次调拨事务提交前，应用已向消息系统发出“库存已移动”，随后数据库报告死锁并回滚；消费者看到的事实就与数据库不一致。若副作用必须与提交结果同步，应采用适合系统的一致性交接设计，例如事务性 outbox，并让下游具备幂等消费能力。关于提交与消息交接的边界，可参见<a href="/zh-CN/2026/10/09/postgres-transaction-outbox/">事务与消息交接</a>; 这里不假定任何特定队列或 outbox 实现。</p>
+<p>即使消息发送放在提交后，进程也可能在数据库提交成功后、客户端收到确认前断开，重试整个操作就可能重复提交。业务操作需要稳定的幂等键或可查询的操作状态，且规则要能区分“上次未提交”“已提交但响应丢失”和“最终失败”。有些外部操作无法纳入数据库事务，也无法由幂等键完全去重，此时补偿和人工处理边界要显式设计，不能以“自动重试”掩盖不确定结果。</p>
+<h2 id="如何验证一条排序规则确实落到了所有入口？"><a href="#如何验证一条排序规则确实落到了所有入口？" class="headerlink" title="如何验证一条排序规则确实落到了所有入口？"></a>如何验证一条排序规则确实落到了所有入口？</h2><p>先把流程表和写入路径列出来，而不是先在生产反复重试：每个入口有哪些资源，先取哪种锁，是否调用触发器或外部服务，失败后从哪个边界恢复。再检查同一资源集合的顺序是否一致，以及资源集合是否可能在排序后又被并发新增或替换。若集合无法在并发变化下稳定确定，仅对已读到的 ID 排序并不能自动保护“全集”不变，可能还需要更高层的业务约束、显式协调或序列化策略。具体选择要看允许的并发度和写入范围。</p>
+<p>在隔离的测试数据库中，可以构造方向相反的两笔调拨，让每个事务先取得其第一把锁，再触发第二把锁；记录实际的 SQLSTATE、等待对象、事务入口和最终库存守恒结果。再增加批处理、补偿与跨表路径，确认它们遵守同一规则。修复后需要验证两件事：等待环是否不再由这些排序路径产生；被中止并重试或最终失败的业务操作是否恰好按产品规则落账。只看死锁计数下降不够，因为测试流量可能没有触发旧竞争窗口；只看库存总量也不够，因为重复调拨可能在总量守恒的同时写错归属。</p>
+<p>如果死锁仍出现，先不要把它当作排序设计已无效：检查等待图涉及的是哪类锁、是否有未纳入清单的表/行锁、触发器、外键或 advisory lock，以及某个入口是否采用不同资源键。锁顺序只能消除它所覆盖的冲突集合中的一种循环构造，不能证明任意 SQL、迁移任务和第三方扩展之间永远不会发生死锁。测试建议尚未执行，本文没有真实错误率或性能结果。</p>
+<h2 id="哪些情况下不应只靠统一排序？"><a href="#哪些情况下不应只靠统一排序？" class="headerlink" title="哪些情况下不应只靠统一排序？"></a>哪些情况下不应只靠统一排序？</h2><p>如果操作只修改一行，互相反向获取多项锁的风险可能较低，但外键检查、触发器或其他事务仍可能带入额外锁；单行写不等于系统整体没有死锁。若请求涉及的资源集合动态变化、跨租户关联或层级关系，完整排序规则可能难以定义。这时应先确认业务不变量能否用约束、单一协调记录、分区级串行化或其他机制表达，再比较锁范围变窄带来的并发损失和协调点造成的排队。</p>
+<p>显式 advisory lock 适合数据库行模型难以直接表达的互斥键，但它是合作协议：漏掉一个入口就漏掉保护，而且必须处理锁键碰撞、锁生命周期及事务级或会话级语义。会话级锁与事务回滚并不完全遵循事务语义，而事务级锁在事务结束时释放；<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/19/explicit-locking.html#ADVISORY-LOCKS">PostgreSQL 19 advisory lock 文档</a>说明了这一区别。使用前应按实际版本文档确认调用形式和失败边界。</p>
+<p>决策可以归结为几个可核对的问题：哪些对象构成一次业务操作？所有写入路径能否拿到同一份排序键？排序后集合是否稳定？异常是否能让完整业务事务安全重试？外部副作用能否与提交结果对齐？若任一答案是否定的，单独给 SQL 添行锁就不是完整方案。先统一资源顺序，无法统一时明确协调方式，再验证死锁恢复和业务结果，才能说明行锁究竟保护了什么。</p>
 
       </div>
       <!--/email_off-->
@@ -220,7 +232,7 @@
           
             <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
           
-            <a class="tag tag--postgresql18" href="/zh-CN/tags/PostgreSQL18/">PostgreSQL18</a>
+            <a class="tag tag--postgresql19" href="/zh-CN/tags/PostgreSQL19/">PostgreSQL19</a>
           
         </footer>
       
@@ -238,11 +250,11 @@
         <span>分享</span>
         <div>
           
-            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F10%2Fpostgres-deadlock-order%2F&text=%E5%8A%A0%E4%BA%86%E8%A1%8C%E9%94%81%E4%BB%8D%E7%84%B6%E6%AD%BB%E9%94%81%EF%BC%9A%E6%89%80%E6%9C%89%E5%85%A5%E5%8F%A3%E6%98%AF%E5%90%A6%E6%8C%89%E5%90%8C%E4%B8%80%E9%A1%BA%E5%BA%8F%E6%8B%BF%E9%94%81%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F10%2Fpostgres-deadlock-order%2F&text=%E5%8A%A0%E4%BA%86%E8%A1%8C%E9%94%81%E4%BB%8D%E7%84%B6%E6%AD%BB%E9%94%81%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88%E7%9B%B8%E5%85%B3%E5%86%99%E5%85%A5%E8%B7%AF%E5%BE%84%E8%A6%81%E7%BB%9F%E4%B8%80%E9%94%81%E9%A1%BA%E5%BA%8F%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
           
             <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F10%2Fpostgres-deadlock-order%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
           
-            <a href="mailto:?subject=%E5%8A%A0%E4%BA%86%E8%A1%8C%E9%94%81%E4%BB%8D%E7%84%B6%E6%AD%BB%E9%94%81%EF%BC%9A%E6%89%80%E6%9C%89%E5%85%A5%E5%8F%A3%E6%98%AF%E5%90%A6%E6%8C%89%E5%90%8C%E4%B8%80%E9%A1%BA%E5%BA%8F%E6%8B%BF%E9%94%81%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F10%2Fpostgres-deadlock-order%2F" aria-label="邮件分享" title="邮件分享">@</a>
+            <a href="mailto:?subject=%E5%8A%A0%E4%BA%86%E8%A1%8C%E9%94%81%E4%BB%8D%E7%84%B6%E6%AD%BB%E9%94%81%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88%E7%9B%B8%E5%85%B3%E5%86%99%E5%85%A5%E8%B7%AF%E5%BE%84%E8%A6%81%E7%BB%9F%E4%B8%80%E9%94%81%E9%A1%BA%E5%BA%8F%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F10%2Fpostgres-deadlock-order%2F" aria-label="邮件分享" title="邮件分享">@</a>
           
         </div>
       </section>
@@ -274,11 +286,17 @@
 
         
           
-            <a class="toc-link toc-link--h2" href="#每个入口都合理，组合仍可能互相等待">每个入口都合理，组合仍可能互相等待</a>
+            <a class="toc-link toc-link--h2" href="#行锁保护行，不会替事务安排顺序">行锁保护行，不会替事务安排顺序</a>
           
-            <a class="toc-link toc-link--h2" href="#缩短事务，不靠延长等待掩盖问题">缩短事务，不靠延长等待掩盖问题</a>
+            <a class="toc-link toc-link--h2" href="#把业务操作顺序与锁顺序分开">把业务操作顺序与锁顺序分开</a>
           
-            <a class="toc-link toc-link--h2" href="#用等待关系验证修复">用等待关系验证修复</a>
+            <a class="toc-link toc-link--h2" href="#等待变长不是死锁修复">等待变长不是死锁修复</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么只重放最后一条语句会写错业务">为什么只重放最后一条语句会写错业务</a>
+          
+            <a class="toc-link toc-link--h2" href="#如何验证一条排序规则确实落到了所有入口？">如何验证一条排序规则确实落到了所有入口？</a>
+          
+            <a class="toc-link toc-link--h2" href="#哪些情况下不应只靠统一排序？">哪些情况下不应只靠统一排序？</a>
           
         
       </nav></details>
@@ -327,20 +345,20 @@
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/10/postgres-jsonb-query-index/">JSONB 有 GIN 索引，为什么键存在查询仍可能用不上？</a></h3>
-          <p>2026-10-10</p>
+          <h3><a href="/zh-CN/2026/10/23/css-container-query-size-containment/">屏幕很宽，侧栏卡片为什么仍然挤成一团？</a></h3>
+          <p>2026-10-23</p>
         </article>
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/10/postgres-pagination-order/">翻页有重复：LIMIT 之外还要约定什么？</a></h3>
-          <p>2026-10-10</p>
+          <h3><a href="/zh-CN/2026/10/23/grpc-status-trailers-result/">HTTP 已经返回 200，gRPC 调用为什么仍然失败？</a></h3>
+          <p>2026-10-23</p>
         </article>
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/10/postgres-unique-null/">唯一约束存在，为什么还能保存两个空值？</a></h3>
-          <p>2026-10-10</p>
+          <h3><a href="/zh-CN/2026/10/23/http-content-location-representation/">Content-Location 出现以后，客户端应该跳转吗？</a></h3>
+          <p>2026-10-23</p>
         </article>
       
     </div>
