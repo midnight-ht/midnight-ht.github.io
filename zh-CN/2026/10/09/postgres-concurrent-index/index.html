@@ -29,10 +29,10 @@
     <link rel="apple-touch-icon" href="/img/favicon.ico">
   
   
-    <meta name="description" content="PostgreSQL 18 并发建索引仍有事务等待、资源开销和失败状态，需要以有效性及业务负载验收。">
+    <meta name="description" content="PostgreSQL 并发建索引不挡普通写入，却仍有扫描、事务等待和失败状态。按阶段看进度，再用索引有效性和查询验证决定是否验收。">
   
   
-    <meta name="keywords" content="PostgreSQL 18,并发索引,数据库发布">
+    <meta name="keywords" content="PostgreSQL 并发建索引,CREATE INDEX CONCURRENTLY,pg_stat_progress_create_index,索引有效性">
   
   
     <meta name="robots" content="index,follow,max-image-preview:large">
@@ -55,7 +55,7 @@
   
   
     <meta property="og:title" content="生产建索引用了 CONCURRENTLY，为什么还在等？ | Midnight blog">
-    <meta property="og:description" content="PostgreSQL 18 并发建索引仍有事务等待、资源开销和失败状态，需要以有效性及业务负载验收。">
+    <meta property="og:description" content="PostgreSQL 并发建索引不挡普通写入，却仍有扫描、事务等待和失败状态。按阶段看进度，再用索引有效性和查询验证决定是否验收。">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/">
     <meta property="og:site_name" content="Midnight blog">
@@ -64,7 +64,7 @@
     <meta name="twitter:card" content="summary">
   
   
-    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/","name":"生产建索引用了 CONCURRENTLY，为什么还在等？ | Midnight blog","description":"PostgreSQL 18 并发建索引仍有事务等待、资源开销和失败状态，需要以有效性及业务负载验收。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/","headline":"生产建索引用了 CONCURRENTLY，为什么还在等？","description":"PostgreSQL 18 并发建索引仍有事务等待、资源开销和失败状态，需要以有效性及业务负载验收。","inLanguage":"zh-CN","datePublished":"2026-10-08T19:18:41.000Z","dateModified":"2026-10-08T19:18:41.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Delivery, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"生产建索引用了 CONCURRENTLY，为什么还在等？","item":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/"}]}]}</script>
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/","name":"生产建索引用了 CONCURRENTLY，为什么还在等？ | Midnight blog","description":"PostgreSQL 并发建索引不挡普通写入，却仍有扫描、事务等待和失败状态。按阶段看进度，再用索引有效性和查询验证决定是否验收。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/","headline":"生产建索引用了 CONCURRENTLY，为什么还在等？","description":"PostgreSQL 并发建索引不挡普通写入，却仍有扫描、事务等待和失败状态。按阶段看进度，再用索引有效性和查询验证决定是否验收。","inLanguage":"zh-CN","datePublished":"2026-10-08T19:18:41.000Z","dateModified":"2026-11-26T20:30:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/sql-createindex.html","https://www.postgresql.org/docs/19/sql-createindex.html","https://www.postgresql.org/docs/18/progress-reporting.html","https://www.postgresql.org/docs/19/progress-reporting.html","https://www.postgresql.org/docs/18/catalog-pg-index.html","https://www.postgresql.org/docs/18/functions-info.html","https://www.postgresql.org/about/news/postgresql-19-released-3449/"],"keywords":"Delivery, Engineering, PostgreSQL, Database"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"生产建索引用了 CONCURRENTLY，为什么还在等？","item":"https://www.zyweb.vip/zh-CN/2026/10/09/postgres-concurrent-index/"}]}]}</script>
   
   <meta name="theme-color" content="#080b10">
   
@@ -144,7 +144,7 @@
     <h1>生产建索引用了 CONCURRENTLY，为什么还在等？</h1>
 
     
-      <p class="post-hero__summary">PostgreSQL 18 并发建索引仍有事务等待、资源开销和失败状态，需要以有效性及业务负载验收。</p>
+      <p class="post-hero__summary">PostgreSQL 并发建索引不挡普通写入，却仍有扫描、事务等待和失败状态。按阶段看进度，再用索引有效性和查询验证决定是否验收。</p>
     
 
     <div class="post-hero__meta">
@@ -163,7 +163,7 @@
         
 
 
-        <small>更新于 <time datetime="2026-10-08T19:18:41.000Z">2026-10-09</time> · 预计阅读 3 分钟</small>
+        <small>更新于 <time datetime="2026-11-26T20:30:00.000Z">2026-11-27</time> · 预计阅读 7 分钟</small>
       </div>
     </div>
 
@@ -195,24 +195,36 @@
 
       
 
-      
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>CONCURRENTLY 减少普通写入被建索引挡住的时间，但增加扫描、等待和资源消耗；命令耗时不能单独判断故障。</li><li>pg_stat_progress_create_index 的 phase 和计数是诊断入口；阶段切换时计数语义会变化，不能把单个百分比当总进度。</li><li>命令失败后要核对 pg_index 状态；无效索引可能继续占空间并增加写入维护成本，唯一索引还可能已开始约束写入。</li></ul></section>
       <!--email_off-->
       <div class="article-content">
-        <p>CREATE INDEX CONCURRENTLY 允许常规写入继续进行，但并不承诺立即完成或完全没有业务代价。生产变更应同时观察事务等待、资源负载和索引有效性，不能只等部署脚本的超时。下面按 PostgreSQL 18 文档讨论变更计划，没有在生产库执行索引操作。</p>
-<h2 id="在线构建为什么仍然会等待"><a href="#在线构建为什么仍然会等待" class="headerlink" title="在线构建为什么仍然会等待"></a>在线构建为什么仍然会等待</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/sql-createindex.html">PostgreSQL 18 的 CREATE INDEX 文档</a>说明，并发方式需要额外扫描和事务等待，工作量比普通方式更多；失败时也可能留下无效索引。它不能在事务块中执行。因此迁移工具若默认把整个文件包在一个事务里，必须先确认支持这种操作的运行方式。</p>
-<p>假设订单查询需要新索引，而库里仍有长时间未结束的事务。构建过程等待不必然意味着数据库已经死锁，也可能是在等待满足阶段条件。此时盲目取消再运行，既未消除原因，又增加了清理责任。应该先找到等待对象、持续时间及拥有者，并由变更负责人协调处理长事务，再决定继续、取消还是调整窗口。</p>
-<h2 id="上线计划需要包含停止条件"><a href="#上线计划需要包含停止条件" class="headerlink" title="上线计划需要包含停止条件"></a>上线计划需要包含停止条件</h2><p>候选计划可以先记录表规模、现有索引、预期查询、剩余存储空间和变更负责人。执行期间观察业务延迟与错误、数据库负载、等待事件和构建进度。阈值必须依据本服务的约定，不抄一个“通用安全百分比”就视为可用。</p>
-<p>构建耗时也不等于业务不可用时长。反过来，即使写入未被常规表锁挡住，额外扫描仍可能争用资源，使业务变慢。应把数据库侧状态与用户结果放在一起判断，避免因为“没有锁表”就忽略明显的服务退化。必要时先降低其他后台任务的资源竞争。</p>
-<p>失败处置要看目录里的真实状态。无效索引可能占空间并带来维护成本，不能因为查询计划没有使用它就当作不存在。清理或重建之前，确认索引名称、归属表和失败原因，防止脚本误操作同名但不同用途的对象。具体命令应由有权限的操作人员在确认环境后执行。</p>
-<h2 id="命令完成之后还要验证什么"><a href="#命令完成之后还要验证什么" class="headerlink" title="命令完成之后还要验证什么"></a>命令完成之后还要验证什么</h2><p>索引有效只是第一步。还要用真实代表性的查询参数检查计划选择及业务耗时，考虑数据分布和缓存条件。新增索引不保证优化器必定采用，也不保证所有查询更快；写入维护成本需要在变更后持续观察。不要把一次本地短查询当作生产收益证据。</p>
-<p>对迁移工具，建议在预演环境检查事务包装、失败后的重跑行为和日志归档。如果重跑只看到对象已存在就跳过，而不检查有效性，可能把失败状态固化成“迁移完成”。本文未执行预演，这些是上线前需要补齐的验收项目。</p>
-<p>什么时候不用并发方式？可控维护窗口中的小表变更，普通构建可能更简单；是否接受写入阻塞应由业务安排决定，而不是默认所有表都必须并发。更复杂的分区和唯一性场景还需逐项阅读对应限制，不能把本例扩展成通用数据库发布脚本。</p>
-<p>把索引变更当作有阶段状态的操作：开始、等待、完成、有效、查询验证和清理各自留证。若新增索引的理由仍只是“查询慢”，先回到<a href="/zh-CN/2026/10/09/postgres-explain-evidence/">EXPLAIN 的证据检查</a>，确认主要问题确实来自访问方式。</p>
+        <p><code>CREATE INDEX CONCURRENTLY</code> 不会像普通建索引那样挡住表上的常规写入，但它并不承诺立即完成，也不承诺没有资源代价。它需要额外扫描，并等待可能影响构建的事务或旧快照结束。看到命令持续运行时，先看阶段，再判断是在等待、扫描还是被业务负载拖慢；不要只凭超时就取消重跑。本文的原始版本边界是 PostgreSQL 18，下面也核对了 PostgreSQL 19 文档；没有连接数据库或实际执行这些示例。</p>
+<h2 id="并发建索引绕过了什么，又增加了什么？"><a href="#并发建索引绕过了什么，又增加了什么？" class="headerlink" title="并发建索引绕过了什么，又增加了什么？"></a>并发建索引绕过了什么，又增加了什么？</h2><p>普通 <code>CREATE INDEX</code> 通常会在构建期间阻止该表上的写入。<code>CONCURRENTLY</code> 选择另一种取舍：让普通 INSERT、UPDATE、DELETE 尽量继续，同时把工作拆成多个事务阶段，执行两次表扫描，并等待已有事务在特定阶段结束。额外扫描会消耗 CPU 和 I/O，所以“不挡写入”不等于“应用延迟不变”。在写入繁忙、磁盘带宽紧张的库里，索引构建可能和业务查询争资源，即使没有一个明显的长锁挡住写请求。</p>
+<p>PostgreSQL 18 和 19 的 <code>CREATE INDEX</code> 文档都描述了这些扫描与等待阶段。PostgreSQL 19 于 2026-11-19 发布；它另有 <code>REPACK</code> 命令，但 <code>REPACK</code> 与 <code>CREATE INDEX CONCURRENTLY</code> 不是同一项操作。不能因为版本升级，就把这篇针对创建新索引的说明套用到重整表空间或重建既有索引的流程。执行前应确认数据库主版本，再读相应版本的命令限制和进度字段。</p>
+<p>一个并发构建会先把索引登记为暂时无效的目录对象，再分阶段扫描和验证。建索引进程需要等可能改动表的事务结束；完成第二次扫描后，还会等持有较早快照的事务结束，才把索引标成可供查询使用的有效状态。因此，一个事务拖住最后阶段，并不说明扫描线程停止工作，更不能由此推断数据库已经死锁。阶段名回答“当前在做什么”，等待对象和事务开始时间则帮助回答“为什么还没过去”。</p>
+<h2 id="怎么分辨在等事务，还是扫描本身很慢？"><a href="#怎么分辨在等事务，还是扫描本身很慢？" class="headerlink" title="怎么分辨在等事务，还是扫描本身很慢？"></a>怎么分辨在等事务，还是扫描本身很慢？</h2><p>PostgreSQL 18、19 都提供 <code>pg_stat_progress_create_index</code>，每个正在执行 CREATE INDEX 或 REINDEX 的后端有一行状态。视图会报告 <code>phase</code>；在扫描阶段可观察 <code>blocks_done</code>、<code>blocks_total</code> 等计数，在等待阶段则有 <code>lockers_done</code>、<code>lockers_total</code> 和 <code>current_locker_pid</code>。一个只读观察查询可以是：</p>
+<pre><code class="sql">SELECT p.pid, p.command, p.phase,
+       p.blocks_done, p.blocks_total,
+       p.tuples_done, p.tuples_total,
+       p.lockers_done, p.lockers_total, p.current_locker_pid,
+       a.state, a.wait_event_type, a.wait_event, a.xact_start, a.query
+FROM pg_stat_progress_create_index AS p
+LEFT JOIN pg_stat_activity AS a USING (pid);
+</code></pre>
+<p>这是供操作人员按环境核对的查询样例，本文没有在 PostgreSQL 实例里执行；权限、视图字段和连接方式都应对照目标主版本检查。<code>building index</code> 时先看扫描计数是否变化，并观察数据库 I/O、CPU 和业务延迟。计数只描述当前阶段；从一次扫描切到验证阶段后，计数可能重新对应另一个工作单元，所以“完成 70%”不能当作整个并发流程的可靠剩余时间估算。等待阶段则先记录 phase、当前等待的 PID、事务开始时间和业务所有者，再确认该事务是否确实需要处理。</p>
+<p>尤其要区分 heavyweight lock 等待和“waiting for old snapshots”。<code>pg_blocking_pids()</code> 能返回阻止某会话获取锁的进程 ID；但一个空数组不能证明并发建索引已没有事务等待，因为旧快照等待与锁阻塞不是同一个观察问题。进度视图中的阶段和 locker 信息应与 <code>pg_stat_activity</code> 一起看，必要时再和事务负责人核实。统计信息、查询文本也可能受权限影响；不要把观测查询当作能自动识别所有根因的诊断器。</p>
+<p>假设订单表需要按创建时间与状态查询建立索引。团队观察到构建停留在 <code>waiting for writers before validation</code>，并发现一个事务持续打开数小时。此时的合理动作是确认事务所属任务、是否处于空闲事务、能否由业务负责人安全结束，并同步评估继续等待的写入负载；直接重复启动只会再次进入相似等待。若阶段是 <code>building index</code>，但计数缓慢且磁盘读写繁忙，重点则应转向资源竞争与变更窗口，而不是只找一个持锁会话。这里是解释诊断分支的假设场景，不是实际发生的生产故障。</p>
+<h2 id="命令失败之后，为什么不能只看迁移日志？"><a href="#命令失败之后，为什么不能只看迁移日志？" class="headerlink" title="命令失败之后，为什么不能只看迁移日志？"></a>命令失败之后，为什么不能只看迁移日志？</h2><p><code>CREATE INDEX CONCURRENTLY</code> 失败时，数据库可能留下无效索引。<code>pg_index.indisvalid</code> 表示索引能否安全供查询使用；<code>indisready</code> 表示索引是否已准备好接受写入维护。它们不是同一个布尔值。无效索引可能不能用于查询，却仍占用空间或产生写入维护开销。检查时应同时限定 schema、表、索引名，并查看实际定义和状态，不能只凭命令报错就断定“对象不存在”。</p>
+<p>唯一索引还有一个更隐蔽的失败路径：并发构建到第二次扫描附近时，唯一性约束可能已开始影响其他事务，即使最终命令失败，遗留的无效唯一索引仍可能继续拒绝重复值。对业务来说，这意味着失败不总是“没有发布”；操作人员要评估写请求是否已经看到约束行为，再选择清理或重新构建。普通的非唯一索引不会产生相同的唯一约束副作用，但无效对象仍要处理。</p>
+<p>迁移系统也要匹配数据库命令的事务语义。<code>CREATE INDEX CONCURRENTLY</code> 不能放在事务块中；若迁移工具把整个脚本自动包进一个事务，命令会报错。重试逻辑若只写 <code>IF NOT EXISTS</code>，也不代表已有同名索引的列、条件和有效状态符合预期；PostgreSQL 文档明确提醒，同名关系可能与本次想创建的索引完全不同。迁移回执应能区分“执行成功、失败遗留、已存在但定义不符、索引有效但查询未采用”等状态。</p>
+<h2 id="什么情况下普通建索引反而更合适？"><a href="#什么情况下普通建索引反而更合适？" class="headerlink" title="什么情况下普通建索引反而更合适？"></a>什么情况下普通建索引反而更合适？</h2><p><code>CONCURRENTLY</code> 的价值是缩短常规写入被建索引阻塞的窗口，不是任何情况下都更快。小表、低流量系统或有明确维护窗口的服务，普通建索引可能更简单、总工作量也更少；如果不能接受写入阻塞，再比较并发方式产生的扫描与资源开销。选择依据应是可承受的写入停顿、表规模、业务峰值、磁盘余量、长期事务情况以及失败清理能力，而不是“生产表一律 CONCURRENTLY”的口号。</p>
+<p>每张表同时只能运行一个并发索引构建，构建期间也不允许对表做其他 schema 修改；这会影响批次并行度。分区表上的并发创建还有单独限制，应看对应版本的 <code>CREATE INDEX</code> 文档，不能把普通表的操作流程直接复制过去。若新索引的理由只是“某查询慢”，先用代表性参数检查<a href="/zh-CN/2026/10/09/postgres-explain-evidence/">EXPLAIN 计划证据</a>，确认索引条件、数据分布和写入成本再排发布窗口。</p>
+<p>命令返回成功也只是一个门槛。要核对 <code>indisvalid</code>、<code>indisready</code>，再观察具有代表性的查询是否采用索引、延迟是否变化，以及写入维护和存储成本是否可接受。表达式索引可能还需要更新统计信息。建议在预演环境覆盖长事务等待、资源变慢、客户端超时、唯一冲突、迁移重试和失败后清理；本文列出的计划没有实际执行，不能当作通过记录。发布回执应分别记录构建阶段、数据库目录状态、查询计划和应用侧结果，避免把“命令不报错”写成“索引带来性能提升”。</p>
 
       </div>
       <!--/email_off-->
 
-      
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/sql-createindex.html" rel="noopener">PostgreSQL 18 — CREATE INDEX</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/19/sql-createindex.html" rel="noopener">PostgreSQL 19 — CREATE INDEX</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/progress-reporting.html" rel="noopener">PostgreSQL 18 — Progress Reporting, CREATE INDEX Progress Reporting</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/19/progress-reporting.html" rel="noopener">PostgreSQL 19 — Progress Reporting, CREATE INDEX Progress Reporting</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/catalog-pg-index.html" rel="noopener">PostgreSQL 18 — pg_index Catalog</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/18/functions-info.html" rel="noopener">PostgreSQL 18 — System Information Functions, pg_blocking_pids</a></li><li><a target="_blank" href="https://www.postgresql.org/about/news/postgresql-19-released-3449/" rel="noopener">PostgreSQL Global Development Group — PostgreSQL 19 Released (2026-11-19)</a></li></ol></section>
       
         <footer class="article-taxonomy">
           <span>标签</span>
@@ -220,6 +232,10 @@
             <a class="tag tag--delivery" href="/zh-CN/tags/Delivery/">Delivery</a>
           
             <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--database" href="/zh-CN/tags/Database/">Database</a>
           
         </footer>
       
@@ -273,11 +289,13 @@
 
         
           
-            <a class="toc-link toc-link--h2" href="#在线构建为什么仍然会等待">在线构建为什么仍然会等待</a>
+            <a class="toc-link toc-link--h2" href="#并发建索引绕过了什么，又增加了什么？">并发建索引绕过了什么，又增加了什么？</a>
           
-            <a class="toc-link toc-link--h2" href="#上线计划需要包含停止条件">上线计划需要包含停止条件</a>
+            <a class="toc-link toc-link--h2" href="#怎么分辨在等事务，还是扫描本身很慢？">怎么分辨在等事务，还是扫描本身很慢？</a>
           
-            <a class="toc-link toc-link--h2" href="#命令完成之后还要验证什么">命令完成之后还要验证什么</a>
+            <a class="toc-link toc-link--h2" href="#命令失败之后，为什么不能只看迁移日志？">命令失败之后，为什么不能只看迁移日志？</a>
+          
+            <a class="toc-link toc-link--h2" href="#什么情况下普通建索引反而更合适？">什么情况下普通建索引反而更合适？</a>
           
         
       </nav></details>
@@ -326,19 +344,19 @@
       
         <article class="related-card">
           
+          <h3><a href="/zh-CN/2026/10/13/postgres-advisory-lock-pool/">连接池里的 PostgreSQL 咨询锁，什么时候才会释放？</a></h3>
+          <p>2026-10-13</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/11/postgres-savepoint-partial-import/">逐行保存点之后，如何给出可信的 PostgreSQL 导入回执？</a></h3>
+          <p>2026-10-11</p>
+        </article>
+      
+        <article class="related-card">
+          
           <h3><a href="/zh-CN/2026/10/25/kubernetes-init-container-resource-requests/">普通 init 容器的资源请求：逐资源比较最大值与应用之和</a></h3>
-          <p>2026-10-25</p>
-        </article>
-      
-        <article class="related-card">
-          
-          <h3><a href="/zh-CN/2026/10/25/kubernetes-internal-traffic-policy-local/">Service 有健康端点仍访问失败：internalTrafficPolicy Local 的节点边界</a></h3>
-          <p>2026-10-25</p>
-        </article>
-      
-        <article class="related-card">
-          
-          <h3><a href="/zh-CN/2026/10/25/otel-log-severity-number-text/">OpenTelemetry 日志等级：保留 SeverityText，用 SeverityNumber 比较</a></h3>
           <p>2026-10-25</p>
         </article>
       
