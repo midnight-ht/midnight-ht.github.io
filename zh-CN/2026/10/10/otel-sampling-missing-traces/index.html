@@ -29,10 +29,10 @@
     <link rel="apple-touch-icon" href="/img/favicon.ico">
   
   
-    <meta name="description" content="OpenTelemetry 尾部采样只能判断收到的数据；头部丢弃、路由分散和等待窗口都会影响错误链路保留，需要同时验证资源与完整性。">
+    <meta name="description" content="尾部采样只能判断 Collector 收到的 span。本文拆解 SDK 丢弃、路由分片、晚到数据与容量淘汰，说明如何验证错误链路究竟缺在哪一段。">
   
   
-    <meta name="keywords" content="OpenTelemetry,头部采样,尾部采样">
+    <meta name="keywords" content="OpenTelemetry 尾部采样,Collector,trace 完整性">
   
   
     <meta name="robots" content="index,follow,max-image-preview:large">
@@ -55,7 +55,7 @@
   
   
     <meta property="og:title" content="改用尾部采样，就能找回已经丢掉的错误链路吗？ | Midnight blog">
-    <meta property="og:description" content="OpenTelemetry 尾部采样只能判断收到的数据；头部丢弃、路由分散和等待窗口都会影响错误链路保留，需要同时验证资源与完整性。">
+    <meta property="og:description" content="尾部采样只能判断 Collector 收到的 span。本文拆解 SDK 丢弃、路由分片、晚到数据与容量淘汰，说明如何验证错误链路究竟缺在哪一段。">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/10/otel-sampling-missing-traces/">
     <meta property="og:site_name" content="Midnight blog">
@@ -64,7 +64,7 @@
     <meta name="twitter:card" content="summary">
   
   
-    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/otel-sampling-missing-traces/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/10/otel-sampling-missing-traces/","name":"改用尾部采样，就能找回已经丢掉的错误链路吗？ | Midnight blog","description":"OpenTelemetry 尾部采样只能判断收到的数据；头部丢弃、路由分散和等待窗口都会影响错误链路保留，需要同时验证资源与完整性。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/otel-sampling-missing-traces/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/otel-sampling-missing-traces/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/otel-sampling-missing-traces/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/otel-sampling-missing-traces/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/10/otel-sampling-missing-traces/","headline":"改用尾部采样，就能找回已经丢掉的错误链路吗？","description":"OpenTelemetry 尾部采样只能判断收到的数据；头部丢弃、路由分散和等待窗口都会影响错误链路保留，需要同时验证资源与完整性。","inLanguage":"zh-CN","datePublished":"2026-10-09T19:23:32.000Z","dateModified":"2026-10-09T19:23:32.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Delivery, Engineering, OpenTelemetry"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/otel-sampling-missing-traces/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"改用尾部采样，就能找回已经丢掉的错误链路吗？","item":"https://www.zyweb.vip/zh-CN/2026/10/10/otel-sampling-missing-traces/"}]}]}</script>
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/otel-sampling-missing-traces/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/10/otel-sampling-missing-traces/","name":"改用尾部采样，就能找回已经丢掉的错误链路吗？ | Midnight blog","description":"尾部采样只能判断 Collector 收到的 span。本文拆解 SDK 丢弃、路由分片、晚到数据与容量淘汰，说明如何验证错误链路究竟缺在哪一段。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/otel-sampling-missing-traces/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/otel-sampling-missing-traces/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/otel-sampling-missing-traces/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/10/otel-sampling-missing-traces/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/10/otel-sampling-missing-traces/","headline":"改用尾部采样，就能找回已经丢掉的错误链路吗？","description":"尾部采样只能判断 Collector 收到的 span。本文拆解 SDK 丢弃、路由分片、晚到数据与容量淘汰，说明如何验证错误链路究竟缺在哪一段。","inLanguage":"zh-CN","datePublished":"2026-10-09T19:23:32.000Z","dateModified":"2026-11-25T16:00:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Delivery, Engineering, OpenTelemetry"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/10/otel-sampling-missing-traces/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"改用尾部采样，就能找回已经丢掉的错误链路吗？","item":"https://www.zyweb.vip/zh-CN/2026/10/10/otel-sampling-missing-traces/"}]}]}</script>
   
   <meta name="theme-color" content="#080b10">
   
@@ -144,7 +144,7 @@
     <h1>改用尾部采样，就能找回已经丢掉的错误链路吗？</h1>
 
     
-      <p class="post-hero__summary">OpenTelemetry 尾部采样只能判断收到的数据；头部丢弃、路由分散和等待窗口都会影响错误链路保留，需要同时验证资源与完整性。</p>
+      <p class="post-hero__summary">尾部采样只能判断 Collector 收到的 span。本文拆解 SDK 丢弃、路由分片、晚到数据与容量淘汰，说明如何验证错误链路究竟缺在哪一段。</p>
     
 
     <div class="post-hero__meta">
@@ -163,7 +163,7 @@
         
 
 
-        <small>更新于 <time datetime="2026-10-09T19:23:32.000Z">2026-10-10</time> · 预计阅读 3 分钟</small>
+        <small>更新于 <time datetime="2026-11-25T16:00:00.000Z">2026-11-26</time> · 预计阅读 10 分钟</small>
       </div>
     </div>
 
@@ -198,15 +198,26 @@
       
       <!--email_off-->
       <div class="article-content">
-        <p>尾部采样不能找回上游已经丢弃、没有发送的数据。它可以根据收到的链路信息做更有针对性的保留决定，但错误链路是否完整，还受头部采样、传输、路由和等待条件影响。本文依据 OpenTelemetry 概念文档讨论设计，没有配置 Collector 或测量存储成本。</p>
-<h2 id="决定的位置影响可用的信息"><a href="#决定的位置影响可用的信息" class="headerlink" title="决定的位置影响可用的信息"></a>决定的位置影响可用的信息</h2><p><a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/concepts/sampling/">OpenTelemetry 采样说明</a>区分尽早做决定的头部采样和结合全部或大部分 span 的尾部采样。后者可以按错误、整体延迟或属性筛选，但需要有状态处理与资源。文档也允许组合使用。本篇讨论机制，具体 SDK 与 Collector 配置需要按选定版本另行核对。</p>
-<p>假设请求进入时按比例丢弃了一些链路，之后其中某个子调用失败。下游没有收到这些 span，再写一条“保留错误”的规则，也不能凭空恢复缺失内容。因此“保留所有错误链路”只能在明确的数据接收范围与条件下讨论，不能当成尾部采样这个名称自带的绝对保证。</p>
-<p>比例降低不等于每个业务群体都留下同样有用的证据。高流量接口、低频批处理和新版本路径的排查需求不同。采样策略应对应真实问题，例如调查发布后的异常，而不是只追求把数据量降到一个漂亮数字。没有来源与测量，不应写出成本下降百分比或错误检出率。</p>
-<h2 id="收集完整性也有工程代价"><a href="#收集完整性也有工程代价" class="headerlink" title="收集完整性也有工程代价"></a>收集完整性也有工程代价</h2><p>尾部判断需要在决定前保存相关信息。链路持续时间、数据到达顺序和处理节点的分布会影响能够看见多少内容；等待时间过短可能错过晚到的片段，等待过长则提高状态保留责任。具体实现的窗口与容量要查对应组件文档并验证，不在概念文章里编造一个通用配置值。</p>
-<p>假设同一链路的片段被送往不同处理节点，需要确认路由与状态聚合设计能满足所选策略。增加节点不自动意味着链路更完整。节点重启、缓存压力和传输失败也可能改变实际数据范围，监控必须涵盖采集链本身，而不是只有业务服务的错误率。</p>
-<p>采样规则使用的属性应有明确来源与隐私边界。为了筛选某个业务场景，不必把客户邮箱放进所有上下文；可以采用适当的低敏感分类，同时保留诊断价值。相关传播风险见<a href="/zh-CN/2026/10/09/otel-baggage-boundaries/">链路上下文边界</a>。规则依赖某个字段时，要检查该字段是否在所需片段上稳定出现。</p>
-<h2 id="验证保留策略，而不是只看页面上有链路"><a href="#验证保留策略，而不是只看页面上有链路" class="headerlink" title="验证保留策略，而不是只看页面上有链路"></a>验证保留策略，而不是只看页面上有链路</h2><p>可以提出待执行检查：受控正常请求、子调用出错、长时请求、晚到数据以及采集节点重启，分别确认应保留的片段和允许缺失的边界。检查还应包含上游已经丢弃的链路，明确它不会被尾部规则恢复。本文没有运行这些测试，也不承诺实现会自动处理全部异常。</p>
-<p>业务总错误量不应只从被选择留下的链路直接推断；样本选择可能有偏向，需要结合适合的指标统计与日志。存储、传输和采样计算成本也要一起评估。评审时把数据接收范围、策略条件、资源上限和未知缺口写清楚，才能解释为什么某次错误没有可见链路。</p>
+        <p>不能。尾部采样可以等到一部分 span 到达后，再按错误状态、时长或属性决定是否保留 trace；它不能重建从未被创建、记录、导出或送到该采样器的 span。要判断“错误链路为什么不完整”，必须把采样决策点和它之前的采集路径分开检查。本文依据 OpenTelemetry 规范、概念文档及 Collector Contrib 尾部采样处理器文档整理；没有配置 Collector，也没有执行压测或测量资源成本。处理器文档会随版本变化，文中的具体参数和指标名应以部署所用发行版及版本为准。</p>
+<h2 id="尾部采样看到的是已到达的证据"><a href="#尾部采样看到的是已到达的证据" class="headerlink" title="尾部采样看到的是已到达的证据"></a>尾部采样看到的是已到达的证据</h2><p>trace 不是服务端一次性导出的一整块对象。数据模型把 span 描述为独立操作，消费者按 Trace ID 将收到的 span 分组，再用父子关系和 links 组织成 trace。因此后端看到的“链路”是对已收到数据的视图。官方数据模型把只收到部分 span 称为不完整 trace，并列出采样未选中、过滤、导出失败或延迟、span/队列/后端限制，以及操作尚未完成等原因。<a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/specs/otel/trace/data-model/#partial-and-incomplete-traces">事实 F1、F2</a></p>
+<p>这点决定了尾部策略的能力边界。Collector 的 tail sampling processor 能根据它收集到的 trace 数据评估策略；OpenTelemetry 的采样概念举例包括包含错误的 trace、整体时长以及某些属性。相比在请求刚开始时做头部决策，它能利用稍晚出现的信息，但“稍晚”不等于拥有整个系统中每一个 span。<a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/concepts/sampling/#tail-sampling">事实 F3</a></p>
+<p>假设一次请求依次经过入口服务、订单服务和数据库。入口 span 已被发送；订单服务因为 SDK 的 DROP 决策而不记录子 span。如果数据库 SDK 继承未采样上下文并据此 DROP，数据库 span 也不会被记录；具体行为取决于子服务的 sampler。假设 Collector 最终只收到入口 span，再增加“包含 ERROR 就保留”的尾部规则，输入集合里仍没有 ERROR span，结果只能基于现有证据判断。SDK 规范明确规定 <code>IsRecording=false</code> 时 span 数据会被丢弃，span processor 不会收到它；如果某个阶段把 span 丢弃，后面的处理器无法恢复其属性、事件或状态。<a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/specs/otel/trace/sdk/#sampling">事实 F4</a></p>
+<p>反过来，入口服务本地仍记录了 span，也不保证后续可见。它可能卡在导出队列、被队列限制丢弃、遭到 Collector 前置过滤，或在网络故障后没有成功重试。概念数据模型把失败或延迟导出和配置的 span、队列或后端限制列为不完整 trace 的常见来源。排查时应沿着“span 创建与记录 → SDK 导出 → 接收器 → 前置处理器 → 尾部采样器 → 后端”逐段核对，不能只看采样器的策略配置。<a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/specs/otel/trace/data-model/#partial-and-incomplete-traces">事实 F2、F4</a></p>
+<h2 id="路由错误会让同一-trace-被拆成几份"><a href="#路由错误会让同一-trace-被拆成几份" class="headerlink" title="路由错误会让同一 trace 被拆成几份"></a>路由错误会让同一 trace 被拆成几份</h2><p>尾部采样处理器需要按 Trace ID 聚合 span，并在有状态的缓冲区里等待决策。Contrib 处理器文档要求同一 trace 的所有 span 到达同一个 Collector 实例；否则每个副本只根据自己收到的片段作判断。<a target="_blank" rel="noopener" href="https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/tailsamplingprocessor/README.md">处理器文档</a>给出这一要求，部署指南给出的两层模式则是：第一层 Collector 使用按 trace ID 路由的 load-balancing exporter，第二层 Collector 执行 tail sampling。<a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/collector/deploy/gateway/#load-balancing-exporter">事实 F5、F6</a></p>
+<p>用三段链路说明差别。若入口、订单和数据库三个服务的 span 都送到 Collector A，A 有机会看见 ERROR 状态并保留整组已送达的 span。若普通负载均衡把入口送到 A、订单送到 B、数据库又送到 A，A 和 B 各自维护的缓冲区并不会自动合并。A 可能看见一个没有错误的入口和数据库片段，B 看见孤立的错误片段；其中任何一个结果都不等于完整 trace。这里是机制示例，不代表任何实际环境的测试结果。</p>
+<p>扩容会让路由成为持续运行的问题。trace ID 路由避免了同一稳定拓扑下任意分配，但服务发现成员改变时，路由映射可能改变；仍在途的旧 trace 和新 span 可能被送到不同副本。agent-to-gateway 指南因此把多实例尾部采样称为较高级的部署方式，提醒测试路由重新分配和决策一致性，并建议优先考虑单个资源充足的尾部采样网关，除非已有可靠的粘性路由策略。<a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/collector/deploy/other/agent-to-gateway/#sampling-considerations">事实 F7</a></p>
+<h2 id="等待窗口只能等到，不会召回"><a href="#等待窗口只能等到，不会召回" class="headerlink" title="等待窗口只能等到，不会召回"></a>等待窗口只能等到，不会召回</h2><p>采样器通常会缓冲 trace 一段时间再作决定。Collector Contrib 当前主分支文档将 <code>decision_wait</code> 定义为计时路径的决策等待时间；<code>trace-complete</code> 策略会根据累计数据在计时器处理时评估，等待更久通常也意味着状态保留更久。该文档目前列出的默认值是 30 秒，但这是当前特定处理器文档的版本信息，不是所有 Collector 发行版、所有采样策略都保证使用的通用值。配置前应先确认实际二进制包含哪个处理器版本和功能门。<a target="_blank" rel="noopener" href="https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/tailsamplingprocessor/README.md#sampling-strategies">事实 F8</a></p>
+<p>窗口太短，子调用 span 可能在决策后才到；窗口加长可以让更多迟到数据有机会先抵达，却不能让已丢弃数据出现。处理器文档还说明，晚到 span 在原决定仍留在缓冲区时会继承原决定，因此不会影响那次策略判断。决策缓存可以在 span 数据释放后记住 trace ID 的采样结果，但缓存保存的是决定，不是原 trace 内容；它不是恢复机制。没有缓存或对应项已被淘汰时，迟到 span 可能再次经历缓冲并形成新的决定，造成同一 trace 不同片段的处理结果不一致。<a target="_blank" rel="noopener" href="https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/tailsamplingprocessor/README.md#late-arriving-spans">事实 F9</a></p>
+<p>这让“等多久”成为基于测量的取舍，而不是把时间设得越大越安全。需要关注实际 span 到达延迟分布、trace 持续时间、缓冲区占用和决策处理延迟。官方处理器文档列出提前淘汰计数 <code>otelcol_processor_tail_sampling_sampling_trace_dropped_too_early</code>、缓冲保留时长 <code>otelcol_processor_tail_sampling_sampling_trace_removal_age</code>、决策计时延迟 <code>otelcol_processor_tail_sampling_sampling_decision_timer_latency</code> 和晚到 span 年龄 <code>otelcol_processor_tail_sampling_sampling_late_span_age</code>。监控这些指标能定位采样器自身压力与晚到情况，但不能单独证明上游 span 没有丢失。<a target="_blank" rel="noopener" href="https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/tailsamplingprocessor/README.md#monitoring-and-tuning">事实 F10</a></p>
+<h2 id="容量淘汰和单条-trace-上限是两种缺口"><a href="#容量淘汰和单条-trace-上限是两种缺口" class="headerlink" title="容量淘汰和单条 trace 上限是两种缺口"></a>容量淘汰和单条 trace 上限是两种缺口</h2><p>增加副本不一定扩大每条 trace 能用的缓冲空间。如果 trace 按 ID 固定路由到某一副本，该副本的 <code>num_traces</code>、内存、CPU 与决策延迟共同决定能否在窗口内持有足够状态。Contrib 文档描述了环形缓冲达到 <code>num_traces</code> 时移除最旧 trace 的行为；被移除的 trace 可能在 <code>decision_wait</code> 到期前就被提前丢弃。它也提供 <code>maximum_trace_size_bytes</code> 这一单条 trace 大小上限，超限时会立即从 tail sampler 丢弃。前者是很多 trace 竞争有限缓冲的压力，后者是单条 trace 过大，调一个参数不一定同时解决二者。<a target="_blank" rel="noopener" href="https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/tailsamplingprocessor/README.md#dropped-traces">事实 F11、F12</a></p>
+<p>因此不要从“错误链路不见了”直接跳到“把等待值翻倍”。如果提前淘汰指标上升，降低等待时间可能减少缓冲压力，但也会更早决定，放弃慢到达的 span；提高容量则会增加内存占用。若最大 trace 大小经常触发，调大 trace 数量未必有帮助，应该先确定异常 trace 是跨度太多、事件属性过大，还是错误数据本身需要例外保护。官方文档建议处理器的下游快速消费输出，避免采样决策和后续流水线处理延长延迟；但实际的容量值、回退策略与安全余量，需要按流量峰值和运行版本测量，而不是照抄示例配置。[事实 F10、F11]</p>
+<p>优先解决数据路径的完整性，再谈策略命中率。可以为诊断用的测试请求附加低敏感、稳定的版本或实验标记，以便核对 span 在各级的存在；不要把邮箱、令牌或完整请求体塞进属性来“确保采样命中”。属性隐私与采样规则的具体合规性依业务而定，跨服务上下文的敏感信息边界可参照<a href="/zh-CN/2026/10/09/otel-baggage-boundaries/">OpenTelemetry baggage 的传播限制</a>。若策略依赖一个属性，还要核对它由哪个服务添加、在哪些 span 上出现、是否会被处理器重命名或过滤。属性缺席与 span 丢失是不同故障，表现都可能是规则没保留该 trace。</p>
+<h2 id="用一个分段验证区分故障位置"><a href="#用一个分段验证区分故障位置" class="headerlink" title="用一个分段验证区分故障位置"></a>用一个分段验证区分故障位置</h2><p>下面是待执行的验证方案，不是已运行的实验。准备固定的 trace ID 关联请求，在入口、订单和数据库各产生一个可区分的 span，并在第二个子调用模拟 ERROR。每个阶段记录可核对的 span ID、父 span ID、状态码或测试属性。先让 SDK 和 Collector 不启用采样丢弃，检查三个 span 是否都到达采样器；再单独引入一种故障，比如 SDK DROP、前置过滤、导出队列失败或随机负载均衡。这样一旦后端出现缺口，能定位缺口在采样器之前还是之后。</p>
+<p>随后验证时间与路由：令一个服务的 span 延迟到达，分别落在决策窗口前后；观察它是否参与决策、是否继承已有决定。再将同一个 trace 的 span 分批从两个入口 Collector 发出，核对按 trace ID 路由时是否由同一尾部采样实例接收。若生产会扩缩容，在成员变化期间重复检查路由映射；不能以静态拓扑测试替代这一条件。最后在接近峰值的受控负载下观察缓冲提前淘汰、处理器延迟、单 trace 超限和内存变化。若没有这些负载测试证据，就不要声称容量可以覆盖生产尖峰。</p>
+<p>验证结果最好拆成三类指标：产生端创建/记录了多少测试 span，尾部采样器实际接收了多少、按什么原因作决定，后端最终存了多少。它们对应不同边界，数字不相等时先查阶段差异，而不是把所有缺口都归因于“采样率”。错误总量也不能直接用被采样保留的 trace 数量推算，因为策略有意偏向错误、延迟或属性群体；整体错误率应由合适的指标或其他未采样汇总数据提供。</p>
+<h2 id="何时尾部采样有用，何时它不解决问题"><a href="#何时尾部采样有用，何时它不解决问题" class="headerlink" title="何时尾部采样有用，何时它不解决问题"></a>何时尾部采样有用，何时它不解决问题</h2><p>如果 SDK 或前置管道能把候选 span 送到尾部采样器，系统可以接受缓冲与运维成本，并且诊断问题确实依赖请求结束后才知道的错误、时长或属性，尾部策略才提供头部策略无法直接做出的选择。采样概念文档也指出，采样可以组合在不同采集阶段：在高流量下，头部采样先限制进入管道的数据，随后尾部采样再按可见证据作更复杂决定。这个组合能保护遥测管道，但如果头部阶段已经让候选 trace 不再记录或导出，尾部规则只会作用于留下来的子集。关于传播的 <code>sampled</code> 标志与接收端信任边界，可继续看<a href="/zh-CN/2026/10/29/traceparent-sampled-trust-boundary/">traceparent sampled 标志的信任边界</a>。<a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/concepts/sampling/">事实 F3、F13</a></p>
+<p>如果主要问题是服务没有正确创建 span、采样决策在 SDK 阶段丢弃了数据、导出或接收不可靠、路由没有把同一 trace 聚到一起，先修这些环节比再加一个尾部策略更直接。如果真正的问题是高基数、存储费用或只想保留一个统计比例，概率采样、指标聚合或后端提供的方案可能更合适；具体选择取决于能否接受遗漏哪些诊断信息、在什么阶段作决定，以及运维团队能否维护有状态的缓冲服务。</p>
+<p>最终可以把承诺写成可验证的范围：“在指定 SDK 未丢弃候选 span、导出链路健康、所有片段到达同一个尾部采样器、并满足等待与容量限制时，按错误属性保留已接收的 trace。”这句话比“保留所有错误链路”更长，但它能让排障者知道缺失证据可能在哪个边界发生。先核对路径和版本，再调策略参数。</p>
 
       </div>
       <!--/email_off-->
@@ -274,11 +285,17 @@
 
         
           
-            <a class="toc-link toc-link--h2" href="#决定的位置影响可用的信息">决定的位置影响可用的信息</a>
+            <a class="toc-link toc-link--h2" href="#尾部采样看到的是已到达的证据">尾部采样看到的是已到达的证据</a>
           
-            <a class="toc-link toc-link--h2" href="#收集完整性也有工程代价">收集完整性也有工程代价</a>
+            <a class="toc-link toc-link--h2" href="#路由错误会让同一-trace-被拆成几份">路由错误会让同一 trace 被拆成几份</a>
           
-            <a class="toc-link toc-link--h2" href="#验证保留策略，而不是只看页面上有链路">验证保留策略，而不是只看页面上有链路</a>
+            <a class="toc-link toc-link--h2" href="#等待窗口只能等到，不会召回">等待窗口只能等到，不会召回</a>
+          
+            <a class="toc-link toc-link--h2" href="#容量淘汰和单条-trace-上限是两种缺口">容量淘汰和单条 trace 上限是两种缺口</a>
+          
+            <a class="toc-link toc-link--h2" href="#用一个分段验证区分故障位置">用一个分段验证区分故障位置</a>
+          
+            <a class="toc-link toc-link--h2" href="#何时尾部采样有用，何时它不解决问题">何时尾部采样有用，何时它不解决问题</a>
           
         
       </nav></details>
