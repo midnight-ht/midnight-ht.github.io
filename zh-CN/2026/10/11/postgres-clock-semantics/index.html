@@ -12,7 +12,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
-  <title>同一事务里时间没变，是数据库时钟停了吗？ | Midnight blog</title>
+  <title>想记录提交时刻？PostgreSQL 19 的 `clock_timestamp()` 不够 | Midnight blog</title>
   
     <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
     
@@ -29,10 +29,10 @@
     <link rel="apple-touch-icon" href="/img/favicon.ico">
   
   
-    <meta name="description" content="CURRENT_TIMESTAMP 不变源于事务时间语义；按业务事件选择取时点，避免把时间戳当成全局顺序。">
+    <meta name="description" content="`clock_timestamp()` 记录函数取值时刻，不等于事务提交。按事务、语句、观察和提交事件选择时间来源，并看清提交时间追踪的限制。">
   
   
-    <meta name="keywords" content="PostgreSQL18,事务时间,审计时间">
+    <meta name="keywords" content="PostgreSQL 19,CURRENT_TIMESTAMP,clock_timestamp,事务时间戳">
   
   
     <meta name="robots" content="index,follow,max-image-preview:large">
@@ -54,8 +54,8 @@
     <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
   
   
-    <meta property="og:title" content="同一事务里时间没变，是数据库时钟停了吗？ | Midnight blog">
-    <meta property="og:description" content="CURRENT_TIMESTAMP 不变源于事务时间语义；按业务事件选择取时点，避免把时间戳当成全局顺序。">
+    <meta property="og:title" content="想记录提交时刻？PostgreSQL 19 的 `clock_timestamp()` 不够 | Midnight blog">
+    <meta property="og:description" content="`clock_timestamp()` 记录函数取值时刻，不等于事务提交。按事务、语句、观察和提交事件选择时间来源，并看清提交时间追踪的限制。">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/">
     <meta property="og:site_name" content="Midnight blog">
@@ -64,7 +64,7 @@
     <meta name="twitter:card" content="summary">
   
   
-    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/","name":"同一事务里时间没变，是数据库时钟停了吗？ | Midnight blog","description":"CURRENT_TIMESTAMP 不变源于事务时间语义；按业务事件选择取时点，避免把时间戳当成全局顺序。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/","headline":"同一事务里时间没变，是数据库时钟停了吗？","description":"CURRENT_TIMESTAMP 不变源于事务时间语义；按业务事件选择取时点，避免把时间戳当成全局顺序。","inLanguage":"zh-CN","datePublished":"2026-10-10T19:18:07.000Z","dateModified":"2026-10-10T19:18:07.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"Development, Engineering"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"同一事务里时间没变，是数据库时钟停了吗？","item":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/"}]}]}</script>
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/","name":"想记录提交时刻？PostgreSQL 19 的 `clock_timestamp()` 不够 | Midnight blog","description":"`clock_timestamp()` 记录函数取值时刻，不等于事务提交。按事务、语句、观察和提交事件选择时间来源，并看清提交时间追踪的限制。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/","headline":"想记录提交时刻？PostgreSQL 19 的 `clock_timestamp()` 不够","description":"`clock_timestamp()` 记录函数取值时刻，不等于事务提交。按事务、语句、观察和提交事件选择时间来源，并看清提交时间追踪的限制。","inLanguage":"zh-CN","datePublished":"2026-10-10T19:18:07.000Z","dateModified":"2026-11-26T00:10:55.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/19/functions-datetime.html#FUNCTIONS-DATETIME-CURRENT","https://www.postgresql.org/docs/19/datatype-datetime.html","https://www.postgresql.org/docs/19/runtime-config-replication.html#GUC-TRACK-COMMIT-TIMESTAMP","https://www.postgresql.org/docs/19/functions-info.html#FUNCTIONS-COMMIT-TIMESTAMP"],"keywords":"PostgreSQL, 时间语义, 审计, 事务"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"想记录提交时刻？PostgreSQL 19 的 `clock_timestamp()` 不够","item":"https://www.zyweb.vip/zh-CN/2026/10/11/postgres-clock-semantics/"}]}]}</script>
   
   <meta name="theme-color" content="#080b10">
   
@@ -137,14 +137,14 @@
   <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
   <header class="post-hero">
     <div class="post-hero__kicker">
-      <span class="tag tag--development">Development</span>
+      <span class="tag tag--postgresql">PostgreSQL</span>
       <time datetime="2026-10-10T19:18:07.000Z">2026-10-11</time>
     </div>
 
-    <h1>同一事务里时间没变，是数据库时钟停了吗？</h1>
+    <h1>想记录提交时刻？PostgreSQL 19 的 `clock_timestamp()` 不够</h1>
 
     
-      <p class="post-hero__summary">CURRENT_TIMESTAMP 不变源于事务时间语义；按业务事件选择取时点，避免把时间戳当成全局顺序。</p>
+      <p class="post-hero__summary">`clock_timestamp()` 记录函数取值时刻，不等于事务提交。按事务、语句、观察和提交事件选择时间来源，并看清提交时间追踪的限制。</p>
     
 
     <div class="post-hero__meta">
@@ -163,7 +163,7 @@
         
 
 
-        <small>更新于 <time datetime="2026-10-10T19:18:07.000Z">2026-10-11</time> · 预计阅读 3 分钟</small>
+        <small>更新于 <time datetime="2026-11-26T00:10:55.000Z">2026-11-26</time> · 预计阅读 8 分钟</small>
       </div>
     </div>
 
@@ -195,29 +195,58 @@
 
       
 
-      
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>CURRENT_TIMESTAMP、now() 与 transaction_timestamp() 表示事务开始时间；同一事务内保持一致是设计语义。</li><li>statement_timestamp() 表示服务器收到最近命令消息的时点；clock_timestamp() 表示函数被求值时的当前时间，两者都不是提交时间。</li><li>PostgreSQL 的提交时间追踪需要启动时启用配置，并且历史数据会被 vacuum 清理；它不是默认可长期查询的审计日志。</li></ul></section>
       <!--email_off-->
       <div class="article-content">
-        <p>同一事务里 CURRENT_TIMESTAMP 不变，是 PostgreSQL 对事务时间的定义，不能据此判断数据库时钟停了。需要记录事务开始、语句开始还是实际读取时刻，应先选择时间语义，再选择函数；审计字段的名字也应说明它记录的是哪一个事件。</p>
-<h2 id="时间字段需要一个明确的问题"><a href="#时间字段需要一个明确的问题" class="headerlink" title="时间字段需要一个明确的问题"></a>时间字段需要一个明确的问题</h2><p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/18/functions-datetime.html">PostgreSQL 18 的日期时间文档</a>区分事务开始时间、语句开始时间与实际当前时间。CURRENT_TIMESTAMP 对应事务开始；clock_timestamp 的值可以在同一语句内变化。这些行为服务于不同用途，不存在所有字段都应该替换成一种函数的结论。版本依据为文档第十八版，本文没有运行数据库实验。</p>
-<p>设想事务先读取资料，再等待一个外部确认，最后写入审批记录。如果字段用事务开始时间，它描述的是整组操作的起点，不是最后写入那一刻。这个设计示例没有实际等待时长，却能暴露命名问题：一个叫“完成时间”的字段如果记录起点，会误导排查者，而函数本身并没有故障。</p>
-<h2 id="稳定与变化各有用途"><a href="#稳定与变化各有用途" class="headerlink" title="稳定与变化各有用途"></a>稳定与变化各有用途</h2><p>在同一事务中保持一致的时间，可以让一组相关记录共享同一个业务时点，便于解释它们属于同次变更。若要观察某段执行过程实际何时到达，则需要另外的事件时间。把执行观测时间与业务生效时间混在一列，后续报表可能将排队、处理和生效之间的差异理解成数据异常。</p>
-<p>语句开始时间也有独立价值：它不等于整个事务起点，更不保证每一行实际被处理的精确时刻。建议在表结构和接口说明中明确字段来源，而不是只列出数据类型。迁移函数之前，应检查使用者是否依赖同批数据时间相同，是否把它当成排序依据，以及历史记录是否还能与新定义比较。</p>
-<h2 id="时间戳不能代替所有顺序"><a href="#时间戳不能代替所有顺序" class="headerlink" title="时间戳不能代替所有顺序"></a>时间戳不能代替所有顺序</h2><p>即使采用变化的当前时间，也不应把时间戳当成全局唯一序号或绝对的跨系统因果关系。时钟与分布式执行还有其他约束；如果业务需要严格顺序，应另行设计标识或版本规则。多条记录显示相同时间，可能来自精度、语义或并发，不能仅凭相等就断言重复处理。</p>
-<p>对于审计，建议保留事件类型、对象身份、事务关联和时间来源，让一个时间值能够被解释。若记录外部事件，还需区分外部声称的发生时间与本系统观察时间。本文不声称这些字段能够证明事件真实性，它们只是提高后续核对能力的设计建议。日志中也应避免为排查而加入不必要的敏感数据。</p>
-<p>可以在可恢复环境中规划事务内多次读取、不同语句与长事务的对照检查，核对字段到底满足哪种业务含义。没有执行结果前，不把预期行为写成测试通过。相关的<a href="/zh-CN/2026/10/10/timestamps-recurring-intent/">周期任务时间设计</a>讨论日历意图，属于另一层问题；当前这篇先解决数据库取时点。下一步从“创建”“完成”“生效”三个字段名出发，逐一核对实际记录事件，再决定是否修改默认值。</p>
+        <p>不够。<code>clock_timestamp()</code> 返回函数被求值时的当前时间；它不会等到事务提交后再回填，因此不能证明提交时刻。在 PostgreSQL 19 中，<code>CURRENT_TIMESTAMP</code>、<code>now()</code> 和 <code>transaction_timestamp()</code> 表示事务开始时间；<code>statement_timestamp()</code> 表示服务器收到最近命令消息的时点。选择哪个函数，要先说清字段要记录哪一个事件。</p>
+<h2 id="一个“时间落后”的字段，可能只是记错了事件"><a href="#一个“时间落后”的字段，可能只是记错了事件" class="headerlink" title="一个“时间落后”的字段，可能只是记错了事件"></a>一个“时间落后”的字段，可能只是记错了事件</h2><p>设想一个审批事务先开始，随后等待锁、读取规则、更新订单，最后才提交。若 <code>updated_at</code> 使用 <code>CURRENT_TIMESTAMP</code>，它描述的是事务起点；值看起来早于更新语句甚至提交时刻，并不说明数据库时钟停了。这里是解释语义的假设时间线，没有实际服务、等待时长或故障记录。</p>
+<p><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/19/functions-datetime.html#FUNCTIONS-DATETIME-CURRENT">当前日期时间章节</a>说明，标准当前日期时间函数返回当前事务的开始时间。同一事务多次调用仍得到同一个值，文档明确把这种一致性视为特性：一个事务中的多项修改可以共享同一时间标记。<code>now()</code> 是 <code>transaction_timestamp()</code> 的传统别名，<code>CURRENT_TIMESTAMP</code> 也对应这个时点。</p>
+<p>这适合表达“本次事务的共同业务时点”，例如一次原子更新中需要让几张表的修改带相同时间。它不等于每行实际写入的瞬间，不等于执行到某个语句的时刻，更不等于数据库确认提交的时刻。若字段名是 <code>committed_at</code>，却由 <code>DEFAULT now()</code> 填充，名字比值本身承诺得更多。</p>
+<h2 id="三个“现在”各回答什么问题"><a href="#三个“现在”各回答什么问题" class="headerlink" title="三个“现在”各回答什么问题"></a>三个“现在”各回答什么问题</h2><p>PostgreSQL 19 文档把 <code>statement_timestamp()</code> 定义为当前语句开始时间，更精确地说，是服务器收到客户端最近一条命令消息的时点；它在事务第一条语句中与事务开始时间相同，后续语句可能不同。它适合记录命令进入服务端处理流程的边界，但不是每一行更新的精确时间，也不是客户端点击按钮或网络请求离开客户端的时间。</p>
+<p><code>clock_timestamp()</code> 返回调用时的实际当前时间，同一条 SQL 语句里也可能变化。对观察长语句中某段处理大概发生在何时，它比事务时间更贴近“读表时钟”；代价是同一语句内多行或多个表达式未必共享同一值。官方函数定义没有承诺这个值唯一、单调或能建立并发事务之间的全序，所以它也不是可靠的事件序号。这是根据函数契约得到的设计边界，不是对某个操作系统时钟行为的实测结论。</p>
+<p>可把差异放进一段隔离环境的示例。以下 SQL 用于规划验证，本文没有连接 PostgreSQL 执行；输出关系是按官方语义推导，不是实测日志。</p>
+<pre><code class="sql">BEGIN;
+SELECT CURRENT_TIMESTAMP AS transaction_time,
+       statement_timestamp() AS command_received,
+       clock_timestamp() AS sampled_time;
+
+SELECT pg_sleep(1);
+
+UPDATE approval
+   SET status = &#39;approved&#39;,
+       transaction_time = CURRENT_TIMESTAMP,
+       observed_time = clock_timestamp()
+ WHERE id = 42
+ RETURNING transaction_time, observed_time, statement_timestamp();
+COMMIT;
+</code></pre>
+<p>按文档语义，第二条查询中的事务时间仍与第一条相同；更新语句的 <code>statement_timestamp()</code> 则取最近命令消息的到达时点。<code>clock_timestamp()</code> 在被求值时读取当前时间，它与事务时间之间的差值取决于服务端时钟和执行过程，文档没有保证其大小或顺序，不能在文稿里编造固定数值。更关键的是，更新求值之后，事务仍可能等待约束、提交锁或存储确认，也可能最终回滚。因此返回行里的取样值不能被改名为提交时间。</p>
+<h2 id="为什么提交时间不该靠改函数名推出来"><a href="#为什么提交时间不该靠改函数名推出来" class="headerlink" title="为什么提交时间不该靠改函数名推出来"></a>为什么提交时间不该靠改函数名推出来</h2><p>提交是事务完成边界，不是前一条 SQL 中某个表达式求值的边界。<a href="/zh-CN/2026/10/16/postgres-returning-commit-boundary/">本站关于 <code>RETURNING</code> 与提交边界的文章</a>解释了类似误读：语句返回行和整个事务已成功提交是不同事实。时间字段也应保持这种区分。应用若要向调用者报告提交成功，应读取 <code>COMMIT</code> 的结果；若在收到成功确认后再取一次应用时钟，字段应叫“提交确认被应用观察到的时间”，而不是数据库精确提交时刻。若要事后查询 PostgreSQL 记录的事务提交时间，则需另看专门的提交时间信息函数。</p>
+<p>但这组能力不是无条件审计设施。<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/19/runtime-config-replication.html#GUC-TRACK-COMMIT-TIMESTAMP"><code>track_commit_timestamp</code> 配置</a>默认关闭，只能在服务器启动时设置；<a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/19/functions-info.html#FUNCTIONS-COMMIT-TIMESTAMP"><code>pg_xact_commit_timestamp</code> 文档</a>说明，只有在配置启用后提交的事务才有可用信息，而且这些信息会被 vacuum 常规清理。它适合在确认运维设置、保留边界和权限后用于特定的事后诊断，不应被当成永久审计日志或可随时查询的业务列。</p>
+<p>如果业务必须长期保留“某审批记录由哪个事务、何时最终提交”的证据，通常要在应用审计模型中明确记录事件身份、操作者、请求关联、状态转移和事务结果，并设计留存与不可抵赖要求。数据库提交时间追踪可以补充诊断线索，但不替代这套业务证据，也不自动证明操作者身份或外部动作已完成。设计选择应以审计要求和故障恢复路径为准，不能只因一个函数名字看起来像“当前时间”就启用全局配置。</p>
+<h2 id="默认值还有一个部署时刻陷阱"><a href="#默认值还有一个部署时刻陷阱" class="headerlink" title="默认值还有一个部署时刻陷阱"></a>默认值还有一个部署时刻陷阱</h2><p>列默认值常见写法是 <code>DEFAULT now()</code>。这确实是函数调用，不会在建表时固定成一个常量；不过它返回的仍是当前事务开始时间。若插入语句位于一个已经运行很久的显式事务里，这个默认值可能明显早于插入语句。相反，在自动提交的一条短 INSERT 中，它通常接近语句所在事务的起点。区别来自事务边界，不是默认表达式悄悄换了含义。</p>
+<p>不要把它改写成 <code>DEFAULT TIMESTAMP &#39;now&#39;</code> 以为只是另一种拼法。文档还提醒，这种特殊字面量会在解析时转换成一个时间常量；若用于后续才执行的列默认值，时间可能固定在建表时。要在每次需要默认值时求值，应使用 <code>now()</code> 或 <code>CURRENT_TIMESTAMP</code> 这样的函数形式，并继续确认事务语义是否满足字段定义。</p>
+<p>这是迁移中容易留下的历史错误：表先创建，部署一段时间后才有新行，可默认值却看起来早于第一条业务记录。排查时先查看实际默认表达式与列类型，再在测试表中创建两列不同默认值，间隔一段时间后插入并比较；SQL 的类型转换和会话时区也要一并检查。日期时间类型章节说明 <code>timestamp</code> 与 <code>timestamptz</code> 的含义不同。此处不展开时区建模；关键是不要把字面量解析时点、事务起点和时间点存储混成一个概念。</p>
+<h2 id="怎么为审计字段选时间来源？"><a href="#怎么为审计字段选时间来源？" class="headerlink" title="怎么为审计字段选时间来源？"></a>怎么为审计字段选时间来源？</h2><p>先在 schema 和事件说明里写下谓词，再选函数：<code>transaction_started_at</code> 表示同一事务开始；<code>command_received_at</code> 表示服务端收到当前命令；<code>sampled_at</code> 表示表达式实际取值时；<code>committed_at</code> 表示只有事务成功完成后才能确认的提交事件。名称只是帮助检查，真正的证明还要看写入代码在哪个事务阶段执行、提交失败是否会留下记录，以及外部通知是否在提交以后发生。</p>
+<p>如果目标是让同一批修改共享时间，事务时间通常比逐行变化的墙上时钟更容易解释。如果目标是观察 SQL 的处理起点，语句时间更符合问题。如果目标是采样执行过程，<code>clock_timestamp()</code> 可以提供调用时值，但不能据此推断严格顺序。如果目标是确认提交成功，就检查 <code>COMMIT</code> 结果；如果目标是保存应用何时收到或观察到这个结果，应在确认以后单独取样并明确命名；若要数据库记录的精确提交时间，则评估已启用的提交时间追踪和其限制。不能仅靠把字段改名、改默认值或增加小数秒精度来补足语义。</p>
+<p>验证时可以在可丢弃数据库里分别测试：同一事务多次读取、事务内跨多条语句、等待一段时间后再更新、回滚、提交失败、函数默认值与特殊 <code>now</code> 字面量。只比较结果中时间是否相等还不够；要记录事务开始、命令发送/接收、表达式求值、提交确认分别由哪一段代码观察。本文的测试矩阵没有实际执行，具体版本和驱动仍需按目标环境运行。</p>
+<p>排查一个看似“时间倒退”的字段，先问它代表的是事务、命令、取样还是提交；再核对函数、默认表达式、事务是否长时间开放以及提交失败路径。这个顺序能把“时钟坏了”的猜测转成可验证的字段契约，也能避免让 <code>clock_timestamp()</code> 承担它从未承诺的提交语义。</p>
 
       </div>
       <!--/email_off-->
 
-      
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/19/functions-datetime.html#FUNCTIONS-DATETIME-CURRENT" rel="noopener">PostgreSQL 19 Documentation, 9.9.5 Current Date/Time</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/19/datatype-datetime.html" rel="noopener">PostgreSQL 19 Documentation, 8.5 Date/Time Types</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/19/runtime-config-replication.html#GUC-TRACK-COMMIT-TIMESTAMP" rel="noopener">PostgreSQL 19 Documentation, 19.6 Replication — track_commit_timestamp</a></li><li><a target="_blank" href="https://www.postgresql.org/docs/19/functions-info.html#FUNCTIONS-COMMIT-TIMESTAMP" rel="noopener">PostgreSQL 19 Documentation, 9.28.9 Committed Transaction Information Functions</a></li></ol></section>
       
         <footer class="article-taxonomy">
           <span>标签</span>
           
-            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
           
-            <a class="tag tag--engineering" href="/zh-CN/tags/Engineering/">Engineering</a>
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E6%97%B6%E9%97%B4%E8%AF%AD%E4%B9%89/">时间语义</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E5%AE%A1%E8%AE%A1/">审计</a>
+          
+            <a class="tag tag--ai-agent" href="/zh-CN/tags/%E4%BA%8B%E5%8A%A1/">事务</a>
           
         </footer>
       
@@ -235,11 +264,11 @@
         <span>分享</span>
         <div>
           
-            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F11%2Fpostgres-clock-semantics%2F&text=%E5%90%8C%E4%B8%80%E4%BA%8B%E5%8A%A1%E9%87%8C%E6%97%B6%E9%97%B4%E6%B2%A1%E5%8F%98%EF%BC%8C%E6%98%AF%E6%95%B0%E6%8D%AE%E5%BA%93%E6%97%B6%E9%92%9F%E5%81%9C%E4%BA%86%E5%90%97%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F11%2Fpostgres-clock-semantics%2F&text=%E6%83%B3%E8%AE%B0%E5%BD%95%E6%8F%90%E4%BA%A4%E6%97%B6%E5%88%BB%EF%BC%9FPostgreSQL%2019%20%E7%9A%84%20%60clock_timestamp()%60%20%E4%B8%8D%E5%A4%9F" aria-label="分享到 X" title="分享到 X">X</a>
           
             <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F11%2Fpostgres-clock-semantics%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
           
-            <a href="mailto:?subject=%E5%90%8C%E4%B8%80%E4%BA%8B%E5%8A%A1%E9%87%8C%E6%97%B6%E9%97%B4%E6%B2%A1%E5%8F%98%EF%BC%8C%E6%98%AF%E6%95%B0%E6%8D%AE%E5%BA%93%E6%97%B6%E9%92%9F%E5%81%9C%E4%BA%86%E5%90%97%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F11%2Fpostgres-clock-semantics%2F" aria-label="邮件分享" title="邮件分享">@</a>
+            <a href="mailto:?subject=%E6%83%B3%E8%AE%B0%E5%BD%95%E6%8F%90%E4%BA%A4%E6%97%B6%E5%88%BB%EF%BC%9FPostgreSQL%2019%20%E7%9A%84%20%60clock_timestamp()%60%20%E4%B8%8D%E5%A4%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F10%2F11%2Fpostgres-clock-semantics%2F" aria-label="邮件分享" title="邮件分享">@</a>
           
         </div>
       </section>
@@ -255,7 +284,7 @@
           
             <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/10/11/plural-rules-message/">
               <span>下一篇</span>
-              <strong>国际化不能只给英文单词加一个 s</strong>
+              <strong>Intl.PluralRules 只选类别，不会替你翻译整句话</strong>
               <small>2026-10-11</small>
             </a>
           
@@ -271,11 +300,15 @@
 
         
           
-            <a class="toc-link toc-link--h2" href="#时间字段需要一个明确的问题">时间字段需要一个明确的问题</a>
+            <a class="toc-link toc-link--h2" href="#一个“时间落后”的字段，可能只是记错了事件">一个“时间落后”的字段，可能只是记错了事件</a>
           
-            <a class="toc-link toc-link--h2" href="#稳定与变化各有用途">稳定与变化各有用途</a>
+            <a class="toc-link toc-link--h2" href="#三个“现在”各回答什么问题">三个“现在”各回答什么问题</a>
           
-            <a class="toc-link toc-link--h2" href="#时间戳不能代替所有顺序">时间戳不能代替所有顺序</a>
+            <a class="toc-link toc-link--h2" href="#为什么提交时间不该靠改函数名推出来">为什么提交时间不该靠改函数名推出来</a>
+          
+            <a class="toc-link toc-link--h2" href="#默认值还有一个部署时刻陷阱">默认值还有一个部署时刻陷阱</a>
+          
+            <a class="toc-link toc-link--h2" href="#怎么为审计字段选时间来源？">怎么为审计字段选时间来源？</a>
           
         
       </nav></details>
@@ -298,9 +331,9 @@
           <h2>相关专题</h2>
           <p>把当前文章放回长期跟踪线索里。</p>
           
-            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>226</b></a>
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>225</b></a>
           
-            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>201</b></a>
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>200</b></a>
           
             <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>118</b></a>
           
@@ -324,20 +357,20 @@
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/23/css-container-query-size-containment/">屏幕很宽，侧栏卡片为什么仍然挤成一团？</a></h3>
-          <p>2026-10-23</p>
+          <h3><a href="/zh-CN/2026/10/16/postgres-returning-commit-boundary/">PostgreSQL RETURNING 返回行，就代表事务已提交吗？</a></h3>
+          <p>2026-10-16</p>
         </article>
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/23/grpc-status-trailers-result/">HTTP 已经返回 200，gRPC 调用为什么仍然失败？</a></h3>
-          <p>2026-10-23</p>
+          <h3><a href="/zh-CN/2026/11/17/postgres-regexp-match-matches-row-cardinality/">PostgreSQL 换了正则函数，为什么匹配不到的记录整行消失？</a></h3>
+          <p>2026-11-17</p>
         </article>
       
         <article class="related-card">
           
-          <h3><a href="/zh-CN/2026/10/23/http-content-location-representation/">Content-Location 出现以后，客户端应该跳转吗？</a></h3>
-          <p>2026-10-23</p>
+          <h3><a href="/zh-CN/2026/11/16/postgres-copy-on-error-reject-limit/">PostgreSQL COPY 跳过了坏行，为什么第二条坏值又让整次失败？</a></h3>
+          <p>2026-11-16</p>
         </article>
       
     </div>
