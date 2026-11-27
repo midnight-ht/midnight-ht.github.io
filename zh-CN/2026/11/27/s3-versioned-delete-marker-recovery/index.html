@@ -1,0 +1,403 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>版本化 S3 对象 DELETE 返回成功，为什么旧文件还在？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="启用版本控制的 S3 桶中，不带 versionId 的 DELETE 通常创建 delete marker，让对象表现为已删除；恢复要精确移除当前 marker，永久删除旧版本则是另一项操作。">
+  
+  
+    <meta name="keywords" content="S3 delete marker,S3 versioning recovery,DeleteObject versionId">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/27/s3-versioned-delete-marker-recovery/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="版本化 S3 对象 DELETE 返回成功，为什么旧文件还在？ | Midnight blog">
+    <meta property="og:description" content="启用版本控制的 S3 桶中，不带 versionId 的 DELETE 通常创建 delete marker，让对象表现为已删除；恢复要精确移除当前 marker，永久删除旧版本则是另一项操作。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/","name":"版本化 S3 对象 DELETE 返回成功，为什么旧文件还在？ | Midnight blog","description":"启用版本控制的 S3 桶中，不带 versionId 的 DELETE 通常创建 delete marker，让对象表现为已删除；恢复要精确移除当前 marker，永久删除旧版本则是另一项操作。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/","headline":"版本化 S3 对象 DELETE 返回成功，为什么旧文件还在？","description":"启用版本控制的 S3 桶中，不带 versionId 的 DELETE 通常创建 delete marker，让对象表现为已删除；恢复要精确移除当前 marker，永久删除旧版本则是另一项操作。","inLanguage":"zh-CN","datePublished":"2026-11-27T08:15:00.000Z","dateModified":"2026-11-27T08:15:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.aws.amazon.com/AmazonS3/latest/userguide/ManagingDelMarkers.html","https://docs.aws.amazon.com/AmazonS3/latest/userguide/DeletingObjectVersions.html"],"keywords":"AWS, Amazon S3, Versioning, Recovery"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"版本化 S3 对象 DELETE 返回成功，为什么旧文件还在？","item":"https://www.zyweb.vip/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/" selected>zh-CN</option><option value="/en/2026/11/27/s3-versioned-delete-marker-recovery/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/" selected>zh-CN</option><option value="/en/2026/11/27/s3-versioned-delete-marker-recovery/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--aws">AWS</span>
+      <time datetime="2026-11-27T08:15:00.000Z">2026-11-27</time>
+    </div>
+
+    <h1>版本化 S3 对象 DELETE 返回成功，为什么旧文件还在？</h1>
+
+    
+      <p class="post-hero__summary">启用版本控制的 S3 桶中，不带 versionId 的 DELETE 通常创建 delete marker，让对象表现为已删除；恢复要精确移除当前 marker，永久删除旧版本则是另一项操作。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-27T08:15:00.000Z">2026-11-27</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/27/s3-versioned-delete-marker-recovery/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>版本化桶中的无版本号 DELETE 通常新增 marker，并不抹除以前的对象版本。</li><li>要恢复对象，应识别并删除当前 delete marker 的 versionId。</li><li>不带 versionId 再删一次可能再创建 marker，版本生命周期规则也会永久删除非当前版本。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>在启用版本控制的 Amazon S3 桶里，不带 <code>versionId</code> 的 <code>DeleteObject</code> 通常不会永久抹掉已有对象版本，而是创建一个新的 delete marker，让普通 <code>GET</code> 看起来像对象已删除。恢复时要先找到当前 marker，再明确删除它的版本；对同一个 key 再发一次不带版本号的 DELETE，可能只会创建第二个 marker。删除“当前可见对象”和永久清除历史版本是两种不同操作。</p>
+<h2 id="Delete-marker-改变当前视图，不是对象内容"><a href="#Delete-marker-改变当前视图，不是对象内容" class="headerlink" title="Delete marker 改变当前视图，不是对象内容"></a>Delete marker 改变当前视图，不是对象内容</h2><p>对象版本控制启用后，同一个 key 可以有多个版本。无版本号删除在当前版本前放入 marker，使普通读取不再返回旧内容；旧版本仍可能保留，并继续占用存储。marker 本身也有 version ID，作为该 key 的一个当前版本。S3 返回成功说明删除请求被接受，不代表此前的字节数据已经物理清除。</p>
+<p>这解释了控制台、API 和应用日志之间常见的误读：控制台的对象列表可能不再显示 key，<code>HEAD</code> 或 <code>GET</code> 返回 404，但按历史 version ID 查询仍能找到以前的数据。此时“用户不可见”成立，“数据永久删除”不成立。若合规要求是不可恢复地销毁，必须考虑旧版本、复制目标、备份、Object Lock 保留期和生命周期规则，不能仅凭一次 DeleteObject 事件判断删除完成。</p>
+<h2 id="恢复操作必须针对-marker-的版本号"><a href="#恢复操作必须针对-marker-的版本号" class="headerlink" title="恢复操作必须针对 marker 的版本号"></a>恢复操作必须针对 marker 的版本号</h2><p>先通过版本列表找到该 key 的版本序列，确认最新条目是 delete marker，并记录其 version ID；再对该 key 发起带此 version ID 的删除请求。marker 被移除后，较新的非 marker 版本重新成为当前版本，普通 <code>GET</code> 会返回该对象。恢复不是把旧版本复制成新对象，也不是撤销整个桶上的版本控制开关。</p>
+<p>陷阱在于再次调用不带 version ID 的 DELETE。AWS 文档指出，如果当前版本本身是 delete marker，这个请求不会删除它，而会再 PUT 一个新的 marker。于是列表里 marker 数量继续增加，对象仍返回 404。版本 ID 为 <code>NULL</code> 的 marker 还有特例：请求必须显式传 <code>NULL</code> 才能删除该 marker；未传版本 ID 时可能创建另一条带唯一 ID 的 marker。恢复脚本若只按 key 删除而未读取版本状态，可能重复制造“删除记录”。</p>
+<h2 id="删除数据与撤销隐藏的状态不同"><a href="#删除数据与撤销隐藏的状态不同" class="headerlink" title="删除数据与撤销隐藏的状态不同"></a>删除数据与撤销隐藏的状态不同</h2><p>永久删除某个具体历史对象版本时，应向 DeleteObject 指定那个对象版本的 <code>versionId</code>。删除 marker 只是让较老版本重新可见；它不自动删除那些较老版本，也不会绕过 Object Lock。被保留或处于 legal hold 的对象版本可能拒绝永久删除；无版本号删除在受保护对象上仍可能成功创建 marker，使对象从普通视图隐藏，却没有销毁受保护数据。</p>
+<p>生命周期配置也有两类动作需要区分：当前版本过期在版本化桶里可以通过新增 marker 表达，非当前版本过期则会永久移除历史版本。若 marker 下方还存在对象版本，marker 不是“过期 marker”；只有对象版本已清除、只剩一个过期 marker 时，特定生命周期动作才可能自动删除该 marker。设置错误的生命周期规则可能把暂时隐藏与永久清理混为一谈。需要结合恢复窗口、存储成本、审计保留期和 Object Lock 设计，而不是让所有旧版本都由一个统一天数规则处理。</p>
+<h2 id="事件示例：上传服务把-DELETE-当成撤销上传"><a href="#事件示例：上传服务把-DELETE-当成撤销上传" class="headerlink" title="事件示例：上传服务把 DELETE 当成撤销上传"></a>事件示例：上传服务把 DELETE 当成撤销上传</h2><p>假设应用删除某张图片以撤销用户上传。请求在版本化桶成功，应用将数据库状态写成 <code>deleted=true</code>，用户界面不再显示图片。数月后做恢复演练，团队发现通过版本列表仍能读取图片；这并不表示 S3 没执行请求，而是应用的“已删除”含义只是当前版本被 marker 隐藏。正确的数据合同应区分 <code>hidden_from_current_reads</code>、<code>recoverable_version_retained</code> 和 <code>permanently_deleted</code> 等状态，并明确是谁负责清理非当前版本。</p>
+<p>如果业务真的需要恢复，可以由受控恢复程序读取对象版本列表，验证当前 marker 的 key 和版本 ID 与事件记录匹配，再删除指定 marker。操作前先核对账户、桶、区域和版本号；不可只靠 key 搜索结果猜测，因为并发上传和另一次删除会改变“当前版本”。如果业务要永久销毁，则应检查每个版本、marker、复制目标和保留策略，审批和结果记录也要绑定具体版本 ID。</p>
+<p>本文没有访问 AWS 账户或运行 S3 API。上述过程基于 S3 文档，实际恢复步骤需在当前桶版本控制状态、权限、Object Lock 与 SDK/API 行为下验证。不要把示例步骤当作对任意桶都可执行的恢复脚本。</p>
+<h2 id="验证恢复流程时保留反例路径"><a href="#验证恢复流程时保留反例路径" class="headerlink" title="验证恢复流程时保留反例路径"></a>验证恢复流程时保留反例路径</h2><p>在非生产测试桶先启用版本控制，上传两份不同内容到同一 key，记录两个版本 ID；无版本号 DELETE 后确认普通 GET 的结果与版本列表变化；再删除当前 marker 的确切 version ID，确认较旧内容恢复为当前版本。额外测试“对 marker 再做无版本号 DELETE”、NULL version ID、对象被锁定、非当前版本生命周期过期，以及上传和删除并发等路径。记录响应中的 version ID、delete-marker 标志和对象读取结果，不要只记录 HTTP 状态码。</p>
+<p>生产验收应区分三类承诺：客户端隐藏、可恢复删除、永久清除。事件、数据库状态机、对象版本清理、备份和复制策略要使用相同术语。若系统把一次成功的 DELETE 映射成永久清除，恢复演练会暴露语义缺口；若把 marker 恢复误当成重新上传，则可能覆盖现有对象。把“当前可见”“历史保留”和“不可恢复”分开命名，才能让应用的删除按钮与 S3 版本状态一致。</p>
+<p>审计字段至少应把 bucket、key、版本 ID、发起主体、请求时间、请求类型和返回的 delete-marker 状态对应起来。对批量删除，逐项结果比汇总 HTTP 成功码更重要：逐项结果能区分 key 失败、marker 新增和指定历史版本删除。恢复前再读一次版本清单能降低竞态风险，但仍应使用事件中识别出的版本 ID，而不是假设“当前最新那条”在任意时刻都安全。使用具体版本 ID 可把恢复动作约束到单一对象变更。</p>
+<h3 id="关联阅读"><a href="#关联阅读" class="headerlink" title="关联阅读"></a>关联阅读</h3><p>同一个对象 key 的版本身份也会影响完整性校验；本站的 <a href="/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/">S3 multipart checksum 文章</a> 说明 ETag 的边界。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/ManagingDelMarkers.html" rel="noopener">Amazon S3 User Guide — Managing delete markers</a></li><li><a target="_blank" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/DeletingObjectVersions.html" rel="noopener">Amazon S3 User Guide — Deleting object versions from a versioning-enabled bucket</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--aws" href="/zh-CN/tags/AWS/">AWS</a>
+          
+            <a class="tag tag--amazon-s3" href="/zh-CN/tags/Amazon-S3/">Amazon S3</a>
+          
+            <a class="tag tag--versioning" href="/zh-CN/tags/Versioning/">Versioning</a>
+          
+            <a class="tag tag--recovery" href="/zh-CN/tags/Recovery/">Recovery</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--operations" href="/zh-CN/categories/Operations/">Operations</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fs3-versioned-delete-marker-recovery%2F&text=%E7%89%88%E6%9C%AC%E5%8C%96%20S3%20%E5%AF%B9%E8%B1%A1%20DELETE%20%E8%BF%94%E5%9B%9E%E6%88%90%E5%8A%9F%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E6%97%A7%E6%96%87%E4%BB%B6%E8%BF%98%E5%9C%A8%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fs3-versioned-delete-marker-recovery%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=%E7%89%88%E6%9C%AC%E5%8C%96%20S3%20%E5%AF%B9%E8%B1%A1%20DELETE%20%E8%BF%94%E5%9B%9E%E6%88%90%E5%8A%9F%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E6%97%A7%E6%96%87%E4%BB%B6%E8%BF%98%E5%9C%A8%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fs3-versioned-delete-marker-recovery%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/">
+              <span>上一篇</span>
+              <strong>SQS FIFO 的五分钟去重保护的是发送重试，不是业务副作用</strong>
+              <small>2026-11-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/">
+              <span>下一篇</span>
+              <strong>S3 分段上传返回的 ETag 为什么不能当成整文件 MD5？</strong>
+              <small>2026-11-27</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Delete-marker-改变当前视图，不是对象内容">Delete marker 改变当前视图，不是对象内容</a>
+          
+            <a class="toc-link toc-link--h2" href="#恢复操作必须针对-marker-的版本号">恢复操作必须针对 marker 的版本号</a>
+          
+            <a class="toc-link toc-link--h2" href="#删除数据与撤销隐藏的状态不同">删除数据与撤销隐藏的状态不同</a>
+          
+            <a class="toc-link toc-link--h2" href="#事件示例：上传服务把-DELETE-当成撤销上传">事件示例：上传服务把 DELETE 当成撤销上传</a>
+          
+            <a class="toc-link toc-link--h2" href="#验证恢复流程时保留反例路径">验证恢复流程时保留反例路径</a>
+          
+            <a class="toc-link toc-link--h3" href="#关联阅读">关联阅读</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>224</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>199</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>119</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>85</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/">S3 分段上传返回的 ETag 为什么不能当成整文件 MD5？</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/27/eventbridge-retry-age-and-dlq/">EventBridge 目标不可用，默认重试为何五分钟后停止？</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/">SQS FIFO 的五分钟去重保护的是发送重试，不是业务副作用</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

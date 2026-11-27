@@ -1,0 +1,406 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Node 测试里的时钟被推进了，为什么 Promise 还没完成？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Node test runner 的 MockTimers 推进虚拟 timer/Date 时钟，但 setTime、tick 和 Promise 微任务不是一个概念；先明确要驱动哪种等待。">
+  
+  
+    <meta name="keywords" content="Node.js MockTimers,node:test mock timers,virtual clock">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/27/node-test-mock-timers-clock-boundary/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/27/node-test-mock-timers-clock-boundary/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/27/node-test-mock-timers-clock-boundary/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/27/node-test-mock-timers-clock-boundary/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Node 测试里的时钟被推进了，为什么 Promise 还没完成？ | Midnight blog">
+    <meta property="og:description" content="Node test runner 的 MockTimers 推进虚拟 timer/Date 时钟，但 setTime、tick 和 Promise 微任务不是一个概念；先明确要驱动哪种等待。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/27/node-test-mock-timers-clock-boundary/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/node-test-mock-timers-clock-boundary/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/27/node-test-mock-timers-clock-boundary/","name":"Node 测试里的时钟被推进了，为什么 Promise 还没完成？ | Midnight blog","description":"Node test runner 的 MockTimers 推进虚拟 timer/Date 时钟，但 setTime、tick 和 Promise 微任务不是一个概念；先明确要驱动哪种等待。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/node-test-mock-timers-clock-boundary/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/node-test-mock-timers-clock-boundary/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/node-test-mock-timers-clock-boundary/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/node-test-mock-timers-clock-boundary/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/27/node-test-mock-timers-clock-boundary/","headline":"Node 测试里的时钟被推进了，为什么 Promise 还没完成？","description":"Node test runner 的 MockTimers 推进虚拟 timer/Date 时钟，但 setTime、tick 和 Promise 微任务不是一个概念；先明确要驱动哪种等待。","inLanguage":"zh-CN","datePublished":"2026-11-27T08:15:00.000Z","dateModified":"2026-11-27T08:15:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://nodejs.org/api/test.html"],"keywords":"Node.js, node:test, Timers, Testing"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/node-test-mock-timers-clock-boundary/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Node 测试里的时钟被推进了，为什么 Promise 还没完成？","item":"https://www.zyweb.vip/zh-CN/2026/11/27/node-test-mock-timers-clock-boundary/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/27/node-test-mock-timers-clock-boundary/" selected>zh-CN</option><option value="/en/2026/11/27/node-test-mock-timers-clock-boundary/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/27/node-test-mock-timers-clock-boundary/" selected>zh-CN</option><option value="/en/2026/11/27/node-test-mock-timers-clock-boundary/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--node-js">Node.js</span>
+      <time datetime="2026-11-27T08:15:00.000Z">2026-11-27</time>
+    </div>
+
+    <h1>Node 测试里的时钟被推进了，为什么 Promise 还没完成？</h1>
+
+    
+      <p class="post-hero__summary">Node test runner 的 MockTimers 推进虚拟 timer/Date 时钟，但 setTime、tick 和 Promise 微任务不是一个概念；先明确要驱动哪种等待。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-27T08:15:00.000Z">2026-11-27</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/27/node-test-mock-timers-clock-boundary/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/27/node-test-mock-timers-clock-boundary/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>MockTimers 可控制选定的 timer API 与 Date，不会自动推进所有异步工作。</li><li>setTime 改变虚拟时间但不触发到期 timer；tick 才按时长推进 timer。</li><li>每个 test context 的 mock tracker 会自动恢复，但手动管理 fixture 时仍要防止真实 timer 泄漏。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Node.js <code>node:test</code> 的 MockTimers 可以让测试推进虚拟 timer 与 <code>Date</code>，不用为 <code>setTimeout</code> 等待真实秒数；但改动时钟和触发定时器不是同一件事。官方 API 中 <code>setTime()</code> 改变 mock clock 的时间，却不触发在过去或当前时刻到期的 timer；<code>tick()</code> 才让时间向前走并执行到期回调。若把两者混为一谈，Promise 仍 pending 并不说明 mock 失效。</p>
+<h2 id="先列出测试要控制的时间来源"><a href="#先列出测试要控制的时间来源" class="headerlink" title="先列出测试要控制的时间来源"></a>先列出测试要控制的时间来源</h2><p>一个“过期”逻辑可能依赖多种时钟：<code>Date.now()</code> 判断业务截止时间，<code>setTimeout()</code> 安排重试，<code>setInterval()</code> 更新心跳，<code>node:timers/promises</code> 返回可等待 Promise。MockTimers 默认可模拟 <code>setInterval</code>、<code>setTimeout</code>、<code>setImmediate</code> 和 <code>Date</code>，也允许通过 <code>apis</code> 明确选择；指定某个 timer API 时，它对应的 clear 函数也会一起模拟。不要因为 mock 了 <code>Date</code>，就假定外部库里所有时间来源或 <code>performance.now()</code> 都随之冻结。</p>
+<p>可控测试的第一步是给每个行为标出其时间依赖、预期触发边界和副作用。例如，失败后 500ms 重试，应验证 499ms 时没有发起第二次请求，跨过 500ms 后才发起；TTL 到期后拒绝读取，则要分别检查虚拟 wall clock 与 timer 回调是否一起推进。这个具体边界比“把时间快进一下”更可审查。</p>
+<h2 id="setTime-与-tick-的差别"><a href="#setTime-与-tick-的差别" class="headerlink" title="setTime 与 tick 的差别"></a><code>setTime</code> 与 <code>tick</code> 的差别</h2><p>假设测试先用 <code>mock.timers.enable({apis:[&#39;setTimeout&#39;,&#39;Date&#39;], now: 0})</code> 建立虚拟时钟，再安排一个 1000ms timer。调用 <code>setTime(1000)</code> 后，<code>Date.now()</code> 可显示新的时间，但该 timer 不会因为时钟跳到了截止点而自动运行。调用 <code>tick(1000)</code> 则推进计时器经过的时长，使到期回调执行。这个区别适合模拟手动改系统时间与真实经过等待时长的不同业务语义。</p>
+<p>日期边界的测试还应决定是否要跨越日历日、时区偏移、夏令时或月末；单纯把毫秒数增加 24 小时不总等于业务上的“明天”。MockTimers 只替换选定的 API，并不自动替应用定义日期语义。若代码把 <code>Date</code> 与真实网络响应、数据库时钟或原生扩展混用，虚拟时钟可能只控制了测试的一部分。</p>
+<h2 id="timer-回调、微任务和-Promise-仍需观察"><a href="#timer-回调、微任务和-Promise-仍需观察" class="headerlink" title="timer 回调、微任务和 Promise 仍需观察"></a>timer 回调、微任务和 Promise 仍需观察</h2><p>timer 到期回调若调用 <code>resolve()</code>，Promise 的 continuation 通常会在微任务队列里继续；测试应等待对应 Promise 或按 Node 文档提供的 mock timer 方法推进相关任务，不要把“回调执行”与“所有异步链结束”当成同一个观测点。Node 的测试 runner API 版本会改变可用方法和稳定性状态，当前引用的文档页面为 Node.js v26.13.1；功能从 v20.4.0、v18.19.0 引入，MockTimers 在 v23.1.0 标为稳定。若项目跑 Node 20 或 22，应读对应发行文档，不能直接复制最新 API 语法。</p>
+<p>也要留意 <code>node:timers/promises</code> 的 <code>setTimeout()</code>、AbortSignal 中断、同一 deadline 安排多个 timer 的顺序，以及 <code>setInterval()</code> 跨多个 tick 的行为。测试只推进一次 tick 后断言服务逻辑已完成，可能漏掉 Promise settling 或后续 interval 触发。把各阶段断言拆开：时间读取、timer callback 次数、请求次数、Promise state、清理动作，能定位究竟是钟没变、回调没跑还是异步 continuation 未完成。</p>
+<h2 id="一个可复现重试边界的测试设计"><a href="#一个可复现重试边界的测试设计" class="headerlink" title="一个可复现重试边界的测试设计"></a>一个可复现重试边界的测试设计</h2><p>设一个请求函数第一次拒绝，第二次成功；生产逻辑通过 <code>setTimeout(retry, 500)</code> 重试。测试应在每个测试上下文创建 mock timers，执行一次请求，然后在 499ms 检查调用仍为一次，接着再推进 1ms，并等待重试 Promise，最后检查第二次调用与最终结果。再增加取消路径：在到期前 AbortSignal 取消，确认 timer 被清理且不会继续执行副作用。这里是建议设计，没有执行 Node 命令或观察测试日志。</p>
+<p>同样重要的是负向情况：若测试在断言后没有恢复 timer 行为，模拟状态可能污染共享 fixture；若只 mock <code>setTimeout</code> 而代码实际用了 <code>timers/promises</code>，测试依旧会等待真实时间；若 timer callback 安排另一个 timer，只推进一个间隔未必触发第二个。Node test runner 将 mock tracker 绑定到测试上下文，并会在 test 完成后恢复模拟，但你手工创建的外部 clock、第三方 fake timer 或跨上下文对象仍需自己管理。</p>
+<h2 id="选择标准：测试逻辑时间，别制造全局假象"><a href="#选择标准：测试逻辑时间，别制造全局假象" class="headerlink" title="选择标准：测试逻辑时间，别制造全局假象"></a>选择标准：测试逻辑时间，别制造全局假象</h2><p>优先使用 <code>node:test</code> 内置 MockTimers，当目标是验证 Node 自带 timer API、Date 边界和本测试的重试行为。仅选择需要 mock 的 API，让其他真实异步依赖保持清楚；用 <code>now</code> 设置明确 epoch，在每个测试中设定独立初始值。若组件自带时钟抽象，注入 clock 可能更适合跨运行时或纯函数测试。不要同时叠加几种 fake timer，除非已明确哪一层替换了哪个全局对象。</p>
+<p>验收时记录 Node 版本、测试运行器、启用的 API、初始时间、每次 tick/setTime、回调次数和异步完成点。本文没有实际执行示例；它给出基于最新 Node 文档的行为解释，不能当作项目测试通过证据。测试应精确描述“虚拟时钟现在是什么”和“哪些 timer 已经运行”，避免一个笼统的 fast-forward 把环境真实机制遮住。</p>
+<h2 id="把虚拟时钟测试写成状态转换表"><a href="#把虚拟时钟测试写成状态转换表" class="headerlink" title="把虚拟时钟测试写成状态转换表"></a>把虚拟时钟测试写成状态转换表</h2><p>对边界敏感的逻辑，测试设计可以先列出状态而不是先写 <code>tick</code>：初始时刻、注册了哪些 timer、deadline、deadline 前的期望、到期后的回调、Promise continuation、最终副作用。以重试为例，第一次调用失败后注册 500ms timer；虚拟时钟处于 499ms 时调用数仍为 1；再经过 1ms 后 timer 回调应启动第二次调用；随后还要等待并断言第二个 Promise 的结果。这样可以把“定时器按期运行”与“业务异步链收敛”分别验证。若 Node 当前版本提供了运行 pending timers 或执行微任务相关的 API，必须按对应版本文档核对其语义，不要把某个测试工具的 flush helper 当成所有 Node 版本都具备的功能。</p>
+<p>另一个容易漏掉的边界是相同 deadline 的多个 timer。代码可能依赖注册顺序，也可能在一个 timer 中创建新的 timer；一次 tick 的目标区间是否包含终点、到期回调创建的后续 timer 是否会在本次推进中继续执行，都会影响测试写法。最稳妥的是设计几个小测试，直接记录每个 callback 的顺序，并逐次推进有限时间，再与当前 Node 版本的公开 API 行为核对。本文没有运行这些实验，所以不能断言特定版本中所有嵌套 timer 的调度顺序。</p>
+<p>MockTimers 的边界也能帮助判断何时应改用依赖注入。若被测模块同时读 <code>Date.now()</code>、浏览器性能时钟、数据库服务器时间和第三方库的私有调度器，mock Node 全局 timer 只覆盖了一部分时间源。把业务 deadline 包装成显式 clock 接口，能在单元测试里注入可控时间，再用少量集成测试核对真实适配器。相反，若目标只是验证 Node <code>setTimeout</code>/<code>Date</code> 的交互，内置 mock 可减少额外假时钟实现的维护成本。测试报告中列出被替换的 API 和仍然真实运行的时钟，能避免把局部虚拟时间误当成全系统时间冻结。</p>
+<h3 id="关联阅读"><a href="#关联阅读" class="headerlink" title="关联阅读"></a>关联阅读</h3><p>浏览器端异步条件与固定等待的区别见本站的 <a href="/zh-CN/2026/10/11/playwright-assertion-wait/">Playwright assertion wait 文章</a>。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://nodejs.org/api/test.html" rel="noopener">Node.js v26.13.1 documentation — Test runner: MockTimers</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--node-js" href="/zh-CN/tags/Node.js/">Node.js</a>
+          
+            <a class="tag tag--node-test" href="/zh-CN/tags/node%3Atest/">node:test</a>
+          
+            <a class="tag tag--timers" href="/zh-CN/tags/Timers/">Timers</a>
+          
+            <a class="tag tag--testing" href="/zh-CN/tags/Testing/">Testing</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--testing" href="/zh-CN/categories/Testing/">Testing</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fnode-test-mock-timers-clock-boundary%2F&text=Node%20%E6%B5%8B%E8%AF%95%E9%87%8C%E7%9A%84%E6%97%B6%E9%92%9F%E8%A2%AB%E6%8E%A8%E8%BF%9B%E4%BA%86%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%20Promise%20%E8%BF%98%E6%B2%A1%E5%AE%8C%E6%88%90%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fnode-test-mock-timers-clock-boundary%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Node%20%E6%B5%8B%E8%AF%95%E9%87%8C%E7%9A%84%E6%97%B6%E9%92%9F%E8%A2%AB%E6%8E%A8%E8%BF%9B%E4%BA%86%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%20Promise%20%E8%BF%98%E6%B2%A1%E5%AE%8C%E6%88%90%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fnode-test-mock-timers-clock-boundary%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/27/otel-exemplars-metric-trace-link/">
+              <span>上一篇</span>
+              <strong>指标图上看到尖峰，却找不到请求：OpenTelemetry exemplar 连接了什么？</strong>
+              <small>2026-11-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/27/node-permission-model-trust-boundary/">
+              <span>下一篇</span>
+              <strong>Node.js 权限模型能收紧进程权限，但不是运行陌生代码的沙箱</strong>
+              <small>2026-11-27</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#先列出测试要控制的时间来源">先列出测试要控制的时间来源</a>
+          
+            <a class="toc-link toc-link--h2" href="#setTime-与-tick-的差别">setTime 与 tick 的差别</a>
+          
+            <a class="toc-link toc-link--h2" href="#timer-回调、微任务和-Promise-仍需观察">timer 回调、微任务和 Promise 仍需观察</a>
+          
+            <a class="toc-link toc-link--h2" href="#一个可复现重试边界的测试设计">一个可复现重试边界的测试设计</a>
+          
+            <a class="toc-link toc-link--h2" href="#选择标准：测试逻辑时间，别制造全局假象">选择标准：测试逻辑时间，别制造全局假象</a>
+          
+            <a class="toc-link toc-link--h2" href="#把虚拟时钟测试写成状态转换表">把虚拟时钟测试写成状态转换表</a>
+          
+            <a class="toc-link toc-link--h3" href="#关联阅读">关联阅读</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>224</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>199</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>119</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>85</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/27/node-permission-model-trust-boundary/">Node.js 权限模型能收紧进程权限，但不是运行陌生代码的沙箱</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/16/python-mock-mutable-call-argument-snapshot/">Mock 明明被正确调用，断言为什么看到已经清空的字典？</a></h3>
+          <p>2026-11-16</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/15/python-logging-dictconfig-existing-loggers/">Python 改完日志配置，为什么旧 logger 不再出声？</a></h3>
+          <p>2026-11-15</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

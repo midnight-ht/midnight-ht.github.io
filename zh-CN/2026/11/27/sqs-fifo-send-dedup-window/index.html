@@ -1,0 +1,400 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>SQS FIFO 的五分钟去重保护的是发送重试，不是业务副作用 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Amazon SQS FIFO 按消息去重 ID 在五分钟窗口内避免重复入队；它不替消费者保证一次性扣款或数据库写入，内容哈希也不包含消息属性。">
+  
+  
+    <meta name="keywords" content="SQS FIFO 去重,MessageDeduplicationId,exactly-once processing">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/27/sqs-fifo-send-dedup-window/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="SQS FIFO 的五分钟去重保护的是发送重试，不是业务副作用 | Midnight blog">
+    <meta property="og:description" content="Amazon SQS FIFO 按消息去重 ID 在五分钟窗口内避免重复入队；它不替消费者保证一次性扣款或数据库写入，内容哈希也不包含消息属性。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/","name":"SQS FIFO 的五分钟去重保护的是发送重试，不是业务副作用 | Midnight blog","description":"Amazon SQS FIFO 按消息去重 ID 在五分钟窗口内避免重复入队；它不替消费者保证一次性扣款或数据库写入，内容哈希也不包含消息属性。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/","headline":"SQS FIFO 的五分钟去重保护的是发送重试，不是业务副作用","description":"Amazon SQS FIFO 按消息去重 ID 在五分钟窗口内避免重复入队；它不替消费者保证一次性扣款或数据库写入，内容哈希也不包含消息属性。","inLanguage":"zh-CN","datePublished":"2026-11-27T08:15:00.000Z","dateModified":"2026-11-27T08:15:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues-exactly-once-processing.html","https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-fifo-queue-message-identifiers.html"],"keywords":"AWS, Amazon SQS, FIFO, Idempotency"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"SQS FIFO 的五分钟去重保护的是发送重试，不是业务副作用","item":"https://www.zyweb.vip/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/" selected>zh-CN</option><option value="/en/2026/11/27/sqs-fifo-send-dedup-window/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/" selected>zh-CN</option><option value="/en/2026/11/27/sqs-fifo-send-dedup-window/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--aws">AWS</span>
+      <time datetime="2026-11-27T08:15:00.000Z">2026-11-27</time>
+    </div>
+
+    <h1>SQS FIFO 的五分钟去重保护的是发送重试，不是业务副作用</h1>
+
+    
+      <p class="post-hero__summary">Amazon SQS FIFO 按消息去重 ID 在五分钟窗口内避免重复入队；它不替消费者保证一次性扣款或数据库写入，内容哈希也不包含消息属性。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-27T08:15:00.000Z">2026-11-27</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/27/sqs-fifo-send-dedup-window/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>五分钟窗口绑定 FIFO 消息发送去重，不等于业务效果只执行一次。</li><li>内容去重模式只对消息体做 SHA-256，消息属性不参与。</li><li>关键业务副作用仍需由消费者的幂等键或事务记录保护。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Amazon SQS FIFO 的去重窗口解决的是发送端不知道 <code>SendMessage</code> 是否成功、于是重试同一条消息时可能多入队的问题。按相同去重 ID 在五分钟窗口内重发，SQS 不会再加入一份重复消息；这不保证消费者只执行一次扣款、发邮件或数据库写入。消费者侧仍可能遇到重投、超时和副作用之后未删除消息等情况，因此要把“队列接收去重”和“业务操作幂等”分开设计。</p>
+<h2 id="五分钟窗口从哪里开始？"><a href="#五分钟窗口从哪里开始？" class="headerlink" title="五分钟窗口从哪里开始？"></a>五分钟窗口从哪里开始？</h2><p>假设订单服务要把订单 <code>o-817</code> 的“准备出库”事件发送到 FIFO 队列。服务发送后网络断开，没有收到响应，无法确定消息是否已经到达。它使用 <code>order:o-817:ready:v1</code> 作为 <code>MessageDeduplicationId</code> 重试。如果重试落在同一个五分钟去重区间，SQS 会把它识别为重复发送，不再把第二份放入队列。这让客户端可以对不确定的发送结果进行有限重试，而不用假设每个网络超时都代表第一次请求失败。</p>
+<p>这个保证有明确边界：它作用在 FIFO 的发送去重机制和时间窗口内。五分钟之后，相同 ID 的发送不再享有这个窗口内的抑制保证；业务系统要能处理延迟重放、人工重发或更长时间后的恢复。消息发出后消费者是否成功、是否处理到一半、是否把副作用提交后崩溃，都不是发送去重本身能证明的事情。AWS 页面用 “exactly-once processing” 描述 FIFO 能力时，正文具体展开的是避免在短窗口里重复入队，阅读时不能把标题扩大成端到端事务语义。</p>
+<h2 id="内容去重会看哪些字段？"><a href="#内容去重会看哪些字段？" class="headerlink" title="内容去重会看哪些字段？"></a>内容去重会看哪些字段？</h2><p>启用 content-based deduplication 时，SQS 用消息体计算 SHA-256 去生成 deduplication ID；消息属性不参与该哈希。因此，两条消息的 JSON body 相同，但 <code>tenant</code>、<code>trace-id</code> 或 <code>schema-version</code> 属性不同，仍可能因为生成的去重 ID 相同而被当作重复。如果这些属性改变业务含义，不能默默依赖 body-only 的内容去重。可以显式提供包含业务版本的 <code>MessageDeduplicationId</code>，或者把语义字段纳入经过规范化的消息体；设计时要说明稳定的事件身份是什么。</p>
+<p>反过来，如果两条文本 JSON 的字段顺序不同，虽然业务数据可能相等，字节内容也可能不同，内容去重就可能得到不同 ID。内容去重不是 JSON 语义比较器，不会替应用排序字段、规范数字格式或去掉不影响业务的元数据。对于一次业务动作，显式构造稳定的事件 ID 往往比期待哈希自动理解“语义相同”更容易审计。示例中的 ID 格式仅为设计假设，未发送到 AWS 队列。</p>
+<p>显式 ID 也需要避免“过度复用”。如果系统仅把订单号 <code>o-817</code> 当去重 ID，同一订单的 <code>ready</code> 与之后合法的 <code>cancelled</code> 两种不同事件可能在五分钟内撞到同一身份，第二个发送会被抑制。更有解释力的身份通常包含聚合对象、事件类型和产生该事件的稳定版本或序号；它既要让网络重试保持一致，也要让不同业务变化彼此区分。反例是在每次重试时随机生成一个新 UUID：这会把同一业务事件伪装成多条新消息，失去重试去重的效果。具体字段应由事件模型定义，而不是单纯照搬示例字符串。</p>
+<h2 id="一个副作用时间线如何越过发送去重？"><a href="#一个副作用时间线如何越过发送去重？" class="headerlink" title="一个副作用时间线如何越过发送去重？"></a>一个副作用时间线如何越过发送去重？</h2><p>设消费者收到订单事件后先调用支付服务，再把消息删除。假设支付已成功，但消费者在 <code>DeleteMessage</code> 前崩溃，消息之后可以重新交付。FIFO 仍按队列顺序交付，但消费者可能再次调用支付服务。去重窗口描述发送端重复提交消息的行为，不会自动检查外部支付系统是否已经扣款，也不会让支付调用与消息删除形成同一个原子事务。</p>
+<p>更稳妥的消费者合同是：将稳定的 <code>event_id</code> 写入业务侧处理记录，并与业务变更放在同一数据库事务里；如果副作用发生在外部服务，则把该 ID 作为下游幂等键传递，或先写 outbox 再由有去重能力的下游执行。数据库唯一约束可以阻止同一事件被第二次登记，但不能凭空撤销一个已经完成、而下游又不支持幂等的外部动作。具体做法取决于副作用边界，不存在由 SQS FIFO 单独提供的通用分布式事务。</p>
+<p>处理记录还要定义状态转换。比如，第一次收到事件时建立唯一的 <code>event_id</code>，业务事务提交后把记录标为完成；第二次收到相同事件时，若查到完成记录就不重复调用外部服务。若只记录“处理中”而消费者崩溃，租约过期后还要允许恢复或人工核对，不能让这个状态永久占住事件。这个数据库状态设计是消费者责任，SQS 的五分钟发送去重不会替它维护。</p>
+<h2 id="如何验收发送者和消费者的不同保证？"><a href="#如何验收发送者和消费者的不同保证？" class="headerlink" title="如何验收发送者和消费者的不同保证？"></a>如何验收发送者和消费者的不同保证？</h2><p>发送端测试应分别覆盖：首次发送已成功但响应丢失、窗口内相同 ID 重试、不同业务 ID 的消息、窗口过后再次发送，以及属性不同但 body 相同的内容去重情形。消费者测试应覆盖：处理前崩溃、业务副作用成功后删除前崩溃、同事件再次交付、幂等记录已存在，以及下游暂时失败。测试的目标不是证明任何真实队列恰好执行一次，而是证明每一层在自己声明的合同内处理重试。</p>
+<p>本文没有创建 SQS 队列或运行 AWS 客户端；时间线和检查项是根据官方文档组织的假设案例，不是实测日志。部署前还应核对队列是否启用 content-based deduplication、显式 ID 的生成规则、FIFO 消息组顺序，以及消费者的可见性与删除策略。把五分钟发送去重当作一层减轻重复入队的保护，再独立设计业务幂等，才不会把一个局部机制误当成端到端“只执行一次”。</p>
+<p>发送端仍需记录业务事件 ID、SQS 返回的消息 ID 和重试原因。去重 ID 应来自稳定的业务操作标识，而不是每次重试都重新生成的随机数；但若两个不同事件错误复用同一个 ID，窗口内的第二条消息也可能被当作重复发送而抑制。消息体哈希去重也有相反边界：同一正文、不同消息属性仍可能命中相同正文去重值。先定义消息唯一性是“相同命令只出现一次”还是“正文相同只出现一次”，再选显式 ID 或内容去重。</p>
+<h3 id="关联阅读"><a href="#关联阅读" class="headerlink" title="关联阅读"></a>关联阅读</h3><p>发送去重之外，消费端租约与重复投递见本站的 <a href="/zh-CN/2026/11/27/sqs-visibility-timeout-renewal-ceiling/">SQS visibility timeout 续租边界</a>。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues-exactly-once-processing.html" rel="noopener">Exactly-once processing in Amazon SQS — FIFO producer deduplication</a></li><li><a target="_blank" href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-fifo-queue-message-identifiers.html" rel="noopener">FIFO queue and message identifiers — Message deduplication ID</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--aws" href="/zh-CN/tags/AWS/">AWS</a>
+          
+            <a class="tag tag--amazon-sqs" href="/zh-CN/tags/Amazon-SQS/">Amazon SQS</a>
+          
+            <a class="tag tag--fifo" href="/zh-CN/tags/FIFO/">FIFO</a>
+          
+            <a class="tag tag--idempotency" href="/zh-CN/tags/Idempotency/">Idempotency</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--architecture" href="/zh-CN/categories/Architecture/">Architecture</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fsqs-fifo-send-dedup-window%2F&text=SQS%20FIFO%20%E7%9A%84%E4%BA%94%E5%88%86%E9%92%9F%E5%8E%BB%E9%87%8D%E4%BF%9D%E6%8A%A4%E7%9A%84%E6%98%AF%E5%8F%91%E9%80%81%E9%87%8D%E8%AF%95%EF%BC%8C%E4%B8%8D%E6%98%AF%E4%B8%9A%E5%8A%A1%E5%89%AF%E4%BD%9C%E7%94%A8" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fsqs-fifo-send-dedup-window%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=SQS%20FIFO%20%E7%9A%84%E4%BA%94%E5%88%86%E9%92%9F%E5%8E%BB%E9%87%8D%E4%BF%9D%E6%8A%A4%E7%9A%84%E6%98%AF%E5%8F%91%E9%80%81%E9%87%8D%E8%AF%95%EF%BC%8C%E4%B8%8D%E6%98%AF%E4%B8%9A%E5%8A%A1%E5%89%AF%E4%BD%9C%E7%94%A8&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fsqs-fifo-send-dedup-window%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/27/sqs-visibility-timeout-renewal-ceiling/">
+              <span>上一篇</span>
+              <strong>SQS 心跳续租能减少抢重消息，但十二小时上限不会重置</strong>
+              <small>2026-11-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/">
+              <span>下一篇</span>
+              <strong>版本化 S3 对象 DELETE 返回成功，为什么旧文件还在？</strong>
+              <small>2026-11-27</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#五分钟窗口从哪里开始？">五分钟窗口从哪里开始？</a>
+          
+            <a class="toc-link toc-link--h2" href="#内容去重会看哪些字段？">内容去重会看哪些字段？</a>
+          
+            <a class="toc-link toc-link--h2" href="#一个副作用时间线如何越过发送去重？">一个副作用时间线如何越过发送去重？</a>
+          
+            <a class="toc-link toc-link--h2" href="#如何验收发送者和消费者的不同保证？">如何验收发送者和消费者的不同保证？</a>
+          
+            <a class="toc-link toc-link--h3" href="#关联阅读">关联阅读</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>224</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>199</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>119</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>85</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/27/sqs-visibility-timeout-renewal-ceiling/">SQS 心跳续租能减少抢重消息，但十二小时上限不会重置</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/27/eventbridge-retry-age-and-dlq/">EventBridge 目标不可用，默认重试为何五分钟后停止？</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/">S3 分段上传返回的 ETag 为什么不能当成整文件 MD5？</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

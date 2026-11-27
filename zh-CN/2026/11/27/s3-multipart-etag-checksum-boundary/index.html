@@ -1,0 +1,401 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>S3 分段上传返回的 ETag 为什么不能当成整文件 MD5？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="S3 multipart ETag 标识组合对象，却不保证等于整文件 MD5；应在创建上传时选择 checksum 算法与 full/composite 类型，再按存储的校验值验证完整性。">
+  
+  
+    <meta name="keywords" content="S3 multipart ETag,S3 checksum,CRC64NVME,分段上传完整性">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/27/s3-multipart-etag-checksum-boundary/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="S3 分段上传返回的 ETag 为什么不能当成整文件 MD5？ | Midnight blog">
+    <meta property="og:description" content="S3 multipart ETag 标识组合对象，却不保证等于整文件 MD5；应在创建上传时选择 checksum 算法与 full/composite 类型，再按存储的校验值验证完整性。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/","name":"S3 分段上传返回的 ETag 为什么不能当成整文件 MD5？ | Midnight blog","description":"S3 multipart ETag 标识组合对象，却不保证等于整文件 MD5；应在创建上传时选择 checksum 算法与 full/composite 类型，再按存储的校验值验证完整性。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/","headline":"S3 分段上传返回的 ETag 为什么不能当成整文件 MD5？","description":"S3 multipart ETag 标识组合对象，却不保证等于整文件 MD5；应在创建上传时选择 checksum 算法与 full/composite 类型，再按存储的校验值验证完整性。","inLanguage":"zh-CN","datePublished":"2026-11-27T08:15:00.000Z","dateModified":"2026-11-27T08:15:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity-upload.html","https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html"],"keywords":"AWS, Amazon S3, Multipart Upload, Data Integrity"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"S3 分段上传返回的 ETag 为什么不能当成整文件 MD5？","item":"https://www.zyweb.vip/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/" selected>zh-CN</option><option value="/en/2026/11/27/s3-multipart-etag-checksum-boundary/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/" selected>zh-CN</option><option value="/en/2026/11/27/s3-multipart-etag-checksum-boundary/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--aws">AWS</span>
+      <time datetime="2026-11-27T08:15:00.000Z">2026-11-27</time>
+    </div>
+
+    <h1>S3 分段上传返回的 ETag 为什么不能当成整文件 MD5？</h1>
+
+    
+      <p class="post-hero__summary">S3 multipart ETag 标识组合对象，却不保证等于整文件 MD5；应在创建上传时选择 checksum 算法与 full/composite 类型，再按存储的校验值验证完整性。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-27T08:15:00.000Z">2026-11-27</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/27/s3-multipart-etag-checksum-boundary/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>分段对象 ETag 不是整对象 MD5，不应直接拿它比较本地文件摘要。</li><li>multipart checksum 可选择 full object 或 composite，算法支持范围不同。</li><li>上传发起时声明算法，并在完成和下载验证路径核对实际 checksum。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Amazon S3 multipart 上传完成后返回的 ETag 可以标识组合对象，但不能普遍解释为整个对象字节的 MD5。AWS 文档明确说明，multipart 上传产生的对象 ETag 不是整文件 MD5，与加密方式无关；单次上传时 ETag 在特定条件下才可能等于对象 MD5。若要验证大文件完整性，应显式选择 S3 支持的 checksum 算法和校验类型，并确认 checksum 在上传时被服务端验证、保存，随后能在读取时用于核对。</p>
+<h2 id="一个三段文件为什么容易误验？"><a href="#一个三段文件为什么容易误验？" class="headerlink" title="一个三段文件为什么容易误验？"></a>一个三段文件为什么容易误验？</h2><p>假设本地文件拆成三个部分分别上传，客户端从 <code>CompleteMultipartUpload</code> 响应取得一个 ETag，例如外观上可能包含引号和连字符。直接对原始整文件运行 MD5，然后与这个 ETag 字符串比较，可能不相等；这不自动证明上传损坏。对于某些上传方式，ETag 由各部分的摘要信息组合而来，而不是对完整拼接对象直接做一次 MD5。AWS 还说明，对于 multipart 上传，ETag 不会是整个对象的 MD5，无论使用哪种加密方式。不能将某次 SSE-S3、小文件或单段对象上的经验外推到分段上传。</p>
+<p>同时，ETag 可以作为对象版本表示的一部分，帮助识别对象内容是否改变，但不等于通用完整性协议。对象元数据变化和对象字节变化也不是一回事；仅因 ETag 看起来像十六进制串，就把它当成“可信强哈希”使用，容易把缓存标识、并发条件与传输完整性检查混为一个合同。先定义要验证的是哪个属性：每段传输未损坏、最终对象等于期望字节、对象是否发生变化，分别需要可验证的字段与流程。</p>
+<h2 id="full-object-与-composite-checksum-有什么不同？"><a href="#full-object-与-composite-checksum-有什么不同？" class="headerlink" title="full object 与 composite checksum 有什么不同？"></a>full object 与 composite checksum 有什么不同？</h2><p>S3 multipart checksum 支持 full object 和 composite 类型，但并非每个算法都支持两种类型。当前文档列出 CRC-64/NVME 可用于 full object 而不支持 composite；CRC32、CRC32C 可用于两者；SHA-1、SHA-256、MD5 与若干 XXHash/SHA-512 算法只支持 composite。Full object checksum 代表完整拼接对象的校验值；composite checksum 则由分段校验信息组成，不能一概当作普通整文件摘要。验证系统应保存算法名称、校验类型和对象版本等上下文，不能只存一串没有解释的字符。</p>
+<p>使用 multipart API 时，发起上传阶段应指定 checksum 算法和类型，再对每段提供该算法的校验信息。AWS 文档特别提醒，对较新的 checksum 算法，如果只在 <code>CompleteMultipartUpload</code> 提供校验头，却没有在 <code>CreateMultipartUpload</code> 指定算法，完成请求会失败；一些既有算法在未于发起时声明的情况下，完成阶段提供的校验值可能不被验证或保存。安全做法是从上传启动就建立校验合同，避免误以为最后一个请求带了值便完成了服务端验证。</p>
+<p>把全对象校验作为需求时，完整流程可以这样定义：上传前从原始文件计算所选 full-object checksum，将算法、类型、期望值和对象 key 绑定到同一任务记录；创建 multipart upload 时声明支持该组合的算法和校验类型；各段上传成功后保存 part 编号和响应；完成后读取对象所保存的 checksum 字段，与任务记录中的算法和期望值核对。如果计算值不匹配，S3 会以校验错误拒绝完成，而不是让系统把有疑问的对象标记成功。该流程仍要按所用 SDK 的字段支持实际验证。</p>
+<h2 id="如何把现有的-ETag-比较迁移为校验合同？"><a href="#如何把现有的-ETag-比较迁移为校验合同？" class="headerlink" title="如何把现有的 ETag 比较迁移为校验合同？"></a>如何把现有的 ETag 比较迁移为校验合同？</h2><p>假设原系统把本地 MD5 与 S3 ETag 字符串相等当作上传成功条件。迁移时可以为上传任务增加期望的 checksum 算法、值、类型和对象 key；启动 multipart 时声明该算法，逐段上传并收集响应中的部分状态，最后完成上传。随后调用对象元数据读取接口，核对服务返回的 checksum 字段与预期算法和类型一致。对于下载检查，再按保存的校验算法验证读回的字节。这个流程需考虑 SDK 版本、checksum 字段是否请求返回、multipart checksum 组合规则与对象加密方式，不能仅仅替换字段名。</p>
+<p>一个反例是选了 SHA-256 composite，却把它与本地整个文件的一次性 SHA-256 直接相等比较。Composite checksum 的含义不同；如果需求是整文件 SHA-256，而算法不支持该上传类型的 full object 校验，就应设计另外的全对象校验路径，不能重命名 composite 值掩盖差异。当前文档对 CRC-64/NVME 提供 full object 路径，选择时仍需考虑客户端 SDK 和接收流程支持。</p>
+<p>旧对象若没有保存所需的 checksum 元数据，也不能仅凭 ETag 相似或不同就回填“已验证”状态。可在数据清单中把它标成校验证据不足，再根据风险选择重新下载计算、与可信来源摘要比对，或重新上传并建立新合同。这个状态分类是迁移中的保守判断，不代表旧对象必然损坏；它只避免把没有证据误说成通过完整性检查。</p>
+<p>保存“未验证”原因，后续迁移才可复查。</p>
+<h2 id="如何验收一次上传？"><a href="#如何验收一次上传？" class="headerlink" title="如何验收一次上传？"></a>如何验收一次上传？</h2><p>在测试桶用固定字节输入，分别覆盖单次 PUT 和多段 multipart；记录上传发起时声明的算法、类型、各段 checksum、完成响应和后续对象 checksum 字段。人为修改一段字节、交换段号或让完成请求缺少某一段，确认错误路径能阻止对象被错误标记为已验证。再验证加密方式、SDK 升级和旧对象没有 checksum 元数据时，系统会如何分类，而不是用 ETag 猜测。</p>
+<p>本文未创建 S3 桶或运行 CLI/SDK；输入和步骤是设计验收方案，不是执行日志。最终规则要以当前 AWS 文档、SDK 行为和实际上传协议为准。把 ETag 当对象标识线索，把明确声明的 checksum 当完整性证据，并保留算法与校验类型，能避免将表面相似的十六进制字段当成同一含义。</p>
+<p>并发覆盖也要绑定版本身份。假设流程完成上传后读取 checksum，但同一 key 紧接着被另一个任务覆盖；如果读取未指向此次上传的对象版本，系统可能把后来对象的摘要误当成刚完成任务的证据。任务记录应保存完成响应中的版本信息（桶版本控制状态会影响可用字段），后续验证再对准同一版本。算法选对了仍不够，证据也必须对应正确对象。</p>
+<h3 id="关联阅读"><a href="#关联阅读" class="headerlink" title="关联阅读"></a>关联阅读</h3><p>校验算法要对应正确对象版本；本站的 <a href="/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/">S3 delete marker 恢复边界</a> 讨论版本身份。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity-upload.html" rel="noopener">Amazon S3 User Guide — Checking object integrity for data uploads</a></li><li><a target="_blank" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html" rel="noopener">Amazon S3 User Guide — Uploading and copying objects using multipart upload</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--aws" href="/zh-CN/tags/AWS/">AWS</a>
+          
+            <a class="tag tag--amazon-s3" href="/zh-CN/tags/Amazon-S3/">Amazon S3</a>
+          
+            <a class="tag tag--multipart-upload" href="/zh-CN/tags/Multipart-Upload/">Multipart Upload</a>
+          
+            <a class="tag tag--data-integrity" href="/zh-CN/tags/Data-Integrity/">Data Integrity</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fs3-multipart-etag-checksum-boundary%2F&text=S3%20%E5%88%86%E6%AE%B5%E4%B8%8A%E4%BC%A0%E8%BF%94%E5%9B%9E%E7%9A%84%20ETag%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E8%83%BD%E5%BD%93%E6%88%90%E6%95%B4%E6%96%87%E4%BB%B6%20MD5%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fs3-multipart-etag-checksum-boundary%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=S3%20%E5%88%86%E6%AE%B5%E4%B8%8A%E4%BC%A0%E8%BF%94%E5%9B%9E%E7%9A%84%20ETag%20%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E8%83%BD%E5%BD%93%E6%88%90%E6%95%B4%E6%96%87%E4%BB%B6%20MD5%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fs3-multipart-etag-checksum-boundary%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/">
+              <span>上一篇</span>
+              <strong>版本化 S3 对象 DELETE 返回成功，为什么旧文件还在？</strong>
+              <small>2026-11-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/27/redis-wait-ack-is-not-durability/">
+              <span>下一篇</span>
+              <strong>Redis WAIT 返回 2，为什么仍不能说写入已经耐久？</strong>
+              <small>2026-11-27</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#一个三段文件为什么容易误验？">一个三段文件为什么容易误验？</a>
+          
+            <a class="toc-link toc-link--h2" href="#full-object-与-composite-checksum-有什么不同？">full object 与 composite checksum 有什么不同？</a>
+          
+            <a class="toc-link toc-link--h2" href="#如何把现有的-ETag-比较迁移为校验合同？">如何把现有的 ETag 比较迁移为校验合同？</a>
+          
+            <a class="toc-link toc-link--h2" href="#如何验收一次上传？">如何验收一次上传？</a>
+          
+            <a class="toc-link toc-link--h3" href="#关联阅读">关联阅读</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>224</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>199</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>119</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>85</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/">版本化 S3 对象 DELETE 返回成功，为什么旧文件还在？</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/27/eventbridge-retry-age-and-dlq/">EventBridge 目标不可用，默认重试为何五分钟后停止？</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/">SQS FIFO 的五分钟去重保护的是发送重试，不是业务副作用</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

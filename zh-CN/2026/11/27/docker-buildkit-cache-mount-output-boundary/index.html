@@ -1,0 +1,406 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Docker 构建缓存有了 mount，为什么 CI 每次还是重新下载？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="BuildKit cache mount 是构建器本地的可回收性能缓存，不写入镜像层，也不随 --cache-to 导出；CI 新建 builder 时可能为空，构建不能依赖其内容正确性。">
+  
+  
+    <meta name="keywords" content="Docker BuildKit cache mount,RUN --mount=type=cache,Docker external cache">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/27/docker-buildkit-cache-mount-output-boundary/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/27/docker-buildkit-cache-mount-output-boundary/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/27/docker-buildkit-cache-mount-output-boundary/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/27/docker-buildkit-cache-mount-output-boundary/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Docker 构建缓存有了 mount，为什么 CI 每次还是重新下载？ | Midnight blog">
+    <meta property="og:description" content="BuildKit cache mount 是构建器本地的可回收性能缓存，不写入镜像层，也不随 --cache-to 导出；CI 新建 builder 时可能为空，构建不能依赖其内容正确性。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/27/docker-buildkit-cache-mount-output-boundary/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/docker-buildkit-cache-mount-output-boundary/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/27/docker-buildkit-cache-mount-output-boundary/","name":"Docker 构建缓存有了 mount，为什么 CI 每次还是重新下载？ | Midnight blog","description":"BuildKit cache mount 是构建器本地的可回收性能缓存，不写入镜像层，也不随 --cache-to 导出；CI 新建 builder 时可能为空，构建不能依赖其内容正确性。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/docker-buildkit-cache-mount-output-boundary/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/docker-buildkit-cache-mount-output-boundary/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/docker-buildkit-cache-mount-output-boundary/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/docker-buildkit-cache-mount-output-boundary/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/27/docker-buildkit-cache-mount-output-boundary/","headline":"Docker 构建缓存有了 mount，为什么 CI 每次还是重新下载？","description":"BuildKit cache mount 是构建器本地的可回收性能缓存，不写入镜像层，也不随 --cache-to 导出；CI 新建 builder 时可能为空，构建不能依赖其内容正确性。","inLanguage":"zh-CN","datePublished":"2026-11-27T08:15:00.000Z","dateModified":"2026-11-27T08:15:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.docker.com/build/cache/optimize/","https://docs.docker.com/reference/dockerfile/"],"keywords":"Docker, BuildKit, CI, Build Cache"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/docker-buildkit-cache-mount-output-boundary/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Docker 构建缓存有了 mount，为什么 CI 每次还是重新下载？","item":"https://www.zyweb.vip/zh-CN/2026/11/27/docker-buildkit-cache-mount-output-boundary/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/27/docker-buildkit-cache-mount-output-boundary/" selected>zh-CN</option><option value="/en/2026/11/27/docker-buildkit-cache-mount-output-boundary/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/27/docker-buildkit-cache-mount-output-boundary/" selected>zh-CN</option><option value="/en/2026/11/27/docker-buildkit-cache-mount-output-boundary/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--docker">Docker</span>
+      <time datetime="2026-11-27T08:15:00.000Z">2026-11-27</time>
+    </div>
+
+    <h1>Docker 构建缓存有了 mount，为什么 CI 每次还是重新下载？</h1>
+
+    
+      <p class="post-hero__summary">BuildKit cache mount 是构建器本地的可回收性能缓存，不写入镜像层，也不随 --cache-to 导出；CI 新建 builder 时可能为空，构建不能依赖其内容正确性。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-27T08:15:00.000Z">2026-11-27</time> · 预计阅读 7 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/27/docker-buildkit-cache-mount-output-boundary/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/27/docker-buildkit-cache-mount-output-boundary/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>Cache mount 与可复用 instruction layer 是不同缓存机制。</li><li>cache mount 通常保留在同一个 builder 的本地存储，不属于 --cache-to/from 导出的构建缓存。</li><li>构建必须在空缓存或内容被回收时仍正确；缓存只应加速，不应成为构建输入的唯一来源。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>BuildKit 的 <code>RUN --mount=type=cache</code> 提供给构建命令一个持久化目录，适合缓存包管理器或编译器的重复下载；它是构建器本地、可被回收的性能缓存，不写进最终镜像层，也不随常规 <code>--cache-to</code> 导出。CI 每次启动全新 builder 时缓存可能为空，所以“配置了 cache mount”不等于跨 runner 复用缓存。正确的构建必须能在缓存缺失或被清理时仍生成正确产物。</p>
+<h2 id="Cache-mount-和-instruction-layer-不是同一个东西"><a href="#Cache-mount-和-instruction-layer-不是同一个东西" class="headerlink" title="Cache mount 和 instruction layer 不是同一个东西"></a>Cache mount 和 instruction layer 不是同一个东西</h2><p>Docker 的普通构建层按指令及其输入命中缓存；若前面的 <code>COPY</code> 输入变了，后续层可能失效并重新执行。Cache mount 则是在某条 <code>RUN</code> 指令执行期间，把一个缓存目录挂入容器，例如 <code>/root/.npm</code> 或编译器缓存。命令重跑时，包管理器可以复用已下载文件，减少网络请求，但 mount 目录里的内容不是该指令输出层的一部分。</p>
+<p>可以把它们理解为两种状态：layer cache 重用上一次指令的结果，cache mount 为重新执行的指令提供可用的临时积累数据。指令没有失效时，Docker 可能直接复用层，命令根本不运行；指令失效时，mount 可能帮助加速重新运行。这两者的命中条件、存储位置和导出方式不同，不能用“镜像层缓存了”推断“cache mount 在新机器上存在”。</p>
+<h2 id="为什么-CI-会从空目录开始？"><a href="#为什么-CI-会从空目录开始？" class="headerlink" title="为什么 CI 会从空目录开始？"></a>为什么 CI 会从空目录开始？</h2><p>Docker 文档说明，cache mount 存在 BuildKit builder 的本地存储，不包括在导出的外部 build cache 中，也不会由 <code>--cache-from</code> 恢复。如果每个 CI job 都创建全新的 builder，cache mount 起点就是空目录。即使同一 builder 的内容会在构建间保留，也可能被其它并行构建覆盖，或被 builder 的垃圾回收清除。Dockerfile reference 要求构建对 cache mount 的任何内容都保持正确，不能假设它永远包含上次写入的结果。</p>
+<p>因此要先确认 CI 是否复用了同一个 BuildKit daemon/builder，再确认外部 cache 配置和 cache mount 本地持久化是两个单独机制。仅添加 <code>cache-from</code> / <code>cache-to</code> 不代表 mount 目录会在新 builder 中复原。若希望 CI 跨新 builder 共享包下载，可以使用适合的 CI cache 导入导出方案、外部包仓库或构建器持久化策略；具体效果依赖 Docker/BuildKit 版本和 CI 平台。</p>
+<h2 id="让缓存失效只影响速度，不影响正确性"><a href="#让缓存失效只影响速度，不影响正确性" class="headerlink" title="让缓存失效只影响速度，不影响正确性"></a>让缓存失效只影响速度，不影响正确性</h2><p>示例 Dockerfile 可以为 npm cache 挂载 <code>/root/.npm</code>，然后执行 <code>npm ci</code>。项目依赖仍须由 lockfile 确定，<code>npm ci</code> 每次按锁文件安装；cache mount 只帮助复用 package tarball 等下载内容。若 mount 被清空，命令可能更慢，但不能因此改变依赖版本或成功与否。若将 cache 目录当成唯一保留 <code>node_modules</code> 的位置，而构建后续步骤依赖它，mount 生命周期结束后内容可能不在预期层中。</p>
+<p>并发访问也要匹配缓存客户端的行为。<code>sharing=shared</code> 允许多个 writer 并行使用同一 mount，<code>private</code> 可为并发 writer 创建独立缓存，<code>locked</code> 则让后续构建等前一个使用者释放。Docker 文档以 apt 缓存为例建议 <code>sharing=locked</code>，因为包管理数据需要互斥访问。不要为所有目录盲目设同一个 sharing 模式；应根据包管理器的锁、并发写入安全性和容错能力选择。</p>
+<h2 id="一个缓存配置正确却没有加速的例子"><a href="#一个缓存配置正确却没有加速的例子" class="headerlink" title="一个缓存配置正确却没有加速的例子"></a>一个缓存配置正确却没有加速的例子</h2><p>开发者在 Dockerfile 中加了 cache mount，本地连续 build 变快，随后在 CI 看到每个 job 仍重新下载。若 CI runner 每次新建 builder，官方约定的本地 mount 缓存不会从 <code>--cache-from</code> 恢复；构建行为符合设计，不代表配置语法无效。更合适的诊断是记录 builder 身份、生命周期、cache mount ID、目录路径、是否命中、下载量和 <code>RUN</code> 指令是否真正执行，再决定需要复用 builder 还是外部包缓存。</p>
+<p>另一个反例是把 <code>/root/.npm</code> 的缓存内容当成供应链验证。缓存可能被另一个构建写入，内容可被清理或陈旧；lockfile integrity 校验、包来源、依赖审查和最终 build artifact 身份仍应独立验证。缓存可提高重复操作效率，却不自动提高依赖安全性，也不证明两次构建产物可复现。</p>
+<h2 id="验收方法：空缓存、并发和导出三个路径"><a href="#验收方法：空缓存、并发和导出三个路径" class="headerlink" title="验收方法：空缓存、并发和导出三个路径"></a>验收方法：空缓存、并发和导出三个路径</h2><p>在测试 runner 先记录 builder ID，执行两次相同构建并观察 cache mount 是否保留；再使用新 builder 执行一次，确认空缓存仍能成功。明确打出每条 <code>RUN</code> 是否命中 layer cache，避免把层复用误当成 cache mount 命中。接着使用 <code>--cache-to</code> 导出并在新 builder <code>--cache-from</code>，验证 mount 起始状态；根据预期配置共享 builder 或 CI cache。最后并发执行两条构建，检查包管理器缓存是否需要 <code>locked</code>。</p>
+<p>本文未运行 Docker build，也没有测量下载时间。验收应记录 Docker/BuildKit 版本、Dockerfile syntax directive、builder driver、cache id、sharing、外部 cache backend 与命令结果；性能改善必须来自实际 CI 对比，不能根据文档机制推算。将 cache mount 设计成可被清空、覆盖或回收的数据目录，构建仍保持确定性，才把性能优化和构建正确性分开。</p>
+<h2 id="cache-ID-也决定哪些构建共享目录"><a href="#cache-ID-也决定哪些构建共享目录" class="headerlink" title="cache ID 也决定哪些构建共享目录"></a>cache ID 也决定哪些构建共享目录</h2><p>不同 <code>RUN --mount=type=cache</code> 可以通过 <code>id</code> 指定缓存身份；不显式设置时，默认身份与目标路径有关。多个分支、项目或并发任务若意外共用相同 builder 与缓存 ID，可能读到彼此积累的包数据。为缓存指定稳定但按工具/项目隔离的 ID，并根据写入并发选择 <code>shared</code>、<code>private</code> 或 <code>locked</code>；这些选项控制的是缓存访问，不是依赖完整性。配置 <code>uid</code>、<code>gid</code>、<code>mode</code> 时还要让构建用户实际有权读写挂载目录，否则冷缓存阶段可能与热缓存阶段表现不同。</p>
+<p>Cache mount 也不应承载凭据或租户专属数据。即使目录只存在于 builder 存储，builder 的复用范围仍决定哪些构建可以再次挂载它；共享 builder 上的缓存内容需要按同一信任域管理。对私有仓库下载凭据使用 BuildKit 的 secret mount 等专门机制，避免把认证材料写入可复用缓存。本文没有对任何 runner 做隔离测试，这里是基于 Dockerfile mount 选项与 CI 信任边界的设计判断。</p>
+<p>缓存键还要与内容格式兼容。升级包管理器或改变缓存布局后，沿用旧 ID 可能让新工具读到无法识别的状态；可将工具主版本或格式代号纳入 <code>id</code>，并在清理旧缓存前确认冷构建路径可用。反过来把每个 commit SHA 都放进 ID 会让缓存永远无法复用。选择 key 的目标是隔离不兼容数据，同时保留可信分支间合理的复用。</p>
+<h3 id="关联阅读"><a href="#关联阅读" class="headerlink" title="关联阅读"></a>关联阅读</h3><p>包索引与构建缓存失效的另一个案例见本站的 <a href="/zh-CN/2026/10/18/docker-build-cache-package-index/">Docker package-index cache 文章</a>。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.docker.com/build/cache/optimize/" rel="noopener">Docker Docs — Optimize cache usage in builds</a></li><li><a target="_blank" href="https://docs.docker.com/reference/dockerfile/" rel="noopener">Dockerfile reference — RUN --mount=type=cache</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--docker" href="/zh-CN/tags/docker/">Docker</a>
+          
+            <a class="tag tag--buildkit" href="/zh-CN/tags/BuildKit/">BuildKit</a>
+          
+            <a class="tag tag--ci" href="/zh-CN/tags/CI/">CI</a>
+          
+            <a class="tag tag--build-cache" href="/zh-CN/tags/Build-Cache/">Build Cache</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--delivery" href="/zh-CN/categories/Delivery/">Delivery</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fdocker-buildkit-cache-mount-output-boundary%2F&text=Docker%20%E6%9E%84%E5%BB%BA%E7%BC%93%E5%AD%98%E6%9C%89%E4%BA%86%20mount%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%20CI%20%E6%AF%8F%E6%AC%A1%E8%BF%98%E6%98%AF%E9%87%8D%E6%96%B0%E4%B8%8B%E8%BD%BD%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fdocker-buildkit-cache-mount-output-boundary%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Docker%20%E6%9E%84%E5%BB%BA%E7%BC%93%E5%AD%98%E6%9C%89%E4%BA%86%20mount%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%20CI%20%E6%AF%8F%E6%AC%A1%E8%BF%98%E6%98%AF%E9%87%8D%E6%96%B0%E4%B8%8B%E8%BD%BD%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fdocker-buildkit-cache-mount-output-boundary%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/27/eventbridge-retry-age-and-dlq/">
+              <span>上一篇</span>
+              <strong>EventBridge 目标不可用，默认重试为何五分钟后停止？</strong>
+              <small>2026-11-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/27/cmake-generator-expression-context/">
+              <span>下一篇</span>
+              <strong>CMake 生成表达式写对了语法，为什么仍没有展开？</strong>
+              <small>2026-11-27</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Cache-mount-和-instruction-layer-不是同一个东西">Cache mount 和 instruction layer 不是同一个东西</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么-CI-会从空目录开始？">为什么 CI 会从空目录开始？</a>
+          
+            <a class="toc-link toc-link--h2" href="#让缓存失效只影响速度，不影响正确性">让缓存失效只影响速度，不影响正确性</a>
+          
+            <a class="toc-link toc-link--h2" href="#一个缓存配置正确却没有加速的例子">一个缓存配置正确却没有加速的例子</a>
+          
+            <a class="toc-link toc-link--h2" href="#验收方法：空缓存、并发和导出三个路径">验收方法：空缓存、并发和导出三个路径</a>
+          
+            <a class="toc-link toc-link--h2" href="#cache-ID-也决定哪些构建共享目录">cache ID 也决定哪些构建共享目录</a>
+          
+            <a class="toc-link toc-link--h3" href="#关联阅读">关联阅读</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>224</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>199</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>119</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>85</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/01/docker-secret-value-cache-invalidation/">Docker secret值换了，为什么认证步骤仍命中缓存？</a></h3>
+          <p>2026-11-01</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/31/docker-run-network-fetch-scope/">RUN断网，远程ADD为什么仍可能下载？</a></h3>
+          <p>2026-10-31</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/22/docker-run-bind-mount-write-discard/">RUN 的 bind mount 加了 rw，生成文件为什么下一步不见了？</a></h3>
+          <p>2026-11-22</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

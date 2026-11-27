@@ -1,0 +1,399 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Python audit hook 能记录和中止事件，但不能把解释器变成沙箱 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Python 3.12 的 sys.addaudithook 面向运行时审计；钩子安装本身可能被已有钩子拒绝且不显式报出，安全边界仍须放在解释器之外。">
+  
+  
+    <meta name="keywords" content="sys.addaudithook,Python audit events,Python 沙箱">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/27/python-audit-hooks-not-sandbox/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Python audit hook 能记录和中止事件，但不能把解释器变成沙箱 | Midnight blog">
+    <meta property="og:description" content="Python 3.12 的 sys.addaudithook 面向运行时审计；钩子安装本身可能被已有钩子拒绝且不显式报出，安全边界仍须放在解释器之外。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/","name":"Python audit hook 能记录和中止事件，但不能把解释器变成沙箱 | Midnight blog","description":"Python 3.12 的 sys.addaudithook 面向运行时审计；钩子安装本身可能被已有钩子拒绝且不显式报出，安全边界仍须放在解释器之外。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/","headline":"Python audit hook 能记录和中止事件，但不能把解释器变成沙箱","description":"Python 3.12 的 sys.addaudithook 面向运行时审计；钩子安装本身可能被已有钩子拒绝且不显式报出，安全边界仍须放在解释器之外。","inLanguage":"zh-CN","datePublished":"2026-11-27T08:15:00.000Z","dateModified":"2026-11-27T08:15:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.python.org/3.12/library/sys.html#sys.addaudithook","https://peps.python.org/pep-0578/"],"keywords":"Python, Security, Audit Hooks, Runtime"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Python audit hook 能记录和中止事件，但不能把解释器变成沙箱","item":"https://www.zyweb.vip/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/" selected>zh-CN</option><option value="/en/2026/11/27/python-audit-hooks-not-sandbox/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/" selected>zh-CN</option><option value="/en/2026/11/27/python-audit-hooks-not-sandbox/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--python">Python</span>
+      <time datetime="2026-11-27T08:15:00.000Z">2026-11-27</time>
+    </div>
+
+    <h1>Python audit hook 能记录和中止事件，但不能把解释器变成沙箱</h1>
+
+    
+      <p class="post-hero__summary">Python 3.12 的 sys.addaudithook 面向运行时审计；钩子安装本身可能被已有钩子拒绝且不显式报出，安全边界仍须放在解释器之外。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-27T08:15:00.000Z">2026-11-27</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/27/python-audit-hooks-not-sandbox/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>审计事件适合观察内部动作并在受控条件下中止。</li><li>RuntimeError 可能使新钩子未被添加且被抑制，调用方不能据此认定安装成功。</li><li>恶意代码可绕过 Python 层钩子；安全边界要由进程外控制。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Python 的 audit hook 适合观察解释器和库发出的审计事件，也能按策略记录、拒绝某些操作；它不是运行陌生 Python 代码的沙箱。更容易被忽略的是安装行为：Python 3.12 文档说明，如果已经存在的 hook 在添加新 hook 时抛出 <code>RuntimeError</code>，这个异常会被压制，新 hook 不会加入。调用者因此不能把 <code>sys.addaudithook()</code> 返回或未报错，直接当作“我的检查器已经生效”。</p>
+<h2 id="审计事件提供什么，不提供什么？"><a href="#审计事件提供什么，不提供什么？" class="headerlink" title="审计事件提供什么，不提供什么？"></a>审计事件提供什么，不提供什么？</h2><p>事件可携带事件名和参数。比如 <code>os.chdir</code> 事件带有目标路径；hook 可以写日志、抛出异常中止这次操作，或者终止进程。事件名和参数类型被文档视为公共稳定 API，但这不等于任意第三方库的所有业务动作都有对应事件，也不等于一条事件就能完整描述用户意图。审计日志适合观察解释器内部或原本不容易看见的动作，仍需按照应用的威胁和业务事件设计补充记录。</p>
+<p>选事件时应把信号和决策分开。例如，打开路径 <code>/srv/jobs/tenant-42/report.csv</code> 可以说明解释器尝试访问了某个文件，但不一定说明请求属于哪个用户、为何授权、最终是否成功。路径还可能包含客户标识，直接写入长期日志会引入隐私风险。可以先对参数做范围允许列表与脱敏，再用请求关联号连接到应用层审计记录；不能通过记录一个文件路径，就推断该请求一定合规或一定有恶意。是否接受、拒绝或触发人工检查，仍要建立在明确策略之上。</p>
+<p>以一个文档转换命令为例，团队希望知道处理过程中是否改变了工作目录、打开了哪些文件，以及加载了哪些模块。可以根据 CPython 提供的事件表，选取与目标行为相关的事件，先把事件名、参数脱敏规则、记录位置和失败处理方式写成表，再实现 hook。这个例子是设计方案，没有运行在本文机器上的真实项目，也没有覆盖所有 Python 库的系统调用。若团队想记录“用户点击了导出”或“报告包含哪些租户数据”，这些是业务语义，应在应用自己的受控入口记录，不能等待解释器事件替业务做判断。</p>
+<h2 id="安装钩子失败为什么可能被静默掩盖？"><a href="#安装钩子失败为什么可能被静默掩盖？" class="headerlink" title="安装钩子失败为什么可能被静默掩盖？"></a>安装钩子失败为什么可能被静默掩盖？</h2><p>设想程序启动时添加一项用于记录文件访问的 hook，之后根据记录判断某些输出能否交付。若有另一个已安装 hook 在处理 <code>sys.addaudithook</code> 事件时抛出 <code>RuntimeError</code>，Python 会抑制这一类异常并不添加新 hook。调用端继续启动，看起来没有安装错误，但期望的记录器实际不存在。依赖插件若可以提前安装 hook，就会影响之后安装的观察器。顺序、初始化阶段和加载来源都属于审核问题。</p>
+<p>不能简单地用“调用前后比较 hook 数量”来确认成功，因为 Python 没有给纯 Python 代码一个安全、受支持的 hook 枚举接口。比较稳妥的应用层做法是限制初始化顺序：在加载不受控插件前安装必要的观察器；对关键的安全控制，不能依赖这个纯 Python 添加路径；为进程启动流程保留可核对的配置与诊断。测试时，构造一个已有 hook 对添加事件抛出 <code>RuntimeError</code> 的夹具，确认程序不会把未安装状态报告成安全成功。这个负向测试可以验证当前 CPython 版本中的特定失败路径，但不能证明每一种 hook 和所有解释器扩展都行为相同。</p>
+<h2 id="为什么它不是-Python-级别的沙箱？"><a href="#为什么它不是-Python-级别的沙箱？" class="headerlink" title="为什么它不是 Python 级别的沙箱？"></a>为什么它不是 Python 级别的沙箱？</h2><p>Python 3.12 文档直接说，<code>sys.addaudithook()</code> 不适合实现 sandbox，恶意代码可以轻易禁用或绕过由该函数添加的 hook。官方进一步指出，安全敏感的 hook 至少要通过 <code>PySys_AddAuditHook()</code> C API 在运行时初始化前添加；会任意修改内存的模块，例如 <code>ctypes</code>，需要完全移除或密切监控。这个要求本身就表明，应用在解释器启动后装一段 Python 函数，不足以建立对抗恶意代码的信任边界。</p>
+<p>若你控制的是自己编写的工具和依赖，audit hooks 有助于把内部动作纳入审计或辅助策略检查。若执行的是用户提交的代码、未知插件或攻击者可影响的表达式，必须让隔离位于进程外，例如独立操作系统身份、受限文件系统、网络边界、资源上限和可销毁的执行环境。容器是否构成足够边界，取决于配置的挂载、权限和内核接口；不能仅凭“运行在容器里”作出绝对判断。</p>
+<h2 id="如何验证日志和拒绝规则没有混为一谈？"><a href="#如何验证日志和拒绝规则没有混为一谈？" class="headerlink" title="如何验证日志和拒绝规则没有混为一谈？"></a>如何验证日志和拒绝规则没有混为一谈？</h2><p>把验收拆成三类：事件是否触发、记录是否足以解释上下文、拒绝动作是否真的让操作失败。用允许的路径和禁止的路径各构造一个样例；检查系统调用失败、上层异常传播、部分文件是否被留下，以及日志中是否泄露凭据或个人数据。若 hook 只负责观察，就不能把有日志解释成操作已被阻止；若 hook 拒绝事件，也要检查调用方是否捕获并忽略异常后继续执行。</p>
+<p>本文没有执行这些程序或构造夹具，因而上述内容是基于 Python 3.12 文档的验证方案，不是运行结果。对于安全敏感部署，应固定解释器小版本，确认所有 hook 在何时、由谁安装，检查原生扩展和 <code>ctypes</code> 等能修改进程状态的组件，并把剩余风险交给外层操作系统隔离。这样做不会让 audit hook 失去价值，而是把它放回其真实职责：提高可观察性并辅助策略执行，而不是单独承担恶意代码隔离。</p>
+<p>部署验证还要确认每个预期执行的解释器都加载了 hook：主服务、异步 worker、管理命令和测试进程可能分别创建解释器。只在 Web 入口启动时安装，不能证明后台队列也有相同观察能力。可以在启动诊断中保留 Python 版本、启动方式和 hook 初始化阶段的可审查记录，但不应把事件的敏感路径写入健康端点。覆盖多个进程时，进程启动器和容器权限比父进程中的一段 Python 代码更适合作为安全策略来源。</p>
+<h3 id="关联阅读"><a href="#关联阅读" class="headerlink" title="关联阅读"></a>关联阅读</h3><p>若代码处理用户归档文件，本站的 <a href="/zh-CN/2026/10/30/python-tarfile-data-filter-limits/">tarfile 数据过滤边界</a> 另谈输入解析与文件系统风险。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.python.org/3.12/library/sys.html#sys.addaudithook" rel="noopener">Python 3.12 sys — sys.addaudithook and sys.audit</a></li><li><a target="_blank" href="https://peps.python.org/pep-0578/" rel="noopener">PEP 578 — Python Runtime Audit Hooks</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--python" href="/zh-CN/tags/Python/">Python</a>
+          
+            <a class="tag tag--security" href="/zh-CN/tags/Security/">Security</a>
+          
+            <a class="tag tag--audit-hooks" href="/zh-CN/tags/Audit-Hooks/">Audit Hooks</a>
+          
+            <a class="tag tag--runtime" href="/zh-CN/tags/Runtime/">Runtime</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--security" href="/zh-CN/categories/Security/">Security</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fpython-audit-hooks-not-sandbox%2F&text=Python%20audit%20hook%20%E8%83%BD%E8%AE%B0%E5%BD%95%E5%92%8C%E4%B8%AD%E6%AD%A2%E4%BA%8B%E4%BB%B6%EF%BC%8C%E4%BD%86%E4%B8%8D%E8%83%BD%E6%8A%8A%E8%A7%A3%E9%87%8A%E5%99%A8%E5%8F%98%E6%88%90%E6%B2%99%E7%AE%B1" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fpython-audit-hooks-not-sandbox%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Python%20audit%20hook%20%E8%83%BD%E8%AE%B0%E5%BD%95%E5%92%8C%E4%B8%AD%E6%AD%A2%E4%BA%8B%E4%BB%B6%EF%BC%8C%E4%BD%86%E4%B8%8D%E8%83%BD%E6%8A%8A%E8%A7%A3%E9%87%8A%E5%99%A8%E5%8F%98%E6%88%90%E6%B2%99%E7%AE%B1&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fpython-audit-hooks-not-sandbox%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/27/redis-wait-ack-is-not-durability/">
+              <span>上一篇</span>
+              <strong>Redis WAIT 返回 2，为什么仍不能说写入已经耐久？</strong>
+              <small>2026-11-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/27/otel-exemplars-metric-trace-link/">
+              <span>下一篇</span>
+              <strong>指标图上看到尖峰，却找不到请求：OpenTelemetry exemplar 连接了什么？</strong>
+              <small>2026-11-27</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#审计事件提供什么，不提供什么？">审计事件提供什么，不提供什么？</a>
+          
+            <a class="toc-link toc-link--h2" href="#安装钩子失败为什么可能被静默掩盖？">安装钩子失败为什么可能被静默掩盖？</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么它不是-Python-级别的沙箱？">为什么它不是 Python 级别的沙箱？</a>
+          
+            <a class="toc-link toc-link--h2" href="#如何验证日志和拒绝规则没有混为一谈？">如何验证日志和拒绝规则没有混为一谈？</a>
+          
+            <a class="toc-link toc-link--h3" href="#关联阅读">关联阅读</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>224</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>199</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>119</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>85</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/27/node-permission-model-trust-boundary/">Node.js 权限模型能收紧进程权限，但不是运行陌生代码的沙箱</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/22/python-re-fullmatch-window-anchor-origin/">fullmatch 限定了窗口，^ 为什么仍看原字符串开头？</a></h3>
+          <p>2026-11-22</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/22/python-redirect-stdout-global-thread-scope/">只想抓当前函数，为什么另一个线程的 print 也进来了？</a></h3>
+          <p>2026-11-22</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

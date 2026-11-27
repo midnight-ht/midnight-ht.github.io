@@ -1,0 +1,401 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>SQS 心跳续租能减少抢重消息，但十二小时上限不会重置 | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="SQS visibility timeout 是暂时隐藏消息的租约式机制，不是处理锁；续租仍受首次 ReceiveMessage 后十二小时上限约束，消费者要为重复投递和慢重试设计。">
+  
+  
+    <meta name="keywords" content="SQS visibility timeout,ChangeMessageVisibility,SQS 消费者心跳">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/27/sqs-visibility-timeout-renewal-ceiling/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/27/sqs-visibility-timeout-renewal-ceiling/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/27/sqs-visibility-timeout-renewal-ceiling/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/27/sqs-visibility-timeout-renewal-ceiling/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="SQS 心跳续租能减少抢重消息，但十二小时上限不会重置 | Midnight blog">
+    <meta property="og:description" content="SQS visibility timeout 是暂时隐藏消息的租约式机制，不是处理锁；续租仍受首次 ReceiveMessage 后十二小时上限约束，消费者要为重复投递和慢重试设计。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/27/sqs-visibility-timeout-renewal-ceiling/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/sqs-visibility-timeout-renewal-ceiling/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/27/sqs-visibility-timeout-renewal-ceiling/","name":"SQS 心跳续租能减少抢重消息，但十二小时上限不会重置 | Midnight blog","description":"SQS visibility timeout 是暂时隐藏消息的租约式机制，不是处理锁；续租仍受首次 ReceiveMessage 后十二小时上限约束，消费者要为重复投递和慢重试设计。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/sqs-visibility-timeout-renewal-ceiling/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/sqs-visibility-timeout-renewal-ceiling/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/sqs-visibility-timeout-renewal-ceiling/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/27/sqs-visibility-timeout-renewal-ceiling/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/27/sqs-visibility-timeout-renewal-ceiling/","headline":"SQS 心跳续租能减少抢重消息，但十二小时上限不会重置","description":"SQS visibility timeout 是暂时隐藏消息的租约式机制，不是处理锁；续租仍受首次 ReceiveMessage 后十二小时上限约束，消费者要为重复投递和慢重试设计。","inLanguage":"zh-CN","datePublished":"2026-11-27T08:15:00.000Z","dateModified":"2026-11-27T08:15:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html","https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/best-practices-processing-messages-timely-manner.html","https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ChangeMessageVisibility.html"],"keywords":"AWS, Amazon SQS, Message Processing, Reliability"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/27/sqs-visibility-timeout-renewal-ceiling/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"SQS 心跳续租能减少抢重消息，但十二小时上限不会重置","item":"https://www.zyweb.vip/zh-CN/2026/11/27/sqs-visibility-timeout-renewal-ceiling/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/27/sqs-visibility-timeout-renewal-ceiling/" selected>zh-CN</option><option value="/en/2026/11/27/sqs-visibility-timeout-renewal-ceiling/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/27/sqs-visibility-timeout-renewal-ceiling/" selected>zh-CN</option><option value="/en/2026/11/27/sqs-visibility-timeout-renewal-ceiling/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--aws">AWS</span>
+      <time datetime="2026-11-27T08:15:00.000Z">2026-11-27</time>
+    </div>
+
+    <h1>SQS 心跳续租能减少抢重消息，但十二小时上限不会重置</h1>
+
+    
+      <p class="post-hero__summary">SQS visibility timeout 是暂时隐藏消息的租约式机制，不是处理锁；续租仍受首次 ReceiveMessage 后十二小时上限约束，消费者要为重复投递和慢重试设计。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-27T08:15:00.000Z">2026-11-27</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/27/sqs-visibility-timeout-renewal-ceiling/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/27/sqs-visibility-timeout-renewal-ceiling/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>处理超时会重新让消息可见，无法证明第一次消费者已停止。</li><li>周期性 ChangeMessageVisibility 只能延长租期，不能把十二小时期限重新起算。</li><li>先提交可恢复的业务状态，再删除消息，并为重复投递保留幂等路径。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Amazon SQS 的 visibility timeout 会在消费者收到消息后，暂时让它对其他消费者不可见；它不会锁住消息，也不会证明原消费者还活着。任务处理超过超时时间后，消息可以重新出现并被另一个消费者取走。<code>ChangeMessageVisibility</code> 可按处理进度续租，但从第一次 <code>ReceiveMessage</code> 开始计算的十二小时上限不会因为续租而重新计时。长任务因此必须同时考虑重复执行、慢重试和硬性最长处理时长。</p>
+<h2 id="过短和过长分别制造什么问题？"><a href="#过短和过长分别制造什么问题？" class="headerlink" title="过短和过长分别制造什么问题？"></a>过短和过长分别制造什么问题？</h2><p>假设消费者从 SQS 收到一个需要调用外部渲染服务并写入归档的任务，预计通常两分钟完成，偶尔需要十分钟。如果初始可见性超时只有三十秒，原消费者还在等待渲染时，消息就可能重新可见，第二个消费者也开始执行。两个任务可能争用同一个对象，重复写入或重复触发下游计费。这不是消息丢失，而是租期短于实际工作时间导致的并行重投风险。</p>
+<p>相反，如果给每条消息配置十二小时超时，但消费者在一分钟后崩溃，恢复任务可能要等很久才再次可见。大超时减少了“活着的慢消费者”被误判的机会，却延长了故障恢复等待时间。标准队列的交付本来就可能重复；visibility timeout 不是恰好一次锁。设置值要联系任务耗时分布、下游幂等能力和重试时效，而不是只看平均处理时间。</p>
+<h2 id="心跳续租能延长多久？"><a href="#心跳续租能延长多久？" class="headerlink" title="心跳续租能延长多久？"></a>心跳续租能延长多久？</h2><p>如果处理耗时难以预测，可以先设一个较短的初始可见性时间，再由仍在工作的消费者周期性调用 <code>ChangeMessageVisibility</code>。例如，每分钟检查处理状态并把剩余可见性延长到两分钟，可减少一项仍在推进的长任务被过早重投。这个数字只是解释机制的假设例子，不是 AWS 推荐所有业务照搬的参数，也没有在真实队列上执行。</p>
+<p>续租的计时边界容易误解：SQS 文档规定，最大可见性时间从队列首次收到 <code>ReceiveMessage</code> 请求时起最多十二小时；连续更改不会把这个上限重新起算。网络排队、处理器启动和续租调用自身的延迟，也会占用可用时间。如果预计工作可能超过该上限，应拆成可恢复的小步骤，或使用能表达长流程状态的编排服务，而不是每分钟续租并假定期限会无限延长。</p>
+<p>心跳自身也可能失败。进程暂停、网络不通、权限被撤回或 AWS 调用超时，都会让租约没有按计划延长。此时另一个消费者可能开始处理，而第一个消费者尚未意识到租约已失效。应用应为同一业务键准备并发处理防护，记录最近一次成功续租时间，并在越过内部安全余量后停止发起新的不可逆副作用。单靠本地定时器显示“还在工作”，并不能证明 SQS 已接受续租。</p>
+<p>若单项工作确实无法在十二小时内结束，应把一个不可中断的大任务改成带持久检查点的阶段。每完成一个阶段就提交可恢复状态，再开始下一段；重启后从最后确认的阶段继续。AWS 文档将拆小任务或使用 Step Functions 作为超过上限时的考虑方向。这样改变的是工作模型，而不是试图把有限租约伪装成无限锁。</p>
+<p>还有一个边缘情况：首次收到消息后立刻把单条消息的可见性设置成完整十二小时，也可能因为 <code>ReceiveMessage</code> 到续租请求之间已经过去的时间而被拒绝。十二小时是从接收请求开始计算的上限，不是每个 <code>ChangeMessageVisibility</code> 请求都能独立拿到的新额度。续租器需要按服务返回值判断成功，并为请求延迟留余量；不要只把参数填成最大数值就当作延长期限成功。</p>
+<h2 id="业务状态应该先提交还是先删消息？"><a href="#业务状态应该先提交还是先删消息？" class="headerlink" title="业务状态应该先提交还是先删消息？"></a>业务状态应该先提交还是先删消息？</h2><p>若消费者先删除消息、之后才提交数据库状态，提交失败会造成消息已移除但业务结果不存在。若先提交业务结果、之后删除消息，删除请求失败或响应丢失时，消息可能重投，消费者需要辨认结果已经存在。后者通常更容易构造恢复流程：把事件 ID 和业务变更放入同一事务，提交成功后再删除；重投时查到已完成记录，就跳过重复副作用并再次尝试删除。外部 API 若支持幂等键，应把同一个事件身份传递下去。</p>
+<p>这里仍有边界：数据库记录与外部付款、邮件发送不在同一个本地事务里；如果外部服务既不支持幂等键也不提供查询凭证，系统不能只靠 SQS 顺序消除“对方已执行但本方未收到响应”的不确定性。应使用 outbox、下游幂等接口或人工对账策略。visibility timeout 只管理再次可见的时机，不负责分布式业务原子性。</p>
+<h2 id="怎么验收续租和故障恢复？"><a href="#怎么验收续租和故障恢复？" class="headerlink" title="怎么验收续租和故障恢复？"></a>怎么验收续租和故障恢复？</h2><p>在非生产队列验证一条短任务、一条超过初始超时的任务、一次续租 API 失败、消费者中止、副作用提交后进程退出、十二小时边界以及死信队列路径。观察消息是否再次可见、重复处理是否被业务幂等层吸收、DLQ 是否保留了足够诊断信息，并对照 AWS 请求结果而不是本地心跳日志判断续租是否成功。故障测试应清楚区分“第一次消费者已经退出”和“只是在当前监测时间内没有进展”。</p>
+<p>本文未创建队列或运行 AWS 请求，上述项目是验证清单，不是执行结果。部署前还需核对队列级默认值、消息级覆盖、SDK 是否自动删除消息、接收请求开始时间、队列并发额度与可见性策略。将 visibility timeout 看作有限租约、而非排他锁，才能同时为正常慢任务和异常重投留出正确路径。</p>
+<p>可观测字段应包含接收次数、消息的 receive timestamp、每次续租请求及响应、业务处理阶段和删除消息结果。单看队列的可见消息数量，很难区分消费者积压、处理太慢、续租失败与消息反复重投。若处理器进程在完成数据库副作用后、删除消息前崩溃，下次投递仍会重复执行；可见性窗口不能消除这个故障区间。应把消费幂等记录和业务事务放在一起设计，并在消息删除失败时保留可追踪的重复处理证据。</p>
+<h3 id="关联阅读"><a href="#关联阅读" class="headerlink" title="关联阅读"></a>关联阅读</h3><p>生产者重试是否重复入队是另一层问题，本站的 <a href="/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/">SQS FIFO 去重窗口</a> 单独说明。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html" rel="noopener">Amazon SQS visibility timeout — Changing and extending visibility</a></li><li><a target="_blank" href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/best-practices-processing-messages-timely-manner.html" rel="noopener">Processing messages in a timely manner in Amazon SQS — 12-hour limit</a></li><li><a target="_blank" href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ChangeMessageVisibility.html" rel="noopener">ChangeMessageVisibility API Reference</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--aws" href="/zh-CN/tags/AWS/">AWS</a>
+          
+            <a class="tag tag--amazon-sqs" href="/zh-CN/tags/Amazon-SQS/">Amazon SQS</a>
+          
+            <a class="tag tag--message-processing" href="/zh-CN/tags/Message-Processing/">Message Processing</a>
+          
+            <a class="tag tag--reliability" href="/zh-CN/tags/Reliability/">Reliability</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--operations" href="/zh-CN/categories/Operations/">Operations</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fsqs-visibility-timeout-renewal-ceiling%2F&text=SQS%20%E5%BF%83%E8%B7%B3%E7%BB%AD%E7%A7%9F%E8%83%BD%E5%87%8F%E5%B0%91%E6%8A%A2%E9%87%8D%E6%B6%88%E6%81%AF%EF%BC%8C%E4%BD%86%E5%8D%81%E4%BA%8C%E5%B0%8F%E6%97%B6%E4%B8%8A%E9%99%90%E4%B8%8D%E4%BC%9A%E9%87%8D%E7%BD%AE" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fsqs-visibility-timeout-renewal-ceiling%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=SQS%20%E5%BF%83%E8%B7%B3%E7%BB%AD%E7%A7%9F%E8%83%BD%E5%87%8F%E5%B0%91%E6%8A%A2%E9%87%8D%E6%B6%88%E6%81%AF%EF%BC%8C%E4%BD%86%E5%8D%81%E4%BA%8C%E5%B0%8F%E6%97%B6%E4%B8%8A%E9%99%90%E4%B8%8D%E4%BC%9A%E9%87%8D%E7%BD%AE&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F27%2Fsqs-visibility-timeout-renewal-ceiling%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/27/terraform-foreach-key-address-identity/">
+              <span>上一篇</span>
+              <strong>Terraform for_each 改了 map key，为什么计划要重建云资源？</strong>
+              <small>2026-11-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/">
+              <span>下一篇</span>
+              <strong>SQS FIFO 的五分钟去重保护的是发送重试，不是业务副作用</strong>
+              <small>2026-11-27</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#过短和过长分别制造什么问题？">过短和过长分别制造什么问题？</a>
+          
+            <a class="toc-link toc-link--h2" href="#心跳续租能延长多久？">心跳续租能延长多久？</a>
+          
+            <a class="toc-link toc-link--h2" href="#业务状态应该先提交还是先删消息？">业务状态应该先提交还是先删消息？</a>
+          
+            <a class="toc-link toc-link--h2" href="#怎么验收续租和故障恢复？">怎么验收续租和故障恢复？</a>
+          
+            <a class="toc-link toc-link--h3" href="#关联阅读">关联阅读</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>224</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>199</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>119</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>85</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/">SQS FIFO 的五分钟去重保护的是发送重试，不是业务副作用</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/27/eventbridge-retry-age-and-dlq/">EventBridge 目标不可用，默认重试为何五分钟后停止？</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/27/s3-multipart-etag-checksum-boundary/">S3 分段上传返回的 ETag 为什么不能当成整文件 MD5？</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

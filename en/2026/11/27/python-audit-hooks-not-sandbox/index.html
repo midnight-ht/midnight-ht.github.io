@@ -1,0 +1,398 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Python audit hooks can log and abort events, but they cannot sandbox the interpreter | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Python 3.12&#39;s sys.addaudithook is intended for runtime auditing. An existing hook can prevent a new hook from being installed without an explicit error, so the security boundary still belongs outside the interpreter.">
+  
+  
+    <meta name="keywords" content="sys.addaudithook,Python audit events,Python sandbox">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/27/python-audit-hooks-not-sandbox/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/27/python-audit-hooks-not-sandbox/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Python audit hooks can log and abort events, but they cannot sandbox the interpreter | Midnight blog">
+    <meta property="og:description" content="Python 3.12&#39;s sys.addaudithook is intended for runtime auditing. An existing hook can prevent a new hook from being installed without an explicit error, so the security boundary still belongs outside the interpreter.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/27/python-audit-hooks-not-sandbox/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/27/python-audit-hooks-not-sandbox/#webpage","url":"https://www.zyweb.vip/en/2026/11/27/python-audit-hooks-not-sandbox/","name":"Python audit hooks can log and abort events, but they cannot sandbox the interpreter | Midnight blog","description":"Python 3.12's sys.addaudithook is intended for runtime auditing. An existing hook can prevent a new hook from being installed without an explicit error, so the security boundary still belongs outside the interpreter.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/27/python-audit-hooks-not-sandbox/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/27/python-audit-hooks-not-sandbox/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/27/python-audit-hooks-not-sandbox/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/27/python-audit-hooks-not-sandbox/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/27/python-audit-hooks-not-sandbox/","headline":"Python audit hooks can log and abort events, but they cannot sandbox the interpreter","description":"Python 3.12's sys.addaudithook is intended for runtime auditing. An existing hook can prevent a new hook from being installed without an explicit error, so the security boundary still belongs outside the interpreter.","inLanguage":"en","datePublished":"2026-11-27T08:31:00.000Z","dateModified":"2026-11-27T08:31:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://docs.python.org/3.12/library/sys.html#sys.addaudithook","https://peps.python.org/pep-0578/"],"keywords":"Python, Security, Audit Hooks, Runtime"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/27/python-audit-hooks-not-sandbox/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Python audit hooks can log and abort events, but they cannot sandbox the interpreter","item":"https://www.zyweb.vip/en/2026/11/27/python-audit-hooks-not-sandbox/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/">zh-CN</option><option value="/en/2026/11/27/python-audit-hooks-not-sandbox/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/">zh-CN</option><option value="/en/2026/11/27/python-audit-hooks-not-sandbox/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--python">Python</span>
+      <time datetime="2026-11-27T08:31:00.000Z">2026-11-27</time>
+    </div>
+
+    <h1>Python audit hooks can log and abort events, but they cannot sandbox the interpreter</h1>
+
+    
+      <p class="post-hero__summary">Python 3.12&#39;s sys.addaudithook is intended for runtime auditing. An existing hook can prevent a new hook from being installed without an explicit error, so the security boundary still belongs outside the interpreter.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-27T08:31:00.000Z">2026-11-27</time> · Estimated read 14 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/27/python-audit-hooks-not-sandbox/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/27/python-audit-hooks-not-sandbox/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Audit events help observe internal actions and can abort selected operations under a controlled policy.</li><li>A RuntimeError can be suppressed while the new hook is not added, so callers cannot infer installation success from the absence of an error.</li><li>Malicious code can bypass Python-level hooks; enforce isolation outside the process.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Python audit hooks are useful for observing events emitted by the interpreter and libraries, and they can record or reject selected operations under a policy. They are not a sandbox for running unfamiliar Python code. One installation detail is easy to miss: the Python 3.12 documentation says that if an already installed hook raises <code>RuntimeError</code> while a new hook is being added, that exception is suppressed and the new hook is not installed. A caller therefore cannot treat a call to <code>sys.addaudithook()</code> that did not visibly fail as proof that its checker is active.</p>
+<h2 id="What-do-audit-events-provide-and-what-do-they-not-provide"><a href="#What-do-audit-events-provide-and-what-do-they-not-provide" class="headerlink" title="What do audit events provide, and what do they not provide?"></a>What do audit events provide, and what do they not provide?</h2><p>An event carries a name and arguments. For example, the <code>os.chdir</code> event includes the target path. A hook can log the event, raise an exception to abort the operation, or terminate the process. The documentation treats event names and argument types as a public, stable API. That does not mean every business action in every third-party library has a corresponding event, or that one event fully describes a user&#39;s intent. Audit logs help observe interpreter internals or actions that are otherwise hard to see; applications still need records designed around their own threats and business events.</p>
+<p>Separate the signal from the decision when choosing events. Opening <code>/srv/jobs/tenant-42/report.csv</code> can show that the interpreter attempted a file access, but it may not identify the user, explain the authorization, or tell you whether the operation eventually succeeded. A path may also contain customer identifiers, creating a privacy risk if written directly to long-lived logs. You might redact or allow-list arguments and connect the record to an application-level audit event through a request identifier. A recorded path alone does not prove that a request was compliant or malicious; acceptance, rejection, and escalation still need an explicit policy.</p>
+<p>Consider a document-conversion command. The team wants to know whether processing changed the working directory, which files were opened, and which modules were loaded. It can use CPython&#39;s audit-event table to choose relevant events, then define event names, argument-redaction rules, log destinations, and failure behavior in a table before implementing a hook. This is a design example; no real project was run on this machine, and it does not cover every Python library or system call. If the team wants to record “the user exported a report” or “the report contained data for these tenants,” those are business semantics. Record them at a controlled application entry point instead of asking interpreter events to infer business intent.</p>
+<h2 id="Why-can-a-failed-hook-installation-be-hidden"><a href="#Why-can-a-failed-hook-installation-be-hidden" class="headerlink" title="Why can a failed hook installation be hidden?"></a>Why can a failed hook installation be hidden?</h2><p>Suppose a program adds a hook during startup to record file access, then later uses those records to decide whether an output may be delivered. If another installed hook raises <code>RuntimeError</code> while handling the <code>sys.addaudithook</code> event, Python suppresses that exception and does not add the new hook. The caller continues startup, so there appears to be no installation error even though the expected recorder is absent. A plugin that can install a hook earlier can affect observers installed later. Order, initialization phase, and hook origin are therefore part of the review.</p>
+<p>It is not sufficient to compare the number of hooks before and after the call: Python does not provide pure Python code with a safe, supported way to enumerate installed hooks. A safer application-level approach is to constrain initialization order: install required observers before loading uncontrolled plugins, and do not depend on this pure Python path for critical security controls. Keep startup configuration and diagnostics that can be reviewed. A test fixture can install a hook that raises <code>RuntimeError</code> for the add-hook event and verify that the program does not report an uninstalled observer as a security success. That negative test checks a specific failure path for the CPython version under test; it does not prove identical behavior for every hook or interpreter extension.</p>
+<h2 id="Why-is-this-not-a-Python-level-sandbox"><a href="#Why-is-this-not-a-Python-level-sandbox" class="headerlink" title="Why is this not a Python-level sandbox?"></a>Why is this not a Python-level sandbox?</h2><p>The Python 3.12 documentation directly says that <code>sys.addaudithook()</code> is not suitable for implementing a sandbox, because malicious code can easily disable or bypass hooks added through that function. The documentation further says that security-sensitive hooks must, at a minimum, be added through the C API <code>PySys_AddAuditHook()</code> before runtime initialization; modules that permit arbitrary memory modification, such as <code>ctypes</code>, should be removed entirely or closely monitored. That requirement illustrates why a Python function installed after the interpreter starts cannot establish a trust boundary against hostile code.</p>
+<p>For tools and dependencies you control, audit hooks can bring internal actions into an audit trail or assist policy checks. If you execute user submissions, unknown plugins, or attacker-influenced expressions, isolation must live outside the process—for example, in a separate operating-system identity, restricted filesystem, network boundary, resource limits, and disposable execution environment. Whether a container is a sufficient boundary depends on mounts, privileges, and kernel interfaces; the word “container” alone is not an absolute guarantee.</p>
+<h2 id="How-can-you-verify-that-logging-and-rejection-are-not-confused"><a href="#How-can-you-verify-that-logging-and-rejection-are-not-confused" class="headerlink" title="How can you verify that logging and rejection are not confused?"></a>How can you verify that logging and rejection are not confused?</h2><p>Split acceptance into three questions: did the event fire, does the record explain enough context, and did a rejection actually make the operation fail? Construct examples using both an allowed and a forbidden path. Check the system-call failure, exception propagation, whether a partial file remains, and whether logs expose credentials or personal data. If the hook only observes, a log entry does not mean the operation was blocked. If a hook rejects an event, also check whether the caller catches and ignores the exception before continuing.</p>
+<p>These programs and fixtures were not executed in this article, so the steps above are a verification plan based on the Python 3.12 documentation, not test results. For a security-sensitive deployment, pin the interpreter patch release, determine when and by whom every hook is installed, inspect native extensions and components such as <code>ctypes</code> that can change process state, and assign remaining risk to external operating-system isolation. This does not make audit hooks less useful; it puts them in their actual role: improving observability and assisting policy enforcement, rather than carrying hostile-code isolation by themselves.</p>
+<h3 id="Related-reading"><a href="#Related-reading" class="headerlink" title="Related reading"></a>Related reading</h3><p>For user-supplied archives, the site’s <a href="/en/2026/10/30/python-tarfile-data-filter-limits/">tarfile data-filter boundary</a> discusses input parsing and filesystem risks.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://docs.python.org/3.12/library/sys.html#sys.addaudithook" rel="noopener">Python 3.12 sys — sys.addaudithook and sys.audit</a></li><li><a target="_blank" href="https://peps.python.org/pep-0578/" rel="noopener">PEP 578 — Python Runtime Audit Hooks</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--python" href="/en/tags/Python/">Python</a>
+          
+            <a class="tag tag--security" href="/en/tags/Security/">Security</a>
+          
+            <a class="tag tag--audit-hooks" href="/en/tags/Audit-Hooks/">Audit Hooks</a>
+          
+            <a class="tag tag--runtime" href="/en/tags/Runtime/">Runtime</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--security" href="/en/categories/Security/">Security</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F27%2Fpython-audit-hooks-not-sandbox%2F&text=Python%20audit%20hooks%20can%20log%20and%20abort%20events%2C%20but%20they%20cannot%20sandbox%20the%20interpreter" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F27%2Fpython-audit-hooks-not-sandbox%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Python%20audit%20hooks%20can%20log%20and%20abort%20events%2C%20but%20they%20cannot%20sandbox%20the%20interpreter&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F27%2Fpython-audit-hooks-not-sandbox%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/27/node-permission-model-trust-boundary/">
+              <span>Previous Post</span>
+              <strong>Node.js permissions can limit a process, but they are not a sandbox for hostile code</strong>
+              <small>2026-11-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/27/sqs-fifo-send-dedup-window/">
+              <span>Next Post</span>
+              <strong>SQS FIFO&#39;s five-minute deduplication protects send retries, not business side effects</strong>
+              <small>2026-11-27</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#What-do-audit-events-provide-and-what-do-they-not-provide">What do audit events provide, and what do they not provide?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Why-can-a-failed-hook-installation-be-hidden">Why can a failed hook installation be hidden?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Why-is-this-not-a-Python-level-sandbox">Why is this not a Python-level sandbox?</a>
+          
+            <a class="toc-link toc-link--h2" href="#How-can-you-verify-that-logging-and-rejection-are-not-confused">How can you verify that logging and rejection are not confused?</a>
+          
+            <a class="toc-link toc-link--h3" href="#Related-reading">Related reading</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>224</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>199</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>121</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>90</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/27/node-permission-model-trust-boundary/">Node.js permissions can limit a process, but they are not a sandbox for hostile code</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/22/python-re-fullmatch-window-anchor-origin/">Why does ^ still use the original string origin in a fullmatch window?</a></h3>
+          <p>2026-11-22</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/22/python-redirect-stdout-global-thread-scope/">Why does redirect_stdout capture another thread too?</a></h3>
+          <p>2026-11-22</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
