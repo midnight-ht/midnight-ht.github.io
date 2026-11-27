@@ -1,0 +1,401 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Prometheus 原生直方图合并后桶变少，为什么不是采集丢数？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="原生直方图 schema 决定指数桶分辨率。向下缩放会合并桶并减少细节；理解 schema、插值假设和存储预算，才能解释查询结果差异。">
+  
+  
+    <meta name="keywords" content="Prometheus native histogram schema,histogram resolution,bucket downscaling,PromQL">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/28/prometheus-native-histogram-resolution/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/28/prometheus-native-histogram-resolution/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/28/prometheus-native-histogram-resolution/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/28/prometheus-native-histogram-resolution/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Prometheus 原生直方图合并后桶变少，为什么不是采集丢数？ | Midnight blog">
+    <meta property="og:description" content="原生直方图 schema 决定指数桶分辨率。向下缩放会合并桶并减少细节；理解 schema、插值假设和存储预算，才能解释查询结果差异。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/28/prometheus-native-histogram-resolution/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/prometheus-native-histogram-resolution/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/28/prometheus-native-histogram-resolution/","name":"Prometheus 原生直方图合并后桶变少，为什么不是采集丢数？ | Midnight blog","description":"原生直方图 schema 决定指数桶分辨率。向下缩放会合并桶并减少细节；理解 schema、插值假设和存储预算，才能解释查询结果差异。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/prometheus-native-histogram-resolution/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/prometheus-native-histogram-resolution/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/prometheus-native-histogram-resolution/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/prometheus-native-histogram-resolution/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/28/prometheus-native-histogram-resolution/","headline":"Prometheus 原生直方图合并后桶变少，为什么不是采集丢数？","description":"原生直方图 schema 决定指数桶分辨率。向下缩放会合并桶并减少细节；理解 schema、插值假设和存储预算，才能解释查询结果差异。","inLanguage":"zh-CN","datePublished":"2026-11-27T19:37:00.000Z","dateModified":"2026-11-27T19:37:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://prometheus.io/docs/specs/native_histograms/"],"keywords":"Prometheus, Native Histograms, Metrics, SLO"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/prometheus-native-histogram-resolution/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Prometheus 原生直方图合并后桶变少，为什么不是采集丢数？","item":"https://www.zyweb.vip/zh-CN/2026/11/28/prometheus-native-histogram-resolution/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/28/prometheus-native-histogram-resolution/" selected>zh-CN</option><option value="/en/2026/11/28/prometheus-native-histogram-resolution/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/28/prometheus-native-histogram-resolution/" selected>zh-CN</option><option value="/en/2026/11/28/prometheus-native-histogram-resolution/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--prometheus">Prometheus</span>
+      <time datetime="2026-11-27T19:37:00.000Z">2026-11-28</time>
+    </div>
+
+    <h1>Prometheus 原生直方图合并后桶变少，为什么不是采集丢数？</h1>
+
+    
+      <p class="post-hero__summary">原生直方图 schema 决定指数桶分辨率。向下缩放会合并桶并减少细节；理解 schema、插值假设和存储预算，才能解释查询结果差异。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-27T19:37:00.000Z">2026-11-28</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/28/prometheus-native-histogram-resolution/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/28/prometheus-native-histogram-resolution/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>标准 schema 的数字越高，相邻指数桶越密；增加 1 会把桶分辨率加倍。</li><li>兼容缩放可合并相邻桶，减少细节但保留总体范围。</li><li>分位数估算依赖桶布局和插值假设，不能把 schema 变化当成原始样本变化。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Prometheus 原生直方图查询后桶数变少，不一定代表样本丢失。原生直方图的 schema 决定指数桶分辨率；在标准 schema 中，schema number 增加 1 会把分辨率加倍，边界更密。为了合并不同分辨率的数据或控制存储和传输成本，桶可以向下缩放并合并，细节因此减少。排查时先比较 schema、缩放与查询路径，再判断是否真有观测丢失。</p>
+<h2 id="schema-表示的是桶空间分辨率"><a href="#schema-表示的是桶空间分辨率" class="headerlink" title="schema 表示的是桶空间分辨率"></a>schema 表示的是桶空间分辨率</h2><p>指数直方图将正值和负值范围拆分到对数尺度相邻桶。标准 schema 号定义相邻边界之间的倍数关系；schema 越高，区间被分得越细。Prometheus 的 Native Histograms 规范解释，增加 schema number 1 相当于将桶分成两个、分辨率加倍。这个参数不是“样本精度”或“单位时间采样率”，也不意味着每个观测都以更高精度被测量；它控制的是聚合桶边界的密度。</p>
+<p>缩放到较低 schema 时，相邻细桶可以合成更粗的桶，以便表示不同分辨率的数据或控制数据体量。合并不会凭空改写观测总量，但会丢掉区分细桶内部位置的细节。若 SLO 阈值刚好落在被合并的区间中，分位数估计可能更粗。查询端对桶内分布使用插值假设；Prometheus 文档说明标准 schema 使用指数插值，假设细分后新增桶平均获得相似人口。真实数据分布若高度偏斜，这个假设就影响估计。</p>
+<h2 id="假设例子：阈值落在合并区间附近"><a href="#假设例子：阈值落在合并区间附近" class="headerlink" title="假设例子：阈值落在合并区间附近"></a>假设例子：阈值落在合并区间附近</h2><p>假设某服务跟踪请求延迟，p99 目标是 500ms。较高分辨率 schema 在 450ms 与 510ms 附近有多个桶；某个接收端为了兼容较低分辨率，把数据向下缩放，附近桶被合并成一个更宽区间。查询仍能给出分位数估计，却无法从该桶恢复每个观测落在 470ms 还是 505ms。图表可能出现轻微变化，即使原始请求分布并未同步改变。</p>
+<p>此时错误做法是把新旧 quantile 差异直接叫作“延迟恶化”，或反过来认为“桶总数没变就没有问题”。应对齐同一时间窗口的 schema、sum/count、正负桶、零桶和查询函数，检查采集、远程写入、存储与查询是否有不同的缩放。示例数值是假设说明，没有运行 Prometheus 或测量真实延迟。</p>
+<h2 id="分辨率与成本如何权衡？"><a href="#分辨率与成本如何权衡？" class="headerlink" title="分辨率与成本如何权衡？"></a>分辨率与成本如何权衡？</h2><p>更高分辨率会更准确地定位阈值附近分布，但对每个样本群组可能产生更多非空桶；数据量、远程传输和聚合成本可能随工作负载增加。降低 schema 可缩小桶数、提高合并兼容性，却使边界附近的分位数估计变粗。选择时以决策需求为准：若告警只区分“明显高于 500ms”，较粗粒度也许够用；若产品决策要求区分 490ms 与 505ms，必须验证分辨率足以支撑该差异。</p>
+<p>不要先按平均桶数估算成本，再把统一 schema 套到所有指标。低流量端点、高基数标签或双峰/长尾分布可能形成不同的非空桶模式。应在目标采集、压缩、remote write、存储和查询版本上测量真实样本，结合保留期、标签数和查询频率评估。Native Histogram 的支持与配置在不同 Prometheus 版本和组件中有边界；只有实验通过并不代表整个生产链路都保留相同分辨率。</p>
+<h2 id="如何定位桶差异来自哪里？"><a href="#如何定位桶差异来自哪里？" class="headerlink" title="如何定位桶差异来自哪里？"></a>如何定位桶差异来自哪里？</h2><p>保留原始样本管道中各阶段的 schema 与直方图字段：应用生成、scrape、remote write、接收端存储、读取 API 和 PromQL 结果。比较每一步的 count、sum、schema、零桶与正负桶边界；若 count 一致而 schema 降低、桶合并，则更可能是分辨率缩放而非观测数量丢失。若 count 也下降，要检查采集失败、过滤、限流、队列溢出和时间窗口对齐。</p>
+<p>设计一个受控数据集，在预设阈值两侧放置观测，然后用多种 schema 写入与合并，比较输出桶与 quantile。确保测试覆盖边界附近的集中分布、长尾、稀疏值与零值。记录查询端插值策略和组件版本。不要用仪表盘像素变化替代数值验证；绘图分辨率、查询步长和插值都会影响视觉曲线。</p>
+<h2 id="什么时候可以接受降分辨率？"><a href="#什么时候可以接受降分辨率？" class="headerlink" title="什么时候可以接受降分辨率？"></a>什么时候可以接受降分辨率？</h2><p>当存储预算、网络或聚合兼容性比边界估计更重要，且业务阈值相对宽，降低 schema 可能合理。对需要高精度阈值判断的 SLO，应使用匹配的分辨率并监测下游是否发生缩放；若无法保证，就把告警设计成对估计误差有容忍度。不要把 histogram schema 与传统 bucket histogram 的显式边界混为一谈，它们具有不同的表达与合并方式。</p>
+<p>本文依据 Prometheus Native Histograms 规范说明标准 schema、合并与插值，不包含基准或真实集群观察。落地需要在实际 Prometheus/remote write 版本、采样配置和负载下测试桶增长、查询准确度与存储成本。桶变少可能是缩放的有意结果，但是否能接受取决于决策阈值，而不是桶数本身。</p>
+<p>聚合规则要保持可追溯的分辨率变化。若 recording rule 把多个来源的直方图合并，查询结果的 schema 可能由最粗输入和转换能力共同决定；只在 dashboard 查询时检查原始 scrape schema 不够。将聚合前后 schema 与 count 写入回归样本，可以在升级 Prometheus、remote write 或规则配置时发现意外降采样。若阈值告警对近边界结果敏感，应以更粗粒度的输入做保守测试，而不是只测试理想最高分辨率。</p>
+<p>延伸阅读：本站<a href="/zh-CN/2026/10/15/prometheus-rule-label-contract/">Prometheus 记录规则的标签合同</a>。聚合前后应分别核对标签身份与 histogram schema，避免把实例合并误认为分辨率变化。</p>
+<p>比较时不仅要对齐 schema，也要对齐样本群体。若 recording rule 改了标签，即使 count 相近，新旧直方图也可能代表不同 endpoint 集合。比较分位数前先固定时间窗、标签集合、reset 边界和 schema，再检查阈值落在一个粗桶内还是跨越多个细桶。这样复核才能回答两个问题：代表的请求群体是否变化，以及桶布局是否丢失了决策所需的细节。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://prometheus.io/docs/specs/native_histograms/" rel="noopener">Prometheus Specification — Native Histograms</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--prometheus" href="/zh-CN/tags/Prometheus/">Prometheus</a>
+          
+            <a class="tag tag--native-histograms" href="/zh-CN/tags/Native-Histograms/">Native Histograms</a>
+          
+            <a class="tag tag--metrics" href="/zh-CN/tags/Metrics/">Metrics</a>
+          
+            <a class="tag tag--slo" href="/zh-CN/tags/SLO/">SLO</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--observability" href="/zh-CN/categories/Observability/">Observability</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Fprometheus-native-histogram-resolution%2F&text=Prometheus%20%E5%8E%9F%E7%94%9F%E7%9B%B4%E6%96%B9%E5%9B%BE%E5%90%88%E5%B9%B6%E5%90%8E%E6%A1%B6%E5%8F%98%E5%B0%91%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E6%98%AF%E9%87%87%E9%9B%86%E4%B8%A2%E6%95%B0%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Fprometheus-native-histogram-resolution%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Prometheus%20%E5%8E%9F%E7%94%9F%E7%9B%B4%E6%96%B9%E5%9B%BE%E5%90%88%E5%B9%B6%E5%90%8E%E6%A1%B6%E5%8F%98%E5%B0%91%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E6%98%AF%E9%87%87%E9%9B%86%E4%B8%A2%E6%95%B0%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Fprometheus-native-histogram-resolution%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/">
+              <span>上一篇</span>
+              <strong>EventBridge Archive 重放历史事件，为什么副作用可能再发生？</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/28/sendbeacon-queued-not-delivered/">
+              <span>下一篇</span>
+              <strong>sendBeacon 返回 true，为什么仍不能证明服务端保存了数据？</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#schema-表示的是桶空间分辨率">schema 表示的是桶空间分辨率</a>
+          
+            <a class="toc-link toc-link--h2" href="#假设例子：阈值落在合并区间附近">假设例子：阈值落在合并区间附近</a>
+          
+            <a class="toc-link toc-link--h2" href="#分辨率与成本如何权衡？">分辨率与成本如何权衡？</a>
+          
+            <a class="toc-link toc-link--h2" href="#如何定位桶差异来自哪里？">如何定位桶差异来自哪里？</a>
+          
+            <a class="toc-link toc-link--h2" href="#什么时候可以接受降分辨率？">什么时候可以接受降分辨率？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>224</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>199</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>119</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>85</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/">pg_stat_io 有读写计数，为什么还不能直接说磁盘慢？</a></h3>
+          <p>2026-11-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/27/otel-exemplars-metric-trace-link/">指标图上看到尖峰，却找不到请求：OpenTelemetry exemplar 连接了什么？</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/14/promql-histogram-quantile-bucket-repair/">Prometheus 给出了 p75，为什么还说桶计数被修正？</a></h3>
+          <p>2026-11-14</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

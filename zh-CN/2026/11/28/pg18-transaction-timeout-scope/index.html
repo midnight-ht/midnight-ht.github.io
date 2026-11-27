@@ -1,0 +1,399 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>PostgreSQL 18 事务超时，为什么会把连接一起结束？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="PostgreSQL 18 的 transaction_timeout 限制的是一次事务占用会话的总时长，触发后会终止会话。理解它与语句超时、空闲事务超时的比较关系，再决定按角色或连接设置。">
+  
+  
+    <meta name="keywords" content="PostgreSQL 18 transaction_timeout,statement_timeout,idle_in_transaction_session_timeout,事务连接">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/28/pg18-transaction-timeout-scope/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/28/pg18-transaction-timeout-scope/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/28/pg18-transaction-timeout-scope/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/28/pg18-transaction-timeout-scope/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="PostgreSQL 18 事务超时，为什么会把连接一起结束？ | Midnight blog">
+    <meta property="og:description" content="PostgreSQL 18 的 transaction_timeout 限制的是一次事务占用会话的总时长，触发后会终止会话。理解它与语句超时、空闲事务超时的比较关系，再决定按角色或连接设置。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/28/pg18-transaction-timeout-scope/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/pg18-transaction-timeout-scope/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/28/pg18-transaction-timeout-scope/","name":"PostgreSQL 18 事务超时，为什么会把连接一起结束？ | Midnight blog","description":"PostgreSQL 18 的 transaction_timeout 限制的是一次事务占用会话的总时长，触发后会终止会话。理解它与语句超时、空闲事务超时的比较关系，再决定按角色或连接设置。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/pg18-transaction-timeout-scope/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/pg18-transaction-timeout-scope/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/pg18-transaction-timeout-scope/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/pg18-transaction-timeout-scope/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/28/pg18-transaction-timeout-scope/","headline":"PostgreSQL 18 事务超时，为什么会把连接一起结束？","description":"PostgreSQL 18 的 transaction_timeout 限制的是一次事务占用会话的总时长，触发后会终止会话。理解它与语句超时、空闲事务超时的比较关系，再决定按角色或连接设置。","inLanguage":"zh-CN","datePublished":"2026-11-27T19:20:00.000Z","dateModified":"2026-11-27T19:20:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/runtime-config-client.html"],"keywords":"PostgreSQL, Database, Timeout, Operations"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/pg18-transaction-timeout-scope/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"PostgreSQL 18 事务超时，为什么会把连接一起结束？","item":"https://www.zyweb.vip/zh-CN/2026/11/28/pg18-transaction-timeout-scope/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/28/pg18-transaction-timeout-scope/" selected>zh-CN</option><option value="/en/2026/11/28/pg18-transaction-timeout-scope/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/28/pg18-transaction-timeout-scope/" selected>zh-CN</option><option value="/en/2026/11/28/pg18-transaction-timeout-scope/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--postgresql">PostgreSQL</span>
+      <time datetime="2026-11-27T19:20:00.000Z">2026-11-28</time>
+    </div>
+
+    <h1>PostgreSQL 18 事务超时，为什么会把连接一起结束？</h1>
+
+    
+      <p class="post-hero__summary">PostgreSQL 18 的 transaction_timeout 限制的是一次事务占用会话的总时长，触发后会终止会话。理解它与语句超时、空闲事务超时的比较关系，再决定按角色或连接设置。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-27T19:20:00.000Z">2026-11-28</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/28/pg18-transaction-timeout-scope/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/28/pg18-transaction-timeout-scope/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>transaction_timeout 触发时终止会话，不只是取消当前 SQL。</li><li>PostgreSQL 18 会比较事务超时与语句、空闲事务超时，较长的一项可能被忽略。</li><li>全局配置会影响所有会话；应先界定工作负载，再用受控范围验证断连与重试行为。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>PostgreSQL 18 的 <code>transaction_timeout</code> 不是“慢 SQL 到点就取消”的另一种写法：事务持续时间超过阈值时，服务器会终止该会话。事务中的应用连接因此不再可继续执行后续语句，连接池也必须把它视为失效连接。要不要启用它，首先要回答的不是“阈值设几秒”，而是“哪些事务类型允许占用连接多久，以及被终止后业务如何恢复”。</p>
+<h2 id="三种超时保护的是不同区间"><a href="#三种超时保护的是不同区间" class="headerlink" title="三种超时保护的是不同区间"></a>三种超时保护的是不同区间</h2><p><code>statement_timeout</code> 针对单条语句从服务器收到到完成的执行时间；<code>idle_in_transaction_session_timeout</code> 针对事务已经打开、但客户端暂时没有发出语句的空闲时间；<code>transaction_timeout</code> 则覆盖事务存在的总时长。一次事务可以先运行几条各自都没有触发语句超时的 SQL，中间再停顿一会儿，最后仍因为累计时长越界而被终止。它的目标是把事务占用会话的时间封顶，并不告诉你具体哪条语句慢，也不能替代锁等待、查询计划和连接池治理。</p>
+<p>PostgreSQL 18 文档明确指出，transaction_timeout 同时适用于显式事务和对应单条语句的隐式事务；默认值 0 表示关闭。如果它短于或等于 <code>statement_timeout</code> 或 <code>idle_in_transaction_session_timeout</code>，较长的那个超时会被忽略。这种比较意味着不能把几项配置各自看一遍就认为三项保护都会按预期独立触发。应把它们放在同一条时间线上，问清谁先到期、到期后的连接状态是什么。</p>
+<h2 id="假设时间线：一条请求跨过了事务上限"><a href="#假设时间线：一条请求跨过了事务上限" class="headerlink" title="假设时间线：一条请求跨过了事务上限"></a>假设时间线：一条请求跨过了事务上限</h2><p>假设服务把一次用户操作包在事务中：先读一行，等待外部系统返回，再更新余额。读和更新分别只花 100 毫秒，但外部等待持续 4 秒。若语句上限为 2 秒、事务上限为 3 秒、空闲事务上限为 5 秒，单独看每个 SQL 都很快，却不能推出整笔事务安全：外部等待期间可能处于事务空闲状态，或者事务累计跨度达到上限；具体哪个超时先发生，取决于它们开始计时的时点与连接当前状态。这里的数值只是用于解释时序的假设，并非推荐配置。</p>
+<p>当 transaction_timeout 到期，客户端可能看到连接断开，事务是否提交不能靠“请求超时了”推断。若客户端只做一次盲目重试，服务端可能已在客户端观察到断连前完成提交，也可能根本没有提交。安全恢复需要业务幂等键、事务状态查询或可重放的命令模型；数据库端终止会话并不会替应用提供恰好一次的业务保证。更合适的事务通常也不应跨越网络调用：先在数据库中读取必要状态，完成外部工作后再用版本条件或幂等键提交，能缩短连接被占用的窗口。</p>
+<h2 id="为什么不应直接把它写进全局配置？"><a href="#为什么不应直接把它写进全局配置？" class="headerlink" title="为什么不应直接把它写进全局配置？"></a>为什么不应直接把它写进全局配置？</h2><p>PostgreSQL 文档不建议在 <code>postgresql.conf</code> 全局设置 <code>transaction_timeout</code>，理由是它会影响所有会话。迁移脚本、交互运维会话、批处理、长查询和在线接口的合理事务时长可能完全不同。一个对在线请求有效的短值，可能把批处理正常工作切断；把值调很大来保护批处理，又可能让交互会话长期占用连接。全局值会把这些不同合同压成一个数字。</p>
+<p>更稳的做法是先统计工作负载的事务跨度分布，并按连接角色、数据库或事务入口划分保护范围。优先从服务连接池的专用角色开始，在预发布环境验证事务被终止后的驱动错误、连接淘汰、事务回滚及重试路径。若使用会话级设置，还要检查连接池复用连接时设置是否会泄漏到下一位请求；若用角色级默认值，需用该角色实际建立连接，确认服务器最终生效的值。不要仅凭配置文件改动就认为现有连接已按新策略运行。</p>
+<h2 id="怎样验证配置真正起作用？"><a href="#怎样验证配置真正起作用？" class="headerlink" title="怎样验证配置真正起作用？"></a>怎样验证配置真正起作用？</h2><p>先记录当前 PostgreSQL 主版本和三类超时的有效值，再用隔离测试事务覆盖四种路径：单条语句先达到 statement_timeout；事务先空闲达到 idle 超时；多个短语句使总事务跨度越过 transaction_timeout；配置关系使一项较长超时被忽略。每个测试都应同时收集服务器日志、客户端错误、连接池健康状态与事务结果。测试后确认该会话确实终止、池中新请求取得新连接，并检查已执行写入是否回滚。</p>
+<p>验证期间不要只看 SQL 客户端弹出的“取消”消息。驱动可能把断线、取消和服务端错误映射成不同异常；应用层若把它们都归为可重试错误，容易重复执行非幂等操作。将连接标记失效、事务结果设为未知、业务重试交给幂等策略，是比自动重发整段 SQL 更保守的状态设计。具体行为还取决于 PostgreSQL 驱动、连接池和事务边界，本文没有对某个生产栈做实测。</p>
+<h2 id="选择依据和适用边界"><a href="#选择依据和适用边界" class="headerlink" title="选择依据和适用边界"></a>选择依据和适用边界</h2><p>如果主要风险是遗漏的长事务或客户端在事务中等待太久，transaction_timeout 可以提供总跨度上限；若问题是单条查询消耗资源，statement_timeout 更直接；若问题是事务打开后应用不再工作，idle_in_transaction_session_timeout 更贴近原因。三者不是互斥选项，但必须结合优先关系和故障恢复设计。运行长时间分析任务的系统可能需要单独角色或独立连接策略，而不应悄悄提高所有在线请求的上限。</p>
+<p>本文说明的是 PostgreSQL 18 官方参数语义，不是任何集群的推荐秒数。上线前应核对实际主版本、参数生效范围、驱动与池的断连处理，并通过可回滚的隔离测试确认提交不确定路径。超时能限制资源占用，却不能证明事务安全、请求可重试或业务结果唯一；这些仍要由应用的事务设计和幂等合同承担。</p>
+<p>延伸阅读：本站<a href="/zh-CN/2026/10/09/postgres-concurrent-index/">并发建索引为何仍会等待</a>。两类问题都可能表现为数据库会话停滞，但事务时限会终止会话，并发建索引则有独立的锁与阶段等待合同。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/runtime-config-client.html" rel="noopener">PostgreSQL 18 Documentation — Client Connection Defaults, transaction_timeout</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--database" href="/zh-CN/tags/Database/">Database</a>
+          
+            <a class="tag tag--timeout" href="/zh-CN/tags/Timeout/">Timeout</a>
+          
+            <a class="tag tag--operations" href="/zh-CN/tags/Operations/">Operations</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--operations" href="/zh-CN/categories/Operations/">Operations</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Fpg18-transaction-timeout-scope%2F&text=PostgreSQL%2018%20%E4%BA%8B%E5%8A%A1%E8%B6%85%E6%97%B6%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BC%9A%E6%8A%8A%E8%BF%9E%E6%8E%A5%E4%B8%80%E8%B5%B7%E7%BB%93%E6%9D%9F%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Fpg18-transaction-timeout-scope%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=PostgreSQL%2018%20%E4%BA%8B%E5%8A%A1%E8%B6%85%E6%97%B6%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BC%9A%E6%8A%8A%E8%BF%9E%E6%8E%A5%E4%B8%80%E8%B5%B7%E7%BB%93%E6%9D%9F%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Fpg18-transaction-timeout-scope%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/27/abortsignal-timeout-active-time/">
+              <span>上一篇</span>
+              <strong>页面挂起后 AbortSignal.timeout 为什么还没超时？</strong>
+              <small>2026-11-27</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/">
+              <span>下一篇</span>
+              <strong>pg_stat_io 有读写计数，为什么还不能直接说磁盘慢？</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#三种超时保护的是不同区间">三种超时保护的是不同区间</a>
+          
+            <a class="toc-link toc-link--h2" href="#假设时间线：一条请求跨过了事务上限">假设时间线：一条请求跨过了事务上限</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么不应直接把它写进全局配置？">为什么不应直接把它写进全局配置？</a>
+          
+            <a class="toc-link toc-link--h2" href="#怎样验证配置真正起作用？">怎样验证配置真正起作用？</a>
+          
+            <a class="toc-link toc-link--h2" href="#选择依据和适用边界">选择依据和适用边界</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>224</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>199</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>119</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>85</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/">pg_stat_io 有读写计数，为什么还不能直接说磁盘慢？</a></h3>
+          <p>2026-11-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/13/postgres-advisory-lock-pool/">连接池里的 PostgreSQL 咨询锁，什么时候才会释放？</a></h3>
+          <p>2026-10-13</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/11/postgres-savepoint-partial-import/">逐行保存点之后，如何给出可信的 PostgreSQL 导入回执？</a></h3>
+          <p>2026-10-11</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

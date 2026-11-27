@@ -1,0 +1,400 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why does an AsyncLocalStorage.snapshot callback still need a lifetime policy? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Node.js AsyncLocalStorage.snapshot lets a callback run in a captured async context, but it does not shorten the lifetime of closures or stores. Design context propagation separately from data retention.">
+  
+  
+    <meta name="keywords" content="AsyncLocalStorage.snapshot,Node.js async context,request context,closure lifetime">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/28/node-asynclocalstorage-snapshot-scope/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/28/node-asynclocalstorage-snapshot-scope/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/28/node-asynclocalstorage-snapshot-scope/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/28/node-asynclocalstorage-snapshot-scope/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why does an AsyncLocalStorage.snapshot callback still need a lifetime policy? | Midnight blog">
+    <meta property="og:description" content="Node.js AsyncLocalStorage.snapshot lets a callback run in a captured async context, but it does not shorten the lifetime of closures or stores. Design context propagation separately from data retention.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/28/node-asynclocalstorage-snapshot-scope/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/28/node-asynclocalstorage-snapshot-scope/#webpage","url":"https://www.zyweb.vip/en/2026/11/28/node-asynclocalstorage-snapshot-scope/","name":"Why does an AsyncLocalStorage.snapshot callback still need a lifetime policy? | Midnight blog","description":"Node.js AsyncLocalStorage.snapshot lets a callback run in a captured async context, but it does not shorten the lifetime of closures or stores. Design context propagation separately from data retention.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/28/node-asynclocalstorage-snapshot-scope/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/28/node-asynclocalstorage-snapshot-scope/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/28/node-asynclocalstorage-snapshot-scope/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/28/node-asynclocalstorage-snapshot-scope/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/28/node-asynclocalstorage-snapshot-scope/","headline":"Why does an AsyncLocalStorage.snapshot callback still need a lifetime policy?","description":"Node.js AsyncLocalStorage.snapshot lets a callback run in a captured async context, but it does not shorten the lifetime of closures or stores. Design context propagation separately from data retention.","inLanguage":"en","datePublished":"2026-11-27T19:25:00.000Z","dateModified":"2026-11-27T19:25:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://nodejs.org/api/async_context.html"],"keywords":"Node.js, AsyncLocalStorage, Context Propagation, Memory"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/28/node-asynclocalstorage-snapshot-scope/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why does an AsyncLocalStorage.snapshot callback still need a lifetime policy?","item":"https://www.zyweb.vip/en/2026/11/28/node-asynclocalstorage-snapshot-scope/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/28/node-asynclocalstorage-snapshot-scope/">zh-CN</option><option value="/en/2026/11/28/node-asynclocalstorage-snapshot-scope/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/28/node-asynclocalstorage-snapshot-scope/">zh-CN</option><option value="/en/2026/11/28/node-asynclocalstorage-snapshot-scope/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--node-js">Node.js</span>
+      <time datetime="2026-11-27T19:25:00.000Z">2026-11-28</time>
+    </div>
+
+    <h1>Why does an AsyncLocalStorage.snapshot callback still need a lifetime policy?</h1>
+
+    
+      <p class="post-hero__summary">Node.js AsyncLocalStorage.snapshot lets a callback run in a captured async context, but it does not shorten the lifetime of closures or stores. Design context propagation separately from data retention.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-27T19:25:00.000Z">2026-11-28</time> · Estimated read 15 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/28/node-asynclocalstorage-snapshot-scope/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/28/node-asynclocalstorage-snapshot-scope/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>snapshot captures the async context at its call site and returns a function that runs callbacks in that context.</li><li>A callback may run after a request ends; capture does not copy, clear, or expire the store.</li><li>Inspect objects, sensitive data, and retention time when saving captured callbacks for queues or timers.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Node.js <code>AsyncLocalStorage.snapshot()</code> returns a function that can later run a callback in the asynchronous context captured when <code>snapshot()</code> was called. It solves a propagation question—how later execution can observe the earlier context. It does not automatically copy a store, clear request data, set an expiry, or guarantee that a closure is released promptly. Before saving a snapshot wrapper in a delayed queue or long-lived listener, ask how long the callback will live, what the store references, and who will remove those references when the task ends.</p>
+<h2 id="A-snapshot-and-an-ordinary-closure-do-not-make-the-same-promise"><a href="#A-snapshot-and-an-ordinary-closure-do-not-make-the-same-promise" class="headerlink" title="A snapshot and an ordinary closure do not make the same promise"></a>A snapshot and an ordinary closure do not make the same promise</h2><p><code>AsyncLocalStorage</code> lets an asynchronous call chain read an associated store, such as a request ID, trace-related object, or tenant context. <code>snapshot()</code> captures the current context and returns a function that can wrap a callback; when that callback runs later, the captured context is restored. The Node.js API marks snapshot as stable, with stable-version history in v22.15.0 and v23.11.0. If a deployment runs an older runtime, do not infer support solely from the current documentation.</p>
+<p>Capturing context should not be interpreted as “copying a value.” If the store holds an object reference, restoring the context may still expose the same object rather than a frozen copy. If the object changes later, what the callback sees depends on the reference and the object&#39;s own semantics, not on a deep copy made by snapshot. Likewise, snapshot preserves the AsyncLocalStorage context; it does not recreate arbitrary global variables or every asynchronous resource. It operates within the propagation boundary defined by AsyncLocalStorage.</p>
+<h2 id="Hypothetical-case-a-queue-invokes-the-callback-after-the-request-ends"><a href="#Hypothetical-case-a-queue-invokes-the-callback-after-the-request-ends" class="headerlink" title="Hypothetical case: a queue invokes the callback after the request ends"></a>Hypothetical case: a queue invokes the callback after the request ends</h2><p>Imagine an HTTP handler reads a request ID from the current context and gives a snapshot-wrapped logging callback to a background queue. The request returns quickly; the queue runs the callback several minutes later. Keeping the original request ID in the log may help correlation. But if the store also references the request object, upload buffer, user profile, or a large object graph, the queued closure can keep those objects reachable. The HTTP response ending does not automatically clear the queued function, and snapshot does not decide which fields should remain.</p>
+<p>A safer task boundary constructs a minimal context explicitly: perhaps a request ID, trace ID, and non-sensitive classification label. Store business data according to the queue&#39;s own contract, with TTL and deletion rules where needed. Remove the wrapper or task from the queue after execution. If the delayed work must not inherit the original security principal, tenant permission, or transaction context, do not capture the entire context; revalidate the current authorization state when the task runs. This is an architecture example, not a report of a production queue leak.</p>
+<h2 id="When-should-you-choose-snapshot-bind-or-explicit-parameters"><a href="#When-should-you-choose-snapshot-bind-or-explicit-parameters" class="headerlink" title="When should you choose snapshot, bind, or explicit parameters?"></a>When should you choose snapshot, bind, or explicit parameters?</h2><p>Use snapshot when a callback must continue to access the current asynchronous context across a call-stack boundary, the callback has a short lifetime, and the store contents are controlled. If the goal is to bind one function to its context, <code>AsyncLocalStorage.bind()</code> may express that intent more directly. For work that is persisted, crosses processes or machines, or lasts a long time, explicitly placing the required correlation IDs in the task data is usually easier to audit and avoids treating process-local context as a distributed propagation protocol.</p>
+<p>Do not treat a tenant ID or permission object as authorization merely because it is in the store. Permissions can be revoked, user state can change, and a background worker may process data from a different source. A snapshot preserves a context-propagation fact; it does not guarantee that the captured business decision remains valid in the future. For work that needs reauthorization, keep the data identity separate from the execution principal and check permission at the actual execution point.</p>
+<h2 id="How-can-you-verify-propagation-and-release-behavior"><a href="#How-can-you-verify-propagation-and-release-behavior" class="headerlink" title="How can you verify propagation and release behavior?"></a>How can you verify propagation and release behavior?</h2><p>In an isolated test on the target Node version, set a store inside <code>run()</code> and create a snapshot-wrapped callback. Execute the callback after leaving the original async chain and confirm that it reads the expected request ID. Then create a concurrent chain with a different store and ensure the wrapper does not read another request&#39;s context. Cover an empty store, nested <code>run()</code>, Promise continuations, exceptional exits, and a callback saved in a queue and invoked later. A single synchronous call does not cover asynchronous propagation boundaries.</p>
+<p>Weak references and controlled-GC experiments can help investigate lifetime, but one collection cycle failing to reclaim an object does not prove a permanent leak. More reliable evidence comes from enumerating captured objects, queue retention rules, and task cleanup paths, then comparing heap snapshots. If a global map retains the callback indefinitely, the function itself may keep references alive even when the context object seems small. Conversely, the mere presence of snapshot does not prove a leak: find the actual long-lived reference chain.</p>
+<h2 id="Node-versions-limits-and-the-evidence-used-here"><a href="#Node-versions-limits-and-the-evidence-used-here" class="headerlink" title="Node versions, limits, and the evidence used here"></a>Node versions, limits, and the evidence used here</h2><p>This article follows the Node.js v26.13.1 API documentation for snapshot and its stable-version history in v22.15.0 and v23.11.0. A project should verify import and behavior against its actual Node version matrix. No Node script was run and no heap memory was measured for this article; the validation steps are recommendations, not execution results. Snapshot makes cross-call-stack context restoration explicit. It does not replace task-data design, authorization checks, lifecycle management, or distributed trace propagation.</p>
+<p>Define an allowlist and lifetime for async-context fields: a request ID may be for current-request logging, trace context may cross a short task, and a user object or raw request may be disallowed from persistent queues. During review, find every place a <code>snapshot()</code> result is stored and determine whether it enters a Promise, timer, event listener, queue, or global cache—and when that container releases it. Node&#39;s stability label for propagation does not make the application&#39;s store schema stable; field changes and object references still need compatibility and privacy review.</p>
+<p>Related reading: the site’s <a href="/en/2026/10/23/node-asynclocalstorage-run-context/">the scope established by AsyncLocalStorage.run</a>. <code>run()</code> establishes an execution scope; <code>snapshot()</code> captures the current scope for later restoration. They are not interchangeable and neither is an inter-process message.</p>
+<p>If a queue restores a task after process restart, a function produced by <code>snapshot()</code> cannot be serialized or reused across processes; recovery code must rebuild the minimum context from task fields. Conversely, a short delay inside one process may fit a captured callback, but cancellation still needs to remove that callback from the waiting queue. Inspect queue state, callback references, and cleanup time together. That review can reveal retained memory or stale authorization context that an API stability label cannot reveal.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://nodejs.org/api/async_context.html" rel="noopener">Node.js v26.13.1 API — Asynchronous context tracking, AsyncLocalStorage.snapshot</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--node-js" href="/en/tags/Node.js/">Node.js</a>
+          
+            <a class="tag tag--asynclocalstorage" href="/en/tags/AsyncLocalStorage/">AsyncLocalStorage</a>
+          
+            <a class="tag tag--context-propagation" href="/en/tags/Context-Propagation/">Context Propagation</a>
+          
+            <a class="tag tag--memory" href="/en/tags/Memory/">Memory</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F28%2Fnode-asynclocalstorage-snapshot-scope%2F&text=Why%20does%20an%20AsyncLocalStorage.snapshot%20callback%20still%20need%20a%20lifetime%20policy%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F28%2Fnode-asynclocalstorage-snapshot-scope%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20does%20an%20AsyncLocalStorage.snapshot%20callback%20still%20need%20a%20lifetime%20policy%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F28%2Fnode-asynclocalstorage-snapshot-scope%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/28/python314-executor-map-buffersize-order/">
+              <span>Previous Post</span>
+              <strong>Python 3.14 buffersize bounds submissions without changing result order</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/28/http-priority-header-is-a-hint/">
+              <span>Next Post</span>
+              <strong>Why can a critical response still arrive late after sending HTTP Priority?</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#A-snapshot-and-an-ordinary-closure-do-not-make-the-same-promise">A snapshot and an ordinary closure do not make the same promise</a>
+          
+            <a class="toc-link toc-link--h2" href="#Hypothetical-case-a-queue-invokes-the-callback-after-the-request-ends">Hypothetical case: a queue invokes the callback after the request ends</a>
+          
+            <a class="toc-link toc-link--h2" href="#When-should-you-choose-snapshot-bind-or-explicit-parameters">When should you choose snapshot, bind, or explicit parameters?</a>
+          
+            <a class="toc-link toc-link--h2" href="#How-can-you-verify-propagation-and-release-behavior">How can you verify propagation and release behavior?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Node-versions-limits-and-the-evidence-used-here">Node versions, limits, and the evidence used here</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>224</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>199</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>121</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>90</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/27/node-permission-model-trust-boundary/">Node.js permissions can limit a process, but they are not a sandbox for hostile code</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/27/node-test-mock-timers-clock-boundary/">The test clock moved forward, so why is the Promise still pending?</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/10/abortsignal-any-reason-already-aborted/">AbortSignal.any reasons: DOM rules and a Node v24.21.0 comparison</a></h3>
+          <p>2026-11-10</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

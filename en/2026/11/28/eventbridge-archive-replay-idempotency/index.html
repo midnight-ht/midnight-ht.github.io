@@ -1,0 +1,403 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why can replaying an EventBridge archive repeat side effects? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="EventBridge archive replay resends events from a selected time range to the original event bus. It does not undo consumer side effects or preserve original arrival order; scope targets and protect downstream writes first.">
+  
+  
+    <meta name="keywords" content="EventBridge archive replay,replay-name,event idempotency,event recovery">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/28/eventbridge-archive-replay-idempotency/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/28/eventbridge-archive-replay-idempotency/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why can replaying an EventBridge archive repeat side effects? | Midnight blog">
+    <meta property="og:description" content="EventBridge archive replay resends events from a selected time range to the original event bus. It does not undo consumer side effects or preserve original arrival order; scope targets and protect downstream writes first.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/28/eventbridge-archive-replay-idempotency/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/28/eventbridge-archive-replay-idempotency/#webpage","url":"https://www.zyweb.vip/en/2026/11/28/eventbridge-archive-replay-idempotency/","name":"Why can replaying an EventBridge archive repeat side effects? | Midnight blog","description":"EventBridge archive replay resends events from a selected time range to the original event bus. It does not undo consumer side effects or preserve original arrival order; scope targets and protect downstream writes first.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/28/eventbridge-archive-replay-idempotency/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/28/eventbridge-archive-replay-idempotency/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/28/eventbridge-archive-replay-idempotency/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/28/eventbridge-archive-replay-idempotency/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/28/eventbridge-archive-replay-idempotency/","headline":"Why can replaying an EventBridge archive repeat side effects?","description":"EventBridge archive replay resends events from a selected time range to the original event bus. It does not undo consumer side effects or preserve original arrival order; scope targets and protect downstream writes first.","inLanguage":"en","datePublished":"2026-11-27T19:36:00.000Z","dateModified":"2026-11-27T19:36:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-archive.html"],"keywords":"AWS EventBridge, Event Replay, Idempotency, Recovery"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/28/eventbridge-archive-replay-idempotency/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why can replaying an EventBridge archive repeat side effects?","item":"https://www.zyweb.vip/en/2026/11/28/eventbridge-archive-replay-idempotency/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/">zh-CN</option><option value="/en/2026/11/28/eventbridge-archive-replay-idempotency/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/">zh-CN</option><option value="/en/2026/11/28/eventbridge-archive-replay-idempotency/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--aws-eventbridge">AWS EventBridge</span>
+      <time datetime="2026-11-27T19:36:00.000Z">2026-11-28</time>
+    </div>
+
+    <h1>Why can replaying an EventBridge archive repeat side effects?</h1>
+
+    
+      <p class="post-hero__summary">EventBridge archive replay resends events from a selected time range to the original event bus. It does not undo consumer side effects or preserve original arrival order; scope targets and protect downstream writes first.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-27T19:36:00.000Z">2026-11-28</time> · Estimated read 15 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/28/eventbridge-archive-replay-idempotency/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>An EventBridge archive replays only to the event bus that originally received the events.</li><li>Replay processes event-time intervals and does not guarantee the archive&#39;s original arrival order.</li><li>The replay-name field identifies replayed events, but consumers still need idempotency or isolation for side effects.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>An EventBridge archive replay resends events from a selected time range to the event bus that originally received them. It does not undo side effects that consumers already completed, and it does not guarantee that events arrive again in the order they originally entered the archive. If a consumer sends email, charges a payment, creates a ticket, or updates state, decide how to prevent duplicate side effects before replaying. “This is a recovery operation” does not automatically tell the consumer that it processed the business event before.</p>
+<h2 id="Archive-retention-and-replay-scope-are-separate-choices"><a href="#Archive-retention-and-replay-scope-are-separate-choices" class="headerlink" title="Archive retention and replay scope are separate choices"></a>Archive retention and replay scope are separate choices</h2><p>When creating an archive, you can use an event pattern to filter what is retained and choose a retention period. AWS documentation says an archive can retain events indefinitely by default, but confirm the actual account configuration. To start a replay, specify a time range and optionally choose rules on the original event bus. An archive replay can return only to the source bus; it is not an export mechanism for an arbitrary destination bus. Events remain in the archive after replay and can be replayed multiple times until they exceed retention or the archive is deleted.</p>
+<p>This makes replay a redelivery, not a move or an “undo then restore.” AWS adds <code>replay-name</code> metadata to replayed events and uses it to prevent them from returning to the archive. Consumers can distinguish replay traffic from live events, isolate it, or record the name in an audit field. But this marker is not a business idempotency key and does not prevent the same event from triggering a second payment or email.</p>
+<h2 id="Hypothetical-case-recovering-order-events-sends-duplicate-notices"><a href="#Hypothetical-case-recovering-order-events-sends-duplicate-notices" class="headerlink" title="Hypothetical case: recovering order events sends duplicate notices"></a>Hypothetical case: recovering order events sends duplicate notices</h2><p>Suppose a consumer handles <code>OrderPaid</code> by sending a receipt and changing the order state to <code>notified</code>. A deployment interruption means some events were not delivered successfully, so an operator plans to replay the last 30 minutes. Some events may actually have been processed; only the acknowledgment or downstream metric was lost. When replayed, the same order may run through the consumer again. If email sending is not idempotent, the customer receives a second receipt. A database update from <code>paid</code> to <code>paid</code> may look harmless, but it does not prove that the external email was not duplicated.</p>
+<p>Separate transport event IDs from idempotency keys for business side effects. Before sending, the consumer can record a deduplication key associated with the order and notice type, and make external-send state recoverable with an outbox or a reconciliation boundary. If the mail provider offers no idempotency, define a manual review path. <code>replay-name</code> can annotate the recovery batch, but the business event ID still needs to be compared with the side-effect record. This is an architecture example; no replay was run against a real order system.</p>
+<h2 id="The-replay-window-is-not-original-arrival-order"><a href="#The-replay-window-is-not-original-arrival-order" class="headerlink" title="The replay window is not original arrival order"></a>The replay window is not original arrival order</h2><p>AWS says there may be a delay before an event reaches the archive and recommends waiting 10 minutes before replay so events have arrived. Replay processes events using the time in the event in one-minute intervals; for a 20-minute range, it processes the first minute and then the next. Even though the ranges advance in time, do not assume that events within an interval follow their original archive-arrival order. Business event time and delivery time may also differ.</p>
+<p>If a system depends on strict order—for example, an account must be opened before a balance change—selecting a time range does not automatically reconstruct that sequence. A consumer may need aggregate-version checks, rejection of stale updates, or a dedicated validation flow before applying side effects. Inspect <code>DescribeReplay</code> progress and <code>EventLastReplayedTime</code>, but do not interpret the last replay timestamp as proof that every target completed its business operation.</p>
+<h2 id="How-can-you-reduce-impact-before-replay"><a href="#How-can-you-reduce-impact-before-replay" class="headerlink" title="How can you reduce impact before replay?"></a>How can you reduce impact before replay?</h2><p>Verify the archive pattern and retention settings, then confirm the selected interval and event origin. Enumerate rules and targets on the original bus: which consumers will run, which create external side effects, and which only build analytics or indexes. You can scope replay with rules, but rule changes also need review and rollback. A high-risk consumer can first parse events in an isolated target or dry-run path and count candidate events, duplicate business IDs, time ranges, and records that cannot be correlated.</p>
+<p>Prepare an idempotency strategy, rate limits, a pause switch, and stop conditions. AWS notes that replay may be separate from the account&#39;s PutEvents transaction-per-second quota, but regional replay concurrency limits still apply. Plan throughput against current quotas and target capacity. If duplicate rates rise, ordering conflicts appear, or state regresses, pause replay and preserve progress evidence instead of widening the window. Because replay advances by minute intervals, align pause/resume decisions with replay status, time range, and business acknowledgment.</p>
+<h2 id="How-do-you-accept-recovery-without-confusing-delivery-with-business-completion"><a href="#How-do-you-accept-recovery-without-confusing-delivery-with-business-completion" class="headerlink" title="How do you accept recovery without confusing delivery with business completion?"></a>How do you accept recovery without confusing delivery with business completion?</h2><p>On a test event bus, create an event, consume it once normally, and replay a range that includes it. Confirm that the target sees <code>replay-name</code>, that the idempotency key keeps the side effect unique, and that delivery count and business-write count are recorded separately. Also cover delayed archive arrival, repeated replay of the same interval, consumer failure, an excluded rule, and a mismatch between event time and creation order. Before testing, confirm that the archive retained the event under its actual filter.</p>
+<p>Production recovery acceptance should combine EventBridge replay state, target-delivery metrics, consumer outcomes, and a business side-effect ledger. “Replay completed” proves the AWS replay process state; it does not prove that every Lambda, queue, HTTP endpoint, or external system finished its business work. No AWS account was accessed and no replay was run for this article. Verify current regional quotas, target latency, and recovery behavior for the actual consumer.</p>
+<h2 id="Limits-of-the-mechanism"><a href="#Limits-of-the-mechanism" class="headerlink" title="Limits of the mechanism"></a>Limits of the mechanism</h2><p>Archive replay is useful for reprocessing retained events after a consumer fix or for applying new logic to historical input. It is not a transaction rollback, global ordering service, cross-bus replication feature, or deduplication service. If historical events can trigger real-world side effects, make targets recognize replay, implement idempotency, and provide a stop control before selecting the window. The final evidence of correct recovery is agreement between business state and the side-effect ledger—not merely a replay status of <code>COMPLETED</code>.</p>
+<p>Rules can also change while a replay is running. Temporarily disabling one rule to narrow scope may leave another default rule delivering events to a side-effecting target. Enumerate all matching rules before starting and record rule changes during the replay. Regional concurrent-replay limits affect queueing and staged recovery. A pause can stop later processing, but it cannot retract events already delivered to Lambda, a queue, or an external HTTP service.</p>
+<p>Related reading: the site’s <a href="/en/2026/11/08/saga-compensation-business-outcomes/">Saga compensation outcomes and business state</a>. EventBridge replay only redelivers events; it is not a cross-service transaction state machine or a side-effect reconciliation ledger.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-archive.html" rel="noopener">Amazon EventBridge User Guide — Archiving and replaying events</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--aws-eventbridge" href="/en/tags/AWS-EventBridge/">AWS EventBridge</a>
+          
+            <a class="tag tag--event-replay" href="/en/tags/Event-Replay/">Event Replay</a>
+          
+            <a class="tag tag--idempotency" href="/en/tags/Idempotency/">Idempotency</a>
+          
+            <a class="tag tag--recovery" href="/en/tags/Recovery/">Recovery</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--operations" href="/en/categories/Operations/">Operations</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F28%2Feventbridge-archive-replay-idempotency%2F&text=Why%20can%20replaying%20an%20EventBridge%20archive%20repeat%20side%20effects%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F28%2Feventbridge-archive-replay-idempotency%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20can%20replaying%20an%20EventBridge%20archive%20repeat%20side%20effects%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F28%2Feventbridge-archive-replay-idempotency%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/28/chips-cookie-top-level-partition/">
+              <span>Previous Post</span>
+              <strong>Why does the same iframe service see different cookies on two sites?</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/28/prometheus-native-histogram-resolution/">
+              <span>Next Post</span>
+              <strong>Why can a Prometheus native histogram have fewer buckets after merging without losing samples?</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Archive-retention-and-replay-scope-are-separate-choices">Archive retention and replay scope are separate choices</a>
+          
+            <a class="toc-link toc-link--h2" href="#Hypothetical-case-recovering-order-events-sends-duplicate-notices">Hypothetical case: recovering order events sends duplicate notices</a>
+          
+            <a class="toc-link toc-link--h2" href="#The-replay-window-is-not-original-arrival-order">The replay window is not original arrival order</a>
+          
+            <a class="toc-link toc-link--h2" href="#How-can-you-reduce-impact-before-replay">How can you reduce impact before replay?</a>
+          
+            <a class="toc-link toc-link--h2" href="#How-do-you-accept-recovery-without-confusing-delivery-with-business-completion">How do you accept recovery without confusing delivery with business completion?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Limits-of-the-mechanism">Limits of the mechanism</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>224</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>199</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>121</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>90</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/27/sqs-fifo-send-dedup-window/">SQS FIFO&#39;s five-minute deduplication protects send retries, not business side effects</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/27/s3-versioned-delete-marker-recovery/">Why is the old file still there after DELETE succeeded in a versioned S3 bucket?</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/08/systemd-restart-start-limit-recovery/">An expired start-limit window does not schedule a systemd retry</a></h3>
+          <p>2026-11-08</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

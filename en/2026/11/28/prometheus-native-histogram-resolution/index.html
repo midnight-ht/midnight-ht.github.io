@@ -1,0 +1,401 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why can a Prometheus native histogram have fewer buckets after merging without losing samples? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="A native histogram schema sets exponential bucket resolution. Downscaling merges buckets and removes detail; understand schema, interpolation assumptions, and storage budgets before explaining query differences.">
+  
+  
+    <meta name="keywords" content="Prometheus native histogram schema,histogram resolution,bucket downscaling,PromQL">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/28/prometheus-native-histogram-resolution/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/28/prometheus-native-histogram-resolution/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/28/prometheus-native-histogram-resolution/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/28/prometheus-native-histogram-resolution/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why can a Prometheus native histogram have fewer buckets after merging without losing samples? | Midnight blog">
+    <meta property="og:description" content="A native histogram schema sets exponential bucket resolution. Downscaling merges buckets and removes detail; understand schema, interpolation assumptions, and storage budgets before explaining query differences.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/28/prometheus-native-histogram-resolution/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/28/prometheus-native-histogram-resolution/#webpage","url":"https://www.zyweb.vip/en/2026/11/28/prometheus-native-histogram-resolution/","name":"Why can a Prometheus native histogram have fewer buckets after merging without losing samples? | Midnight blog","description":"A native histogram schema sets exponential bucket resolution. Downscaling merges buckets and removes detail; understand schema, interpolation assumptions, and storage budgets before explaining query differences.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/28/prometheus-native-histogram-resolution/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/28/prometheus-native-histogram-resolution/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/28/prometheus-native-histogram-resolution/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/28/prometheus-native-histogram-resolution/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/28/prometheus-native-histogram-resolution/","headline":"Why can a Prometheus native histogram have fewer buckets after merging without losing samples?","description":"A native histogram schema sets exponential bucket resolution. Downscaling merges buckets and removes detail; understand schema, interpolation assumptions, and storage budgets before explaining query differences.","inLanguage":"en","datePublished":"2026-11-27T19:37:00.000Z","dateModified":"2026-11-27T19:37:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://prometheus.io/docs/specs/native_histograms/"],"keywords":"Prometheus, Native Histograms, Metrics, SLO"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/28/prometheus-native-histogram-resolution/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why can a Prometheus native histogram have fewer buckets after merging without losing samples?","item":"https://www.zyweb.vip/en/2026/11/28/prometheus-native-histogram-resolution/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/28/prometheus-native-histogram-resolution/">zh-CN</option><option value="/en/2026/11/28/prometheus-native-histogram-resolution/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/28/prometheus-native-histogram-resolution/">zh-CN</option><option value="/en/2026/11/28/prometheus-native-histogram-resolution/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--prometheus">Prometheus</span>
+      <time datetime="2026-11-27T19:37:00.000Z">2026-11-28</time>
+    </div>
+
+    <h1>Why can a Prometheus native histogram have fewer buckets after merging without losing samples?</h1>
+
+    
+      <p class="post-hero__summary">A native histogram schema sets exponential bucket resolution. Downscaling merges buckets and removes detail; understand schema, interpolation assumptions, and storage budgets before explaining query differences.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-27T19:37:00.000Z">2026-11-28</time> · Estimated read 15 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/28/prometheus-native-histogram-resolution/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/28/prometheus-native-histogram-resolution/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>For standard schemas, a higher number means denser exponential buckets; increasing it by one doubles resolution.</li><li>Compatible downscaling can merge adjacent buckets, reducing detail while preserving the overall range.</li><li>Quantile estimates depend on bucket layout and interpolation assumptions, so a schema change is not a raw sample change.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Fewer buckets in a Prometheus native-histogram query do not necessarily mean samples were lost. A native histogram&#39;s schema determines exponential bucket resolution. In standard schemas, increasing the schema number by one doubles resolution and makes boundaries denser. To merge data with different resolutions or control storage and transfer costs, buckets can be downscaled and combined, reducing detail. Before diagnosing missing observations, compare schema, downscaling, and the query path.</p>
+<h2 id="A-schema-describes-bucket-space-resolution"><a href="#A-schema-describes-bucket-space-resolution" class="headerlink" title="A schema describes bucket-space resolution"></a>A schema describes bucket-space resolution</h2><p>An exponential histogram divides positive and negative ranges into adjacent buckets on a logarithmic scale. A standard schema number defines the factor between adjacent boundaries; a higher schema divides the range more finely. The Prometheus Native Histograms specification explains that increasing the schema number by one splits buckets in two and doubles resolution. This is not sample precision or samples per unit of time. It controls the density of aggregated bucket boundaries; it does not mean each observation was measured more precisely.</p>
+<p>Downscaling to a lower schema can combine adjacent fine buckets so different resolutions can be represented together or data volume can be controlled. Merging does not invent a new total count, but it discards detail about where observations fell inside the finer buckets. If an SLO threshold lies inside a merged interval, a quantile estimate can become coarser. Querying also uses assumptions about the distribution within a bucket. Prometheus documents exponential interpolation for standard schemas, assuming that newly split buckets contain similar populations on average. A strongly skewed real distribution can make that assumption matter.</p>
+<h2 id="Hypothetical-example-a-threshold-sits-near-a-merged-interval"><a href="#Hypothetical-example-a-threshold-sits-near-a-merged-interval" class="headerlink" title="Hypothetical example: a threshold sits near a merged interval"></a>Hypothetical example: a threshold sits near a merged interval</h2><p>Imagine a service tracks request latency with a p99 target of 500 ms. A higher-resolution schema has several buckets around 450 ms and 510 ms. A receiver downscales the data to match a lower resolution, merging nearby buckets into a wider interval. The query can still estimate the quantile, but it cannot recover whether each observation landed at 470 ms or 505 ms. A chart can shift slightly even if the raw request distribution did not change at the same time.</p>
+<p>The wrong response is to call every new/old quantile difference a “latency regression,” or to assume that an unchanged total bucket count proves nothing happened. Align the schema, sum/count, positive and negative buckets, zero bucket, and query function for the same interval. Check whether scrape, remote write, storage, or query paths apply different downscaling. These values are hypothetical; no Prometheus server or latency workload was measured.</p>
+<h2 id="How-should-resolution-be-balanced-against-cost"><a href="#How-should-resolution-be-balanced-against-cost" class="headerlink" title="How should resolution be balanced against cost?"></a>How should resolution be balanced against cost?</h2><p>Higher resolution can locate a threshold more accurately but may create more non-empty buckets for each sample group. Data volume, remote transfer, and aggregation costs can grow with the workload. A lower schema reduces bucket count and can improve merge compatibility, but quantile estimates near boundaries become less precise. Choose based on the decision the metric supports: a coarse resolution may be enough if an alert only distinguishes “well above 500 ms.” If a product decision must distinguish 490 ms from 505 ms, verify that the resolution can support that separation.</p>
+<p>Do not estimate cost from average bucket count and apply one schema to every metric. Low-volume endpoints, high-cardinality labels, and bimodal or long-tailed distributions can produce very different patterns of non-empty buckets. Measure real samples across the target instrumentation, compression, remote-write, storage, and query versions, together with retention, label count, and query frequency. Native Histogram support and configuration have version and component boundaries; one successful experiment does not prove that the entire production chain preserves the same resolution.</p>
+<h2 id="How-can-you-locate-the-source-of-a-bucket-change"><a href="#How-can-you-locate-the-source-of-a-bucket-change" class="headerlink" title="How can you locate the source of a bucket change?"></a>How can you locate the source of a bucket change?</h2><p>Record schema and histogram fields at each stage: application generation, scrape, remote write, receiver storage, read API, and PromQL result. Compare count, sum, schema, zero bucket, and positive/negative bucket boundaries. If count remains stable while schema is lower and buckets are merged, the change is more likely resolution downscaling than sample-count loss. If count also falls, investigate scrape failure, filtering, throttling, queue overflow, and misaligned time windows.</p>
+<p>Build a controlled dataset with observations on both sides of a target threshold. Write and merge it under several schemas, then compare buckets and quantiles. Cover a concentrated distribution near a boundary, a long tail, sparse values, and zero values. Record query interpolation and component versions. Do not use a dashboard&#39;s pixel movement as a substitute for numeric validation; plot resolution, query step, and interpolation affect the visual curve.</p>
+<h2 id="When-is-lower-resolution-acceptable"><a href="#When-is-lower-resolution-acceptable" class="headerlink" title="When is lower resolution acceptable?"></a>When is lower resolution acceptable?</h2><p>If storage, network, or aggregation compatibility matters more than precise boundary estimates and the business threshold is broad, lowering the schema may be reasonable. For SLO decisions that require precise thresholds, use matching resolution and monitor whether downstream components downscale it. If the chain cannot guarantee that resolution, design alerts to tolerate the estimate&#39;s uncertainty. Do not conflate a native histogram schema with explicit bucket boundaries in a classic histogram; their representation and merge behavior differ.</p>
+<p>This article follows the Prometheus Native Histograms specification for standard schemas, merging, and interpolation. It includes no benchmark or observation from a live cluster. Validate bucket growth, query precision, and storage costs with the deployed Prometheus and remote-write versions, scrape configuration, and workload. Fewer buckets may be an intentional consequence of downscaling; whether that is acceptable depends on the decision threshold, not bucket count alone.</p>
+<p>Recording rules need a traceable resolution history. When a rule merges histograms from multiple sources, the resulting schema can depend on the coarsest input and conversion support; checking only the raw scrape schema at dashboard time is insufficient. Keep pre- and post-aggregation schema and count in regression samples to catch unexpected downscaling after Prometheus, remote-write, or rule upgrades. If an alert is sensitive near a threshold, test conservatively with coarser inputs instead of only the ideal maximum resolution.</p>
+<p>Related reading: the site’s <a href="/en/2026/10/15/prometheus-rule-label-contract/">Prometheus recording-rule label contracts</a>. Check label identity separately from histogram schema before and after aggregation, so merging instances is not mistaken for a resolution change.</p>
+<p>Comparisons need aligned populations as well as aligned schemas. If a recording rule changes labels, the old and new histograms may represent different endpoint groups even when their counts look similar. Fix the time window, label set, reset boundary, and schema before comparing quantiles. Then inspect whether the threshold falls inside one coarse bucket or across several fine buckets. This makes the review answer two separate questions: did the represented request population change, and did the bucket layout lose decision-relevant detail?</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://prometheus.io/docs/specs/native_histograms/" rel="noopener">Prometheus Specification — Native Histograms</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--prometheus" href="/en/tags/Prometheus/">Prometheus</a>
+          
+            <a class="tag tag--native-histograms" href="/en/tags/Native-Histograms/">Native Histograms</a>
+          
+            <a class="tag tag--metrics" href="/en/tags/Metrics/">Metrics</a>
+          
+            <a class="tag tag--slo" href="/en/tags/SLO/">SLO</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--observability" href="/en/categories/Observability/">Observability</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F28%2Fprometheus-native-histogram-resolution%2F&text=Why%20can%20a%20Prometheus%20native%20histogram%20have%20fewer%20buckets%20after%20merging%20without%20losing%20samples%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F28%2Fprometheus-native-histogram-resolution%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20can%20a%20Prometheus%20native%20histogram%20have%20fewer%20buckets%20after%20merging%20without%20losing%20samples%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F28%2Fprometheus-native-histogram-resolution%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/28/eventbridge-archive-replay-idempotency/">
+              <span>Previous Post</span>
+              <strong>Why can replaying an EventBridge archive repeat side effects?</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/28/sendbeacon-queued-not-delivered/">
+              <span>Next Post</span>
+              <strong>Why doesn&#39;t a true sendBeacon result prove that the server stored the data?</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#A-schema-describes-bucket-space-resolution">A schema describes bucket-space resolution</a>
+          
+            <a class="toc-link toc-link--h2" href="#Hypothetical-example-a-threshold-sits-near-a-merged-interval">Hypothetical example: a threshold sits near a merged interval</a>
+          
+            <a class="toc-link toc-link--h2" href="#How-should-resolution-be-balanced-against-cost">How should resolution be balanced against cost?</a>
+          
+            <a class="toc-link toc-link--h2" href="#How-can-you-locate-the-source-of-a-bucket-change">How can you locate the source of a bucket change?</a>
+          
+            <a class="toc-link toc-link--h2" href="#When-is-lower-resolution-acceptable">When is lower resolution acceptable?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>224</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>199</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>121</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>90</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/28/pg18-pgstat-io-measurement-context/">Why don&#39;t pg_stat_io read and write counts prove that storage is slow?</a></h3>
+          <p>2026-11-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/27/otel-exemplars-metric-trace-link/">A metric chart shows a spike but no request: what does an OpenTelemetry exemplar connect?</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/21/ml-r2-constant-target-force-finite/">Why can constant targets make the default R² score only zero or one?</a></h3>
+          <p>2026-11-21</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

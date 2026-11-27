@@ -1,0 +1,400 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>MySQL DDL 卡住时，前一条失败语句为什么还会挡路？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="MySQL 8.4 中，语法有效但执行失败的语句可能仍把 metadata lock 持有到事务结束；autocommit 下则随语句结束释放。查 DDL 等待时要追踪事务和持锁连接，不只看最后一条 SQL。">
+  
+  
+    <meta name="keywords" content="MySQL 8.4 metadata lock,MDL,DDL waiting,transaction end">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/28/mysql-metadata-lock-transaction-end/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/28/mysql-metadata-lock-transaction-end/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/28/mysql-metadata-lock-transaction-end/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/28/mysql-metadata-lock-transaction-end/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="MySQL DDL 卡住时，前一条失败语句为什么还会挡路？ | Midnight blog">
+    <meta property="og:description" content="MySQL 8.4 中，语法有效但执行失败的语句可能仍把 metadata lock 持有到事务结束；autocommit 下则随语句结束释放。查 DDL 等待时要追踪事务和持锁连接，不只看最后一条 SQL。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/28/mysql-metadata-lock-transaction-end/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/mysql-metadata-lock-transaction-end/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/28/mysql-metadata-lock-transaction-end/","name":"MySQL DDL 卡住时，前一条失败语句为什么还会挡路？ | Midnight blog","description":"MySQL 8.4 中，语法有效但执行失败的语句可能仍把 metadata lock 持有到事务结束；autocommit 下则随语句结束释放。查 DDL 等待时要追踪事务和持锁连接，不只看最后一条 SQL。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/mysql-metadata-lock-transaction-end/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/mysql-metadata-lock-transaction-end/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/mysql-metadata-lock-transaction-end/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/mysql-metadata-lock-transaction-end/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/28/mysql-metadata-lock-transaction-end/","headline":"MySQL DDL 卡住时，前一条失败语句为什么还会挡路？","description":"MySQL 8.4 中，语法有效但执行失败的语句可能仍把 metadata lock 持有到事务结束；autocommit 下则随语句结束释放。查 DDL 等待时要追踪事务和持锁连接，不只看最后一条 SQL。","inLanguage":"zh-CN","datePublished":"2026-11-27T19:22:00.000Z","dateModified":"2026-11-27T19:22:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://dev.mysql.com/doc/refman/8.4/en/metadata-locking.html"],"keywords":"MySQL, Metadata Lock, DDL, Database"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/mysql-metadata-lock-transaction-end/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"MySQL DDL 卡住时，前一条失败语句为什么还会挡路？","item":"https://www.zyweb.vip/zh-CN/2026/11/28/mysql-metadata-lock-transaction-end/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/28/mysql-metadata-lock-transaction-end/" selected>zh-CN</option><option value="/en/2026/11/28/mysql-metadata-lock-transaction-end/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/28/mysql-metadata-lock-transaction-end/" selected>zh-CN</option><option value="/en/2026/11/28/mysql-metadata-lock-transaction-end/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--mysql">MySQL</span>
+      <time datetime="2026-11-27T19:22:00.000Z">2026-11-28</time>
+    </div>
+
+    <h1>MySQL DDL 卡住时，前一条失败语句为什么还会挡路？</h1>
+
+    
+      <p class="post-hero__summary">MySQL 8.4 中，语法有效但执行失败的语句可能仍把 metadata lock 持有到事务结束；autocommit 下则随语句结束释放。查 DDL 等待时要追踪事务和持锁连接，不只看最后一条 SQL。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-27T19:22:00.000Z">2026-11-28</time> · 预计阅读 5 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/28/mysql-metadata-lock-transaction-end/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/28/mysql-metadata-lock-transaction-end/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>表元数据锁保护对象定义并可能阻塞不兼容的 DDL。</li><li>语法有效但执行失败的语句不一定提前释放已取得的 metadata lock。</li><li>显式事务结束才是重要边界；autocommit 下每条语句构成事务。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>MySQL 8.4 中，某条语句报错不代表它此前取得的 metadata lock 已经消失。官方手册说明：语法有效、执行阶段失败的语句如果取得了元数据锁，锁不会提前释放，而是延迟到事务结束；autocommit 下每条语句本身是一个完整事务，锁通常随语句结束释放。因此 DDL 等待时，只看正在运行的 SQL 或应用日志最后一行，可能找不到真正阻塞者；要把等待的 DDL、持锁会话和事务边界连起来看。</p>
+<h2 id="metadata-lock-在保护什么？"><a href="#metadata-lock-在保护什么？" class="headerlink" title="metadata lock 在保护什么？"></a>metadata lock 在保护什么？</h2><p>Metadata lock（MDL）用于协调表、视图等对象定义上的并发访问。查询或修改表时，服务器需要保证执行期间对象定义不会以不兼容方式被更改；DDL 则需要取得能够改变定义的锁。若一个事务仍持有与 DDL 冲突的锁，<code>ALTER TABLE</code>、<code>DROP</code> 或类似操作就可能等待。等待并不必然表示 DDL 执行慢，也不一定表示存储引擎正在处理大表；冲突可能来自另一个连接早先访问表后一直没有结束的事务。</p>
+<p>InnoDB 行锁和 MDL 也不是同一个锁。行锁服务于记录级并发控制，MDL 管理对象定义的协调。排查时仅查询某种行锁视图，可能看不到导致 DDL 阻塞的元数据锁等待。应用的一条 SELECT 即使很快返回，若它位于一个显式事务内，连接仍可能保留该事务取得的 MDL，直到事务提交或回滚。</p>
+<h2 id="为什么执行失败仍可能留下等待链？"><a href="#为什么执行失败仍可能留下等待链？" class="headerlink" title="为什么执行失败仍可能留下等待链？"></a>为什么执行失败仍可能留下等待链？</h2><p>MySQL 8.4 手册特别描述了一个容易误判的边界：语法有效但执行期间失败的语句不会因失败就立即释放已取得的 metadata lock。文档解释这是为了保护 binary log 一致性，因为失败语句仍会写入 binary log；锁释放仍推迟到事务结束。语法解析阶段就拒绝的语句与已经进入执行阶段的语句并非同一条路径，因此不要把“错误返回”当作“事务已结束”的证据。</p>
+<p>设想会话 A 先开启显式事务，执行一条访问 <code>orders</code> 的有效语句，执行过程因为约束或数据错误而报错。应用捕获异常后只记录错误，却没有回滚，也继续将连接留在连接池中。会话 B 随后执行需要改变 <code>orders</code> 元数据的 DDL，就可能排在 A 的锁后面。A 的业务日志看起来早已结束，数据库中的事务却仍是打开状态。这里是基于官方机制构造的假设时间线，不是一次真实故障记录。</p>
+<h2 id="排查时同时确认等待者和持有者"><a href="#排查时同时确认等待者和持有者" class="headerlink" title="排查时同时确认等待者和持有者"></a>排查时同时确认等待者和持有者</h2><p>第一步是确定哪个 DDL 在等待，以及它等待的对象和时间；第二步是识别持有冲突锁的会话；第三步是检查该连接是否处于未提交事务、事务开始时间、最后活动时间及应用实例。MySQL 的 Performance Schema 提供 metadata lock 相关观测接口，具体表和权限要按当前 8.4 小版本与启用情况核对。连接 ID 需要映射回连接池、服务实例和请求日志，否则你知道“一个事务在持锁”，却不知道谁负责结束它。</p>
+<p>不要用“杀掉所有慢查询”作为默认处理。终止持锁连接会回滚其事务，可能影响仍在执行的业务；取消等待 DDL 则会让发布操作没有完成。决策应取决于变更窗口、事务是否可安全重试、回滚成本与服务影响。对可控的迁移任务，可以设置等待上限并在超时后停止变更、告警并重试；对长期业务事务，先修复事务清理和连接池归还逻辑，而不是反复重启 DDL。</p>
+<h2 id="一个小型验证怎样暴露这个边界？"><a href="#一个小型验证怎样暴露这个边界？" class="headerlink" title="一个小型验证怎样暴露这个边界？"></a>一个小型验证怎样暴露这个边界？</h2><p>在隔离实例上准备一张测试表，然后由会话 A 开启事务并访问该表，让会话 B 尝试需要冲突元数据锁的 DDL。分别测试两种结束方式：A 在访问后提交；A 执行有效但失败的语句后仍保持事务打开。观察 DDL 的等待是否持续到 A 提交或回滚。再重复相同语句但使用 autocommit，确认 statement 结束后锁释放范围不同。测试前后用 Performance Schema 的锁等待记录和连接状态定位，而不是只依赖客户端耗时。</p>
+<p>实验应使用独立对象，设定清理时限，并在失败路径中主动回滚。不要在生产表上制造长事务来“确认”文档行为，也不要把测试环境某个小版本的输出直接推广到所有部署。应用侧还需确认 ORM 或驱动在语句异常后是否自动回滚；如果只有数据库错误处理而没有事务清理，连接池复用就会把一个局部错误扩展成后续 DDL 排队。</p>
+<h2 id="哪些设计选择能减少重复故障？"><a href="#哪些设计选择能减少重复故障？" class="headerlink" title="哪些设计选择能减少重复故障？"></a>哪些设计选择能减少重复故障？</h2><p>在线请求应尽量缩短显式事务，不要在事务内等待外部 API、用户输入或队列消息；错误路径需要明确提交还是回滚，并在归还池连接前检查事务状态。迁移工具应先检测长事务和元数据锁等待，设置明确的等待策略，在发布窗口外停止而不是无限等待。应用监控可以把事务年龄、连接 ID、请求 ID 与 DDL 发布记录关联，但日志不能替代数据库锁证据。</p>
+<p>本文描述的是 MySQL 8.4 手册所述语义。不同语句类型、事务模式、存储引擎与小版本可能带来不同等待行为，部署前需要针对实际连接池与迁移工具验证。核心判断是：SQL 语句的错误状态和事务生命周期是两个不同状态。只有事务结束，才可以根据这里讨论的规则确认对应 MDL 生命周期到达了结束边界；日志里最后一次错误不足以证明这一点。</p>
+<p>处理等待时还要区分语句错误与事务错误。某些数据库错误会让应用主动回滚，但不能只根据异常类型假定驱动已经替你结束事务；连接池可能在回滚完成前继续占有会话。运维流程最好记录事务开始时间、当前状态、锁等待对象以及所属应用实例，并先确认是否存在未结束的请求。对连接执行 KILL 前，判断它是正在处理重要写入、已经空闲却忘记提交，还是因异常进入异常状态。不同情形的回滚代价与恢复方法不同；一条统一的“清长连接”脚本会把元数据锁问题转成业务中断问题。</p>
+<p>延伸阅读：本站<a href="/zh-CN/2026/10/09/postgres-concurrent-index/">并发建索引等待</a>。那篇文章讨论 PostgreSQL 的建索引阶段；这里的关键边界仍是 MySQL 显式事务何时结束，不能跨引擎复制锁语义。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://dev.mysql.com/doc/refman/8.4/en/metadata-locking.html" rel="noopener">MySQL 8.4 Reference Manual — Metadata Locking</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--mysql" href="/zh-CN/tags/MySQL/">MySQL</a>
+          
+            <a class="tag tag--metadata-lock" href="/zh-CN/tags/Metadata-Lock/">Metadata Lock</a>
+          
+            <a class="tag tag--ddl" href="/zh-CN/tags/DDL/">DDL</a>
+          
+            <a class="tag tag--database" href="/zh-CN/tags/Database/">Database</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--operations" href="/zh-CN/categories/Operations/">Operations</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Fmysql-metadata-lock-transaction-end%2F&text=MySQL%20DDL%20%E5%8D%A1%E4%BD%8F%E6%97%B6%EF%BC%8C%E5%89%8D%E4%B8%80%E6%9D%A1%E5%A4%B1%E8%B4%A5%E8%AF%AD%E5%8F%A5%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E4%BC%9A%E6%8C%A1%E8%B7%AF%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Fmysql-metadata-lock-transaction-end%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=MySQL%20DDL%20%E5%8D%A1%E4%BD%8F%E6%97%B6%EF%BC%8C%E5%89%8D%E4%B8%80%E6%9D%A1%E5%A4%B1%E8%B4%A5%E8%AF%AD%E5%8F%A5%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E4%BC%9A%E6%8C%A1%E8%B7%AF%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Fmysql-metadata-lock-transaction-end%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/">
+              <span>上一篇</span>
+              <strong>pg_stat_io 有读写计数，为什么还不能直接说磁盘慢？</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/28/go-context-cancel-cause-first-wins/">
+              <span>下一篇</span>
+              <strong>Go context 被多个原因取消，Cause 为什么只留下一个？</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#metadata-lock-在保护什么？">metadata lock 在保护什么？</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么执行失败仍可能留下等待链？">为什么执行失败仍可能留下等待链？</a>
+          
+            <a class="toc-link toc-link--h2" href="#排查时同时确认等待者和持有者">排查时同时确认等待者和持有者</a>
+          
+            <a class="toc-link toc-link--h2" href="#一个小型验证怎样暴露这个边界？">一个小型验证怎样暴露这个边界？</a>
+          
+            <a class="toc-link toc-link--h2" href="#哪些设计选择能减少重复故障？">哪些设计选择能减少重复故障？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>224</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>199</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>119</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>85</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/">pg_stat_io 有读写计数，为什么还不能直接说磁盘慢？</a></h3>
+          <p>2026-11-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/28/pg18-transaction-timeout-scope/">PostgreSQL 18 事务超时，为什么会把连接一起结束？</a></h3>
+          <p>2026-11-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/13/postgres-advisory-lock-pool/">连接池里的 PostgreSQL 咨询锁，什么时候才会释放？</a></h3>
+          <p>2026-10-13</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

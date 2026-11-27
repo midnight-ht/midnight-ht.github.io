@@ -1,0 +1,395 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why must a Go 1.25 WaitGroup.Go function still not panic? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Go 1.25 WaitGroup.Go couples goroutine startup with task accounting and marks the task done when the function returns. It does not provide error collection or panic recovery.">
+  
+  
+    <meta name="keywords" content="Go 1.25 WaitGroup.Go,sync.WaitGroup,panic recovery,goroutine lifecycle">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/28/go-waitgroup-go-panic-contract/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/28/go-waitgroup-go-panic-contract/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why must a Go 1.25 WaitGroup.Go function still not panic? | Midnight blog">
+    <meta property="og:description" content="Go 1.25 WaitGroup.Go couples goroutine startup with task accounting and marks the task done when the function returns. It does not provide error collection or panic recovery.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/28/go-waitgroup-go-panic-contract/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/28/go-waitgroup-go-panic-contract/#webpage","url":"https://www.zyweb.vip/en/2026/11/28/go-waitgroup-go-panic-contract/","name":"Why must a Go 1.25 WaitGroup.Go function still not panic? | Midnight blog","description":"Go 1.25 WaitGroup.Go couples goroutine startup with task accounting and marks the task done when the function returns. It does not provide error collection or panic recovery.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/28/go-waitgroup-go-panic-contract/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/28/go-waitgroup-go-panic-contract/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/28/go-waitgroup-go-panic-contract/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/28/go-waitgroup-go-panic-contract/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/28/go-waitgroup-go-panic-contract/","headline":"Why must a Go 1.25 WaitGroup.Go function still not panic?","description":"Go 1.25 WaitGroup.Go couples goroutine startup with task accounting and marks the task done when the function returns. It does not provide error collection or panic recovery.","inLanguage":"en","datePublished":"2026-11-27T19:39:00.000Z","dateModified":"2026-11-27T19:39:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://go.dev/doc/go1.25","https://pkg.go.dev/sync#WaitGroup.Go"],"keywords":"Go, sync.WaitGroup, Concurrency, Error Handling"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/28/go-waitgroup-go-panic-contract/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why must a Go 1.25 WaitGroup.Go function still not panic?","item":"https://www.zyweb.vip/en/2026/11/28/go-waitgroup-go-panic-contract/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/">zh-CN</option><option value="/en/2026/11/28/go-waitgroup-go-panic-contract/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/">zh-CN</option><option value="/en/2026/11/28/go-waitgroup-go-panic-contract/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--go">Go</span>
+      <time datetime="2026-11-27T19:39:00.000Z">2026-11-28</time>
+    </div>
+
+    <h1>Why must a Go 1.25 WaitGroup.Go function still not panic?</h1>
+
+    
+      <p class="post-hero__summary">Go 1.25 WaitGroup.Go couples goroutine startup with task accounting and marks the task done when the function returns. It does not provide error collection or panic recovery.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-27T19:39:00.000Z">2026-11-28</time> · Estimated read 14 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/28/go-waitgroup-go-panic-contract/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>WaitGroup.Go calls f in a new goroutine and removes the task from the group when f returns.</li><li>The documentation requires f not to panic; the Go 1.25 method is not panic containment.</li><li>Starting work on an empty WaitGroup must happen before Wait; callers still own error and panic policy.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Go 1.25 <code>sync.WaitGroup.Go(f)</code> couples launching a goroutine with task accounting: when <code>f</code> returns, the task is removed from the group. It saves the manual <code>Add(1)</code> and <code>defer Done()</code> pairing, but it does not collect errors, recover panics, or isolate tasks. The official documentation explicitly requires that the function not panic. If the work may panic, define who recovers it and how failure is reported before choosing <code>Go</code> directly.</p>
+<h2 id="It-handles-counter-lifetime-not-full-task-supervision"><a href="#It-handles-counter-lifetime-not-full-task-supervision" class="headerlink" title="It handles counter lifetime, not full task supervision"></a>It handles counter lifetime, not full task supervision</h2><p>The older pattern makes the caller increase the counter before starting a goroutine and call <code>Done()</code> on every return path. Forgetting a defer or returning early can make <code>Wait()</code> block forever. Calling <code>Done()</code> more than once can drive the counter negative and panic. <code>WaitGroup.Go</code> puts “task starts” and “task ends when its function returns” in one method, reducing these pairing errors. The standard-library documentation recommends preferring the method and marks it as added in Go 1.25.</p>
+<p>But a WaitGroup answers only whether tracked tasks have ended. It does not hold task return values because <code>f</code> has no return type, and it does not define how multiple errors should be combined. It does not cancel other goroutines, limit concurrency, recover a panic, or guarantee successful side effects. Interpreting <code>Wait()</code> returning as “every child task succeeded” confuses a counting barrier with a task-result protocol.</p>
+<h2 id="Why-does-the-panic-requirement-matter"><a href="#Why-does-the-panic-requirement-matter" class="headerlink" title="Why does the panic requirement matter?"></a>Why does the panic requirement matter?</h2><p>The documentation says that <code>f</code> must not panic. An unrecovered panic in a goroutine generally takes the process down a panic path; the WaitGroup counter lifecycle does not turn it into an observable error. <code>WaitGroup.Go</code> does not automatically provide isolation semantics such as “one worker panics, the others continue, and the caller receives an error slice.” If the team expects local failure, leaving panic behavior undefined is not a complete failure policy.</p>
+<p>Imagine a batch job uses <code>wg.Go(func() { process(record) })</code> and calls <code>wg.Wait()</code> afterward. Parsing one record encounters a nil pointer and panics. A developer might expect the WaitGroup to decrement and return a structured failure to the caller. The method documentation only describes removing the task when <code>f</code> returns and explicitly excludes panic. If the panic is not recovered, it can terminate the process; the caller gets no structured error to inspect. This illustrates a risk, not a run of a real batch job.</p>
+<h2 id="Define-panic-and-error-boundaries-explicitly"><a href="#Define-panic-and-error-boundaries-explicitly" class="headerlink" title="Define panic and error boundaries explicitly"></a>Define panic and error boundaries explicitly</h2><p>If a function can return a normal business error, have each task store it in a synchronized result slot or send a result through a bounded channel. After waiting, aggregate errors according to the business rules. If a panic must become a local task failure, recover it at the boundary inside the same goroutine and pass the stack, task ID, and recovered error to the caller. <code>recover</code> works only in a deferred function, and it should not conceal a broken runtime invariant or pretend that process state is safe.</p>
+<p>A worker pool also needs a separate concurrency limit, cancellation policy, and queue backpressure. A WaitGroup does not limit the number of goroutines. Acquire a semaphore before starting work; on cancellation, stop submitting and wait for already-started tasks. Whether one task failure should stop the others is a business decision unrelated to counting. If you need cancellation and error aggregation, compare a higher-level abstraction such as <code>errgroup</code>, but read its own error and cancellation contract rather than assuming it swallows panics.</p>
+<h2 id="Go-and-Wait-ordering-still-have-rules"><a href="#Go-and-Wait-ordering-still-have-rules" class="headerlink" title="Go and Wait ordering still have rules"></a>Go and Wait ordering still have rules</h2><p>When the WaitGroup counter is zero, <code>Go</code> must be called before <code>Wait</code>. If the group is already non-empty, the documentation allows a task to call <code>Go</code> from another goroutine. When reusing one WaitGroup for several independent task sets, the previous <code>Wait</code> must return before the next set of calls to <code>Go</code>. Starting work only after an empty group has begun <code>Wait</code> can make a caller think the wait includes the task when the synchronization contract does not say that.</p>
+<p>Compared with <code>Add/Done</code>, the method ties startup to counting but does not remove lifecycle constraints for a shared WaitGroup. A WaitGroup must not be copied after first use, and task-start locations still need to be visible to the surrounding concurrency policy. Test zero tasks, startup before waiting, nested task startup, group reuse, normal errors, and the panic boundary—not just that <code>Wait</code> eventually returns.</p>
+<h2 id="When-should-you-use-Go-and-when-keep-Add-Done"><a href="#When-should-you-use-Go-and-when-keep-Add-Done" class="headerlink" title="When should you use Go, and when keep Add/Done?"></a>When should you use Go, and when keep Add/Done?</h2><p>When a work function will not panic, the caller only needs to wait for a set of launched tasks, and an outer layer controls concurrency, <code>WaitGroup.Go</code> can reduce boilerplate and counter-pairing mistakes. <code>Add/Done</code> may still fit when a goroutine is created elsewhere and must be registered independently from its execution function. If the system needs returned errors, sibling cancellation, or a concurrency limit, use a coordinator with an explicit contract instead of expecting a WaitGroup to perform work it does not provide.</p>
+<p>This article checked the method&#39;s introduction, panic requirement, and lifecycle rules against the Go 1.25 release notes and standard-library documentation. No concurrency experiment was run. Confirm the project&#39;s minimum Go version, error and panic policy at each call site, and whether a WaitGroup is reused across phases. A shorter method does not make the task boundary safe automatically.</p>
+<p>The method also does not provide a timed wait. <code>Wait()</code> blocks until the counter reaches zero; it takes no Context and does not cancel work when a deadline expires. If tasks may hang on network calls, pass a Context into the work, configure client timeouts, and manage cancellation and cleanup separately. Wrapping <code>Wait()</code> in another goroutine and selecting on a timer only stops the caller from waiting; it does not stop the underlying tasks. Track goroutine completion, external side-effect state, and the WaitGroup count separately.</p>
+<p>The result should not be reduced to one aggregate error without a storage contract. If several tasks write into one slice, establish synchronization explicitly. One simple design preallocates result slots by input index, lets each goroutine write only its own slot, and has the caller read them in order after <code>Wait</code> returns. For a very large task set, retaining every full error may exhaust memory; define a first-error rule, an error cap, or a back-pressured result channel, including who closes it. A WaitGroup does not choose data ownership or capacity policy. If input contains duplicate records, indexed results preserve both occurrences, while a map keyed only by record ID may overwrite one. That choice belongs to the result contract, not the counter.</p>
+<p>Related reading: the site’s <a href="/en/2026/11/16/go-database-sql-rows-err-iteration/">Go Rows.Next termination and Rows.Err</a>. Concurrent aggregation should preserve each work unit’s error rather than equating a zero task count with complete business data.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://go.dev/doc/go1.25" rel="noopener">Go 1.25 Release Notes</a></li><li><a target="_blank" href="https://pkg.go.dev/sync#WaitGroup.Go" rel="noopener">sync package — WaitGroup.Go</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--go" href="/en/tags/Go/">Go</a>
+          
+            <a class="tag tag--sync-waitgroup" href="/en/tags/sync.WaitGroup/">sync.WaitGroup</a>
+          
+            <a class="tag tag--concurrency" href="/en/tags/Concurrency/">Concurrency</a>
+          
+            <a class="tag tag--error-handling" href="/en/tags/Error-Handling/">Error Handling</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F28%2Fgo-waitgroup-go-panic-contract%2F&text=Why%20must%20a%20Go%201.25%20WaitGroup.Go%20function%20still%20not%20panic%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F28%2Fgo-waitgroup-go-panic-contract%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20must%20a%20Go%201.25%20WaitGroup.Go%20function%20still%20not%20panic%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F28%2Fgo-waitgroup-go-panic-contract%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/28/sendbeacon-queued-not-delivered/">
+              <span>Previous Post</span>
+              <strong>Why doesn&#39;t a true sendBeacon result prove that the server stored the data?</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#It-handles-counter-lifetime-not-full-task-supervision">It handles counter lifetime, not full task supervision</a>
+          
+            <a class="toc-link toc-link--h2" href="#Why-does-the-panic-requirement-matter">Why does the panic requirement matter?</a>
+          
+            <a class="toc-link toc-link--h2" href="#Define-panic-and-error-boundaries-explicitly">Define panic and error boundaries explicitly</a>
+          
+            <a class="toc-link toc-link--h2" href="#Go-and-Wait-ordering-still-have-rules">Go and Wait ordering still have rules</a>
+          
+            <a class="toc-link toc-link--h2" href="#When-should-you-use-Go-and-when-keep-Add-Done">When should you use Go, and when keep Add/Done?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>224</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>199</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>121</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>90</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/28/go-context-cancel-cause-first-wins/">Why does a Go Context keep only one cause when several cancellations race?</a></h3>
+          <p>2026-11-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/28/python314-executor-map-buffersize-order/">Python 3.14 buffersize bounds submissions without changing result order</a></h3>
+          <p>2026-11-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/22/go-base64-strict-padding-crlf/">Why does Base64 Strict still accept a newline?</a></h3>
+          <p>2026-11-22</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

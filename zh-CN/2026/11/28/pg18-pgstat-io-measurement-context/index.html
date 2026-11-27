@@ -1,0 +1,400 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>pg_stat_io 有读写计数，为什么还不能直接说磁盘慢？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="PostgreSQL 18 的 pg_stat_io 按 backend、I/O context 和目标对象拆分集群级统计，并有明确的未覆盖路径。先确定观察窗口、计数口径和排除项，才可能把指标用于排障。">
+  
+  
+    <meta name="keywords" content="PostgreSQL pg_stat_io,PostgreSQL 18 I/O statistics,database observability">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/28/pg18-pgstat-io-measurement-context/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="pg_stat_io 有读写计数，为什么还不能直接说磁盘慢？ | Midnight blog">
+    <meta property="og:description" content="PostgreSQL 18 的 pg_stat_io 按 backend、I/O context 和目标对象拆分集群级统计，并有明确的未覆盖路径。先确定观察窗口、计数口径和排除项，才可能把指标用于排障。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/","name":"pg_stat_io 有读写计数，为什么还不能直接说磁盘慢？ | Midnight blog","description":"PostgreSQL 18 的 pg_stat_io 按 backend、I/O context 和目标对象拆分集群级统计，并有明确的未覆盖路径。先确定观察窗口、计数口径和排除项，才可能把指标用于排障。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/","headline":"pg_stat_io 有读写计数，为什么还不能直接说磁盘慢？","description":"PostgreSQL 18 的 pg_stat_io 按 backend、I/O context 和目标对象拆分集群级统计，并有明确的未覆盖路径。先确定观察窗口、计数口径和排除项，才可能把指标用于排障。","inLanguage":"zh-CN","datePublished":"2026-11-27T19:21:00.000Z","dateModified":"2026-11-27T19:21:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://www.postgresql.org/docs/18/monitoring-stats.html"],"keywords":"PostgreSQL, pg_stat_io, Database, Metrics"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"pg_stat_io 有读写计数，为什么还不能直接说磁盘慢？","item":"https://www.zyweb.vip/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/" selected>zh-CN</option><option value="/en/2026/11/28/pg18-pgstat-io-measurement-context/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/" selected>zh-CN</option><option value="/en/2026/11/28/pg18-pgstat-io-measurement-context/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--postgresql">PostgreSQL</span>
+      <time datetime="2026-11-27T19:21:00.000Z">2026-11-28</time>
+    </div>
+
+    <h1>pg_stat_io 有读写计数，为什么还不能直接说磁盘慢？</h1>
+
+    
+      <p class="post-hero__summary">PostgreSQL 18 的 pg_stat_io 按 backend、I/O context 和目标对象拆分集群级统计，并有明确的未覆盖路径。先确定观察窗口、计数口径和排除项，才可能把指标用于排障。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-27T19:21:00.000Z">2026-11-28</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/28/pg18-pgstat-io-measurement-context/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/28/pg18-pgstat-io-measurement-context/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>pg_stat_io 的每行是 backend type、I/O context 与 target object 的组合，而不是整库的单一磁盘速度。</li><li>绕过 shared buffers 的某些 relation I/O 不在该视图中。</li><li>累积量需要固定窗口并比较同一维度；指标本身不证明瓶颈在磁盘。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p><code>pg_stat_io</code> 有读写计数，并不等于它能直接回答“磁盘是不是慢”。PostgreSQL 18 把集群级 I/O 统计按 backend type、I/O context 和 target object 分行；你看到的数字首先是某类 PostgreSQL 工作负载在统计区间内累积了多少事件，而不是设备延迟、吞吐上限或某条查询的因果证明。排障前先把维度、时间窗口和视图的未覆盖路径写下来，才不会把计数误读成根因。</p>
+<h2 id="每一行代表一种工作角色组合"><a href="#每一行代表一种工作角色组合" class="headerlink" title="每一行代表一种工作角色组合"></a>每一行代表一种工作角色组合</h2><p>官方视图对每行的定义是 backend 类型、目标 I/O 对象与 I/O context 的组合。合理组合才会出现；<code>pg_stat_io</code> 主要覆盖 relation 与 temporary relation 对象，不应把 WAL 统计混进来。PostgreSQL 将 WAL 活动放在单独的 <code>pg_stat_wal</code> 视图，并提供独立的 <code>track_wal_io_timing</code> 配置。这个切分本身很重要：用户 backend 执行的 relation 读取，与后台进程或检查点相关工作，不应在没有说明的情况下合并成一个“数据库读盘数”。如果某时段 checkpointer 的写入升高，而应用连接的 shared-buffer 命中情况稳定，单一总和会让两个不同问题看起来像一个问题。</p>
+<p>其次，<code>pg_stat_io</code> 不是块设备监控。文档明确说，绕过 shared buffers 的 relation I/O，例如把表移动到另一个 tablespace 时发生的 I/O，目前不被跟踪。视图没有记录的事件不能被解释为零，也不能推断“数据库没有发生 I/O”。同理，计数视图不能直接说明物理设备队列、云盘限速、操作系统页缓存命中或存储端延迟；这些需要与 PostgreSQL 统计之外的观测源结合。</p>
+<h2 id="先定观察窗口，再看计数差值"><a href="#先定观察窗口，再看计数差值" class="headerlink" title="先定观察窗口，再看计数差值"></a>先定观察窗口，再看计数差值</h2><p>统计值通常是累积状态。假设某个 backend/context/object 行在采样开始时有 10,000 次读取，五分钟后变成 10,600。增量 600 只说明这个观测窗口内该组合计数增加了 600；要进一步得到每秒速率，需要除以实际经过时间，并确认两次采样之间没有统计重置、实例切换或维度变化。拿两个不同运行时长的快照直接比较绝对值，会把“运行得更久”误当成“更忙”。</p>
+<p>对比窗口还必须匹配工作量。比如上午请求量是下午的三倍，即便下午每分钟 I/O 次数更低，也不能只凭绝对计数断定优化有效。可将统计增量按请求数、事务数或处理的行数归一化，但归一化分母要来自同一服务实例与同一时间边界。若一侧采集的是集群聚合、另一侧采集单节点，或者一侧包含重启前的累计量，计算结果会得到看似精确却不可比较的数字。</p>
+<h2 id="假设示例：写入增量上升，先不要归因于磁盘"><a href="#假设示例：写入增量上升，先不要归因于磁盘" class="headerlink" title="假设示例：写入增量上升，先不要归因于磁盘"></a>假设示例：写入增量上升，先不要归因于磁盘</h2><p>假设一个版本上线后，某个写入相关组合的计数比上一窗口增加 40%。这是一个需要追问的信号，不是“存储慢了”的结论。可能原因包括同样请求发生更多页写、checkpoint 工作量变化、批量任务与在线服务重叠，或采样窗口的流量结构改变。先将 backend、context、target object 原样保留，再与事务数、请求率、检查点观测、等待事件和主机/云盘指标对齐，才能判断变化发生在哪一层。</p>
+<p>反例是先把所有 <code>reads</code>、<code>writes</code> 相加，再把总数当作磁盘 IOPS。这样既混合了不同 backend，也忽略了调用是否经过 shared buffers、实际 I/O 延迟与设备合并行为。若后续发现云盘延迟升高，仍要排查是否只是更大的工作集或更高的请求量导致；若 PostgreSQL 视图计数不变而主机 I/O 上升，还要检查未被该视图覆盖的路径、日志、临时文件或其他进程。这里是分析方法示例，并非来自生产数据库的测量。</p>
+<h2 id="用一张采样表保留因果线索"><a href="#用一张采样表保留因果线索" class="headerlink" title="用一张采样表保留因果线索"></a>用一张采样表保留因果线索</h2><p>可以在每次采样记录时间戳、实例标识、PostgreSQL 主版本、backend type、context、目标对象、各计数的前后值和采样间隔。另存同一窗口的请求量、事务量、等待类别、checkpoint 相关指标以及主机 I/O 观测。出现计数回退时不要把负差值解释成负 I/O；应检查实例重启、统计重置、导出器标签映射和采样对象是否已更换。聚合之前保留原始分组，可让后续重新计算和审计仍有可能。</p>
+<p>验证流程应先在非生产环境对照已知操作：执行受控的普通表读取、写入或 checkpoint 工作，确认预期行的增量方向；再用独立主机观测核对设备活动。要有意验证视图盲区，设计会绕过 shared buffers 的操作时，不应要求 <code>pg_stat_io</code> 必须出现对应关系 I/O。测试的价值在于确认采集管道、标签和解释方式一致，而不是证明线上每个 I/O 都能由单个视图解释。</p>
+<h2 id="什么证据才足以支持“磁盘是瓶颈”？"><a href="#什么证据才足以支持“磁盘是瓶颈”？" class="headerlink" title="什么证据才足以支持“磁盘是瓶颈”？"></a>什么证据才足以支持“磁盘是瓶颈”？</h2><p>至少需要互相吻合的几类证据：同一时间段的 PostgreSQL 统计增量、查询或后台工作的等待现象、主机或存储侧延迟/队列、工作量分母，以及排除重启和重置的连续采样。若计数升高但延迟没有变化，可能是吞吐增加而非退化；若应用变慢但 I/O 计数稳定，瓶颈可能在锁、CPU、网络、连接池或视图未覆盖的活动。不能从一个累计计数推导用户看到的 p95 延迟，也不能把一个统计列命名成某个设备指标。</p>
+<p>本文根据 PostgreSQL 18 文档解释视图的维度与范围，没有连接数据库、查询 <code>pg_stat_io</code> 或测量磁盘。实际系统应核对运行版本、视图字段、采集间隔与实例拓扑，再用受控工作负载验证指标映射。它适合回答“哪类 PostgreSQL 工作在累积 I/O 统计”，不单独回答“哪块盘慢了”或“这次发布造成了多少性能回退”。</p>
+<p>采集系统还要记录统计视图重置边界。部署更新、手工重置或实例切换会让相邻快照不再属于同一累计序列；若直接相减，负值或异常跳变可能来自计数器生命周期，而不是 PostgreSQL 执行了反向 I/O。建议把数据库系统标识、启动时间和 reset 事件一并写入采样维度，并让导出器在标签改变时开始新序列。对于集群滚动升级，先按节点分别核对，再汇总同一时间窗的速率。这样能避免把一个节点重启前的历史计数与另一个节点的当前状态混在一起，也给复盘留出重新计算原始差值的材料。</p>
+<p>延伸阅读：本站<a href="/zh-CN/2026/10/09/kubernetes-resource-latency/">节点 CPU 不忙但容器仍变慢</a>。<code>pg_stat_io</code> 记录数据库 I/O 事件，不能替代节点、容器和存储路径的延迟指标。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://www.postgresql.org/docs/18/monitoring-stats.html" rel="noopener">PostgreSQL 18 Documentation — The Cumulative Statistics System, pg_stat_io</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--postgresql" href="/zh-CN/tags/PostgreSQL/">PostgreSQL</a>
+          
+            <a class="tag tag--pg-stat-io" href="/zh-CN/tags/pg_stat_io/">pg_stat_io</a>
+          
+            <a class="tag tag--database" href="/zh-CN/tags/Database/">Database</a>
+          
+            <a class="tag tag--metrics" href="/zh-CN/tags/Metrics/">Metrics</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--observability" href="/zh-CN/categories/Observability/">Observability</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Fpg18-pgstat-io-measurement-context%2F&text=pg_stat_io%20%E6%9C%89%E8%AF%BB%E5%86%99%E8%AE%A1%E6%95%B0%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E4%B8%8D%E8%83%BD%E7%9B%B4%E6%8E%A5%E8%AF%B4%E7%A3%81%E7%9B%98%E6%85%A2%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Fpg18-pgstat-io-measurement-context%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=pg_stat_io%20%E6%9C%89%E8%AF%BB%E5%86%99%E8%AE%A1%E6%95%B0%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%98%E4%B8%8D%E8%83%BD%E7%9B%B4%E6%8E%A5%E8%AF%B4%E7%A3%81%E7%9B%98%E6%85%A2%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Fpg18-pgstat-io-measurement-context%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/28/pg18-transaction-timeout-scope/">
+              <span>上一篇</span>
+              <strong>PostgreSQL 18 事务超时，为什么会把连接一起结束？</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/28/mysql-metadata-lock-transaction-end/">
+              <span>下一篇</span>
+              <strong>MySQL DDL 卡住时，前一条失败语句为什么还会挡路？</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#每一行代表一种工作角色组合">每一行代表一种工作角色组合</a>
+          
+            <a class="toc-link toc-link--h2" href="#先定观察窗口，再看计数差值">先定观察窗口，再看计数差值</a>
+          
+            <a class="toc-link toc-link--h2" href="#假设示例：写入增量上升，先不要归因于磁盘">假设示例：写入增量上升，先不要归因于磁盘</a>
+          
+            <a class="toc-link toc-link--h2" href="#用一张采样表保留因果线索">用一张采样表保留因果线索</a>
+          
+            <a class="toc-link toc-link--h2" href="#什么证据才足以支持“磁盘是瓶颈”？">什么证据才足以支持“磁盘是瓶颈”？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>224</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>199</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>119</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>85</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/28/pg18-transaction-timeout-scope/">PostgreSQL 18 事务超时，为什么会把连接一起结束？</a></h3>
+          <p>2026-11-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/13/postgres-advisory-lock-pool/">连接池里的 PostgreSQL 咨询锁，什么时候才会释放？</a></h3>
+          <p>2026-10-13</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/10/11/postgres-savepoint-partial-import/">逐行保存点之后，如何给出可信的 PostgreSQL 导入回执？</a></h3>
+          <p>2026-10-11</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

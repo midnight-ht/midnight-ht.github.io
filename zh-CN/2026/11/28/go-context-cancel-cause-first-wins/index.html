@@ -1,0 +1,397 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Go context 被多个原因取消，Cause 为什么只留下一个？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="WithCancelCause 让 Go 调用方提供取消原因，但它不是原因列表：最先生效的取消决定 Context 的 Cause。把控制流取消与多原因诊断分开，避免日志把竞态解释成因果。">
+  
+  
+    <meta name="keywords" content="Go context.Cause,WithCancelCause,ctx.Err,cancellation">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/28/go-context-cancel-cause-first-wins/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/28/go-context-cancel-cause-first-wins/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/28/go-context-cancel-cause-first-wins/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/28/go-context-cancel-cause-first-wins/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Go context 被多个原因取消，Cause 为什么只留下一个？ | Midnight blog">
+    <meta property="og:description" content="WithCancelCause 让 Go 调用方提供取消原因，但它不是原因列表：最先生效的取消决定 Context 的 Cause。把控制流取消与多原因诊断分开，避免日志把竞态解释成因果。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/28/go-context-cancel-cause-first-wins/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/go-context-cancel-cause-first-wins/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/28/go-context-cancel-cause-first-wins/","name":"Go context 被多个原因取消，Cause 为什么只留下一个？ | Midnight blog","description":"WithCancelCause 让 Go 调用方提供取消原因，但它不是原因列表：最先生效的取消决定 Context 的 Cause。把控制流取消与多原因诊断分开，避免日志把竞态解释成因果。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/go-context-cancel-cause-first-wins/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/go-context-cancel-cause-first-wins/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/go-context-cancel-cause-first-wins/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/go-context-cancel-cause-first-wins/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/28/go-context-cancel-cause-first-wins/","headline":"Go context 被多个原因取消，Cause 为什么只留下一个？","description":"WithCancelCause 让 Go 调用方提供取消原因，但它不是原因列表：最先生效的取消决定 Context 的 Cause。把控制流取消与多原因诊断分开，避免日志把竞态解释成因果。","inLanguage":"zh-CN","datePublished":"2026-11-27T19:23:00.000Z","dateModified":"2026-11-27T19:23:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://go.dev/src/context/context.go"],"keywords":"Go, context, Cancellation, Concurrency"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/go-context-cancel-cause-first-wins/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Go context 被多个原因取消，Cause 为什么只留下一个？","item":"https://www.zyweb.vip/zh-CN/2026/11/28/go-context-cancel-cause-first-wins/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/28/go-context-cancel-cause-first-wins/" selected>zh-CN</option><option value="/en/2026/11/28/go-context-cancel-cause-first-wins/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/28/go-context-cancel-cause-first-wins/" selected>zh-CN</option><option value="/en/2026/11/28/go-context-cancel-cause-first-wins/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--go">Go</span>
+      <time datetime="2026-11-27T19:23:00.000Z">2026-11-28</time>
+    </div>
+
+    <h1>Go context 被多个原因取消，Cause 为什么只留下一个？</h1>
+
+    
+      <p class="post-hero__summary">WithCancelCause 让 Go 调用方提供取消原因，但它不是原因列表：最先生效的取消决定 Context 的 Cause。把控制流取消与多原因诊断分开，避免日志把竞态解释成因果。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-27T19:23:00.000Z">2026-11-28</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/28/go-context-cancel-cause-first-wins/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/28/go-context-cancel-cause-first-wins/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>Context.Err 表示通用取消状态，context.Cause 返回第一次生效的具体原因。</li><li>父级和子级取消竞速时，一个 Context 不会自动积累所有取消原因。</li><li>若需要解释多个候选原因，应另记结构化事件，而不是把 Cause 当审计历史。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Go 的 <code>WithCancelCause</code> 允许调用方给取消操作附上原因，但 <code>context.Cause(ctx)</code> 不是多个原因的集合。一个 Context 只保留第一个影响它的取消结果；父级 deadline、客户端断连和本地策略取消若同时发生，最终 Cause 取决于哪个取消先到达该 Context。<code>ctx.Err()</code> 与 <code>context.Cause(ctx)</code> 回答的问题也不同：前者说明它已经取消，后者提供具体 cause。把 Cause 当成完整故障记录，会把并发竞态误写成唯一因果。</p>
+<h2 id="为什么两个取消查询会返回不同内容？"><a href="#为什么两个取消查询会返回不同内容？" class="headerlink" title="为什么两个取消查询会返回不同内容？"></a>为什么两个取消查询会返回不同内容？</h2><p>旧的 Context API 用 <code>Err</code> 表示 <code>context.Canceled</code> 或 <code>context.DeadlineExceeded</code> 这类通用结束状态。<code>WithCancelCause</code> 增加了由调用方指定具体错误的路径；取消后，<code>Err()</code> 仍用于控制流判断，而 <code>context.Cause()</code> 返回附带的原因。代码因此可以用 <code>errors.Is(ctx.Err(), context.Canceled)</code> 判断是否应停止，同时在日志里记录更具体的“用户断开”或“配额取消”。原因不会改变取消这个事实，也不会自动携带整个上游调用链的所有失败。</p>
+<p>Go 的实现有一个重要的首次取消规则：对于一个派生 Context，父级或子级取消中最先生效的原因决定相应 Context 的 Cause；之后的取消不会把原因追加成列表。父级先取消时，子 Context 通常继承父级原因；子 Context 已先由自己的 cancel cause 取消，后续父级取消不会覆盖它。这个语义适合一次性控制流结束，不适合把多个同时失败的依赖压缩成完整诊断模型。</p>
+<h2 id="假设竞争：断连与-deadline-几乎同时出现"><a href="#假设竞争：断连与-deadline-几乎同时出现" class="headerlink" title="假设竞争：断连与 deadline 几乎同时出现"></a>假设竞争：断连与 deadline 几乎同时出现</h2><p>假设一个 HTTP handler 为下游 RPC 建立带 cause 的 Context，并同时监听客户端断连和内部 deadline。某次请求在 deadline 到达附近断开。若断连回调先调用 cancel，<code>Cause</code> 可能是“客户端离开”；若计时器先取消，它可能是 deadline 错误。一次运行中只有胜出的第一个原因出现在该 Context 上。日志记录 Cause 是有用的，但不能由此断言另一个条件从未发生；它只是没有成为这个 Context 的终止原因。</p>
+<p>更清晰的设计是把“控制流主因”和“观测到的事件”分开。Context cause 可以选择一个用于停止工作的终止原因；诊断事件流则可在单独的结构化日志或 span event 中记录 deadline 已触发、连接断开已观察到、哪个下游已返回。每条事件带时间戳、request ID 和来源，后续就能区分“最先使任务停止的原因”与“期间出现的其他信号”。示例展示设计方法，不是从生产追踪中提取的真实事件。</p>
+<h2 id="怎样让父子-Context-的原因可预测？"><a href="#怎样让父子-Context-的原因可预测？" class="headerlink" title="怎样让父子 Context 的原因可预测？"></a>怎样让父子 Context 的原因可预测？</h2><p>先规定取消策略：父级请求取消是否必须压过局部失败？局部限额触发是否只停止某个子任务？超时是否应该映射成可重试状态？这些是业务合同，不能单靠 API 自己决定。若多个子任务并行运行，可以让各子任务的 Context 表达各自停止原因，再在汇总结果中收集多个 error；不要期望单个父 Context Cause 记录所有子任务错误。Go 1.20 起的取消原因 API 与 <code>errors.Join</code> 等错误聚合应各自承担不同职责。</p>
+<p>取消原因还会影响错误分类。把客户端断连标为普通内部故障，会导致告警噪声；把服务端 deadline 与用户取消合并，又可能掩盖超时上升。可以用稳定的原因类型或哨兵错误定义语义，日志中附带可变化的细节，但不要把原始请求参数、凭据或个人数据塞进 cause 文本。cause 会沿 Context 传递，生命周期可能超出调用栈，诊断文本应遵守隐私和保留策略。</p>
+<h2 id="如何验证-first-wins-而不测试偶然调度？"><a href="#如何验证-first-wins-而不测试偶然调度？" class="headerlink" title="如何验证 first-wins 而不测试偶然调度？"></a>如何验证 first-wins 而不测试偶然调度？</h2><p>用确定顺序的单元测试分别取消父级和子级：先取消父级并确认派生 Context 的 Err/Cause；另一个测试先调用带 cause 的子级 cancel，再取消父级，验证子级原因不被替换。对并发竞争，不要断言调度器每次都选定某一原因；应只断言最终 Context 被取消、Cause 属于预期候选集合，并测试单独事件记录能保留两个观察结果。测试还应覆盖 <code>WithCancelCause</code> 的 cancel 函数传入 nil 的语义，以及 deadline/cancel 的错误分类。</p>
+<p>最后检查业务调用者如何消费结果：如果只检查 <code>Cause != nil</code> 并按文本重试，就把原因文本变成不稳定协议；如果不记录 request ID 和子任务错误，cause 也无法重建完整事件链。推荐把 Context 用于传播停止信号，把返回值与观测事件用于结果汇总。本文依据 Go 官方源码核对 API 语义，没有运行并发测试或真实服务；具体版本需以项目采用的 Go 文档为准。</p>
+<p>还需避免把 cancel cause 放进跨请求共享的可变错误对象。若多个 goroutine 都持有同一个 error wrapper 并在取消后修改其字段，日志读到的内容可能与取消瞬间不一致；Context 的 first-wins 只约束哪次取消写入了 Cause，不会冻结错误对象内部的可变状态。使用不可变的 sentinel 或构造独立错误值，再把变化信息作为带时间戳的事件记录。这样，错误分类稳定，日志仍能保留后续观察到的 deadline、断连或依赖失败，而不会暗示它们都曾成为终止原因。</p>
+<p>还有一个容易遗漏的边界：取消通知是协作式的。<code>cancel</code> 会关闭 <code>Done</code>，但不会强制中断正在执行的函数；下游只有在检查 Context、使用支持 Context 的 I/O，或自行监听 <code>Done</code> 时才会停止。因此 Cause 表示停止信号在 Context 树中的归属，并不证明远端请求已经撤回、数据库事务已经回滚，或 goroutine 已经退出。服务需要分别记录取消请求、依赖响应和工作结束时间，才能判断取消是否及时传播。测试时可以让模拟依赖在收到 <code>Done</code> 后回报退出，再检查调用方是否等待清理完成；不要仅凭 Cause 已设置就认为资源释放已经结束。</p>
+<p>延伸阅读：本站<a href="/zh-CN/2026/11/15/go-context-withoutcancel-bounded-cleanup/">脱离请求取消并限制清理时间</a>。这与本篇“谁先取消”的 Cause 选择不同：前者建立独立清理期限，后者描述取消原因在 Context 树中的胜出规则。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://go.dev/src/context/context.go" rel="noopener">Go source — context/context.go: WithCancelCause and Cause</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--go" href="/zh-CN/tags/Go/">Go</a>
+          
+            <a class="tag tag--context" href="/zh-CN/tags/context/">context</a>
+          
+            <a class="tag tag--cancellation" href="/zh-CN/tags/Cancellation/">Cancellation</a>
+          
+            <a class="tag tag--concurrency" href="/zh-CN/tags/Concurrency/">Concurrency</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Fgo-context-cancel-cause-first-wins%2F&text=Go%20context%20%E8%A2%AB%E5%A4%9A%E4%B8%AA%E5%8E%9F%E5%9B%A0%E5%8F%96%E6%B6%88%EF%BC%8CCause%20%E4%B8%BA%E4%BB%80%E4%B9%88%E5%8F%AA%E7%95%99%E4%B8%8B%E4%B8%80%E4%B8%AA%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Fgo-context-cancel-cause-first-wins%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Go%20context%20%E8%A2%AB%E5%A4%9A%E4%B8%AA%E5%8E%9F%E5%9B%A0%E5%8F%96%E6%B6%88%EF%BC%8CCause%20%E4%B8%BA%E4%BB%80%E4%B9%88%E5%8F%AA%E7%95%99%E4%B8%8B%E4%B8%80%E4%B8%AA%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Fgo-context-cancel-cause-first-wins%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/28/mysql-metadata-lock-transaction-end/">
+              <span>上一篇</span>
+              <strong>MySQL DDL 卡住时，前一条失败语句为什么还会挡路？</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/28/python314-executor-map-buffersize-order/">
+              <span>下一篇</span>
+              <strong>Python 3.14 buffersize 限制了并行提交，却没有改变结果顺序</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#为什么两个取消查询会返回不同内容？">为什么两个取消查询会返回不同内容？</a>
+          
+            <a class="toc-link toc-link--h2" href="#假设竞争：断连与-deadline-几乎同时出现">假设竞争：断连与 deadline 几乎同时出现</a>
+          
+            <a class="toc-link toc-link--h2" href="#怎样让父子-Context-的原因可预测？">怎样让父子 Context 的原因可预测？</a>
+          
+            <a class="toc-link toc-link--h2" href="#如何验证-first-wins-而不测试偶然调度？">如何验证 first-wins 而不测试偶然调度？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>224</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>199</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>119</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>85</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/">Go 1.25 的 WaitGroup.Go 省了 Done，为什么仍要求函数不能 panic？</a></h3>
+          <p>2026-11-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/28/python314-executor-map-buffersize-order/">Python 3.14 buffersize 限制了并行提交，却没有改变结果顺序</a></h3>
+          <p>2026-11-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/22/go-base64-strict-padding-crlf/">Base64 Strict 为什么仍接受输入里的换行？</a></h3>
+          <p>2026-11-22</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

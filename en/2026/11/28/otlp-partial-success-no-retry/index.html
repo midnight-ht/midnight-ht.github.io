@@ -1,0 +1,400 @@
+<!doctype html>
+<html
+  lang="en"
+  data-code-copy="Copy"
+  data-code-copied="Copied"
+  data-code-failed="Failed"
+  data-code-copy-label="Copy code"
+  data-code-copied-label="Code copied"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Why shouldn&#39;t an OTLP client resend an entire batch after partial success? | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="A populated OTLP partial_success means that part of a request may already have been accepted; the protocol says not to retry the whole request. Handle rejection counts and causes separately from retryable responses.">
+  
+  
+    <meta name="keywords" content="OTLP partial_success,OpenTelemetry exporter,rejected_spans,telemetry retry">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/en/2026/11/28/otlp-partial-success-no-retry/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/28/otlp-partial-success-no-retry/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/28/otlp-partial-success-no-retry/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/28/otlp-partial-success-no-retry/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Why shouldn&#39;t an OTLP client resend an entire batch after partial success? | Midnight blog">
+    <meta property="og:description" content="A populated OTLP partial_success means that part of a request may already have been accepted; the protocol says not to retry the whole request. Handle rejection counts and causes separately from retryable responses.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/en/2026/11/28/otlp-partial-success-no-retry/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="en">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2026/11/28/otlp-partial-success-no-retry/#webpage","url":"https://www.zyweb.vip/en/2026/11/28/otlp-partial-success-no-retry/","name":"Why shouldn't an OTLP client resend an entire batch after partial success? | Midnight blog","description":"A populated OTLP partial_success means that part of a request may already have been accepted; the protocol says not to retry the whole request. Handle rejection counts and causes separately from retryable responses.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2026/11/28/otlp-partial-success-no-retry/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2026/11/28/otlp-partial-success-no-retry/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2026/11/28/otlp-partial-success-no-retry/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2026/11/28/otlp-partial-success-no-retry/#webpage"},"url":"https://www.zyweb.vip/en/2026/11/28/otlp-partial-success-no-retry/","headline":"Why shouldn't an OTLP client resend an entire batch after partial success?","description":"A populated OTLP partial_success means that part of a request may already have been accepted; the protocol says not to retry the whole request. Handle rejection counts and causes separately from retryable responses.","inLanguage":"en","datePublished":"2026-11-27T19:29:00.000Z","dateModified":"2026-11-27T19:29:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://opentelemetry.io/docs/specs/otlp/"],"keywords":"OpenTelemetry, OTLP, Telemetry, Retries"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2026/11/28/otlp-partial-success-no-retry/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Why shouldn't an OTLP client resend an entire batch after partial success?","item":"https://www.zyweb.vip/en/2026/11/28/otlp-partial-success-no-retry/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/en/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/about/">About <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>Appearance</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/28/otlp-partial-success-no-retry/">zh-CN</option><option value="/en/2026/11/28/otlp-partial-success-no-retry/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">Menu</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="Primary"><a href="/en/archives/">Writing</a><a href="/en/tags/">Topics</a><a href="/en/archives/">Archives</a><a href="/en/about/">About</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">Translations</span><select data-language-select><option value="/zh-CN/2026/11/28/otlp-partial-success-no-retry/">zh-CN</option><option value="/en/2026/11/28/otlp-partial-success-no-retry/" selected>en</option></select></label>
+<label><span class="sr-only">Appearance</span><select data-scheme-select aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label><span class="sr-only">Palette</span><select data-skin-select aria-label="Palette"><option value="ocean">Ocean</option><option value="jade">Jade</option><option value="violet">Violet</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--opentelemetry">OpenTelemetry</span>
+      <time datetime="2026-11-27T19:29:00.000Z">2026-11-28</time>
+    </div>
+
+    <h1>Why shouldn&#39;t an OTLP client resend an entire batch after partial success?</h1>
+
+    
+      <p class="post-hero__summary">A populated OTLP partial_success means that part of a request may already have been accepted; the protocol says not to retry the whole request. Handle rejection counts and causes separately from retryable responses.</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>Engineering notes on development, quality, security, delivery, and operations.</small>
+        </span>
+        <a href="https://www.zyweb.vip/en/about/" rel="author">View Author Profile</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>Updated <time datetime="2026-11-27T19:29:00.000Z">2026-11-28</time> · Estimated read 15 min</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="Translations">
+  <span>Translations</span>
+  
+    <div class="language-list">
+      
+        <a class="" href="/zh-CN/2026/11/28/otlp-partial-success-no-retry/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="is-active" href="/en/2026/11/28/otlp-partial-success-no-retry/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">Article</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>partial_success reports rejected signal items; it is not an ordinary all-or-nothing transient failure.</li><li>The OTLP specification says not to retry the entire request when a populated partial_success response is received.</li><li>Expose rejection counts and investigate data quality instead of using full replay to hide rejection.</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>When an OTLP response contains a populated <code>partial_success</code>, the client must not retry the entire request. The OpenTelemetry Protocol specification says the client MUST NOT retry such a request: the server may have accepted part of it and rejected only the remaining signal items. Treating the response like a normal 503 or network disconnect and resending the whole batch can duplicate spans, metrics, or logs already accepted. Dropping the whole batch, however, loses valid data along with rejected items. Processing needs to distinguish partial acceptance, retryable transport states, and permanently invalid data.</p>
+<h2 id="partial-success-describes-a-partial-result-not-a-transaction-rollback"><a href="#partial-success-describes-a-partial-result-not-a-transaction-rollback" class="headerlink" title="partial_success describes a partial result, not a transaction rollback"></a>partial_success describes a partial result, not a transaction rollback</h2><p>An OTLP partial-success structure can include counts such as <code>rejected_spans</code>, <code>rejected_data_points</code>, <code>rejected_log_records</code>, or <code>rejected_profiles</code>, together with a server-provided explanation. It describes how many items were rejected. It does not provide a transaction ID that makes an entire request safe to replay, and it does not imply that the server rolled back the data it accepted. A request can contain valid and invalid records of one or more signal types. The client must not infer that it can resend the other items together with rejected ones.</p>
+<p>The specification also allows a server to use <code>partial_success</code> for warnings or suggestions even when it accepted the request fully. In that case, the rejected count must be zero and the error message nonempty. Therefore, the presence of a partial-success object alone does not prove data loss. Read the rejection count, explanation, and response status according to their field semantics. Verify the OTLP version and whether the exporter supports the response fields correctly.</p>
+<h2 id="Hypothetical-batch-three-of-one-hundred-spans-are-rejected"><a href="#Hypothetical-batch-three-of-one-hundred-spans-are-rejected" class="headerlink" title="Hypothetical batch: three of one hundred spans are rejected"></a>Hypothetical batch: three of one hundred spans are rejected</h2><p>Imagine an exporter sends an OTLP request containing 100 spans and a collector reports that three were rejected. The remaining records may already have been accepted. If the exporter resends all 100 because it saw an “error message,” downstream storage may contain duplicates for the accepted spans. If it marks the whole batch successful, the three rejected spans may be lost without anyone tracking them. A safer response is to stop whole-batch automatic retry, increment a rejected-item metric, preserve the error category, and investigate shared properties of the rejected data, such as field types, resource attributes, or capacity limits. The numbers are hypothetical; no collector was run for this example.</p>
+<p>Another failure is mapping partial success to a nil error. Higher layers then assume everything arrived while the rejection count disappears. Or an exporter may map it to a generic retryable error and replay everything. Integration tests should verify how the exact response fields pass through the exporter, queue, and alerting system rather than checking only the HTTP status code. Preserve enough information from upstream responses and collector logs to avoid reducing the event to the vague text “partial failure.”</p>
+<h2 id="Why-not-automatically-retry-only-the-rejected-records"><a href="#Why-not-automatically-retry-only-the-rejected-records" class="headerlink" title="Why not automatically retry only the rejected records?"></a>Why not automatically retry only the rejected records?</h2><p>The protocol count says how many items were rejected but may not provide a stable index or replay ID for each record. <code>rejected_spans=3</code> does not necessarily let a client reconstruct which three spans they were. An exporter that retains the original batch and has an exact rejection mapping could build a more granular recovery path, but it cannot assume the server supplied that mapping. Any custom retry must avoid resending accepted records and must not retain sensitive telemetry payloads indefinitely.</p>
+<p>For permanently invalid data, the OTLP specification requires handling the error rather than repeatedly sending the same invalid payload. An exporter can monitor dropped-item counts, causes, and resource or scope labels. If the cause is a fixable configuration or schema issue, correct it and process only data known not to have been accepted. If the acceptance boundary is unknown, record that the result is partially known and use collector observations, downstream deduplication, or data audit to close the gap; do not pretend to have exactly-once delivery.</p>
+<h2 id="How-should-tests-and-alerts-be-designed"><a href="#How-should-tests-and-alerts-be-designed" class="headerlink" title="How should tests and alerts be designed?"></a>How should tests and alerts be designed?</h2><p>Construct at least four responses: full success without partial success; a zero rejection count with a warning; partial rejection with a nonempty explanation; and a permanent non-retryable error. Verify the exporter&#39;s return value, queue acknowledgment, drop policy, and retry count for each case. Specifically confirm that populated partial success does not replay the whole request, rejected counts increase, and the response remains associated with its export batch. Include process restart with a persistent queue so “no retry” does not accidentally become silent data loss.</p>
+<p>Alerts should not watch only the HTTP failure rate. Track rejected-item counts and ratios by signal type, error class, and consecutive time window. Compare receiver and collector counts over the same window. A rising ratio may come from a schema change, throttling, resource-attribute change, or exporter bug; rejection alone does not prove that the collector needs more capacity. This article did not run SDK, exporter, or collector tests; its evidence is the protocol specification. Check the version and implementation used by the project.</p>
+<h2 id="When-is-a-retry-appropriate"><a href="#When-is-a-retry-appropriate" class="headerlink" title="When is a retry appropriate?"></a>When is a retry appropriate?</h2><p>Separate protocol-defined retryable transport states from partial success and permanently bad data. For partial success, do not resend the full request. For a temporary response that the protocol permits retrying, use bounded backoff and queue limits. For malformed or permanently rejected data, record and drop it or send it through a controlled quarantine path. A recovery boundary needs stable evidence: the client can identify exact unaccepted items, or the business layer has a verifiable deduplication key. Without that, splitting and resending can still create duplicates.</p>
+<p>OTLP is not a transactional database interface. It does not promise atomic commit across all telemetry records in an Export request and does not offer a business-level uniqueness guarantee. The exporter&#39;s job is to follow the protocol, expose rejection information, and prevent incorrect replay. The operator&#39;s job is to investigate rejection causes and data-completeness boundaries. Designing those responsibilities separately avoids hiding partial acceptance behind a simplistic “failure means retry” rule.</p>
+<p>Pair rejection counts with exporter queue metrics. If <code>rejected_spans</code> rises while the queue stays stable, the issue may be data shape or collector policy. If the queue also grows, send rate, receiver capacity, and retry behavior may all be out of balance. Break rejection rates down by instrumentation scope, resource attributes, and exporter version to locate recent changes, while controlling label cardinality. Avoid logging raw user data in error details; redaction should still preserve the field type and error category needed for a fix.</p>
+<p>Related reading: the site’s <a href="/en/2026/10/10/otel-sampling-missing-traces/">whether tail sampling can recover an already-lost trace</a>. Locate whether data was filtered before generation or lost during transport or reception before inspecting sampling, exporter queues, or collector responses.</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://opentelemetry.io/docs/specs/otlp/" rel="noopener">OpenTelemetry Protocol Specification 1.11.1 — Partial Success</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>Tags</span>
+          
+            <a class="tag tag--opentelemetry" href="/en/tags/OpenTelemetry/">OpenTelemetry</a>
+          
+            <a class="tag tag--otlp" href="/en/tags/OTLP/">OTLP</a>
+          
+            <a class="tag tag--telemetry" href="/en/tags/Telemetry/">Telemetry</a>
+          
+            <a class="tag tag--retries" href="/en/tags/Retries/">Retries</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--observability" href="/en/categories/Observability/">Observability</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="Share">
+        <span>Share</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F28%2Fotlp-partial-success-no-retry%2F&text=Why%20shouldn't%20an%20OTLP%20client%20resend%20an%20entire%20batch%20after%20partial%20success%3F" aria-label="Share on X" title="Share on X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F28%2Fotlp-partial-success-no-retry%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Why%20shouldn't%20an%20OTLP%20client%20resend%20an%20entire%20batch%20after%20partial%20success%3F&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2026%2F11%2F28%2Fotlp-partial-success-no-retry%2F" aria-label="Share by Email" title="Share by Email">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="Post Navigation">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/en/2026/11/28/dns-svcb-aliasmode-service-mode/">
+              <span>Previous Post</span>
+              <strong>How do AliasMode and ServiceMode differ in DNS HTTPS records?</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/en/2026/11/28/s3-object-lock-version-scope/">
+              <span>Next Post</span>
+              <strong>Why can an S3 key get a new version while Object Lock is enabled?</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">Sidebar</p>
+
+      <details class="sidebar-panel post-toc" open><summary>Contents</summary><nav aria-label="Contents">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#partial-success-describes-a-partial-result-not-a-transaction-rollback">partial_success describes a partial result, not a transaction rollback</a>
+          
+            <a class="toc-link toc-link--h2" href="#Hypothetical-batch-three-of-one-hundred-spans-are-rejected">Hypothetical batch: three of one hundred spans are rejected</a>
+          
+            <a class="toc-link toc-link--h2" href="#Why-not-automatically-retry-only-the-rejected-records">Why not automatically retry only the rejected records?</a>
+          
+            <a class="toc-link toc-link--h2" href="#How-should-tests-and-alerts-be-designed">How should tests and alerts be designed?</a>
+          
+            <a class="toc-link toc-link--h2" href="#When-is-a-retry-appropriate">When is a retry appropriate?</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>Author</h2>
+        <p>Engineering notes on development, quality, security, delivery, and operations.</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>Publisher / Editor</small>
+        </div>
+        <a class="panel-button" href="/en/about/">View Author Profile</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>Related Topics</h2>
+          <p>Place this article back into long-running themes.</p>
+          
+            <a class="series-row" href="/en/tags/Engineering/"><span>Engineering</span><b>224</b></a>
+          
+            <a class="series-row" href="/en/tags/Development/"><span>Development</span><b>199</b></a>
+          
+            <a class="series-row" href="/en/tags/Delivery/"><span>Delivery</span><b>121</b></a>
+          
+            <a class="series-row" href="/en/tags/Quality/"><span>Quality</span><b>90</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>Continue Reading</h2>
+      <p>More editorial judgement from the same source.</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/28/sendbeacon-queued-not-delivered/">Why doesn&#39;t a true sendBeacon result prove that the server stored the data?</a></h3>
+          <p>2026-11-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/27/eventbridge-retry-age-and-dlq/">Why does an EventBridge target stop retrying after five minutes by default?</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/en/2026/11/27/otel-exemplars-metric-trace-link/">A metric chart shows a spike but no request: what does an OpenTelemetry exemplar connect?</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>Engineering notes, from requirements to operations</p><a class="studio-text-link" href="/en/about/">About <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="Resources"><a href="/en/archives/">Archives</a><a href="/atom.xml">RSS</a><a href="/en/privacy/">Privacy</a><a href="/en/advertise/">Advertise</a></nav><a href="#content" class="studio-back-top">Back to top <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

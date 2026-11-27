@@ -1,0 +1,395 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>Go 1.25 的 WaitGroup.Go 省了 Done，为什么仍要求函数不能 panic？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="Go 1.25 的 WaitGroup.Go 把启动 goroutine 与任务计数关联起来，函数返回时自动完成计数；它没有提供错误收集或 panic 恢复。">
+  
+  
+    <meta name="keywords" content="Go 1.25 WaitGroup.Go,sync.WaitGroup,panic recovery,goroutine lifecycle">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/28/go-waitgroup-go-panic-contract/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="Go 1.25 的 WaitGroup.Go 省了 Done，为什么仍要求函数不能 panic？ | Midnight blog">
+    <meta property="og:description" content="Go 1.25 的 WaitGroup.Go 把启动 goroutine 与任务计数关联起来，函数返回时自动完成计数；它没有提供错误收集或 panic 恢复。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/","name":"Go 1.25 的 WaitGroup.Go 省了 Done，为什么仍要求函数不能 panic？ | Midnight blog","description":"Go 1.25 的 WaitGroup.Go 把启动 goroutine 与任务计数关联起来，函数返回时自动完成计数；它没有提供错误收集或 panic 恢复。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/","headline":"Go 1.25 的 WaitGroup.Go 省了 Done，为什么仍要求函数不能 panic？","description":"Go 1.25 的 WaitGroup.Go 把启动 goroutine 与任务计数关联起来，函数返回时自动完成计数；它没有提供错误收集或 panic 恢复。","inLanguage":"zh-CN","datePublished":"2026-11-27T19:39:00.000Z","dateModified":"2026-11-27T19:39:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://go.dev/doc/go1.25","https://pkg.go.dev/sync#WaitGroup.Go"],"keywords":"Go, sync.WaitGroup, Concurrency, Error Handling"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Go 1.25 的 WaitGroup.Go 省了 Done，为什么仍要求函数不能 panic？","item":"https://www.zyweb.vip/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/" selected>zh-CN</option><option value="/en/2026/11/28/go-waitgroup-go-panic-contract/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/" selected>zh-CN</option><option value="/en/2026/11/28/go-waitgroup-go-panic-contract/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--go">Go</span>
+      <time datetime="2026-11-27T19:39:00.000Z">2026-11-28</time>
+    </div>
+
+    <h1>Go 1.25 的 WaitGroup.Go 省了 Done，为什么仍要求函数不能 panic？</h1>
+
+    
+      <p class="post-hero__summary">Go 1.25 的 WaitGroup.Go 把启动 goroutine 与任务计数关联起来，函数返回时自动完成计数；它没有提供错误收集或 panic 恢复。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-27T19:39:00.000Z">2026-11-28</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/28/go-waitgroup-go-panic-contract/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>WaitGroup.Go 在新 goroutine 中调用 f，并在 f 返回时移除任务计数。</li><li>文档要求 f 不得 panic；Go 1.25 的新方法不是 panic containment。</li><li>空 WaitGroup 上启动任务必须先于 Wait；错误和 panic 策略仍需由调用方设计。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>Go 1.25 的 <code>sync.WaitGroup.Go(f)</code> 将启动一个 goroutine 与 WaitGroup 任务计数关联起来：<code>f</code> 返回时，该任务从组中移除。它省掉了手写 <code>Add(1)</code> 和 <code>defer Done()</code>，却没有提供错误收集、panic 恢复或任务隔离。官方文档明确要求传入的函数不得 panic。若工作函数可能 panic，应先定义它由谁恢复、怎样报告失败，再决定是否直接使用 <code>Go</code>。</p>
+<h2 id="它解决的是计数生命周期，不是完整任务监督"><a href="#它解决的是计数生命周期，不是完整任务监督" class="headerlink" title="它解决的是计数生命周期，不是完整任务监督"></a>它解决的是计数生命周期，不是完整任务监督</h2><p>旧写法需要调用方在启动 goroutine 前增加计数，并在所有返回路径上执行 <code>Done()</code>。若忘了 defer 或提前 return，<code>Wait()</code> 可能永久阻塞；若 <code>Done()</code> 多次执行，计数可能变成负数并 panic。<code>WaitGroup.Go</code> 把“任务开始”和“任务函数返回时任务结束”放到同一方法里，减少了这类配对错误。Go 标准库文档建议优先考虑此方法，且标记为 Go 1.25 新增。</p>
+<p>但 WaitGroup 只回答“跟踪的任务是否结束”。它不保存任务返回值，因为 <code>f</code> 没有返回类型；也不定义多个错误如何聚合。它不取消其他 goroutine，不限制并发数，不恢复 panic，也不保证任务副作用成功。把 <code>Wait()</code> 返回解释成“所有子任务成功完成”，是把计数屏障误当成任务结果协议。</p>
+<h2 id="为什么-panic-约束重要？"><a href="#为什么-panic-约束重要？" class="headerlink" title="为什么 panic 约束重要？"></a>为什么 panic 约束重要？</h2><p>文档规定 <code>f</code> 必须不 panic。goroutine panic 若未在该 goroutine 内恢复，通常会使整个进程进入 panic 终止路径；WaitGroup 的计数生命周期不能把它转换成可观察的 error。使用 <code>WaitGroup.Go</code> 不能默认获得“一个 worker panic，其他 worker 继续，最后返回 error slice”这类隔离语义。若团队期望局部失败，不捕获 panic 就不是完整的失败策略。</p>
+<p>假设一个批处理用 <code>wg.Go(func(){ process(record) })</code> 并在后面调用 <code>wg.Wait()</code>。某条记录的解析代码因 nil 指针 panic。开发者可能以为 WaitGroup 会自动 decrement 后向调用方返回失败；实际上方法文档只谈 f 返回时任务计数移除，并且明确排除了 panic。若 panic 未恢复，它可能导致进程崩溃，调用方没有机会读取一个结构化错误。示例为风险说明，没有执行真实批处理。</p>
+<h2 id="如何显式定义-panic-和错误边界？"><a href="#如何显式定义-panic-和错误边界？" class="headerlink" title="如何显式定义 panic 和错误边界？"></a>如何显式定义 panic 和错误边界？</h2><p>若函数可正常返回业务错误，可让每个任务把 error 写入有同步保护的结果槽，或把结果发送到有容量约束的 channel；等待结束后再按业务规则聚合错误。若确实要把 panic 转成局部失败，必须在同一个 goroutine 的函数边界中 <code>recover</code>，将 stack、任务 ID 与恢复后的错误传给调用方。<code>recover</code> 只能在 deferred 函数中生效，且不应吞掉运行时不变量破坏或把进程状态假装安全。</p>
+<p>若使用 worker pool，还需单独处理并发上限、取消与队列背压；WaitGroup 不会限制 goroutine 数量。可以将启动函数放在 semaphore 获取之后，在取消时停止提交并等待已启动任务。发生一个任务失败后是否停止其他任务，取决于业务语义；这与 WaitGroup 的计数无关。需要取消与错误聚合时，比较 <code>errgroup</code> 等更高层抽象，但要阅读其自身的错误和取消合同，不要假定它吞掉 panic。</p>
+<h2 id="Go-的启动与-Wait-顺序仍有规则"><a href="#Go-的启动与-Wait-顺序仍有规则" class="headerlink" title="Go 的启动与 Wait 顺序仍有规则"></a>Go 的启动与 Wait 顺序仍有规则</h2><p>当 WaitGroup 计数为零时，<code>Go</code> 必须在 <code>Wait</code> 之前调用。若组仍非空，文档允许任务在其他 goroutine 中继续调用 <code>Go</code>；复用同一 WaitGroup 等待多个独立任务集合时，上一轮 <code>Wait</code> 必须先返回后再开始新一轮。误在一个空组的 <code>Wait()</code> 已经开始后才启动任务，可能使调用者认为等待覆盖了任务，但同步关系并不成立。</p>
+<p>对照 <code>Add/Done</code>，Go 的方法把启动与计数绑定，但没有消除共享 WaitGroup 的生命周期约束。WaitGroup 不能在首次使用后复制；新任务的启动位置仍要对并发控制可见。测试应覆盖零任务、启动后等待、嵌套任务启动、任务集复用、错误返回和 panic 边界，而不是只验证 Wait 最终返回。</p>
+<h2 id="什么时候用-Go，什么时候仍写-Add-Done？"><a href="#什么时候用-Go，什么时候仍写-Add-Done？" class="headerlink" title="什么时候用 Go，什么时候仍写 Add/Done？"></a>什么时候用 Go，什么时候仍写 Add/Done？</h2><p>当工作函数不 panic、只需等待一组已启动任务结束，且并发数量由上层控制时，<code>WaitGroup.Go</code> 能减少样板并降低计数配对错误。若需要在启动时登记外部创建的 goroutine、把任务计数与执行函数分离，<code>Add/Done</code> 仍可能更合适。需要返回错误、取消同伴或限制并发时，应使用具备明确合同的任务协调器，而不是期待 WaitGroup 承担它没提供的职责。</p>
+<p>本文依据 Go 1.25 release notes 与标准库文档核对方法引入版本、panic 要求和生命周期规则；没有运行并发实验。项目需要确认最低 Go 版本、调用点的错误与 panic policy、以及 WaitGroup 是否跨阶段复用。方法更短不代表任务边界自动变安全。</p>
+<p>方法也不提供超时等待。<code>Wait()</code> 会阻塞到计数为零，没有 context 参数，也不会在截止时间到达时取消任务。若任务可能卡在网络调用，调用方需要让工作本身接收 Context、配置客户端超时，并单独管理取消与清理；给 WaitGroup 包一层 goroutine 再 select，只能让调用者停止等待，不能让底层工作自动停止。评估任务生命周期时，应把 goroutine 结束证据、外部副作用状态和 WaitGroup 计数分开记录。</p>
+<p>检查结果也不应该只剩一个聚合 error。若多个任务写回同一个切片，必须先建立明确的同步关系；一种简单做法是按输入索引预先分配结果槽，每个 goroutine 只写自己的槽，随后主 goroutine 在 <code>Wait</code> 返回后顺序读取。若任务数巨大，则逐个保存完整错误可能耗尽内存，此时应定义首错、错误上限或带背压的结果 channel，并明确其关闭者。WaitGroup 不替应用决定这些数据所有权和容量策略。假设输入包含重复记录，按输入位置保存结果还能保留重复项的身份；用记录 ID 作 map key 则可能覆盖其中一个结果。这个选择属于结果合同，不是计数器行为。</p>
+<p>延伸阅读：本站<a href="/zh-CN/2026/11/16/go-database-sql-rows-err-iteration/">Go Rows.Next 结束与 Rows.Err</a>。并发任务汇总也应保留每个工作单元的错误，而不能把计数归零写成业务数据已完整读取。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://go.dev/doc/go1.25" rel="noopener">Go 1.25 Release Notes</a></li><li><a target="_blank" href="https://pkg.go.dev/sync#WaitGroup.Go" rel="noopener">sync package — WaitGroup.Go</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--go" href="/zh-CN/tags/Go/">Go</a>
+          
+            <a class="tag tag--sync-waitgroup" href="/zh-CN/tags/sync.WaitGroup/">sync.WaitGroup</a>
+          
+            <a class="tag tag--concurrency" href="/zh-CN/tags/Concurrency/">Concurrency</a>
+          
+            <a class="tag tag--error-handling" href="/zh-CN/tags/Error-Handling/">Error Handling</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Fgo-waitgroup-go-panic-contract%2F&text=Go%201.25%20%E7%9A%84%20WaitGroup.Go%20%E7%9C%81%E4%BA%86%20Done%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E8%A6%81%E6%B1%82%E5%87%BD%E6%95%B0%E4%B8%8D%E8%83%BD%20panic%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Fgo-waitgroup-go-panic-contract%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=Go%201.25%20%E7%9A%84%20WaitGroup.Go%20%E7%9C%81%E4%BA%86%20Done%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BB%8D%E8%A6%81%E6%B1%82%E5%87%BD%E6%95%B0%E4%B8%8D%E8%83%BD%20panic%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Fgo-waitgroup-go-panic-contract%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/28/sendbeacon-queued-not-delivered/">
+              <span>上一篇</span>
+              <strong>sendBeacon 返回 true，为什么仍不能证明服务端保存了数据？</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#它解决的是计数生命周期，不是完整任务监督">它解决的是计数生命周期，不是完整任务监督</a>
+          
+            <a class="toc-link toc-link--h2" href="#为什么-panic-约束重要？">为什么 panic 约束重要？</a>
+          
+            <a class="toc-link toc-link--h2" href="#如何显式定义-panic-和错误边界？">如何显式定义 panic 和错误边界？</a>
+          
+            <a class="toc-link toc-link--h2" href="#Go-的启动与-Wait-顺序仍有规则">Go 的启动与 Wait 顺序仍有规则</a>
+          
+            <a class="toc-link toc-link--h2" href="#什么时候用-Go，什么时候仍写-Add-Done？">什么时候用 Go，什么时候仍写 Add/Done？</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>224</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>199</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>119</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>85</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/28/go-context-cancel-cause-first-wins/">Go context 被多个原因取消，Cause 为什么只留下一个？</a></h3>
+          <p>2026-11-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/28/python314-executor-map-buffersize-order/">Python 3.14 buffersize 限制了并行提交，却没有改变结果顺序</a></h3>
+          <p>2026-11-28</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/22/go-base64-strict-padding-crlf/">Base64 Strict 为什么仍接受输入里的换行？</a></h3>
+          <p>2026-11-22</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>

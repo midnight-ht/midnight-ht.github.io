@@ -1,0 +1,403 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-code-copy="复制"
+  data-code-copied="已复制"
+  data-code-failed="复制失败"
+  data-code-copy-label="复制代码"
+  data-code-copied-label="代码已复制"
+>
+  <head>
+  <meta name="google-adsense-account" content="ca-pub-5361625861188247">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>EventBridge Archive 重放历史事件，为什么副作用可能再发生？ | Midnight blog</title>
+  
+    <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
+    
+  
+    <meta name="shenma-site-verification" content="2f2f116d2424190c644213d1fef14b9d_1791462805">
+    
+  
+  
+  
+  
+    <link rel="icon" href="/img/favicon.ico">
+  
+  
+    <link rel="apple-touch-icon" href="/img/favicon.ico">
+  
+  
+    <meta name="description" content="EventBridge archive replay 会把选定时间范围的事件重新送回原 event bus，不会撤销消费者已有副作用，也不保证与原到达顺序一致。重放前要限定目标并保护下游写入。">
+  
+  
+    <meta name="keywords" content="EventBridge archive replay,replay-name,event idempotency,event recovery">
+  
+  
+    <meta name="robots" content="index,follow,max-image-preview:large">
+  
+  <link rel="canonical" href="https://www.zyweb.vip/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/">
+  
+  
+  <link rel="alternate" hreflang="x-default" href="https://www.zyweb.vip/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/">
+  
+    <link rel="alternate" hreflang="zh-CN" href="https://www.zyweb.vip/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/">
+  
+    <link rel="alternate" hreflang="en" href="https://www.zyweb.vip/en/2026/11/28/eventbridge-archive-replay-idempotency/">
+  
+  
+  
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  
+  
+    <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
+  
+  
+    <meta property="og:title" content="EventBridge Archive 重放历史事件，为什么副作用可能再发生？ | Midnight blog">
+    <meta property="og:description" content="EventBridge archive replay 会把选定时间范围的事件重新送回原 event bus，不会撤销消费者已有副作用，也不保证与原到达顺序一致。重放前要限定目标并保护下游写入。">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/">
+    <meta property="og:site_name" content="Midnight blog">
+    <meta property="og:locale" content="zh_CN">
+    
+    <meta name="twitter:card" content="summary">
+  
+  
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/#webpage","url":"https://www.zyweb.vip/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/","name":"EventBridge Archive 重放历史事件，为什么副作用可能再发生？ | Midnight blog","description":"EventBridge archive replay 会把选定时间范围的事件重新送回原 event bus，不会撤销消费者已有副作用，也不保证与原到达顺序一致。重放前要限定目标并保护下游写入。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/","headline":"EventBridge Archive 重放历史事件，为什么副作用可能再发生？","description":"EventBridge archive replay 会把选定时间范围的事件重新送回原 event bus，不会撤销消费者已有副作用，也不保证与原到达顺序一致。重放前要限定目标并保护下游写入。","inLanguage":"zh-CN","datePublished":"2026-11-27T19:36:00.000Z","dateModified":"2026-11-27T19:36:00.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-archive.html"],"keywords":"AWS EventBridge, Event Replay, Idempotency, Recovery"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"EventBridge Archive 重放历史事件，为什么副作用可能再发生？","item":"https://www.zyweb.vip/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/"}]}]}</script>
+  
+  <meta name="theme-color" content="#080b10">
+  
+  <script>
+    (function () {
+      var root = document.documentElement;
+      function read(key, allowed) {
+        var value;
+        try { value = window.localStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        try { value = window.sessionStorage.getItem(key); if (allowed.indexOf(value) >= 0) return value; } catch (e) {}
+        var cookie = document.cookie.split(';').map(function (part) { return part.trim(); }).filter(function (part) { return part.indexOf(key + '=') === 0; })[0];
+        value = cookie ? cookie.slice(key.length + 1) : '';
+        return allowed.indexOf(value) >= 0 ? value : '';
+      }
+      var scheme = read('midnight-theme', ['light', 'dark', 'system']) || 'system';
+      root.dataset.defaultScheme = 'system';
+      root.dataset.defaultSkin = 'ocean';
+      root.dataset.scheme = scheme;
+      root.dataset.skin = read('midnight-skin', ['ocean', 'jade', 'violet']) || 'ocean';
+      root.dataset.theme = scheme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : scheme;
+      root.dataset.background = 'default';
+      root.classList.add(root.dataset.theme === 'dark' ? 'theme-dark' : 'theme-light');
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="/css/main.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/editorial.css?v=0.4.1">
+  <link rel="stylesheet" href="/css/studio.css">
+  <link rel="stylesheet" href="/css/studio-inner.css">
+  
+  
+  
+  
+<meta name="generator" content="Hexo 8.1.2"></head>
+
+  
+  <body class="studio-page studio-inner">
+    
+
+
+    <a class="skip-link" href="#content">跳到正文</a>
+    <div class="site-shell">
+      
+<header class="site-header studio-header"><div class="studio-container studio-header__inner">
+<a class="studio-brand" href="/zh-CN/"><svg class="studio-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 24V8l11 12L27 8v16" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 16 16 28l11-12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg><span>Midnight<span class="studio-brand__dot">.</span></span></a>
+<nav class="studio-nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></nav>
+<details class="studio-desktop-controls studio-preferences"><summary><span>外观</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M12 5a7 7 0 0 1 0 14Z" fill="currentColor"/></svg></summary><div class="studio-preferences__panel">
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/" selected>zh-CN</option><option value="/en/2026/11/28/eventbridge-archive-replay-idempotency/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</div></details>
+<button class="mobile-menu-toggle studio-menu-toggle" type="button" data-mobile-menu-toggle aria-expanded="false" aria-controls="mobile-menu"><span class="sr-only">菜单</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg></button>
+</div>
+<div class="mobile-menu-backdrop" data-mobile-menu-close hidden></div>
+<aside class="mobile-menu" id="mobile-menu" data-mobile-menu hidden aria-hidden="true"><div class="mobile-menu__head"><strong>Midnight</strong><button class="mobile-menu__close" type="button" data-mobile-menu-close aria-label="关闭菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><nav class="mobile-menu__nav" aria-label="主导航"><a href="/zh-CN/archives/">文章</a><a href="/zh-CN/tags/">专题</a><a href="/zh-CN/archives/">归档</a><a href="/zh-CN/about/">关于</a></nav>
+<div class="studio-controls">
+<label><span class="sr-only">多语言版本</span><select data-language-select><option value="/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/" selected>zh-CN</option><option value="/en/2026/11/28/eventbridge-archive-replay-idempotency/">en</option></select></label>
+<label><span class="sr-only">外观</span><select data-scheme-select aria-label="外观"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+<label><span class="sr-only">配色</span><select data-skin-select aria-label="配色"><option value="ocean">海蓝</option><option value="jade">松绿</option><option value="violet">鸢紫</option></select></label>
+</div>
+</aside></header>
+
+      <main class="site-main" id="content">
+        
+        
+
+<article class="post-detail">
+  <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
+  <header class="post-hero">
+    <div class="post-hero__kicker">
+      <span class="tag tag--aws-eventbridge">AWS EventBridge</span>
+      <time datetime="2026-11-27T19:36:00.000Z">2026-11-28</time>
+    </div>
+
+    <h1>EventBridge Archive 重放历史事件，为什么副作用可能再发生？</h1>
+
+    
+      <p class="post-hero__summary">EventBridge archive replay 会把选定时间范围的事件重新送回原 event bus，不会撤销消费者已有副作用，也不保证与原到达顺序一致。重放前要限定目标并保护下游写入。</p>
+    
+
+    <div class="post-hero__meta">
+      <div class="post-author-card">
+        <span class="avatar avatar--large">M</span>
+        <span>
+          <strong>Midnight</strong>
+          <small>软件研发、测试、安全、交付与运维的工程笔记。</small>
+        </span>
+        <a href="https://www.zyweb.vip/zh-CN/about/" rel="author">查看作者档案</a>
+      </div>
+      <div class="post-metrics">
+        
+
+
+        
+
+
+        <small>更新于 <time datetime="2026-11-27T19:36:00.000Z">2026-11-28</time> · 预计阅读 6 分钟</small>
+      </div>
+    </div>
+
+    
+
+    
+<section class="language-switcher" aria-label="多语言版本">
+  <span>多语言版本</span>
+  
+    <div class="language-list">
+      
+        <a class="is-active" href="/zh-CN/2026/11/28/eventbridge-archive-replay-idempotency/" hreflang="zh-CN">
+          zh-CN
+        </a>
+      
+        <a class="" href="/en/2026/11/28/eventbridge-archive-replay-idempotency/" hreflang="en">
+          en
+        </a>
+      
+    </div>
+  
+</section>
+
+  </header>
+
+  <div class="post-layout">
+    <div class="post-body">
+      <p class="post-body__label">正文</p>
+
+      
+
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>EventBridge archive 只能重放到最初接收事件的 event bus。</li><li>重放事件按 event time 分钟区间处理，不保证与归档到达顺序一致。</li><li>replay-name 可识别重放事件，但消费者副作用仍需幂等或隔离。</li></ul></section>
+      <!--email_off-->
+      <div class="article-content">
+        <p>EventBridge Archive 的 replay 会把选定时间范围内的历史事件重新发送到原先接收它们的 event bus。它不撤销消费者之前已经完成的副作用，也不保证事件按最初进入 archive 的顺序再次到达。若消费者收到事件会发邮件、扣款、创建工单或更新状态，重放前必须决定怎样防止重复副作用；“这是恢复操作”不会自动让消费者知道它已经处理过这条业务事件。</p>
+<h2 id="Archive-保留与-replay-范围是两个选择"><a href="#Archive-保留与-replay-范围是两个选择" class="headerlink" title="Archive 保留与 replay 范围是两个选择"></a>Archive 保留与 replay 范围是两个选择</h2><p>创建 archive 时可以用 event pattern 过滤要保存的事件，并设置保留期限；AWS 文档指出默认可无限期保存，具体配置仍应按实际账户验证。启动 replay 时要指定要重放的时间范围，也可选择原 event bus 上的规则。Archive replay 只能回到最初接收事件的 bus；不能把它当成任意目标 bus 的导出工具。事件重放后仍留在 archive 中，可多次重放，直到超过保留期或 archive 被删除。</p>
+<p>这意味着重放是再次投递，而非移动或“撤销后恢复”。AWS 会为 replayed event 添加 <code>replay-name</code> 元数据，并用它避免重放事件再次进入 archive。消费者可以用该值区分实时与历史重放流量、选择隔离处理或写入审计字段；但该标记本身不是业务幂等键，也不会阻止同一事件产生第二次付款或邮件。</p>
+<h2 id="假设场景：恢复历史订单事件却重复发通知"><a href="#假设场景：恢复历史订单事件却重复发通知" class="headerlink" title="假设场景：恢复历史订单事件却重复发通知"></a>假设场景：恢复历史订单事件却重复发通知</h2><p>假设一个消费者原先处理 <code>OrderPaid</code> 后发送收据邮件，并将订单状态推进到 <code>notified</code>。部署中断导致一部分事件未成功送达，运维人员准备重放过去 30 分钟的 archive。部分事件可能其实已被消费者处理，只是 ack 或下游指标丢失；重放后同一订单的消费者再次运行，若邮件发送不幂等，用户会收到第二封收据。若处理函数把订单状态从 paid 改写成 paid，数据库结果看似无变化，也不代表外部邮件没有重复。</p>
+<p>修复要把事件传输 ID 与业务副作用幂等键分开。消费者在发送邮件前可记录与订单/通知类型关联的去重键，并将外部发送状态与数据库事务设计成可恢复流程；若邮件服务没有幂等支持，需要 outbox 或人工核对边界。<code>replay-name</code> 可标注这批恢复事件，但仍需要对照业务事件 ID 与副作用记录。这里是架构推演，没有对真实订单系统进行 replay。</p>
+<h2 id="时间窗口不是原始接收顺序"><a href="#时间窗口不是原始接收顺序" class="headerlink" title="时间窗口不是原始接收顺序"></a>时间窗口不是原始接收顺序</h2><p>AWS 文档指出，archive 到达可能有延迟，并建议在 replay 前等待 10 分钟，确保事件已进入 archive。重放按事件中的时间字段分批处理，以一分钟区间推进；覆盖 20 分钟范围时，会先处理较早的一分钟区间，然后下一个区间。即使范围顺序是时间递进，每个区间内部也不应假设与原始 archive arrival 顺序一致。事件的业务时间与投递时间也可能不同。</p>
+<p>如果系统依赖严格顺序，如账户余额变更必须先开户再扣款，仅按 replay 时间范围不能自动重建该顺序。需要在消费者端按聚合 ID 版本检查、拒绝旧状态更新，或把事件送到专用验证流程后再批准副作用。检查 <code>DescribeReplay</code> 的进度以及 <code>EventLastReplayedTime</code>，但不要把最后重放时间戳解释成所有目标都已经完成业务处理。</p>
+<h2 id="重放前如何缩小影响范围？"><a href="#重放前如何缩小影响范围？" class="headerlink" title="重放前如何缩小影响范围？"></a>重放前如何缩小影响范围？</h2><p>先核实 archive 的 event pattern 与保留期限，确认被选时间段和事件来源。再枚举原 event bus 上会匹配的规则与目标：哪些消费者会接收，哪些会造成外部副作用，哪些只是分析或重建索引。可以选择规则范围控制 replay 目标，但规则改动本身也需要评审与回滚计划。高风险消费者可以先在隔离目标或 dry-run 逻辑中解析事件，统计候选数量、重复业务 ID、时间范围和无法关联的记录。</p>
+<p>准备幂等策略、速率限制、暂停开关和停止条件。AWS 说明 replay 可能与 PutEvents 额度分离，但账户与区域仍有并发 replay 数量上限；吞吐应按当前 quotas 和目标容量规划。若发现下游重复率上升、顺序冲突或状态回退，应停止 replay 并保留进度证据，而非继续扩大窗口。重放的事件按分钟处理意味着暂停与恢复也应以 replay 状态、处理时间段和业务确认对齐。</p>
+<h2 id="怎样验收恢复而不把投递完成当业务完成？"><a href="#怎样验收恢复而不把投递完成当业务完成？" class="headerlink" title="怎样验收恢复而不把投递完成当业务完成？"></a>怎样验收恢复而不把投递完成当业务完成？</h2><p>在测试 event bus 上构造一条事件，先正常消费一次，再对包含它的范围做 replay；验证目标消费者看到 <code>replay-name</code>，幂等键使副作用保持唯一，同时记录投递次数与业务写入次数。再覆盖事件延迟进入 archive、同一时间段重复 replay、消费者处理失败、某个规则被排除、以及 event time 与创建顺序不一致等情况。验证前要确认 archive 里的数据符合实际过滤规则。</p>
+<p>生产恢复验收需要同时看 EventBridge replay 状态、目标投递指标、消费者处理结果和业务副作用台账。服务返回“重放已完成”只证明 AWS replay 过程状态，不证明所有 Lambda、队列、HTTP 端点或外部系统完成了业务操作。本文没有访问 AWS 账户或执行 replay；具体配额、目标延迟和错误恢复应针对当前区域与消费者实现验证。</p>
+<h2 id="适用边界"><a href="#适用边界" class="headerlink" title="适用边界"></a>适用边界</h2><p>Archive replay 适合在消费者修复后重新处理保留事件、或让新逻辑回看历史输入。它不是事务回滚、全局事件排序器、跨 bus 复制机制或去重服务。若历史事件会触发现实副作用，先让目标规则和消费者能识别 replay、具备幂等处理和停止控制，再选择窗口。恢复正确性的最终证据是业务状态与副作用台账一致，而不是单独一个 replay 状态变成 <code>COMPLETED</code>。</p>
+<p>目标规则也可能在 replay 期间被同时修改。若运维人员为了缩小范围临时禁用一条规则，另一条默认规则仍可能把事件送到副作用目标；因此要在启动前枚举事件 bus 上所有匹配规则，并记录 replay 中规则配置的变更。区域内并发 replay 有上限，等待队列或分阶段重放也要纳入事故时间线。暂停操作只能停止后续处理，无法撤回已经交付给 Lambda、队列或外部 HTTP 服务的事件。</p>
+<p>延伸阅读：本站<a href="/zh-CN/2026/11/08/saga-compensation-business-outcomes/">Saga 补偿结果与业务状态</a>。EventBridge replay 只重发事件，不能替代跨服务事务状态机或副作用调和台账。</p>
+
+      </div>
+      <!--/email_off-->
+
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-archive.html" rel="noopener">Amazon EventBridge User Guide — Archiving and replaying events</a></li></ol></section>
+      
+        <footer class="article-taxonomy">
+          <span>标签</span>
+          
+            <a class="tag tag--aws-eventbridge" href="/zh-CN/tags/AWS-EventBridge/">AWS EventBridge</a>
+          
+            <a class="tag tag--event-replay" href="/zh-CN/tags/Event-Replay/">Event Replay</a>
+          
+            <a class="tag tag--idempotency" href="/zh-CN/tags/Idempotency/">Idempotency</a>
+          
+            <a class="tag tag--recovery" href="/zh-CN/tags/Recovery/">Recovery</a>
+          
+        </footer>
+      
+
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--operations" href="/zh-CN/categories/Operations/">Operations</a>
+          
+        </footer>
+      
+
+      <section class="post-share" aria-label="分享">
+        <span>分享</span>
+        <div>
+          
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Feventbridge-archive-replay-idempotency%2F&text=EventBridge%20Archive%20%E9%87%8D%E6%94%BE%E5%8E%86%E5%8F%B2%E4%BA%8B%E4%BB%B6%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%89%AF%E4%BD%9C%E7%94%A8%E5%8F%AF%E8%83%BD%E5%86%8D%E5%8F%91%E7%94%9F%EF%BC%9F" aria-label="分享到 X" title="分享到 X">X</a>
+          
+            <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Feventbridge-archive-replay-idempotency%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
+          
+            <a href="mailto:?subject=EventBridge%20Archive%20%E9%87%8D%E6%94%BE%E5%8E%86%E5%8F%B2%E4%BA%8B%E4%BB%B6%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E5%89%AF%E4%BD%9C%E7%94%A8%E5%8F%AF%E8%83%BD%E5%86%8D%E5%8F%91%E7%94%9F%EF%BC%9F&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2026%2F11%2F28%2Feventbridge-archive-replay-idempotency%2F" aria-label="邮件分享" title="邮件分享">@</a>
+          
+        </div>
+      </section>
+
+      
+        <nav class="post-navigation" aria-label="文章导航">
+          
+            <a class="post-navigation__item post-navigation__item--prev" href="/zh-CN/2026/11/28/chips-cookie-top-level-partition/">
+              <span>上一篇</span>
+              <strong>同一个 iframe 服务，为什么在两个站点读到不同 Cookie？</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+            <a class="post-navigation__item post-navigation__item--next" href="/zh-CN/2026/11/28/prometheus-native-histogram-resolution/">
+              <span>下一篇</span>
+              <strong>Prometheus 原生直方图合并后桶变少，为什么不是采集丢数？</strong>
+              <small>2026-11-28</small>
+            </a>
+          
+        </nav>
+      
+    </div>
+
+    <aside class="post-sidebar">
+      <p class="post-sidebar__label">侧栏</p>
+
+      <details class="sidebar-panel post-toc" open><summary>目录</summary><nav aria-label="目录">
+
+
+        
+          
+            <a class="toc-link toc-link--h2" href="#Archive-保留与-replay-范围是两个选择">Archive 保留与 replay 范围是两个选择</a>
+          
+            <a class="toc-link toc-link--h2" href="#假设场景：恢复历史订单事件却重复发通知">假设场景：恢复历史订单事件却重复发通知</a>
+          
+            <a class="toc-link toc-link--h2" href="#时间窗口不是原始接收顺序">时间窗口不是原始接收顺序</a>
+          
+            <a class="toc-link toc-link--h2" href="#重放前如何缩小影响范围？">重放前如何缩小影响范围？</a>
+          
+            <a class="toc-link toc-link--h2" href="#怎样验收恢复而不把投递完成当业务完成？">怎样验收恢复而不把投递完成当业务完成？</a>
+          
+            <a class="toc-link toc-link--h2" href="#适用边界">适用边界</a>
+          
+        
+      </nav></details>
+
+      
+
+      <section class="sidebar-panel author-panel">
+        <h2>作者</h2>
+        <p>软件研发、测试、安全、交付与运维的工程笔记。</p>
+        <div>
+          <span class="avatar avatar--large">M</span>
+          <strong>Midnight</strong>
+          <small>发布者 / 编辑</small>
+        </div>
+        <a class="panel-button" href="/zh-CN/about/">查看作者档案</a>
+      </section>
+
+      
+        <section class="sidebar-panel">
+          <h2>相关专题</h2>
+          <p>把当前文章放回长期跟踪线索里。</p>
+          
+            <a class="series-row" href="/zh-CN/tags/Engineering/"><span>Engineering</span><b>224</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Development/"><span>Development</span><b>199</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Delivery/"><span>Delivery</span><b>119</b></a>
+          
+            <a class="series-row" href="/zh-CN/tags/Quality/"><span>Quality</span><b>85</b></a>
+          
+        </section>
+      
+
+      
+    </aside>
+  </div>
+</article>
+
+
+  <section class="related-posts">
+    <div class="section-heading">
+      <h2>继续阅读</h2>
+      <p>同一信息源下的延伸判断。</p>
+    </div>
+    <div class="related-grid">
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/27/s3-versioned-delete-marker-recovery/">版本化 S3 对象 DELETE 返回成功，为什么旧文件还在？</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/27/sqs-fifo-send-dedup-window/">SQS FIFO 的五分钟去重保护的是发送重试，不是业务副作用</a></h3>
+          <p>2026-11-27</p>
+        </article>
+      
+        <article class="related-card">
+          
+          <h3><a href="/zh-CN/2026/11/28/go-waitgroup-go-panic-contract/">Go 1.25 的 WaitGroup.Go 省了 Done，为什么仍要求函数不能 panic？</a></h3>
+          <p>2026-11-28</p>
+        </article>
+      
+    </div>
+  </section>
+
+
+
+
+
+
+
+
+
+      </main>
+      <footer class="studio-footer"><div class="studio-container"><div class="studio-footer__top"><p>从需求到运行，记录研发的每一步</p><a class="studio-text-link" href="/zh-CN/about/">关于 <span aria-hidden="true">↗</span></a></div><div class="studio-footer__wordmark" aria-hidden="true">Midnight<span>.</span></div><div class="studio-footer__bottom"><div><span>&copy; 2026 Midnight</span>
+
+</div><nav aria-label="资源"><a href="/zh-CN/archives/">归档</a><a href="/atom.xml">RSS</a><a href="/zh-CN/privacy/">隐私</a><a href="/zh-CN/advertise/">广告合作</a></nav><a href="#content" class="studio-back-top">回到顶部 <span aria-hidden="true">↑</span></a></div></div></footer>
+    </div>
+    
+    <script src="/js/main.js?v=0.4.1" defer></script>
+    
+    
+    <script src="/js/studio.js" defer></script>
+    
+
+
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5361625861188247" crossorigin="anonymous"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  </body>
+</html>
