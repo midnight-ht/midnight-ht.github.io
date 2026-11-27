@@ -12,7 +12,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
-  <title>Promise：手写Promise，原理分析 | Midnight blog</title>
+  <title>Promise 手写实现：从 resolve 到链式传播，哪些语义不能省略 | Midnight blog</title>
   
     <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
     
@@ -29,10 +29,10 @@
     <link rel="apple-touch-icon" href="/img/favicon.ico">
   
   
-    <meta name="description" content="Promise 中的 all 方法">
+    <meta name="description" content="从 `resolve(1)` 到 `resolve(otherPromise)` 看 Promise 的解析与兑现差别，再用 reaction 队列、派生 Promise 和失败路径界定教学实现。">
   
   
-    <meta name="keywords" content="软件研发,需求分析,架构设计,前端开发,后端开发,自动化测试,软件安全,CI/CD,DevOps,可观测性,故障复盘,AI Agent">
+    <meta name="keywords" content="Promise 实现原理,resolve 与 fulfill,thenable,Promise 链式调用,JavaScript Promise jobs">
   
   
     <meta name="robots" content="index,follow,max-image-preview:large">
@@ -54,8 +54,8 @@
     <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
   
   
-    <meta property="og:title" content="Promise：手写Promise，原理分析 | Midnight blog">
-    <meta property="og:description" content="Promise 中的 all 方法">
+    <meta property="og:title" content="Promise 手写实现：从 resolve 到链式传播，哪些语义不能省略 | Midnight blog">
+    <meta property="og:description" content="从 `resolve(1)` 到 `resolve(otherPromise)` 看 Promise 的解析与兑现差别，再用 reaction 队列、派生 Promise 和失败路径界定教学实现。">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://www.zyweb.vip/zh-CN/2022/01/21/Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/">
     <meta property="og:site_name" content="Midnight blog">
@@ -64,7 +64,7 @@
     <meta name="twitter:card" content="summary">
   
   
-    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2022/01/21/Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/#webpage","url":"https://www.zyweb.vip/zh-CN/2022/01/21/Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/","name":"Promise：手写Promise，原理分析 | Midnight blog","description":"Promise 中的 all 方法","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2022/01/21/Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2022/01/21/Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2022/01/21/Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2022/01/21/Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2022/01/21/Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/","headline":"Promise：手写Promise，原理分析","description":"Promise 中的 all 方法","inLanguage":"zh-CN","datePublished":"2022-01-21T15:42:10.000Z","dateModified":"2022-01-21T15:42:10.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"keywords":"JS基础, Promise, JS原理, Development"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2022/01/21/Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Promise：手写Promise，原理分析","item":"https://www.zyweb.vip/zh-CN/2022/01/21/Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/"}]}]}</script>
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/zh-CN/2022/01/21/Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/#webpage","url":"https://www.zyweb.vip/zh-CN/2022/01/21/Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/","name":"Promise 手写实现：从 resolve 到链式传播，哪些语义不能省略 | Midnight blog","description":"从 `resolve(1)` 到 `resolve(otherPromise)` 看 Promise 的解析与兑现差别，再用 reaction 队列、派生 Promise 和失败路径界定教学实现。","inLanguage":"zh-CN","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/zh-CN/2022/01/21/Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/zh-CN/2022/01/21/Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/zh-CN/2022/01/21/Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/zh-CN/2022/01/21/Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/#webpage"},"url":"https://www.zyweb.vip/zh-CN/2022/01/21/Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/","headline":"Promise 手写实现：从 resolve 到链式传播，哪些语义不能省略","description":"从 `resolve(1)` 到 `resolve(otherPromise)` 看 Promise 的解析与兑现差别，再用 reaction 队列、派生 Promise 和失败路径界定教学实现。","inLanguage":"zh-CN","datePublished":"2022-01-21T15:42:10.000Z","dateModified":"2026-11-27T01:09:11.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/zh-CN/about/"},"citation":["https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-promise-objects","https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-createresolvingfunctions","https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-newpromiseresolvethenablejob","https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-promise.prototype.then"],"keywords":"Development, JavaScript, Promise, Async programming"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/zh-CN/2022/01/21/Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://www.zyweb.vip/zh-CN/"},{"@type":"ListItem","position":2,"name":"归档","item":"https://www.zyweb.vip/zh-CN/archives/"},{"@type":"ListItem","position":3,"name":"Promise 手写实现：从 resolve 到链式传播，哪些语义不能省略","item":"https://www.zyweb.vip/zh-CN/2022/01/21/Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/"}]}]}</script>
   
   <meta name="theme-color" content="#080b10">
   
@@ -137,14 +137,14 @@
   <nav class="breadcrumbs" aria-label="面包屑导航"><a href="/zh-CN/">首页</a><span aria-hidden="true">/</span><a href="/zh-CN/archives/">归档</a></nav>
   <header class="post-hero">
     <div class="post-hero__kicker">
-      <span class="tag tag--js">JS基础</span>
+      <span class="tag tag--development">Development</span>
       <time datetime="2022-01-21T15:42:10.000Z">2022-01-21</time>
     </div>
 
-    <h1>Promise：手写Promise，原理分析</h1>
+    <h1>Promise 手写实现：从 resolve 到链式传播，哪些语义不能省略</h1>
 
     
-      <p class="post-hero__summary">Promise 中的 all 方法</p>
+      <p class="post-hero__summary">从 `resolve(1)` 到 `resolve(otherPromise)` 看 Promise 的解析与兑现差别，再用 reaction 队列、派生 Promise 和失败路径界定教学实现。</p>
     
 
     <div class="post-hero__meta">
@@ -163,7 +163,7 @@
         
 
 
-        <small>更新于 <time datetime="2022-01-21T15:42:10.000Z">2022-01-21</time> · 预计阅读 30 分钟</small>
+        <small>更新于 <time datetime="2026-11-27T01:09:11.000Z">2026-11-27</time> · 预计阅读 10 分钟</small>
       </div>
     </div>
 
@@ -195,744 +195,81 @@
 
       
 
-      
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">核心要点</h2><ul><li>区分解析目标锁定与最终兑现。</li><li>then 注册 reaction 并返回新的 Promise。</li><li>用 thenable、异常和回调顺序验证实现边界。</li></ul></section>
       <!--email_off-->
       <div class="article-content">
-        <p>源码地址：<a target="_blank" rel="noopener" href="https://gitee.com/lagou-19-web-paid/practice/tree/master/promise">https://gitee.com/lagou-19-web-paid/practice/tree/master/promise</a></p>
-<h2 id="1-Promise-对象的基础模型-同步，分析执行流程"><a href="#1-Promise-对象的基础模型-同步，分析执行流程" class="headerlink" title="1- Promise 对象的基础模型 (同步，分析执行流程)"></a>1- Promise 对象的基础模型 (同步，分析执行流程)</h2><ol>
-<li>Promise 是一个类，类接收的是一个构造函数，在执行类的时候这个构造函数也会同步执行。</li>
-<li>构造函数在同步执行的时候，会传递俩个回调函数，分别是成功回调[resolve]、失败回调[reject]。</li>
-</ol>
-<ul>
-<li>成功回调：回调函数内接收一个参数，可以是一个普通值，也可以是一个 Promise 对象。此阶段暂时只考虑普通值。</li>
-<li>失败回调：回调函数内接收一个参数，一般为失败原因 </li>
-</ul>
-<ol start="3">
-<li>Promise 中有三个状态，分别为 等待[pending]、成功[fulfilled]、失败[rejected]。状态仅支持 pending -&gt; fulfilled 或 pending -&gt; rejected，状态一旦确定就不支持修改了。</li>
-<li>then 方法会接收俩个参数，成功回调[successCallback]函数、失败回调[failCallback]函数。在 then 方法执行时，会依据Promise 的执行状态，执行成功回调或者失败回调。并在执行相对应的回调时，取出相对应的缓存状态值，作为参数传递至回调函数。</li>
-</ol>
-<pre><code class="javascript">    
-    // Promise 的三个状态
-    const PENDING = &#39;pending&#39; // 等待
-    const FULFILLED = &#39;fulfilled&#39; // 成功
-    const REJECTED = &#39;rejected&#39; // 失败
-    
-    /**
-    *   模拟 原生Promise
-    *   
-    *   @class MyPromise
-    *   @constructor excutor 构造函数，函数接收俩个回调函数，回调函数
-    */
-    class MyPromise {
-        constructor( excutor ) {
-            excutor(this.resolve, this.reject)
-        }
-        
-        // 默认状态为 pending(等待)
-        status = PENDING
-        
-        // 缓存状态值
-        value = undefined // 成功状态 【参数】
-        reason = undefined // 失败状态 【原因】
-
-
-        /**
-        *   成功回调
-        *
-        *   @see 函数使用箭头函数，可以使 this 指向于当前 MyPromise 对象
-        */
-        resolve = (value) =&gt; {
-            // 状态一旦确定不支持更改，return 出函数
-            if (this.status !== PENDING) return
-            
-            // 更改状态为 fulfilled(成功)
-            this.status = FULFILLED
-            
-            // 缓存成功回调 传递的值
-            this.value = value
-        }
-        
-        /**
-        * 失败回调
-        */
-        reject = (reason) =&gt; {
-            // 状态一旦确定不支持更改，return 出函数
-            if (this.status !== PENDING) return
-            
-            // 更改状态为 rejected(失败)
-            this.status = REJECTED
-            
-            // 缓存失败回调 传递的原因
-            this.reason = reason
-        }
-        
-        /**
-        *   then 方法
-        *
-        *   @params {function} successCallback[成功回调]
-        *   @params {function} failCallback[失败回调]
-        */
-        then ( successCallback, failCallback ) {
-            if (this.status === FULFILLED) successCallback(this.value)
-            if (this.status === REJECTED) failCallback(this.reason)
-        }
-    }
-    
-    
-    // 测试当前 MyPromise 
-    
-    let promiseTest = new MyPromise((resolve, reject) =&gt; {
-        resolve(&#39;成功&#39;)
-        // reject(&#39;失败&#39;)
-    })
-   // 执行 then 方法 
-    promiseTest.then(value =&gt; {
-        console.log(value)
-    }, reason =&gt; {
-        console.log(reason)
-    })
+        <p>一个最小 Promise 在 <code>resolve(1)</code> 后能打印 <code>1</code>，并不能说明它会正确处理 <code>resolve(otherPromise)</code>。前者只是保存一个普通值；后者要求当前 Promise 接受另一个对象的最终结果。手写 Promise 真正难的部分，不是把状态改成 fulfilled，而是确定谁拥有最终决定权、回调何时运行，以及 <code>then()</code> 产生的下一段链怎样接住返回值和异常。</p>
+<p>本文按 ECMAScript 2026 的 Promise 语义解释这些边界。示例用于说明算法分工，不是完整规范实现，也没有宣称经过独立运行测试。若目标是理解原理，做一个边界清楚的教学子集足够；若要替换原生 Promise，则还要处理构造器泛型、子类、<code>Symbol.species</code>、拒绝跟踪等规范细节，不能把简化代码称作完整实现。</p>
+<h2 id="先分清状态与“解析目标已锁定”"><a href="#先分清状态与“解析目标已锁定”" class="headerlink" title="先分清状态与“解析目标已锁定”"></a>先分清状态与“解析目标已锁定”</h2><p>Promise 对象有 pending、fulfilled、rejected 三种状态。fulfilled 和 rejected 是 settled；pending 表示还没有最终兑现或拒绝。容易漏掉的是 resolved 不等于 settled：一个 Promise 可以已经 resolved，却仍然 pending，因为它已锁定为跟随另一个尚未完成的 Promise 或 thenable。这里的“锁定”描述以后谁决定结果，“兑现”描述结果状态已经落定。ECMAScript 2026 第 27.2 节明确把这两个概念分开。<a target="_blank" rel="noopener" href="https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-promise-objects">规范原文</a></p>
+<p>假设 <code>outer</code> 的执行器先调用 <code>resolve(inner)</code>，其中 <code>inner</code> 仍 pending，然后又调用 <code>reject(error)</code>。直觉上有人会认为第二次调用应该让 <code>outer</code> 失败，因为此刻还没有打印成功。但正确的判断不是只看 <code>outer</code> 的状态字段：第一次 resolve 已经把它的解析命运交给 <code>inner</code>，后续执行器调用的 reject 不能抢回控制权。等 <code>inner</code> fulfilled 时 <code>outer</code> 才 fulfilled；等 <code>inner</code> rejected 时 <code>outer</code> 才 rejected。因而，仅写 <code>if (status !== PENDING) return</code> 并在第一次 resolve 时立刻设为 fulfilled，会把“接受解析请求”和“最终兑现”错误合并。</p>
+<p>实现可以用一个独立的 <code>alreadyResolved</code> 标记守住 resolve/reject 入口，再用 promise 状态表示最终结果。但这只是便于教学的内部设计，不是规范字段的逐字复刻。解析过程碰到对象值时，还要检查它的 <code>then</code> 属性；若 <code>then</code> 可调用，就把兑现过程交给 thenable 的回调。如果读取 <code>then</code> 本身抛错，则解析结果转为拒绝。普通对象没有可调用的 <code>then</code>，才按普通值兑现。</p>
+<p>这也说明 thenable 不必是原生 Promise。只要某个对象公开了可调用的 <code>then</code>，解析过程就需要按约定接纳它。一个对象的 <code>then</code> getter 可能有副作用或抛错；<code>then</code> 也可能多次调用 resolve/reject。解析流程必须防止这些路径让同一 Promise 兑现多次。规范的 resolving functions 会共同关闭一次性门闩，并对解析到自身的情况拒绝，否则会形成无法完成的自引用。</p>
+<h2 id="then-回调不是当前-Promise-的方法调用"><a href="#then-回调不是当前-Promise-的方法调用" class="headerlink" title="then 回调不是当前 Promise 的方法调用"></a>then 回调不是当前 Promise 的方法调用</h2><p><code>then(onFulfilled, onRejected)</code> 至少做两件事：为当前 Promise 注册一对 reaction，并创建一个新的 Promise 作为返回值。若当前 Promise 还 pending，reaction 暂存；若已 settled，也不是立即同步调用处理函数，而是把 reaction job 放进 Promise job 队列。规范的 <code>PerformPromiseThen</code> 同时接收一个用于承接结果的 promise capability，这就是链式传播的基础。<a target="_blank" rel="noopener" href="https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-promise.prototype.then">Promise.prototype.then 与 PerformPromiseThen</a></p>
+<p>考虑下面这段说明代码：</p>
+<pre><code class="js">const next = source.then(value =&gt; {
+  return value + 1;
+});
 </code></pre>
-<h2 id="2-Promise-对象的异步特性"><a href="#2-Promise-对象的异步特性" class="headerlink" title="2- Promise 对象的异步特性"></a>2- Promise 对象的异步特性</h2><ol>
-<li>异步特点就是不会阻塞代码执行，待异步结束后才会得到特定的值、特定的函数才会执行。</li>
-<li>当执行 Promise 中的 then 方法时，Promise 对象的状态为 pending[等待状态时]，就断定为异步状态。</li>
-<li>断定为异步状态时，successCallback[成功回调]、failCallback[失败回调] 需要缓存在 Promise 对象中。</li>
-<li>在构造函数内的异步方法执行完毕，调用 resolve[成功回调] 、reject[失败回调] 时，前置逻辑处理完毕后，最后执行外部调用 then 方法挂载至 Promise 对象中的 successCallbak[成功回调] 或 failCallback[失败回调]。</li>
-</ol>
-<pre><code class="javascript">    
-    // Promise 的三个状态
-    const PENDING = &#39;pending&#39; // 等待
-    const FULFILLED = &#39;fulfilled&#39; // 成功
-    const REJECTED = &#39;rejected&#39; // 失败
-    
-    /**
-    *   模拟 原生Promise
-    *   
-    *   @class MyPromise
-    *   @constructor excutor 构造函数，函数接收俩个回调函数，回调函数
-    */
-     resolve = (value) =&gt; {
-         // 状态一旦确定不支持更改，return 出函数
-         if (this.status !== PENDING) return
-
-         // 更改状态为 fulfilled(成功)
-         this.status = FULFILLED
-
-         // 缓存成功回调 传递的值
-         this.value = value
-
-         // 执行成功回调
-         this.successCallback &amp;&amp; this.successCallback(this.value)
-     }
-
-     /**
-     * 失败回调
-     */
-     reject = (reason) =&gt; {
-         // 状态一旦确定不支持更改，return 出函数
-         if (this.status !== PENDING) return
-
-         // 更改状态为 rejected(失败)
-         this.status = REJECTED
-
-         // 缓存失败回调 传递的原因
-         this.reason = reason
-
-         // 执行失败回调
-         this.failCallback &amp;&amp; this.failCallback(this.reason)
-     }
-        
-    /**
-    *   then 方法
-    *
-    *   @params {function} successCallback[成功回调]
-    *   @params {function} failCallback[失败回调]
-    */
-    then ( successCallback, failCallback ) {
-        if (this.status === FULFILLED) successCallback(this.value)
-        else if (this.status === REJECTED) failCallback(this.reason)
-        else {
-            // 缓存成功回调
-            this.successCallback = successCallback
-            // 缓存失败回调
-            this.failCallback = failCallback
-        }
-    }
-}
-
-
-// 测试当前 MyPromise
-
-let promiseTest = new MyPromise((resolve, reject) =&gt; {
-    setTimeout(() =&gt; {
-        resolve(&#39;成功&#39;)
-        // reject(&#39;失败&#39;)
-    }, 2000)
-})
-promiseTest.then((value) =&gt; {
-    console.log(&#39;成功回调：&#39;, value)
-}, (reason) =&gt; {
-    console.log(&#39;失败原因：&#39;, reason)
-})
-
+<p><code>next</code> 不是 <code>source</code> 本身。如果处理函数返回 <code>3</code>，下游 Promise 会按解析过程接收 <code>3</code>；如果返回另一个 Promise 或 thenable，下游会跟随它；如果处理函数抛出异常，下游转为 rejected。反过来，如果处理函数没有返回值，结果是 <code>undefined</code>，下游会 fulfilled with <code>undefined</code>。这解释了为什么只把回调放进数组、触发时直接执行，却不处理返回值的“链式实现”，只能展示回调顺序，不能实现 Promise 链。</p>
+<p>这些状态差异在组合 API 中也会影响决策。本站的 <a href="/zh-CN/2026/10/24/promise-any-fulfillment-aggregateerror/">Promise.any 解析</a>展示了“最先兑现”并不等于“最先结束”，也不等于“业务结果有效”；理解 resolve 如何采纳 thenable，才能正确判断 any 收到的到底是哪一种候选结果。</p>
+<p>拒绝处理也遵循同一条结果管道。<code>onRejected</code> 正常返回一个值时，下游通常恢复为 fulfilled；它返回 Promise 时，下游采用其结果；它再次抛错时，下游才保持拒绝并以新异常为原因。没有提供某一类处理器时，语义需要向下游传递原值或拒绝原因，而不是因为缺少函数就丢失链。实现者应把“当前 Promise 的状态”与“下游 Promise 的解析”分开维护，避免回调内部的返回结果覆盖源对象。</p>
+<h2 id="两个最小反例能暴露结构错误"><a href="#两个最小反例能暴露结构错误" class="headerlink" title="两个最小反例能暴露结构错误"></a>两个最小反例能暴露结构错误</h2><p>第一个反例是同一个 pending Promise 注册两个处理器：</p>
+<pre><code class="js">pending.then(first);
+pending.then(second);
 </code></pre>
-<h2 id="3-Promise-支持多次调用的特性实现"><a href="#3-Promise-支持多次调用的特性实现" class="headerlink" title="3- Promise 支持多次调用的特性实现"></a>3- Promise 支持多次调用的特性实现</h2><ol>
-<li>创建 Promise 方法是可以被多次调用的，在调用后每个 then 方法都应该被正确执行。</li>
-<li>改造缓存回调函数的容器为数组，每次执行 then 方法后，successCallback[成功回调]、failCallback[失败回调] 都应进入对应的缓存栈。</li>
-<li>在构造函数内调用 resolve[成功回调] 、reject[失败回调] 时，循环执行缓存的回调函数，并在回调函数内传入当前 Promise 的成功数据，或失败原因。</li>
-</ol>
-<pre><code class="javascript">
-// Promise 的三个状态
-const PENDING = &#39;pending&#39; // 等待
-const FULFILLED = &#39;fulfilled&#39; // 成功
-const REJECTED = &#39;rejected&#39; // 失败
-/**
- *   模拟 原生Promise
- *  
- *   @class MyPromise
- *   @constructor excutor 构造函数，函数接收俩个回调函数，回调函数
- */
-class MyPromise {
-    constructor(excutor) {
-        excutor(this.resolve, this.reject)
-    }
-    // 默认状态为 pending(等待)
-    status = PENDING
-    
-    // 缓存状态值
-    value = undefined // 成功状态 【参数】
-    reason = undefined // 失败状态 【原因】
-    // 缓存回调函数
-    
-    successCallback = [] // 成功回调
-    failCallback = [] // 失败回调
-    /**
-     *   成功回调
-     *
-     *   @see 函数使用箭头函数，可以使 this 指向于当前 MyPromise 对象
-     */
-    resolve = (value) =&gt; {
-        // 状态一旦确定不支持更改，return 出函数
-        if (this.status !== PENDING) return
-        
-        // 更改状态为 fulfilled(成功)
-        this.status = FULFILLED
-        
-        // 缓存成功回调 传递的值
-        this.value = value
-        
-        // 执行成功回调
-        while (this.successCallback.length) this.successCallback.shift()(this.value)
-    }
-    /**
-     * 失败回调
-     */
-    reject = (reason) =&gt; {
-        // 状态一旦确定不支持更改，return 出函数
-        if (this.status !== PENDING) return
-        
-        // 更改状态为 rejected(失败)
-        this.status = REJECTED
-        
-        // 缓存失败回调 传递的原因
-        this.reason = reason
-        
-        // 执行失败回调
-        while (this.failCallback.length) this.failCallback.shift()(this.reason)
-    }
-    /**
-     *   then 方法
-     *
-     *   @params {function} successCallback[成功回调]
-     *   @params {function} failCallback[失败回调]
-     */
-    then(successCallback, failCallback) {
-        if (this.status === FULFILLED) successCallback(this.value)
-        else if (this.status === REJECTED) failCallback(this.reason)
-        else {
-            // 缓存成功回调
-            this.successCallback.push(successCallback)
-            // 缓存失败回调
-            this.failCallback.push(failCallback)
-        }
-    }
-}
-
-
-// 测试当前 MyPromise
-
-let promiseTest = (status, num) =&gt; {
-    return new MyPromise((resolve, reject) =&gt; {
-        setTimeout(() =&gt; {
-            if (status) resolve(`成功：${num}`)
-            else reject(`失败：${num}`)
-        }, 2000)
-    })
-}
-promiseTest(true, 1).then((value) =&gt; {
-    console.log(&#39;成功回调：&#39;, value)
-}, (reason) =&gt; {
-    console.log(&#39;失败原因：&#39;, reason)
-})
-promiseTest(false, 2).then((value) =&gt; {
-    console.log(&#39;成功回调：&#39;, value)
-}, (reason) =&gt; {
-    console.log(&#39;失败原因：&#39;, reason)
-})
-promiseTest(true, 3).then((value) =&gt; {
-    console.log(&#39;成功回调：&#39;, value)
-}, (reason) =&gt; {
-    console.log(&#39;失败原因：&#39;, reason)
-})
+<p>若对象里只保存一个 <code>successCallback</code> 字段，第二次赋值会覆盖第一次；兑现时只能调用 <code>second</code>。数组或 reaction 链表可以保留两次订阅，但这不是全部工作：每个 reaction 还必须关联自己的下游 Promise capability。一个处理器抛错，只应拒绝它自己的下游 Promise，不应改变源 Promise，也不应阻止其他 reaction 被排入队列。</p>
+<p>第二个反例是已 fulfilled 的 Promise：</p>
+<pre><code class="js">let finished = false;
+Promise.resolve(1).then(() =&gt; console.log(finished));
+finished = true;
 </code></pre>
-<h2 id="4-Promise-链式调用的特性实现"><a href="#4-Promise-链式调用的特性实现" class="headerlink" title="4- Promise 链式调用的特性实现"></a>4- Promise 链式调用的特性实现</h2><ol>
-<li>链式调用过程中，then 方法的 successCallback[成功回调]、failCallback[失败回调]，是可选项。如果为空，则直接返回上一个 Promise 对象的返回值。</li>
-<li>Promise 对象是支持链式调用的，在执行 then 方法的时候，最终会返回一个新的 Promise 对象。</li>
-<li>返回的对象，不支持返回当前调用的 Promise 对象。</li>
-<li>返回的对象如果是对象，则获取 promise 的返回值，依据返回值调用 resolve、reject。</li>
-<li>返回值是普通值则，调用 resolve 方法。</li>
-</ol>
-<pre><code class="javascript">
-// Promise 的三个状态
-const PENDING = &#39;pending&#39; // 等待
-const FULFILLED = &#39;fulfilled&#39; // 成功
-const REJECTED = &#39;rejected&#39; // 失败
-
-/**
- *   模拟 原生Promise
- *  
- *   @class MyPromise
- *   @constructor excutor 构造函数，函数接收俩个回调函数，回调函数
- */
-class MyPromise {
-    constructor(excutor) {
-        try {
-            excutor(this.resolve, this.reject)
-        } catch (e) {
-            this.reject(e)
-        }
-    }
-    
-    // 默认状态为 pending(等待)
-    status = PENDING
-    
-    // 缓存状态值
-    value = undefined // 成功状态 【参数】
-    reason = undefined // 失败状态 【原因】
-    
-    // 缓存回调函数
-    successCallback = [] // 成功回调
-    failCallback = [] // 失败回调
-    
-    /**
-     *   成功回调
-     *
-     *   @see 函数使用箭头函数，可以使 this 指向于当前 MyPromise 对象
-     */
-    resolve = (value) =&gt; {
-        // 状态一旦确定不支持更改，return 出函数
-        if (this.status !== PENDING) return
-        // 更改状态为 fulfilled(成功)
-        this.status = FULFILLED
-        // 缓存成功回调 传递的值
-        this.value = value
-        // 执行成功回调
-        while (this.successCallback.length) this.successCallback.shift()()
-    }
-    
-    /**
-     * 失败回调
-     */
-    reject = (reason) =&gt; {
-        // 状态一旦确定不支持更改，return 出函数
-        if (this.status !== PENDING) return
-        // 更改状态为 rejected(失败)
-        this.status = REJECTED
-        // 缓存失败回调 传递的原因
-        this.reason = reason
-        // 执行失败回调
-        while (this.failCallback.length) this.failCallback.shift()()
-    }
-    
-    /**
-     *   then 方法
-     *
-     *   @params {function} successCallback[成功回调]
-     *   @params {function} failCallback[失败回调]
-     */
-    then(successCallback, failCallback) {
-        // 回调参数可以为空
-        successCallback = successCallback ? successCallback : value =&gt; value
-        failCallback = failCallback ? failCallback : reason =&gt; { throw reason }
-        
-        const promiseNext = new MyPromise((resolve, reject) =&gt; {
-            if (this.status === FULFILLED) {
-                // 当前代码块改变为异步状态，获取到 promiseNext 对象
-                setTimeout(() =&gt; {
-                    try {
-                        // 获取到回调结果
-                        let successNext = successCallback(this.value)
-                        // 执行返回逻辑
-                        resolvePromise(promiseNext, successNext, resolve, reject)
-                    } catch (e) {
-                        reject(e)
-                    }
-                }, 0)
-            } else if (this.status === REJECTED) {
-                setTimeout(() =&gt; {
-                    try {
-                        // 获取到回调结果
-                        let failNext = failCallback(this.reason)
-                        // 执行返回逻辑
-                        resolvePromise(promiseNext, failNext, resolve, reject)
-                    } catch (e) {
-                        reject(e)
-                    }
-                }, 0)
-            } else {
-                // 缓存成功回调
-                this.successCallback.push(() =&gt; {
-                    setTimeout(() =&gt; {
-                        try {
-                            // 获取到回调结果
-                            let successNext = successCallback(this.value)
-                            // 执行返回逻辑
-                            resolvePromise(promiseNext, successNext, resolve, reject)
-                        } catch (e) {
-                            reject(e)
-                        }
-                    }, 0)
-                })
-                // 缓存失败回调
-                this.failCallback.push(() =&gt; {
-                    setTimeout(() =&gt; {
-                        try {
-                            // 获取到回调结果
-                            let failNext = failCallback(this.reason)
-                            // 执行返回逻辑
-                            resolvePromise(promiseNext, failNext, resolve, reject)
-                        } catch (e) {
-                            reject(e)
-                        }
-                    }, 0)
-                })
-            }
-        })
-        // 链式调用，返回新的Promise
-        return promiseNext
-    }
-}
-
-// 链式调用处理回调函数
-function resolvePromise(promise, next, resolve, reject) {
-    // 禁止返回当前 Promise
-    if (promise === next) return reject(new TypeError(&#39;Chaining cycle detected for promise #&lt;Promise&gt;&#39;))
-    // 判断当前返值状态
-    if (next instanceof MyPromise) next.then(resolve, reject) // 如果 返回值为 Promise 对象，则获取到返回值，并调用 resolve、reject 方法传递
-    else resolve(next) // 如果是普通值，则直接调用 resolve 方法
-}
-
-
-// 测试当前 MyPromise
-
-let promiseTest = (status, num) =&gt; {
-    return new MyPromise((resolve, reject) =&gt; {
-        // setTimeout(() =&gt; {
-            if (status) resolve(`成功：${num}`)
-            else reject(`失败：${num}`)
-        // }, 2000)
-    })
-}
-
-// 链式调用
-promiseTest(true, 1).then((value) =&gt; {
-    console.log(&#39;成功回调：&#39;, value)
-    throw Error(value.replace(/成功/, &#39;失败&#39;).replace(/[0-9]/g, 2))
-}, (reason) =&gt; {
-    console.log(&#39;失败原因：&#39;, reason)
-}).then((value) =&gt; {
-    console.log(&#39;成功回调：&#39;, value)
-    return value.replace(/[0-9]/g, 3)
-}, (reason) =&gt; {
-    console.log(&#39;失败原因：&#39;, reason)
-    return (reason &amp;&amp; reason.message || &#39;失败：3&#39;).replace(/失败/, &#39;失败 -&gt; 成功&#39;).replace(/[0-9]/g, &#39;2 -&gt; 3&#39;)
-}).then((value) =&gt; {
-    console.log(&#39;成功回调：&#39;, value)
-    return value.replace(/[0-9]/g, 4)
-}, (reason) =&gt; {
-    console.log(&#39;失败原因：&#39;, reason)
-})
-
-// 参数可选
-promiseTest(true, 100).then().then().then((value) =&gt; console.log(&#39;value&#39;, value))
-promiseTest(false, -100).then().then().then((value) =&gt; console.log(value), (reason) =&gt; console.log(&#39;reason&#39;, reason))
-</code></pre>
-<h2 id="5-Promise-中的-all、resolve、finally、catch-方法"><a href="#5-Promise-中的-all、resolve、finally、catch-方法" class="headerlink" title="5- Promise 中的 all、resolve、finally、catch 方法"></a>5- Promise 中的 all、resolve、finally、catch 方法</h2><ul>
-<li><p>Promise 中的 all 方法</p>
-<ol>
-<li>all 方法是一 Promise 的静态方法，可以直接调用。</li>
-<li>接收的参数为数组，数组中可以有普通值、同步方法、异步方法。</li>
-<li>调用 all 方法后，会依次按顺序执行形参中的数组包含的值或方法。每个值或执行方法后，获取到的结果应按形参中的顺序缓存。</li>
-<li>all 方法最终的返回值是一个 Promise 对象。如果形参中的每个方法都得以正确执行，没有异常则调用 Promise 对象中的 resolve 方法，把最终结果缓存至返回的 Promise 对象中。如果有异常则把异常的原因，则调用 Promise 对象中的 reject 方法，缓存失败原因。</li>
-<li>执行 then 方法就可以获取到，all 顺利完整执行的结果，或某一个状态失败的原因。</li>
-</ol>
-</li>
-<li><p>Promise 中的 resolve 方法</p>
-<ol>
-<li> resolve 方法也是一个 Promise 的静态方法，可以直接调用。</li>
-<li> resolve 方法接收一个参数，这个参数可以是普通值，也可以是异步方法。</li>
-<li> 如果接收到的值是普通值，则包装为 Promise 方法后，返回这个 Promise 方法。</li>
-<li> 如果接收到的值是异步方法，则直接返回这个方法。</li>
-</ol>
-</li>
-<li><p>Promise 中的 finally 方法</p>
-<ol>
-<li> finally 方法在 Promise 对象执行后，无论结果是 fulfilled 或 rejected，都会被执行。</li>
-<li> finally 返回值应为一个 Promise 对象，并且继承当前 Promise 对象的状态。</li>
-<li> finally 对象由于无法知道 Promise 的状态，所以回调函数函数不接收任何参数，仅用于无论 Promise 对象何种状态，都要执行的情况。</li>
-</ol>
-</li>
-<li><p>Promise 中的 catch 方法</p>
-<ol>
-<li> catch 方法会捕获 Promise 的失败状态。</li>
-<li> catch 方法内部为调用 then 方法，第一个参数，成功状态为空。</li>
-</ol>
-</li>
-</ul>
-<h2 id="6-完整的-Promise-对象"><a href="#6-完整的-Promise-对象" class="headerlink" title="6- 完整的 Promise 对象"></a>6- 完整的 Promise 对象</h2><pre><code class="javascript">
-// Promise 的三个状态
-const PENDING = &#39;pending&#39; // 等待
-const FULFILLED = &#39;fulfilled&#39; // 成功
-const REJECTED = &#39;rejected&#39; // 失败
-
-/**
- *   模拟 原生Promise
- *  
- *   @class MyPromise
- *   @constructor excutor 构造函数，函数接收俩个回调函数，回调函数
- */
-class MyPromise {
-    constructor(excutor) {
-        try {
-            excutor(this.resolve, this.reject)
-        } catch (e) {
-            this.reject(e)
-        }
-    }
-    
-    // 默认状态为 pending(等待)
-    status = PENDING
-    
-    // 缓存状态值
-    value = undefined // 成功状态 【参数】
-    reason = undefined // 失败状态 【原因】
-    
-    // 缓存回调函数
-    successCallback = [] // 成功回调
-    failCallback = [] // 失败回调
-    
-    /**
-     *   成功回调
-     *
-     *   @see 函数使用箭头函数，可以使 this 指向于当前 MyPromise 对象
-     */
-    resolve = (value) =&gt; {
-        // 状态一旦确定不支持更改，return 出函数
-        if (this.status !== PENDING) return
-        // 更改状态为 fulfilled(成功)
-        this.status = FULFILLED
-        // 缓存成功回调 传递的值
-        this.value = value
-        // 执行成功回调
-        while (this.successCallback.length) this.successCallback.shift()()
-    }
-    
-    /**
-     * 失败回调
-     */
-    reject = (reason) =&gt; {
-        // 状态一旦确定不支持更改，return 出函数
-        if (this.status !== PENDING) return
-        // 更改状态为 rejected(失败)
-        this.status = REJECTED
-        // 缓存失败回调 传递的原因
-        this.reason = reason
-        // 执行失败回调
-        while (this.failCallback.length) this.failCallback.shift()()
-    }
-    
-    /**
-     *   then 方法
-     *
-     *   @params {function} successCallback[成功回调]
-     *   @params {function} failCallback[失败回调]
-     */
-    then(successCallback, failCallback) {
-        // 回调参数可以为空
-        successCallback = successCallback ? successCallback : value =&gt; value
-        failCallback = failCallback ? failCallback : reason =&gt; { throw reason }
-        
-        const promiseNext = new MyPromise((resolve, reject) =&gt; {
-            if (this.status === FULFILLED) {
-                // 当前代码块改变为异步状态，获取到 promiseNext 对象
-                setTimeout(() =&gt; {
-                    try {
-                        // 获取到回调结果
-                        let successNext = successCallback(this.value)
-                        // 执行返回逻辑
-                        resolvePromise(promiseNext, successNext, resolve, reject)
-                    } catch (e) {
-                        reject(e)
-                    }
-                }, 0)
-            } else if (this.status === REJECTED) {
-                setTimeout(() =&gt; {
-                    try {
-                        // 获取到回调结果
-                        let failNext = failCallback(this.reason)
-                        // 执行返回逻辑
-                        resolvePromise(promiseNext, failNext, resolve, reject)
-                    } catch (e) {
-                        reject(e)
-                    }
-                }, 0)
-            } else {
-                // 缓存成功回调
-                this.successCallback.push(() =&gt; {
-                    setTimeout(() =&gt; {
-                        try {
-                            // 获取到回调结果
-                            let successNext = successCallback(this.value)
-                            // 执行返回逻辑
-                            resolvePromise(promiseNext, successNext, resolve, reject)
-                        } catch (e) {
-                            reject(e)
-                        }
-                    }, 0)
-                })
-                // 缓存失败回调
-                this.failCallback.push(() =&gt; {
-                    setTimeout(() =&gt; {
-                        try {
-                            // 获取到回调结果
-                            let failNext = failCallback(this.reason)
-                            // 执行返回逻辑
-                            resolvePromise(promiseNext, failNext, resolve, reject)
-                        } catch (e) {
-                            reject(e)
-                        }
-                    }, 0)
-                })
-            }
-        })
-        // 链式调用，返回新的Promise
-        return promiseNext
-    }
-    
-    /**
-    *   Promise 对象的 finally 方法
-    */
-    finally(callback) {
-        // 调用   then 方法，获取 Promise 的状态，并返回
-        return this.then(
-                // 传递成功值，并把 回调函数包装为 Promise 对象 返回
-                (value) =&gt; MyPromise.resolve(callback()).then(() =&gt; value),
-                // 传递失败原因，并把 回调函数包装为 Promise 对象 返回
-                (reason) =&gt; MyPromise.resolve(callback().then(() =&gt; { throw reason })
-            ))
-    }
-    
-    /**
-    *   Promise 对象的 then 方法
-    */
-    catch(callback) {
-        return this.then(undefined, callback)
-    }
-    
-    
-    /**
-    *   Promise 对象的 all 方法
-    */
-    static all(array) {
-        // 缓存最终结果
-        let result = []
-        // 缓存结果的
-        let count = 0
-        // 返回 Promise 对象
-        return new MyPromise((resolve, reject) =&gt; {
-            function addData(key, value) {
-                // 按下标缓存最终值
-                result[key] = value
-                
-                // 缓存值的次数
-                count++
-                
-                // 缓存值的次数，等于 all 形参的长度，则代表所有方法或值都缓存至结果
-                if (count === array.length) resolve(result)
-            }
-            
-            // 循环依次执行
-            for (let i = 0; i &lt; array.length; i++) {
-                // 获取当前执行
-                let current = array[i]
-                // 异步方法处理
-                if (current instanceof MyPromise) {
-                    current.then(value =&gt; addData(i, value), reason =&gt; resolve(reason))
-                } else { // 普通值处理
-                    addData(i, current)
-                }
-            }
-        })
-    }
-    
-    /**
-    *   Promise 对象的 resolve 方法
-    */
-    static resolve(value) {
-        if (value instanceof MyPromise) return value // Promise 对象则直接返回
-        else return new MyPromise(resolve =&gt; resolve(value)) // 普通值，则包装为异步方法
-    }
-}
-
-// 链式调用处理回调函数
-function resolvePromise(promise, next, resolve, reject) {
-    // 禁止返回当前 Promise
-    if (promise === next) return reject(new TypeError(&#39;Chaining cycle detected for promise #&lt;Promise&gt;&#39;))
-    // 判断当前返值状态
-    if (next instanceof MyPromise) next.then(resolve, reject) // 如果 返回值为 Promise 对象，则获取到返回值，并调用 resolve、reject 方法传递
-    else resolve(next) // 如果是普通值，则直接调用 resolve 方法
-}
-</code></pre>
+<p>Promise reaction 通过 job 队列异步执行，因此回调看到的是 <code>true</code>。如果教学实现发现状态已经 fulfilled 就立即调用处理器，输出就会变成 <code>false</code>。原来的同步例子适合说明 executor 在构造期间同步运行，却不适合作为 then 调度的证据。这里也要谨慎措辞：Promise job 是规范抽象；浏览器和 Node.js 的宿主如何把相关任务与其他队列整合，是宿主环境的调度问题。</p>
+<h2 id="教学实现应该拆成哪些职责"><a href="#教学实现应该拆成哪些职责" class="headerlink" title="教学实现应该拆成哪些职责"></a>教学实现应该拆成哪些职责</h2><p>一个可读的实现草图可以分为四个模块，而不是让 <code>resolve</code> 同时做所有事。第一，状态存储只负责 pending/fulfilled/rejected 和最终结果，终态不可逆。第二，<code>resolvePromise</code> 接受一个解析值：普通值兑现；自身引用拒绝；对象则读取一次 <code>then</code>，处理读取异常，并对可调用 thenable 安排接纳过程。第三，<code>then</code> 生成下游 Promise，并把 fulfilled/rejected 两类处理函数、目标 Promise 和一次性 resolve/reject 包装成 reaction。第四，reaction job 执行时捕获处理函数异常，将返回值交给下游的 <code>resolvePromise</code>，没有处理函数时执行相应的值/原因透传。</p>
+<p>代码结构上，可能会有 <code>fulfill(value)</code>、<code>reject(reason)</code>、<code>resolve(value)</code> 三个看起来相近的入口。它们不能互相替代：<code>fulfill</code> 直接完成状态转换；<code>reject</code> 直接记录拒绝；<code>resolve</code> 负责判断普通值、Promise、thenable 和自解析，再决定如何最终兑现。把内部函数命名为 <code>resolve</code> 却直接执行 <code>status = FULFILLED</code>，是许多简化教程中最危险的偷换。</p>
+<p>处理 thenable 时还需要注意重入。直接同步执行第三方对象的 <code>then</code>，可能在外层解析流程还没保存保护状态时再次调用回调，产生意外交错。规范把 thenable 接纳过程放进 Promise job；这不仅关乎“异步看起来更统一”，也是为了避免调用其 <code>then</code> 时同步重入解析函数。读取 <code>then</code> 的动作与调用 <code>then</code> 的动作也应区分：规范先取得该属性，后续 job 再以一次性 resolving functions 调用它。<a target="_blank" rel="noopener" href="https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-createresolvingfunctions">CreateResolvingFunctions 与 NewPromiseResolveThenableJob</a></p>
+<p>若学习目的只是掌握状态推进，可先实现普通值、拒绝、异步 reaction 和多订阅；下一步加入派生 Promise 的返回值与异常转换；再做 thenable 吸收、自解析保护和重复调用保护。每一步都保留明确的“不支持”列表。不要让一段只对原生 Promise 和固定回调有效的代码，借着 <code>MyPromise</code> 这个名字显得符合标准。</p>
+<h2 id="用测试矩阵判断边界，而不只看成功示例"><a href="#用测试矩阵判断边界，而不只看成功示例" class="headerlink" title="用测试矩阵判断边界，而不只看成功示例"></a>用测试矩阵判断边界，而不只看成功示例</h2><p>至少列出这些输入：普通值 resolve、reject 后接 catch、resolve 一个 pending Promise、resolve 一个已 fulfilled Promise、thenable 兑现、thenable 拒绝、then getter 抛错、thenable 连续调用两种回调、Promise 解析自身、多个 then 订阅、回调返回普通值、返回 Promise、回调抛错、已完成 Promise 的 then 调度顺序。每项要写预期结果和预期顺序，不要只看控制台里出现了“成功”。</p>
+<p>错误示例也要覆盖。若第二次 then 覆盖第一次，测试应记录两个处理器都必须各自得到一次结果；若回调被同步执行，测试应比较同一调用栈内标记变量的值；若 thenable 先 resolve 再 reject，测试检查下游只采纳第一次有效解析路径；若回调抛错，则检查源 Promise 是否仍保持 fulfilled，而派生 Promise 是否拒绝。这样可以把“状态没坏”“链没断”和“回调顺序正确”分成不同断言。</p>
+<p>本文没有运行这些示例代码，因此矩阵是建议的验证设计，不是实测报告。ECMAScript 规范能告诉我们内建 Promise 应有的算法语义，但不能证明一段手写实现已经符合所有细节。若准备做兼容性实现，需要把规范条款和完整测试套件作为独立工作；若目标是教学，则把支持范围写在代码旁边，读者反而更容易知道自己学到了哪一层。</p>
+<p>Promise 实现最值得保留的判断，不是“几行代码也能造一个 Promise”，而是把解析、兑现、reaction 调度和下游传播分成不同职责。只要这四件事仍混在一个状态分支里，普通成功示例就会给出过度乐观的印象。先明确教学实现支持到哪里，再用失败路径验证每个边界。</p>
 
       </div>
       <!--/email_off-->
 
-      
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">参考来源</h2><ol><li><a target="_blank" href="https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-promise-objects" rel="noopener">ECMAScript 2026 Language Specification, §27.2 Promise Objects (accessed 2026-11-27)</a></li><li><a target="_blank" href="https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-createresolvingfunctions" rel="noopener">ECMAScript 2026 Language Specification, §27.2.1.3 CreateResolvingFunctions (accessed 2026-11-27)</a></li><li><a target="_blank" href="https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-newpromiseresolvethenablejob" rel="noopener">ECMAScript 2026 Language Specification, §27.2.2 Promise Jobs (accessed 2026-11-27)</a></li><li><a target="_blank" href="https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-promise.prototype.then" rel="noopener">ECMAScript 2026 Language Specification, §27.2.5.4 Promise.prototype.then / PerformPromiseThen (accessed 2026-11-27)</a></li></ol></section>
       
         <footer class="article-taxonomy">
           <span>标签</span>
           
-            <a class="tag tag--js" href="/zh-CN/tags/JS%E5%9F%BA%E7%A1%80/">JS基础</a>
+            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+          
+            <a class="tag tag--javascript" href="/zh-CN/tags/JavaScript/">JavaScript</a>
           
             <a class="tag tag--promise" href="/zh-CN/tags/Promise/">Promise</a>
           
-            <a class="tag tag--js" href="/zh-CN/tags/JS%E5%8E%9F%E7%90%86/">JS原理</a>
-          
-            <a class="tag tag--development" href="/zh-CN/tags/Development/">Development</a>
+            <a class="tag tag--async-programming" href="/zh-CN/tags/Async-programming/">Async programming</a>
           
         </footer>
       
 
+      
+        <footer class="article-taxonomy">
+          <span>分类</span>
+          
+            <a class="tag tag--development" href="/zh-CN/categories/Development/">Development</a>
+          
+        </footer>
       
 
       <section class="post-share" aria-label="分享">
         <span>分享</span>
         <div>
           
-            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2022%2F01%2F21%2FPromise%25EF%25BC%259A%25E6%2589%258B%25E5%2586%2599Promise%25EF%25BC%258C%25E5%258E%259F%25E7%2590%2586%25E5%2588%2586%25E6%259E%2590%2F&text=Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90" aria-label="分享到 X" title="分享到 X">X</a>
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2022%2F01%2F21%2FPromise%25EF%25BC%259A%25E6%2589%258B%25E5%2586%2599Promise%25EF%25BC%258C%25E5%258E%259F%25E7%2590%2586%25E5%2588%2586%25E6%259E%2590%2F&text=Promise%20%E6%89%8B%E5%86%99%E5%AE%9E%E7%8E%B0%EF%BC%9A%E4%BB%8E%20resolve%20%E5%88%B0%E9%93%BE%E5%BC%8F%E4%BC%A0%E6%92%AD%EF%BC%8C%E5%93%AA%E4%BA%9B%E8%AF%AD%E4%B9%89%E4%B8%8D%E8%83%BD%E7%9C%81%E7%95%A5" aria-label="分享到 X" title="分享到 X">X</a>
           
             <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2022%2F01%2F21%2FPromise%25EF%25BC%259A%25E6%2589%258B%25E5%2586%2599Promise%25EF%25BC%258C%25E5%258E%259F%25E7%2590%2586%25E5%2588%2586%25E6%259E%2590%2F" aria-label="分享到 LinkedIn" title="分享到 LinkedIn">in</a>
           
-            <a href="mailto:?subject=Promise%EF%BC%9A%E6%89%8B%E5%86%99Promise%EF%BC%8C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2022%2F01%2F21%2FPromise%25EF%25BC%259A%25E6%2589%258B%25E5%2586%2599Promise%25EF%25BC%258C%25E5%258E%259F%25E7%2590%2586%25E5%2588%2586%25E6%259E%2590%2F" aria-label="邮件分享" title="邮件分享">@</a>
+            <a href="mailto:?subject=Promise%20%E6%89%8B%E5%86%99%E5%AE%9E%E7%8E%B0%EF%BC%9A%E4%BB%8E%20resolve%20%E5%88%B0%E9%93%BE%E5%BC%8F%E4%BC%A0%E6%92%AD%EF%BC%8C%E5%93%AA%E4%BA%9B%E8%AF%AD%E4%B9%89%E4%B8%8D%E8%83%BD%E7%9C%81%E7%95%A5&body=https%3A%2F%2Fwww.zyweb.vip%2Fzh-CN%2F2022%2F01%2F21%2FPromise%25EF%25BC%259A%25E6%2589%258B%25E5%2586%2599Promise%25EF%25BC%258C%25E5%258E%259F%25E7%2590%2586%25E5%2588%2586%25E6%259E%2590%2F" aria-label="邮件分享" title="邮件分享">@</a>
           
         </div>
       </section>
@@ -964,17 +301,15 @@ function resolvePromise(promise, next, resolve, reject) {
 
         
           
-            <a class="toc-link toc-link--h2" href="#1-Promise-对象的基础模型-同步，分析执行流程">1- Promise 对象的基础模型 (同步，分析执行流程)</a>
+            <a class="toc-link toc-link--h2" href="#先分清状态与“解析目标已锁定”">先分清状态与“解析目标已锁定”</a>
           
-            <a class="toc-link toc-link--h2" href="#2-Promise-对象的异步特性">2- Promise 对象的异步特性</a>
+            <a class="toc-link toc-link--h2" href="#then-回调不是当前-Promise-的方法调用">then 回调不是当前 Promise 的方法调用</a>
           
-            <a class="toc-link toc-link--h2" href="#3-Promise-支持多次调用的特性实现">3- Promise 支持多次调用的特性实现</a>
+            <a class="toc-link toc-link--h2" href="#两个最小反例能暴露结构错误">两个最小反例能暴露结构错误</a>
           
-            <a class="toc-link toc-link--h2" href="#4-Promise-链式调用的特性实现">4- Promise 链式调用的特性实现</a>
+            <a class="toc-link toc-link--h2" href="#教学实现应该拆成哪些职责">教学实现应该拆成哪些职责</a>
           
-            <a class="toc-link toc-link--h2" href="#5-Promise-中的-all、resolve、finally、catch-方法">5- Promise 中的 all、resolve、finally、catch 方法</a>
-          
-            <a class="toc-link toc-link--h2" href="#6-完整的-Promise-对象">6- 完整的 Promise 对象</a>
+            <a class="toc-link toc-link--h2" href="#用测试矩阵判断边界，而不只看成功示例">用测试矩阵判断边界，而不只看成功示例</a>
           
         
       </nav></details>

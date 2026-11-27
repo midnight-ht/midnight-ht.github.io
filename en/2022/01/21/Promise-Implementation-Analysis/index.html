@@ -12,7 +12,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
-  <title>Promise - Implementation and Analysis | Midnight blog</title>
+  <title>Handwriting a Promise: Semantics You Cannot Skip from `resolve` to Chaining | Midnight blog</title>
   
     <meta name="baidu-site-verification" content="codeva-18dgxFQGZ2">
     
@@ -29,10 +29,10 @@
     <link rel="apple-touch-icon" href="/img/favicon.ico">
   
   
-    <meta name="description" content="Engineering notes on requirements, architecture, development, testing, delivery, and operations. Evidence, trade-offs, and verification across the software lifecycle.">
+    <meta name="description" content="See why `resolve(1)` and `resolve(otherPromise)` differ, then trace reaction jobs, derived promises, and failure paths to define a teaching implementation’s limits.">
   
   
-    <meta name="keywords" content="软件研发,需求分析,架构设计,前端开发,后端开发,自动化测试,软件安全,CI/CD,DevOps,可观测性,故障复盘,AI Agent">
+    <meta name="keywords" content="Promise implementation,resolve versus fulfill,thenable,Promise chaining,JavaScript Promise jobs">
   
   
     <meta name="robots" content="index,follow,max-image-preview:large">
@@ -54,8 +54,8 @@
     <link rel="alternate" type="application/atom+xml" title="RSS" href="/atom.xml">
   
   
-    <meta property="og:title" content="Promise - Implementation and Analysis | Midnight blog">
-    <meta property="og:description" content="Engineering notes on requirements, architecture, development, testing, delivery, and operations. Evidence, trade-offs, and verification across the software lifecycle.">
+    <meta property="og:title" content="Handwriting a Promise: Semantics You Cannot Skip from `resolve` to Chaining | Midnight blog">
+    <meta property="og:description" content="See why `resolve(1)` and `resolve(otherPromise)` differ, then trace reaction jobs, derived promises, and failure paths to define a teaching implementation’s limits.">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://www.zyweb.vip/en/2022/01/21/Promise-Implementation-Analysis/">
     <meta property="og:site_name" content="Midnight blog">
@@ -64,7 +64,7 @@
     <meta name="twitter:card" content="summary">
   
   
-    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2022/01/21/Promise-Implementation-Analysis/#webpage","url":"https://www.zyweb.vip/en/2022/01/21/Promise-Implementation-Analysis/","name":"Promise - Implementation and Analysis | Midnight blog","description":"Engineering notes on requirements, architecture, development, testing, delivery, and operations. Evidence, trade-offs, and verification across the software lifecycle.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2022/01/21/Promise-Implementation-Analysis/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2022/01/21/Promise-Implementation-Analysis/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2022/01/21/Promise-Implementation-Analysis/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2022/01/21/Promise-Implementation-Analysis/#webpage"},"url":"https://www.zyweb.vip/en/2022/01/21/Promise-Implementation-Analysis/","headline":"Promise - Implementation and Analysis","description":"Engineering notes on requirements, architecture, development, testing, delivery, and operations. Evidence, trade-offs, and verification across the software lifecycle.","inLanguage":"en","datePublished":"2022-01-21T15:42:10.000Z","dateModified":"2022-01-21T15:42:10.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"keywords":"JavaScript Basics, Promise, JavaScript Principles, Development"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2022/01/21/Promise-Implementation-Analysis/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Promise - Implementation and Analysis","item":"https://www.zyweb.vip/en/2022/01/21/Promise-Implementation-Analysis/"}]}]}</script>
+    <script id="midnight-seo-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://www.zyweb.vip/#website","url":"https://www.zyweb.vip/","name":"Midnight blog"},{"@type":"WebPage","@id":"https://www.zyweb.vip/en/2022/01/21/Promise-Implementation-Analysis/#webpage","url":"https://www.zyweb.vip/en/2022/01/21/Promise-Implementation-Analysis/","name":"Handwriting a Promise: Semantics You Cannot Skip from `resolve` to Chaining | Midnight blog","description":"See why `resolve(1)` and `resolve(otherPromise)` differ, then trace reaction jobs, derived promises, and failure paths to define a teaching implementation’s limits.","inLanguage":"en","isPartOf":{"@id":"https://www.zyweb.vip/#website"},"mainEntity":{"@id":"https://www.zyweb.vip/en/2022/01/21/Promise-Implementation-Analysis/#article"},"breadcrumb":{"@id":"https://www.zyweb.vip/en/2022/01/21/Promise-Implementation-Analysis/#breadcrumb"}},{"@type":"BlogPosting","@id":"https://www.zyweb.vip/en/2022/01/21/Promise-Implementation-Analysis/#article","mainEntityOfPage":{"@id":"https://www.zyweb.vip/en/2022/01/21/Promise-Implementation-Analysis/#webpage"},"url":"https://www.zyweb.vip/en/2022/01/21/Promise-Implementation-Analysis/","headline":"Handwriting a Promise: Semantics You Cannot Skip from `resolve` to Chaining","description":"See why `resolve(1)` and `resolve(otherPromise)` differ, then trace reaction jobs, derived promises, and failure paths to define a teaching implementation’s limits.","inLanguage":"en","datePublished":"2022-01-21T15:42:10.000Z","dateModified":"2026-11-27T01:09:11.000Z","author":{"@type":"Person","name":"Midnight","url":"https://www.zyweb.vip/en/about/"},"citation":["https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-promise-objects","https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-createresolvingfunctions","https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-newpromiseresolvethenablejob","https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-promise.prototype.then"],"keywords":"Development, JavaScript, Promise, Async programming"},{"@type":"BreadcrumbList","@id":"https://www.zyweb.vip/en/2022/01/21/Promise-Implementation-Analysis/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.zyweb.vip/en/"},{"@type":"ListItem","position":2,"name":"Archive","item":"https://www.zyweb.vip/en/archives/"},{"@type":"ListItem","position":3,"name":"Handwriting a Promise: Semantics You Cannot Skip from `resolve` to Chaining","item":"https://www.zyweb.vip/en/2022/01/21/Promise-Implementation-Analysis/"}]}]}</script>
   
   <meta name="theme-color" content="#080b10">
   
@@ -137,12 +137,14 @@
   <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/en/">Home</a><span aria-hidden="true">/</span><a href="/en/archives/">Archive</a></nav>
   <header class="post-hero">
     <div class="post-hero__kicker">
-      <span class="tag tag--javascript-basics">JavaScript Basics</span>
+      <span class="tag tag--development">Development</span>
       <time datetime="2022-01-21T15:42:10.000Z">2022-01-21</time>
     </div>
 
-    <h1>Promise - Implementation and Analysis</h1>
+    <h1>Handwriting a Promise: Semantics You Cannot Skip from `resolve` to Chaining</h1>
 
+    
+      <p class="post-hero__summary">See why `resolve(1)` and `resolve(otherPromise)` differ, then trace reaction jobs, derived promises, and failure paths to define a teaching implementation’s limits.</p>
     
 
     <div class="post-hero__meta">
@@ -161,7 +163,7 @@
         
 
 
-        <small>Updated <time datetime="2022-01-21T15:42:10.000Z">2022-01-21</time> · Estimated read 18 min</small>
+        <small>Updated <time datetime="2026-11-27T01:09:11.000Z">2026-11-27</time> · Estimated read 23 min</small>
       </div>
     </div>
 
@@ -193,326 +195,81 @@
 
       
 
-      
+      <section class="article-takeaways" aria-labelledby="takeaways-title"><h2 id="takeaways-title">Key takeaways</h2><ul><li>Separate a locked-in resolution from final settlement.</li><li>`then` registers a reaction and returns a new Promise.</li><li>Use thenables, exceptions, and ordering to test implementation boundaries.</li></ul></section>
       <!--email_off-->
       <div class="article-content">
-        <p>Source Code: <a target="_blank" rel="noopener" href="https://gitee.com/lagou-19-web-paid/practice/tree/master/promise">https://gitee.com/lagou-19-web-paid/practice/tree/master/promise</a></p>
-<h2 id="1-Promise-Basic-Model-Synchronous-Execution-Flow-Analysis"><a href="#1-Promise-Basic-Model-Synchronous-Execution-Flow-Analysis" class="headerlink" title="1 - Promise Basic Model (Synchronous, Execution Flow Analysis)"></a>1 - Promise Basic Model (Synchronous, Execution Flow Analysis)</h2><ol>
-<li>Promise is a class that receives a constructor function as a parameter. When executing the class, the constructor function is also executed synchronously.</li>
-<li>When the constructor function executes synchronously, it passes two callback functions: success callback [resolve] and failure callback [reject].</li>
-</ol>
-<ul>
-<li>Success callback: receives a parameter in the callback function, which can be either a plain value or a Promise object. For now, we only consider plain values.</li>
-<li>Failure callback: receives a parameter in the callback function, usually the reason for failure</li>
-</ul>
-<ol start="3">
-<li>Promise has three states: pending (waiting), fulfilled (success), and rejected (failure). State transitions are only allowed from pending to fulfilled or from pending to rejected. Once a state is determined, it cannot be changed.</li>
-<li>The then method receives two parameters: success callback [successCallback] function and failure callback [failCallback] function. When the then method is executed, it executes the success callback or failure callback based on the Promise&#39;s execution state, and passes the corresponding cached state value to the callback function as a parameter.</li>
-</ol>
-<pre><code class="javascript">// Promise three states
-const PENDING = &quot;pending&quot;; // waiting
-const FULFILLED = &quot;fulfilled&quot;; // success
-const REJECTED = &quot;rejected&quot;; // failure
-
-/**
- *   Simulating native Promise
- *
- *   @class MyPromise
- *   @constructor executor - constructor function that receives two callback functions
- */
-class MyPromise {
-  constructor(executor) {
-    executor(this.resolve, this.reject);
-  }
-
-  // Default state is pending
-  status = PENDING;
-
-  // Cache state values
-  value = undefined; // success state [parameter]
-  reason = undefined; // failure state [reason]
-
-  /**
-   *   Success callback
-   *
-   *   @see Using arrow function to keep &#39;this&#39; pointing to current MyPromise object
-   */
-  resolve = (value) =&gt; {
-    // State cannot be changed once determined, return early
-    if (this.status !== PENDING) return;
-
-    // Change state to fulfilled
-    this.status = FULFILLED;
-
-    // Cache the value passed to success callback
-    this.value = value;
-  };
-
-  /**
-   * Failure callback
-   */
-  reject = (reason) =&gt; {
-    // State cannot be changed once determined, return early
-    if (this.status !== PENDING) return;
-
-    // Change state to rejected
-    this.status = REJECTED;
-
-    // Cache the reason passed to failure callback
-    this.reason = reason;
-  };
-
-  /**
-   *   then method
-   *
-   *   @params {function} successCallback - success callback function
-   *   @params {function} failCallback - failure callback function
-   */
-  then(successCallback, failCallback) {
-    if (this.status === FULFILLED) successCallback(this.value);
-    if (this.status === REJECTED) failCallback(this.reason);
-  }
-}
-
-// Test current MyPromise
-
-let promiseTest = new MyPromise((resolve, reject) =&gt; {
-  resolve(&quot;success&quot;);
-  // reject(&#39;failure&#39;)
+        <p>A minimal Promise that prints <code>1</code> after <code>resolve(1)</code> does not prove that it handles <code>resolve(otherPromise)</code> correctly. The first call stores an ordinary value. In contrast, the other call asks the current Promise to adopt another object’s eventual outcome. The hard part of implementing a Promise is not flipping a field to <code>fulfilled</code>; it is deciding who now controls the outcome, when reactions run, and how the next link in the chain receives a return value or an exception.</p>
+<p>This article uses the Promise semantics in ECMAScript 2026 to explain those boundaries. The snippets are explanatory fragments, not a complete specification implementation, and they are not presented as independently executed code. A deliberately limited teaching subset is useful for learning. Replacing the native Promise requires much more, including constructor-generic behavior, subclassing, <code>Symbol.species</code>, rejection tracking, and other specification details. A simplified sketch should not be called a complete implementation.</p>
+<h2 id="Separate-state-from-a-locked-in-resolution"><a href="#Separate-state-from-a-locked-in-resolution" class="headerlink" title="Separate state from a locked-in resolution"></a>Separate state from a locked-in resolution</h2><p>A Promise has three states: pending, fulfilled, and rejected. Fulfilled and rejected are settled; pending means the outcome has not settled. One distinction is easy to miss: resolved does not mean settled. A Promise can be resolved but still pending because it has been locked in to follow another Promise or thenable that has not completed. “Locked in” says who controls the eventual outcome; “fulfilled” or “rejected” says that the outcome has already settled. The ECMAScript 2026 Promise Objects clause explicitly distinguishes the terms. <a target="_blank" rel="noopener" href="https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-promise-objects">Specification text</a></p>
+<p>Suppose an executor first calls <code>resolve(inner)</code>, where <code>inner</code> is still pending, then calls <code>reject(error)</code>. It may seem that the second call should reject <code>outer</code> because no success has been printed yet. But the deciding fact is not merely the current state field: the first resolve has already handed <code>outer</code>’s resolution fate to <code>inner</code>. A later reject call from the executor cannot take control back. <code>outer</code> becomes fulfilled when <code>inner</code> fulfills and rejected when <code>inner</code> rejects. Therefore, setting <code>status = FULFILLED</code> immediately on the first resolve merges “accept a resolution request” with “settle the outcome,” which is incorrect.</p>
+<p>An implementation can use a separate <code>alreadyResolved</code> guard at the resolve/reject entry points and use the Promise state to represent the final outcome. That is a useful teaching design, not a verbatim copy of the specification’s internal fields. When resolution receives an object, it must also inspect that object’s <code>then</code> property. If <code>then</code> is callable, the Promise adopts the thenable’s outcome. If reading <code>then</code> throws, resolution becomes rejection. An object without a callable <code>then</code> is fulfilled as an ordinary value.</p>
+<p>A thenable does not need to be a native Promise. Any object with a callable <code>then</code> property can participate in resolution. Its <code>then</code> getter may have side effects or throw; its <code>then</code> method may call resolve or reject more than once. The resolution process must prevent these paths from settling the same Promise multiple times. Under §27.2.1.3, resolving functions share a one-shot guard and reject self-resolution, which would otherwise create an unfinishable reference.</p>
+<h2 id="A-then-callback-is-not-a-method-on-the-source-Promise"><a href="#A-then-callback-is-not-a-method-on-the-source-Promise" class="headerlink" title="A then callback is not a method on the source Promise"></a>A <code>then</code> callback is not a method on the source Promise</h2><p><code>then(onFulfilled, onRejected)</code> does at least two things: it registers a pair of reactions on the source Promise and creates a new Promise to return. If the source is pending, the reactions are stored. If it is already settled, the reaction is still enqueued as a Promise job rather than called synchronously. The abstract <code>PerformPromiseThen</code> operation receives a promise capability that carries the result; this is the basis of chaining. <a target="_blank" rel="noopener" href="https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-promise.prototype.then">Promise.prototype.then and PerformPromiseThen</a></p>
+<p>Consider this explanatory snippet:</p>
+<pre><code class="js">const next = source.then(value =&gt; {
+  return value + 1;
 });
-// Execute then method
-promiseTest.then(
-  (value) =&gt; {
-    console.log(value);
-  },
-  (reason) =&gt; {
-    console.log(reason);
-  },
-);
 </code></pre>
-<h2 id="2-Promise-Asynchronous-Characteristics"><a href="#2-Promise-Asynchronous-Characteristics" class="headerlink" title="2 - Promise Asynchronous Characteristics"></a>2 - Promise Asynchronous Characteristics</h2><ol>
-<li>Asynchronous characteristics mean that the code does not block execution and specific values or functions are obtained after the asynchronous operation completes.</li>
-<li>When executing the then method in a Promise and the Promise object&#39;s state is pending (waiting state), it is determined as an asynchronous state.</li>
-<li>When determining an asynchronous state, successCallback (success callback) and failCallback (failure callback) need to be cached in the Promise object.</li>
-<li>When the asynchronous method in the constructor completes and calls resolve (success callback) or reject (failure callback), after completing the preceding logic, the successCallback or failCallback mounted to the Promise object through the external then method is executed.</li>
-</ol>
-<pre><code class="javascript">
-    // Promise three states
-    const PENDING = &#39;pending&#39; // waiting
-    const FULFILLED = &#39;fulfilled&#39; // success
-    const REJECTED = &#39;rejected&#39; // failure
-
-    /**
-    *   Simulating native Promise
-    *
-    *   @class MyPromise
-    *   @constructor executor - constructor function that receives two callback functions
-    */
-     resolve = (value) =&gt; {
-         // State cannot be changed once determined, return early
-         if (this.status !== PENDING) return
-
-         // Change state to fulfilled
-         this.status = FULFILLED
-
-         // Cache the value passed to success callback
-         this.value = value
-
-         // Execute success callback
-         this.successCallback &amp;&amp; this.successCallback(this.value)
-     }
-
-     /**
-     * Failure callback
-     */
-     reject = (reason) =&gt; {
-         // State cannot be changed once determined, return early
-         if (this.status !== PENDING) return
-
-         // Change state to rejected
-         this.status = REJECTED
-
-         // Cache the reason passed to failure callback
-         this.reason = reason
-
-         // Execute failure callback
-         this.failCallback &amp;&amp; this.failCallback(this.reason)
-     }
-
-    /**
-    *   then method
-    *
-    *   @params {function} successCallback - success callback function
-    *   @params {function} failCallback - failure callback function
-    */
-    then ( successCallback, failCallback ) {
-        if (this.status === FULFILLED) successCallback(this.value)
-        else if (this.status === REJECTED) failCallback(this.reason)
-        else {
-            // Cache success callback
-            this.successCallback = successCallback
-            // Cache failure callback
-            this.failCallback = failCallback
-        }
-    }
-}
-
-
-// Test current MyPromise
-
-let promiseTest = new MyPromise((resolve, reject) =&gt; {
-    setTimeout(() =&gt; {
-        resolve(&#39;success&#39;)
-        // reject(&#39;failure&#39;)
-    }, 2000)
-})
-promiseTest.then((value) =&gt; {
-    console.log(&#39;Success callback: &#39;, value)
-}, (reason) =&gt; {
-    console.log(&#39;Failure reason: &#39;, reason)
-})
-
+<p><code>next</code> is not <code>source</code>. A handler that returns <code>3</code> resolves the downstream Promise with <code>3</code>; returning another Promise or thenable makes the downstream adopt that outcome. Throwing from the handler rejects the downstream Promise. No explicit return means <code>undefined</code>, so the downstream fulfills with <code>undefined</code>. This is why an implementation that merely stores callbacks in an array and invokes them on settlement demonstrates callback order, but does not implement Promise chaining.</p>
+<p>These settlement distinctions also matter when composing APIs. The site’s <a href="/en/2026/10/24/promise-any-fulfillment-aggregateerror/">Promise.any analysis</a> shows that “first fulfilled” is not “first to finish” and does not mean “business-valid result.” Understanding how resolution adopts a thenable helps clarify what kind of candidate result <code>any</code> receives.</p>
+<p>Rejection handlers use the same result pipeline. When <code>onRejected</code> returns normally, the downstream Promise usually becomes fulfilled with that value. Returning a Promise makes the downstream adopt its result. A new throw leaves the downstream rejected with that exception. When one handler is missing, the corresponding value or rejection reason must pass through; the chain should not lose it simply because no function was supplied. Keep the source Promise’s state separate from the downstream Promise’s resolution so a handler’s return value cannot overwrite the source.</p>
+<h2 id="Two-small-counterexamples-expose-structural-mistakes"><a href="#Two-small-counterexamples-expose-structural-mistakes" class="headerlink" title="Two small counterexamples expose structural mistakes"></a>Two small counterexamples expose structural mistakes</h2><p>The first counterexample registers two handlers on one pending Promise:</p>
+<pre><code class="js">pending.then(first);
+pending.then(second);
 </code></pre>
-<h2 id="3-Promise-Multiple-Call-Support-Implementation"><a href="#3-Promise-Multiple-Call-Support-Implementation" class="headerlink" title="3 - Promise Multiple Call Support Implementation"></a>3 - Promise Multiple Call Support Implementation</h2><ol>
-<li>The Promise method can be called multiple times, and each then method should be executed correctly after the call.</li>
-<li>Refactor the container for caching callback functions to an array, so that each time the then method is executed, successCallback (success callback) and failCallback (failure callback) should enter the corresponding cache stack.</li>
-<li>When calling resolve (success callback) or reject (failure callback) in the constructor, loop through and execute the cached callback functions, passing the current Promise&#39;s success data or failure reason to the callback function.</li>
-</ol>
-<pre><code class="javascript">// Promise three states
-const PENDING = &quot;pending&quot;; // waiting
-const FULFILLED = &quot;fulfilled&quot;; // success
-const REJECTED = &quot;rejected&quot;; // failure
-/**
- *   Simulating native Promise
- *
- *   @class MyPromise
- *   @constructor executor - constructor function that receives two callback functions
- */
-class MyPromise {
-  constructor(executor) {
-    executor(this.resolve, this.reject);
-  }
-  // Default state is pending
-  status = PENDING;
-
-  // Cache state values
-  value = undefined; // success state [parameter]
-  reason = undefined; // failure state [reason]
-  // Cache callback functions
-
-  successCallback = []; // success callback
-  failCallback = []; // failure callback
-  /**
-   *   Success callback
-   *
-   *   @see Using arrow function to keep &#39;this&#39; pointing to current MyPromise object
-   */
-  resolve = (value) =&gt; {
-    // State cannot be changed once determined, return early
-    if (this.status !== PENDING) return;
-
-    // Change state to fulfilled
-    this.status = FULFILLED;
-
-    // Cache the value passed to success callback
-    this.value = value;
-
-    // Execute success callbacks
-    while (this.successCallback.length)
-      this.successCallback.shift()(this.value);
-  };
-  /**
-   * Failure callback
-   */
-  reject = (reason) =&gt; {
-    // State cannot be changed once determined, return early
-    if (this.status !== PENDING) return;
-
-    // Change state to rejected
-    this.status = REJECTED;
-
-    // Cache the reason passed to failure callback
-    this.reason = reason;
-
-    // Execute failure callbacks
-    while (this.failCallback.length) this.failCallback.shift()(this.reason);
-  };
-  /**
-   *   then method
-   *
-   *   @params {function} successCallback - success callback function
-   *   @params {function} failCallback - failure callback function
-   */
-  then(successCallback, failCallback) {
-    if (this.status === FULFILLED) successCallback(this.value);
-    else if (this.status === REJECTED) failCallback(this.reason);
-    else {
-      // Cache success callback
-      this.successCallback.push(successCallback);
-      // Cache failure callback
-      this.failCallback.push(failCallback);
-    }
-  }
-}
-
-// Test current MyPromise
-
-let promiseTest = (status, num) =&gt; {
-  return new MyPromise((resolve, reject) =&gt; {
-    setTimeout(() =&gt; {
-      if (status) resolve(`Success: ${num}`);
-      else reject(`Failure: ${num}`);
-    }, 2000);
-  });
-};
-promiseTest(true, 1).then(
-  (value) =&gt; {
-    console.log(&quot;Success callback: &quot;, value);
-  },
-  (reason) =&gt; {
-    console.log(&quot;Failure reason: &quot;, reason);
-  },
-);
-promiseTest(false, 2).then(
-  (value) =&gt; {
-    console.log(&quot;Success callback: &quot;, value);
-  },
-  (reason) =&gt; {
-    console.log(&quot;Failure reason: &quot;, reason);
-  },
-);
+<p>If the object has only one <code>successCallback</code> field, the second assignment overwrites the first; only <code>second</code> runs on fulfillment. An array or reaction list preserves both subscriptions, but that is not the whole design: each reaction must also be associated with its own downstream promise capability. If one handler throws, it should reject only its own downstream Promise. It should not change the source Promise or prevent other reactions from being enqueued.</p>
+<p>An already fulfilled Promise exposes a different defect:</p>
+<pre><code class="js">let finished = false;
+Promise.resolve(1).then(() =&gt; console.log(finished));
+finished = true;
 </code></pre>
+<p>Promise reactions run asynchronously through jobs, so the handler observes <code>true</code>. A teaching implementation that invokes the handler immediately when it sees the fulfilled state would print <code>false</code>. The original synchronous example is useful for showing that an executor runs during construction, but it is not evidence about <code>then</code> scheduling. One qualification matters: Promise jobs are a specification abstraction; how browsers and Node.js integrate them with other queues belongs to the host environment.</p>
+<h2 id="Split-a-teaching-implementation-into-responsibilities"><a href="#Split-a-teaching-implementation-into-responsibilities" class="headerlink" title="Split a teaching implementation into responsibilities"></a>Split a teaching implementation into responsibilities</h2><p>A readable implementation sketch can have four modules instead of making <code>resolve</code> do everything. First, state storage handles pending/fulfilled/rejected and the final result; a settled state is irreversible. Second, <code>resolvePromise</code> accepts a resolution value: fulfill with ordinary values; reject self-resolution; for objects, read <code>then</code> once, handle a read exception, and arrange adoption when <code>then</code> is callable. Third, <code>then</code> creates a downstream Promise and packages the fulfillment and rejection handlers, the target Promise, and one-shot resolve/reject functions into reactions. Fourth, when a reaction job runs, it catches handler exceptions and passes the returned value to the downstream <code>resolvePromise</code>; if a handler is absent, it forwards the value or reason as required.</p>
+<p>A code sketch may have three deceptively similar entry points: <code>fulfill(value)</code>, <code>reject(reason)</code>, and <code>resolve(value)</code>. They are not interchangeable. <code>fulfill</code> changes the state directly; <code>reject</code> records a rejection; <code>resolve</code> decides whether the input is an ordinary value, Promise, thenable, or self-reference, and how the outcome will eventually settle. Renaming a function <code>resolve</code> while making it immediately execute <code>status = FULFILLED</code> is a dangerous shortcut in many simplified tutorials.</p>
+<p>Thenable adoption also raises a reentrancy concern. Calling a third-party object’s <code>then</code> synchronously may invoke callbacks before the outer resolution process has recorded its guard state, creating surprising interleavings. The <code>NewPromiseResolveThenableJob</code> operation places thenable adoption in a Promise job. That scheduling is not only about making behavior “look asynchronous”; it also avoids synchronous re-entry while calling the thenable’s <code>then</code>. Reading the <code>then</code> property and calling it are separate steps: the specification first obtains the property, then a later job invokes it with one-shot resolving functions. <a target="_blank" rel="noopener" href="https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-createresolvingfunctions">CreateResolvingFunctions and NewPromiseResolveThenableJob</a></p>
+<p>If the learning goal is state transitions, start with ordinary fulfillment, rejection, asynchronous reactions, and multiple subscriptions. Next add the downstream Promise’s return-value and exception handling. Then add thenable adoption, self-resolution protection, and duplicate-call protection. Keep an explicit list of unsupported behavior at each stage. A fragment that only works for native Promises and fixed callbacks should not appear standards-compliant just because it is named <code>MyPromise</code>.</p>
+<h2 id="Use-a-test-matrix-not-only-a-success-example"><a href="#Use-a-test-matrix-not-only-a-success-example" class="headerlink" title="Use a test matrix, not only a success example"></a>Use a test matrix, not only a success example</h2><p>At minimum, cover these inputs: resolve with an ordinary value; reject and then attach <code>catch</code>; resolve with a pending Promise; resolve with an already fulfilled Promise; a thenable fulfills; a thenable rejects; reading a <code>then</code> getter throws; a thenable calls both callbacks; a Promise resolves with itself; multiple <code>then</code> subscriptions; a handler returns an ordinary value; a handler returns a Promise; a handler throws; and the ordering of a <code>then</code> attached after settlement. For each case, write the expected result and expected order instead of merely checking that the console says “success.”</p>
+<p>Include failure assertions. When a second <code>then</code> would overwrite the first, assert that both handlers receive one result. When a callback might run synchronously, compare a marker set later in the same call stack. When a thenable resolves and then rejects, verify that the downstream Promise follows only the first valid resolution path. When a handler throws, verify that the source remains fulfilled while its derived Promise rejects. This separates “state did not break,” “the chain propagated,” and “the callback order was correct” into different checks.</p>
+<p>None of the code fragments here were executed, so this matrix is a proposed verification design, not a test report. The ECMAScript specification describes the algorithms for native Promise objects; it does not prove that a handwritten implementation conforms to every detail. A compatibility implementation needs separate work against the full specification and test suite. For a teaching implementation, documenting its supported subset beside the code makes it clearer what the reader has actually learned.</p>
+<p>The useful lesson in implementing a Promise is not that a few lines can recreate the native object. It is that resolution, fulfillment, reaction scheduling, and downstream propagation are separate responsibilities. When those responsibilities remain mixed inside one state branch, an ordinary success example gives an overly optimistic impression. Define the teaching subset first, then use failure paths to test each boundary.</p>
 
       </div>
       <!--/email_off-->
 
-      
+      <section class="article-sources" aria-labelledby="sources-title"><h2 id="sources-title">Sources</h2><ol><li><a target="_blank" href="https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-promise-objects" rel="noopener">ECMAScript 2026 Language Specification, §27.2 Promise Objects (accessed 2026-11-27)</a></li><li><a target="_blank" href="https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-createresolvingfunctions" rel="noopener">ECMAScript 2026 Language Specification, §27.2.1.3 CreateResolvingFunctions (accessed 2026-11-27)</a></li><li><a target="_blank" href="https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-newpromiseresolvethenablejob" rel="noopener">ECMAScript 2026 Language Specification, §27.2.2 Promise Jobs (accessed 2026-11-27)</a></li><li><a target="_blank" href="https://tc39.es/ecma262/2026/multipage/control-abstraction-objects.html#sec-promise.prototype.then" rel="noopener">ECMAScript 2026 Language Specification, §27.2.5.4 Promise.prototype.then / PerformPromiseThen (accessed 2026-11-27)</a></li></ol></section>
       
         <footer class="article-taxonomy">
           <span>Tags</span>
           
-            <a class="tag tag--javascript-basics" href="/en/tags/JavaScript-Basics/">JavaScript Basics</a>
+            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+          
+            <a class="tag tag--javascript" href="/en/tags/JavaScript/">JavaScript</a>
           
             <a class="tag tag--promise" href="/en/tags/Promise/">Promise</a>
           
-            <a class="tag tag--javascript-principles" href="/en/tags/JavaScript-Principles/">JavaScript Principles</a>
-          
-            <a class="tag tag--development" href="/en/tags/Development/">Development</a>
+            <a class="tag tag--async-programming" href="/en/tags/Async-programming/">Async programming</a>
           
         </footer>
       
 
+      
+        <footer class="article-taxonomy">
+          <span>Categories</span>
+          
+            <a class="tag tag--development" href="/en/categories/Development/">Development</a>
+          
+        </footer>
       
 
       <section class="post-share" aria-label="Share">
         <span>Share</span>
         <div>
           
-            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2022%2F01%2F21%2FPromise-Implementation-Analysis%2F&text=Promise%20-%20Implementation%20and%20Analysis" aria-label="Share on X" title="Share on X">X</a>
+            <a target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2022%2F01%2F21%2FPromise-Implementation-Analysis%2F&text=Handwriting%20a%20Promise%3A%20Semantics%20You%20Cannot%20Skip%20from%20%60resolve%60%20to%20Chaining" aria-label="Share on X" title="Share on X">X</a>
           
             <a target="_blank" rel="noopener" href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2022%2F01%2F21%2FPromise-Implementation-Analysis%2F" aria-label="Share on LinkedIn" title="Share on LinkedIn">in</a>
           
-            <a href="mailto:?subject=Promise%20-%20Implementation%20and%20Analysis&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2022%2F01%2F21%2FPromise-Implementation-Analysis%2F" aria-label="Share by Email" title="Share by Email">@</a>
+            <a href="mailto:?subject=Handwriting%20a%20Promise%3A%20Semantics%20You%20Cannot%20Skip%20from%20%60resolve%60%20to%20Chaining&body=https%3A%2F%2Fwww.zyweb.vip%2Fen%2F2022%2F01%2F21%2FPromise-Implementation-Analysis%2F" aria-label="Share by Email" title="Share by Email">@</a>
           
         </div>
       </section>
@@ -544,11 +301,15 @@ promiseTest(false, 2).then(
 
         
           
-            <a class="toc-link toc-link--h2" href="#1-Promise-Basic-Model-Synchronous-Execution-Flow-Analysis">1 - Promise Basic Model (Synchronous, Execution Flow Analysis)</a>
+            <a class="toc-link toc-link--h2" href="#Separate-state-from-a-locked-in-resolution">Separate state from a locked-in resolution</a>
           
-            <a class="toc-link toc-link--h2" href="#2-Promise-Asynchronous-Characteristics">2 - Promise Asynchronous Characteristics</a>
+            <a class="toc-link toc-link--h2" href="#A-then-callback-is-not-a-method-on-the-source-Promise">A then callback is not a method on the source Promise</a>
           
-            <a class="toc-link toc-link--h2" href="#3-Promise-Multiple-Call-Support-Implementation">3 - Promise Multiple Call Support Implementation</a>
+            <a class="toc-link toc-link--h2" href="#Two-small-counterexamples-expose-structural-mistakes">Two small counterexamples expose structural mistakes</a>
+          
+            <a class="toc-link toc-link--h2" href="#Split-a-teaching-implementation-into-responsibilities">Split a teaching implementation into responsibilities</a>
+          
+            <a class="toc-link toc-link--h2" href="#Use-a-test-matrix-not-only-a-success-example">Use a test matrix, not only a success example</a>
           
         
       </nav></details>
